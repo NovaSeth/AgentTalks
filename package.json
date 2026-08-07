@@ -10,7 +10,7 @@
   },
   "files": ["bin", "src", "ui"],
   "scripts": {
-    "test": "node --test \"test/**/*.test.ts\"",
-    "verify": "node --test \"test/**/*.test.ts\""
+    "test": "node --test --test-timeout=20000 \"test/**/*.test.ts\"",
+    "verify": "node --test --test-timeout=20000 \"test/**/*.test.ts\""
   }
 }
