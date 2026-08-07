@@ -24,6 +24,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     secret: "sekret-testowy-0123456789abcdef",
     trustProxy: false,
     allowPublicBind: false,
+    allowLoopbackWake: false,
     maxMessageBytes: 65536,
     maxFileBytes: 1024 * 1024,
     sessionTtlSec: 3600,

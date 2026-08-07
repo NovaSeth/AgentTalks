@@ -19,6 +19,7 @@ export type Config = {
   secret: string;
   trustProxy: boolean;
   allowPublicBind: boolean;
+  allowLoopbackWake: boolean;
   maxMessageBytes: number;
   maxFileBytes: number;
   sessionTtlSec: number;
@@ -51,6 +52,7 @@ const DEFAULTS = {
   port: 8787,
   trustProxy: false,
   allowPublicBind: false,
+  allowLoopbackWake: false,
   maxMessageBytes: 65536,
   maxFileBytes: 32 * 1024 * 1024,
   sessionTtlSec: 30 * 24 * 3600,
@@ -99,6 +101,7 @@ export function loadConfig(dataDir: string = defaultDataDir()): Config {
     secret: String(stored.secret ?? ""),
     trustProxy: bool(process.env.AGENTTALKS_TRUST_PROXY ?? stored.trustProxy, DEFAULTS.trustProxy),
     allowPublicBind: bool(stored.allowPublicBind, DEFAULTS.allowPublicBind),
+    allowLoopbackWake: bool(stored.allowLoopbackWake, DEFAULTS.allowLoopbackWake),
     maxMessageBytes: num(stored.maxMessageBytes, DEFAULTS.maxMessageBytes),
     maxFileBytes: num(stored.maxFileBytes, DEFAULTS.maxFileBytes),
     sessionTtlSec: num(stored.sessionTtlSec, DEFAULTS.sessionTtlSec),

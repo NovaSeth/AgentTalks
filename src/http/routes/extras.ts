@@ -110,7 +110,9 @@ export function registerExtraRoutes(router: Router): void {
       data,
       mime: str(req.headers["content-type"]) ?? "application/octet-stream",
       maxBytes: rc.config.maxFileBytes,
-      ttlSec: int(req.headers["x-ttl"]) ?? null,
+      // Pusty/zerowy X-TTL to "bez TTL", ale dla pliku sensitive rdzen i tak
+      // nada domyslny; przekazujemy undefined, nie 0.
+      ttlSec: (int(req.headers["x-ttl"]) || undefined) ?? null,
       sensitive: req.headers["x-sensitive"] === "1",
       burn: req.headers["x-burn"] === "1",
       sessionId: str(req.headers["x-session-id"]) ?? null,
@@ -168,7 +170,7 @@ export function registerExtraRoutes(router: Router): void {
     if (!target) throw badRequest("brak_target", "podaj target (URL webhooka)");
     let result;
     try {
-      result = setWake(rc.ctx, actor.id, target);
+      result = setWake(rc.ctx, actor.id, target, { allowLoopback: rc.config.allowLoopbackWake });
     } catch (err) {
       throw badRequest("zly_target", err instanceof Error ? err.message : String(err));
     }

@@ -27,6 +27,11 @@ export type Tap = (recipients: readonly number[], event: Event) => void;
 export class EventBus {
   #byActor = new Map<number, Set<Listener>>();
   #taps = new Set<Tap>();
+  // Osobny licznik ZASOBOCHLONNYCH strumieni (SSE): subscriberCount liczy tez
+  // long-poll i MCP talk_read, ktore trzymaja subskrypcje tylko na chwile, wiec
+  // limit strumieni oparty na nim raz odcinalby SSE przez wiszace long-polle,
+  // a raz w ogole nie widzialby dlugotrwalych polaczen.
+  #streams = new Map<number, number>();
 
   subscribe(actorId: number, fn: Listener): () => void {
     let set = this.#byActor.get(actorId);
@@ -75,5 +80,23 @@ export class EventBus {
 
   subscriberCount(actorId: number): number {
     return this.#byActor.get(actorId)?.size ?? 0;
+  }
+
+  /** Rejestruje dlugotrwaly strumien (SSE) na potrzeby limitu. Zwraca funkcje
+   *  zwalniajaca; count NIE obejmuje krotkotrwalych subskrypcji long-polla. */
+  openStream(actorId: number): () => void {
+    this.#streams.set(actorId, (this.#streams.get(actorId) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const n = (this.#streams.get(actorId) ?? 1) - 1;
+      if (n <= 0) this.#streams.delete(actorId);
+      else this.#streams.set(actorId, n);
+    };
+  }
+
+  streamCount(actorId: number): number {
+    return this.#streams.get(actorId) ?? 0;
   }
 }

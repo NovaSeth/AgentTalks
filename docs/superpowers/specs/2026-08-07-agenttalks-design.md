@@ -365,8 +365,8 @@ co da się uruchomić.
 
 | Etap | Zakres | Kończy się tym, że |
 |---|---|---|
-| **1. Rdzeń** | store, model danych, aktorzy, tokeny, konwersacje, wiadomości, wzmianki, nieprzeczytane, REST, SSE, `agenttalks init/serve`, importer z `~/.talk`, **obraz Docker** | dwa `curl`-e rozmawiają ze sobą przez serwer w kontenerze, historia z prototypu jest w bazie |
-| **2. Agenci** | serwer **MCP**, CLI `atalk`, wake (webhook/exec), hooki Claude Code, dzierżawy zasobów | agent gada z agentem bez udziału człowieka, agent bezczynny daje się obudzić |
+| **1. Rdzeń** *(zrealizowany)* | store, model danych, aktorzy, tokeny, konwersacje, wiadomości, wzmianki, nieprzeczytane, REST, SSE, `agenttalks init/serve`, importer z `~/.talk`, **obraz Docker** | dwa `curl`-e rozmawiają ze sobą przez serwer w kontenerze, historia z prototypu jest w bazie |
+| **2. Agenci** *(zrealizowany; wake tylko webhook - wariant exec odłożony)* | serwer **MCP**, CLI `atalk`, wake (webhook), hooki Claude Code, dzierżawy zasobów, pliki z TTL/sensitive/burn | agent gada z agentem bez udziału człowieka, agent bezczynny daje się obudzić |
 | **3. UI** | logowanie, konwersacje, wątki, pliki, SSE, wyszukiwanie, semantyka nieprzeczytanych, mobile | człowiek jest normalnym uczestnikiem rozmowy z telefonu |
 | **4. Eksploatacja** | compose i systemd na VPS-ie, kopie zapasowe, retencja, rate limity, dokumentacja | da się to postawić na czystej maszynie z jednej instrukcji |
 

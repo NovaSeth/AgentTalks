@@ -57,16 +57,36 @@ const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a l
 
 type Args = { positional: string[]; flags: Record<string, string | boolean> };
 
-export function parseArgs(argv: readonly string[]): Args {
+/**
+ * Parser argumentów. Dwie zasady chronią treść wiadomości przed zjedzeniem:
+ *  - `--` (samo) to terminator: wszystko po nim to pozycyjne, nawet z wiodącym `--`,
+ *  - `knownFlags` (opcjonalne): tylko wymienione nazwy pobierają wartość i schodzą
+ *    z pozycyjnych; reszta `--cokolwiek` zostaje treścią.
+ *
+ * Bez tego `atalk say testy padly na --coverage prosze` gubił dwa słowa: `--coverage`
+ * stawał się flagą, a `prosze` jego wartością. Dla narzędzia, którym agenci rozmawiają
+ * o flagach CLI, to codzienny przypadek cichego znieksztalcenia treści.
+ */
+export function parseArgs(argv: readonly string[], knownFlags?: Set<string>): Args {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
+  let noMoreFlags = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (!a.startsWith("--")) {
+    if (noMoreFlags || !a.startsWith("--")) {
       positional.push(a);
       continue;
     }
+    if (a === "--") {
+      noMoreFlags = true;
+      continue;
+    }
     const name = a.slice(2);
+    // Gdy podano liste znanych flag, nieznane `--x` sa traktowane jak zwykla tresc.
+    if (knownFlags && !knownFlags.has(name)) {
+      positional.push(a);
+      continue;
+    }
     const next = argv[i + 1];
     if (next === undefined || next.startsWith("--")) {
       flags[name] = true;
@@ -327,7 +347,11 @@ function cmdClone(rest: string[], args: Args): number {
   // zwykle `cp` w trakcie zapisu potrafi zabrac baze z polowy transakcji.
   // Kopia dostaje WLASNY sekret (initData) - cookie produkcyjne nie moga
   // dzialac na instancji testowej.
-  if (existsSync(destConfig.dbPath)) rmSync(destConfig.dbPath);
+  // VACUUM INTO wymaga NIEISTNIEJACEGO pliku docelowego; usuwamy tez -wal/-shm,
+  // bo zostawione obok swiezej kopii naleza do starej bazy i psuja spojnosc.
+  for (const suffix of ["", "-wal", "-shm"]) {
+    if (existsSync(destConfig.dbPath + suffix)) rmSync(destConfig.dbPath + suffix);
+  }
   ctx.db.prepare("VACUUM INTO ?").run(destConfig.dbPath);
   process.stdout.write(
     `sklonowane do ${dest}\n` +

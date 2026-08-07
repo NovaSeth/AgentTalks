@@ -113,3 +113,15 @@ test("rejestracja sesji nieistniejacego aktora jest odrzucona", () => {
   const ctx = testCtx();
   assert.throws(() => registerSession(ctx, { sessionId: "s1", actorId: 999 }), /nie ma aktora/);
 });
+
+test("heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me", () => {
+  const ctx = testCtx();
+  const a = mkActor(ctx, "nestor");
+  registerSession(ctx, { sessionId: "s1", actorId: a.id, label: "vps-deploy", kind: "durable" });
+  // atalk ping/busy woła registerSession z samym sessionId
+  registerSession(ctx, { sessionId: "s1", actorId: a.id });
+  signal(ctx, "s1", "busy");
+  const p = presence(ctx)[0];
+  assert.equal(p.label, "vps-deploy", "heartbeat zjadl etykiete");
+  assert.equal(p.kind, "durable");
+});

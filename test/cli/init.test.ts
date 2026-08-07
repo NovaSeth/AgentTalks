@@ -134,3 +134,21 @@ test("clone robi spojna kopie z wlasnym sekretem", async () => {
   const ctx = createCtx(openDb(dstCfg.dbPath));
   assert.ok(getActorByHandle(ctx, "probny"), "dane nie przeszly do kopii");
 });
+
+test("parseArgs z lista znanych flag nie zjada tresci z --", () => {
+  const a = parseArgs(["say", "testy", "padly", "na", "--coverage", "prosze", "sprawdz"],
+    new Set(["to", "url"]));
+  assert.deepEqual(a.positional,
+    ["say", "testy", "padly", "na", "--coverage", "prosze", "sprawdz"]);
+});
+
+test("parseArgs terminator -- przenosi reszte do positional", () => {
+  const a = parseArgs(["say", "--", "--to", "@kto"], new Set(["to"]));
+  assert.deepEqual(a.positional, ["say", "--to", "@kto"]);
+});
+
+test("parseArgs bez listy nadal parsuje znane flagi", () => {
+  const a = parseArgs(["claim", "deploy", "--ttl", "300"]);
+  assert.deepEqual(a.positional, ["claim", "deploy"]);
+  assert.equal(a.flags.ttl, "300");
+});

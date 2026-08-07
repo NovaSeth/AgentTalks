@@ -32,10 +32,11 @@ const MAX_BUFFERED_BYTES = 1024 * 1024;
 
 export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   const { actor } = requireAuth(rc);
-  if (rc.ctx.bus.subscriberCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
+  if (rc.ctx.bus.streamCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
     throw tooMany("za_duzo_strumieni",
       `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych strumieni - zamknij ktorys`);
   }
+  const releaseStream = rc.ctx.bus.openStream(actor.id);
 
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
@@ -73,6 +74,10 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
     // wlasne wpisy z okresu zerwania.
     let cursor = lastSeen;
     for (;;) {
+      // Backpressure moglo zerwac polaczenie w trakcie dosylki - nie ma sensu
+      // synchronicznie doczytywac calego backlogu dla martwego gniazda (node:sqlite
+      // jest jednowatkowe, wiec blokowaloby to event loop wszystkim pozostalym).
+      if (res.destroyed || res.writableEnded) return;
       const batch = inboxAfter(rc.ctx, actor.id, cursor, RESUME_PAGE, { includeOwn: true });
       for (const message of batch) {
         send({ type: "message", conversationId: message.conversationId, message }, message.id);
@@ -80,11 +85,18 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
       if (batch.length < RESUME_PAGE) break;
       cursor = batch[batch.length - 1].id;
     }
-    // Edycje i kasowania sprzed kursora: kursor id ich nie obejmuje.
-    const changed = updatedBefore(rc.ctx, actor.id, lastSeen,
-      rc.ctx.now() - RESUME_EDIT_WINDOW_SEC);
-    for (const message of changed) {
-      send({ type: "message_updated", conversationId: message.conversationId, message });
+    // Edycje i kasowania sprzed kursora: kursor id ich nie obejmuje. Stronicowane
+    // tak samo jak inboxAfter - pojedyncza strona gubila zmiany powyzej limitu.
+    let editCursor = 0;
+    const since = rc.ctx.now() - RESUME_EDIT_WINDOW_SEC;
+    for (;;) {
+      if (res.destroyed || res.writableEnded) return;
+      const changed = updatedBefore(rc.ctx, actor.id, lastSeen, since, editCursor);
+      for (const message of changed) {
+        send({ type: "message_updated", conversationId: message.conversationId, message });
+      }
+      if (changed.length < RESUME_PAGE) break;
+      editCursor = changed[changed.length - 1].id;
     }
   }
   res.write(": polaczono\n\n");
@@ -103,6 +115,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   const cleanup = () => {
     clearInterval(ping);
     unsubscribe();
+    releaseStream();
   };
   res.on("close", cleanup);
   res.on("error", cleanup);
@@ -146,9 +159,12 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
     };
 
     const unsubscribe = rc.ctx.bus.subscribe(actor.id, (event) => {
-      if (event.type === "message") finish();
+      // Tylko cudze wiadomosci: inboxAfter pomija wlasne, wiec obudzenie na
+      // wlasnej konczylo long-poll pusta lista i klient odpytywal od nowa.
+      if (event.type === "message" && event.message.actorId !== actor.id) finish();
     });
     const timer = setTimeout(finish, wait * 1000);
+    if (typeof timer.unref === "function") timer.unref();
     // Klient, ktory sie rozlaczyl w trakcie czekania, nie moze zostawic
     // subskrypcji i timera na zawsze.
     res.on("close", onClose);

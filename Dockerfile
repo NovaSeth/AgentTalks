@@ -33,4 +33,8 @@ USER node
 
 # init jest idempotentne, wiec bezpiecznie stoi w sciezce startu: pierwszy start
 # zaklada baze, kazdy nastepny nic nie zmienia.
-CMD ["sh", "-c", "node bin/agenttalks.js init && exec node bin/agenttalks.js serve --host 0.0.0.0 --port 8080"]
+#
+# Bez --port: AGENTTALKS_PORT (env, domyslnie 8080 z ENV wyzej) ustawia port przez
+# loadConfig, wiec `serve` i `healthcheck` maja jedno zrodlo prawdy - nadpisanie
+# env zmienia oba spojnie, zamiast psuc healthcheck przy zmianie portu.
+CMD ["sh", "-c", "node bin/agenttalks.js init && exec node bin/agenttalks.js serve --host 0.0.0.0"]

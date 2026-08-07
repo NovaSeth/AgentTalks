@@ -276,16 +276,17 @@ export function updatedBefore(
   actorId: number,
   beforeId: number,
   sinceTs: number,
+  afterCursor = 0,
 ): Message[] {
   const rows = ctx.db
     .prepare(
       `SELECT m.* FROM messages m
          JOIN members mem ON mem.conversation_id = m.conversation_id AND mem.actor_id = ?
-        WHERE m.id <= ?
+        WHERE m.id > ? AND m.id <= ?
           AND (COALESCE(m.edited_at, 0) >= ? OR COALESCE(m.deleted_at, 0) >= ?)
         ORDER BY m.id LIMIT 500`,
     )
-    .all(actorId, beforeId, sinceTs, sinceTs) as MsgRow[];
+    .all(actorId, afterCursor, beforeId, sinceTs, sinceTs) as MsgRow[];
   return rows.map(messageFromRow);
 }
 

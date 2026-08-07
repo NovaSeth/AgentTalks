@@ -209,7 +209,10 @@ test("DM budzi nieobecnego adresata podpisanym ladunkiem", async () => {
 test("aktor z zywym SSE nie jest budzony - push juz dotarl", async () => {
   const { ctx, ala, bob, dm, delivered } = wakeSetup();
   setWake(ctx, bob.id, "https://most.example/wake");
-  const off = ctx.bus.subscribe(bob.id, () => {});
+  // Zywe SSE to zarejestrowany STRUMIEN (openStream), nie zwykla subskrypcja -
+  // long-poll i MCP talk_read subskrybuja szyne na chwile i nie liczą sie jako
+  // "agent trzyma polaczenie".
+  const off = ctx.bus.openStream(bob.id);
   postMessage(ctx, { conversationId: dm.id, actorId: ala.id, body: "jestes online" });
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(delivered.length, 0);
@@ -343,4 +346,36 @@ test("actorLiveness: zywa sesja -> online, zakonczona -> nieobecny", () => {
   assert.equal(actorLiveness(ctx, bob.id).lastSeenAt, 1000);
   endSession(ctx, "s1");
   assert.deepEqual(actorLiveness(ctx, bob.id), { online: false, lastSeenAt: null });
+});
+
+test("wake odrzuca adresy lokalne i prywatne (SSRF)", () => {
+  const ctx = testCtx();
+  const bob = mkActor(ctx, "bob");
+  for (const bad of [
+    "http://127.0.0.1/wake", "http://localhost:9000/x", "http://169.254.169.254/latest/meta-data",
+    "http://10.0.0.5/x", "http://192.168.1.1/x", "http://172.16.0.1/x", "http://[::1]/x",
+  ]) {
+    assert.throws(() => setWake(ctx, bob.id, bad), /lokalny|prywatny|http/, `przeszlo: ${bad}`);
+  }
+  assert.doesNotThrow(() => setWake(ctx, bob.id, "https://most.example.com/wake"));
+});
+
+test("wake pozwala na loopback tylko za jawna zgoda", () => {
+  const ctx = testCtx();
+  const bob = mkActor(ctx, "bob");
+  assert.throws(() => setWake(ctx, bob.id, "http://127.0.0.1/wake"), /lokalny/);
+  assert.doesNotThrow(() => setWake(ctx, bob.id, "http://127.0.0.1/wake", { allowLoopback: true }));
+});
+
+test("plik sensitive z ttl=0 dostaje domyslny TTL, nie staje sie wieczny", () => {
+  let t = 1000;
+  const ctx = testCtx(() => t);
+  const dir = mkdtempSync(join(tmpdir(), "at-files-"));
+  const ala = mkActor(ctx, "ala");
+  const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: ala.id });
+  const { file } = storeFile(ctx, dir, {
+    actorId: ala.id, conversationId: c.id, name: "z.png", data: Buffer.from("x"),
+    maxBytes: 1024, sensitive: true, ttlSec: 0,
+  });
+  assert.equal(file.expiresAt, 1000 + 24 * 3600, "ttl=0 przy sensitive musi dac domyslny TTL");
 });

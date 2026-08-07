@@ -96,9 +96,12 @@ export function storeFile(
   const id = randomBytes(16).toString("base64url");
   const name = safeName(input.name);
   const sensitive = input.sensitive === true;
-  // Wrazliwy plik bez jawnego TTL dostaje domyslny - "wrazliwy i wieczny"
-  // to dokladnie kombinacja, ktora bolala w prototypie.
-  const ttl = input.ttlSec ?? (sensitive ? SENSITIVE_DEFAULT_TTL : null);
+  // Wrazliwy plik bez SENSOWNEGO TTL dostaje domyslny. `?? ` nie wystarczy:
+  // ttl=0 (albo pusty naglowek X-TTL zamieniony na 0) to nie "podaj TTL", tylko
+  // "brak TTL" - a "wrazliwy i wieczny" to dokladnie kombinacja, ktora bolala
+  // w prototypie. Traktujemy wiec kazde ttl <= 0 jak brak.
+  const explicitTtl = input.ttlSec && input.ttlSec > 0 ? Math.trunc(input.ttlSec) : null;
+  const ttl = explicitTtl ?? (sensitive ? SENSITIVE_DEFAULT_TTL : null);
   const now = ctx.now();
 
   mkdirSync(filesDir, { recursive: true });
@@ -115,7 +118,7 @@ export function storeFile(
       id, input.actorId, input.conversationId, name, input.data.length,
       createHash("sha256").update(input.data).digest("hex"),
       input.mime ?? "application/octet-stream", path, now,
-      ttl ? now + Math.trunc(ttl) : null, sensitive ? 1 : 0, input.burn ? 1 : 0,
+      ttl ? now + ttl : null, sensitive ? 1 : 0, input.burn ? 1 : 0,
     );
 
   const human = humanSize(input.data.length);

@@ -62,28 +62,35 @@ export function registerSession(
   const exists = ctx.db.prepare("SELECT id FROM actors WHERE id = ?").get(input.actorId);
   if (!exists) throw notFound("aktor", `nie ma aktora ${input.actorId}`);
   const now = ctx.now();
+  // COALESCE(excluded, sessions): pola PODANE nadpisuja, POMINIETE zostaja.
+  // `atalk ping`/`busy`/`typing` wolaja to samo POST /api/sessions z samym
+  // sessionId - bez tego heartbeat kasowal etykiete ustawiona przez `atalk me`
+  // (label spadal do sessionId.slice(0,8), kind/cwd/host do domyslnych), przez
+  // co rozmowca co chwile zmienial nazwe w obecnosci.
   ctx.db
     .prepare(
       `INSERT INTO sessions(id, actor_id, label, kind, cwd, host, started_at, last_seen_at)
-       VALUES(?,?,?,?,?,?,?,?)
+       VALUES(:id, :actor, :label, :kind, :cwd, :host, :now, :now)
        ON CONFLICT(id) DO UPDATE SET
-         label = excluded.label,
-         kind = excluded.kind,
-         cwd = excluded.cwd,
-         host = excluded.host,
-         last_seen_at = excluded.last_seen_at,
+         label = COALESCE(:labelOrNull, sessions.label),
+         kind = COALESCE(:kindOrNull, sessions.kind),
+         cwd = COALESCE(:cwd, sessions.cwd),
+         host = COALESCE(:host, sessions.host),
+         last_seen_at = :now,
          ended_at = NULL`,
     )
-    .run(
-      input.sessionId,
-      input.actorId,
-      input.label ?? input.sessionId.slice(0, 8),
-      input.kind ?? "durable",
-      input.cwd ?? null,
-      input.host ?? null,
+    .run({
+      id: input.sessionId,
+      actor: input.actorId,
+      label: input.label ?? input.sessionId.slice(0, 8),
+      kind: input.kind ?? "durable",
+      cwd: input.cwd ?? null,
+      host: input.host ?? null,
       now,
-      now,
-    );
+      // przy UPDATE: null = "nie ruszaj tego pola"
+      labelOrNull: input.label ?? null,
+      kindOrNull: input.kind ?? null,
+    });
   ctx.bus.publish(allActorIds(ctx), { type: "presence" });
 }
 

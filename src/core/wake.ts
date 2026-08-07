@@ -42,11 +42,18 @@ export function setWake(
   ctx: Ctx,
   actorId: number,
   target: string,
+  opts: { allowLoopback?: boolean } = {},
 ): { config: WakeConfig; secret: string } {
   const url = new URL(target); // walidacja; rzuci na smieciach
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     throw new Error("wake_target musi byc adresem http(s)");
   }
+  // SSRF: serwer sam wykona POST na ten adres, wiec aktor moglby zmusic go do
+  // pukania w uslugi wewnetrzne (metadata chmury 169.254.169.254, baza, panel na
+  // localhost). Blokujemy adresy lokalne i prywatne. Wyjatek allowLoopback jest
+  // WYLACZNIE dla mostow na tej samej maszynie i wymaga jawnej zgody admina
+  // w konfiguracji instancji - domyslnie zamkniete.
+  assertPublicHost(url.hostname, opts.allowLoopback === true);
   const secret = randomBytes(24).toString("base64url");
   ctx.db
     .prepare(
@@ -55,6 +62,35 @@ export function setWake(
     )
     .run(target, secret, actorId);
   return { config: getWake(ctx, actorId)!, secret };
+}
+
+/** Odrzuca adresy, na ktore serwer nie ma prawa strzelac w cudzym imieniu:
+ *  pętla zwrotna, sieci prywatne (RFC 1918), link-local (w tym 169.254.169.254 -
+ *  endpoint metadanych chmury), IPv6 ULA/loopback. Nazwy nie-IP przechodza:
+ *  rozwiazanie DNS moze i tak wskazac adres prywatny, ale pelna ochrona (rebinding)
+ *  wymaga sprawdzenia PRZY strzale, nie przy rejestracji - to jest pierwsza,
+ *  tania warstwa, ktora odsiewa oczywiste przypadki. */
+function assertPublicHost(hostname: string, allowLoopback: boolean): void {
+  const h = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (allowLoopback && (h === "127.0.0.1" || h === "::1" || h === "localhost")) return;
+  const blocked =
+    h === "localhost" ||
+    h === "0.0.0.0" ||
+    h === "::1" ||
+    h === "::" ||
+    /^127\./.test(h) ||
+    /^10\./.test(h) ||
+    /^192\.168\./.test(h) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    /^169\.254\./.test(h) ||
+    /^fe80:/.test(h) ||
+    /^f[cd][0-9a-f]{2}:/.test(h);
+  if (blocked) {
+    throw new Error(
+      `wake_target ${hostname} wskazuje adres lokalny/prywatny - serwer nie bedzie ` +
+        `w niego strzelal. Uzyj adresu publicznego mostu.`,
+    );
+  }
 }
 
 export function clearWake(ctx: Ctx, actorId: number): void {
@@ -118,7 +154,7 @@ export function registerWake(
 
     for (const actorId of new Set(recipients)) {
       if (actorId === msg.actorId) continue;
-      if (ctx.bus.subscriberCount(actorId) > 0) continue; // zywe SSE = push juz dotarl
+      if (ctx.bus.streamCount(actorId) > 0) continue; // zywe SSE = push juz dotarl
 
       let reason: WakeReason | null = null;
       if (direct) reason = "dm";

@@ -84,7 +84,8 @@ class Api {
     };
   }
 
-  async call(method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+  async call(method: string, path: string, body?: unknown,
+             opts: { allow409?: boolean } = {}): Promise<Record<string, unknown>> {
     let res: Response;
     try {
       res = await fetch(this.#cfg.url + path, {
@@ -100,8 +101,11 @@ class Api {
     }
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      // 409 przy dzierzawach to normalna odpowiedz negocjacyjna, nie awaria.
-      if (res.status === 409) return { ...data, _status: 409 };
+      // 409 jest odpowiedzia negocjacyjna TYLKO dla dzierzaw (allow409). Bez tego
+      // `atalk channel #istniejacy` dostawal 409 "kanal istnieje", call go nie
+      // rzucal, a handler czytal undefined.conversation -> TypeError zamiast
+      // komunikatu serwera.
+      if (res.status === 409 && opts.allow409) return { ...data, _status: 409 };
       throw new Error(String(data.error ?? `HTTP ${res.status}`));
     }
     return data;
@@ -161,22 +165,24 @@ class Api {
 
 // ---- lokalny kursor -------------------------------------------------------
 
-function cursorFile(cfg: ClientConfig): string {
-  const key = createHash("sha256").update(`${cfg.url}|${cfg.token}`).digest("hex").slice(0, 16);
+/** Kursor kluczowany po serwerze i AKTORZE (handle), nie po tokenie: rotacja
+ *  tokenu nie moze cofac kursora do zera i powtarzac calej historii. */
+function cursorFile(cfg: ClientConfig, handle: string): string {
+  const key = createHash("sha256").update(`${cfg.url}|${handle}`).digest("hex").slice(0, 16);
   return join(CONFIG_DIR, `cursor-${key}`);
 }
 
-function readCursor(cfg: ClientConfig): number {
+function readCursor(cfg: ClientConfig, handle: string): number {
   try {
-    return Number(readFileSync(cursorFile(cfg), "utf8").trim()) || 0;
+    return Number(readFileSync(cursorFile(cfg, handle), "utf8").trim()) || 0;
   } catch {
     return 0;
   }
 }
 
-function writeCursor(cfg: ClientConfig, id: number): void {
+function writeCursor(cfg: ClientConfig, handle: string, id: number): void {
   mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(cursorFile(cfg), String(id));
+  writeFileSync(cursorFile(cfg, handle), String(id));
 }
 
 // ---- rendering ------------------------------------------------------------
@@ -292,8 +298,15 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
     atalk get-file <id> <sciezka-docelowa>
 `;
 
+// Wszystkie flagi, ktore atalk rozumie. Dzieki temu `--coverage`, `--foo` itp.
+// w tresci wiadomosci zostaja tekstem, a nie znikaja jako nieznana flaga.
+const KNOWN_FLAGS = new Set([
+  "url", "token", "session", "wait", "to", "sensitive", "burn", "ttl", "note",
+  "private", "topic", "after", "since-ts", "until-ts", "kind", "data", "name",
+]);
+
 export async function atalkMain(argv: readonly string[]): Promise<number> {
-  const args = parseArgs(argv);
+  const args = parseArgs(argv, KNOWN_FLAGS);
   const [cmd, ...rest] = args.positional;
 
   try {
@@ -377,7 +390,9 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "read": {
       const wait = Number(flagStr(args, "wait") ?? 0) || 0;
-      const after = readCursor(cfg);
+      const me = await api.call("GET", "/api/me");
+      const handle = (me.actor as { handle: string }).handle;
+      const after = readCursor(cfg, handle);
       const r = await api.call("GET", `/api/messages?after=${after}&wait=${wait}`);
       const messages = r.messages as Msg[];
       if (messages.length === 0) {
@@ -387,7 +402,9 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const { who, conv } = await nameMaps(api);
       out(`${messages.length} nowych:`);
       for (const m of messages) out(fmtMsg(m, who, conv));
-      writeCursor(cfg, messages[messages.length - 1].id);
+      // Kursor PO wydruku: gdyby render rzucil, nastepne `read` pokaze to samo,
+      // a nie przeskoczy nieprzeczytane.
+      writeCursor(cfg, handle, messages[messages.length - 1].id);
       return 0;
     }
 
@@ -496,22 +513,30 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "follow": {
       const { who, conv } = await nameMaps(api);
-      const after = flagStr(args, "after");
+      const afterRaw = flagStr(args, "after");
+      // NaN z niecyfrowego --after serwer bierze jak 0 i wypisuje cala historie.
+      let cursor: number | undefined =
+        afterRaw !== undefined && /^\d+$/.test(afterRaw) ? Number(afterRaw) : undefined;
       out("strumien na zywo (Ctrl+C konczy)...");
-      for await (const ev of api.events(after !== undefined ? Number(after) : undefined)) {
-        if (ev.type === "message" || ev.type === "message_updated") {
-          const m = ev.message as Msg;
-          const author = who.get(m.actorId);
-          if (author === undefined) {
-            // nowy rozmowca w trakcie strumienia - odswiez mapy
-            const maps = await nameMaps(api);
-            for (const [k, v] of maps.who) who.set(k, v);
-            for (const [k, v] of maps.conv) conv.set(k, v);
+      // Reconnect: SSE bywa zrywane przez proxy; wznawiamy od ostatniego id.
+      for (;;) {
+        try {
+          for await (const ev of api.events(cursor)) {
+            if (ev.type !== "message" && ev.type !== "message_updated") continue;
+            const m = ev.message as Msg;
+            if (m.id) cursor = m.id;
+            if (who.get(m.actorId) === undefined || conv.get(m.conversationId) === undefined) {
+              const maps = await nameMaps(api);
+              for (const [k, v] of maps.who) who.set(k, v);
+              for (const [k, v] of maps.conv) conv.set(k, v);
+            }
+            out(fmtMsg(m, who, conv) + (ev.type === "message_updated" ? "  (zmieniona)" : ""));
           }
-          out(fmtMsg(m, who, conv) + (ev.type === "message_updated" ? "  (zmieniona)" : ""));
+        } catch (err) {
+          out(`(strumien zerwany: ${err instanceof Error ? err.message : err}; wznawiam za 2 s)`);
         }
+        await new Promise((r) => setTimeout(r, 2000));
       }
-      return 0;
     }
 
     case "who": {
@@ -792,7 +817,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         ttlSec: Number(flagStr(args, "ttl") ?? 0) || undefined,
         note: flagStr(args, "note"),
         sessionId: sessionId(args),
-      });
+      }, { allow409: true });
       if (r.granted) {
         const lease = r.lease as { expiresAt: number };
         out(`GRANTED ${rest[0]} na ${lease.expiresAt - Math.floor(Date.now() / 1000)} s`);
@@ -809,7 +834,8 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         process.stderr.write("uzycie: atalk release <zasob>\n");
         return 1;
       }
-      const r = await api.call("POST", "/api/leases/release", { resource: rest[0] });
+      const r = await api.call("POST", "/api/leases/release", { resource: rest[0] },
+        { allow409: true });
       if (r.released) {
         out("UNLOCKED");
         return 0;

@@ -17,10 +17,24 @@ set -uo pipefail
 MODE="${1:-}"
 command -v atalk >/dev/null 2>&1 || exit 0
 [ -n "${AGENTTALKS_TOKEN:-}" ] || exit 0
+# python3 jest wymagany do bezpiecznego parsowania JSON i do emit. Bez niego hook
+# NIE wola `atalk read` (ktore przesuwa kursor) - inaczej wiadomosci zostalyby
+# skonsumowane, a nie mialby ich jak dostarczyc do kontekstu i przepadlyby.
+command -v python3 >/dev/null 2>&1 || exit 0
+
+# Timeout na kazde wywolanie atalk: tick odpala sie po KAZDYM narzedziu, wiec
+# wiszacy serwer nie moze blokowac pracy agenta. `timeout` jest w coreutils; gdy
+# go nie ma (np. macOS bez gtimeout), wywolania ida bez limitu - i tak w tle.
+if command -v timeout >/dev/null 2>&1; then AT_TIMEOUT="timeout 5"; else AT_TIMEOUT=""; fi
+at() { $AT_TIMEOUT atalk "$@"; }
 
 payload=$(cat 2>/dev/null || true)
+# Parsujemy JSON Pythonem, nie sedem: zachlanne `.*` bralo OSTATNIE "session_id"
+# w linii, wiec pole z tresci narzedzia MCP nadpisywalo prawdziwe id sesji.
 sid=$(printf '%s' "$payload" \
-  | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+  | python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("session_id",""))
+except Exception: print("")' 2>/dev/null || true)
 [ -n "$sid" ] && export AGENTTALKS_SESSION="$sid"
 
 emit() {   # $1 = tekst do kontekstu, $2 = nazwa zdarzenia hooka
@@ -36,8 +50,8 @@ PY
 case "$MODE" in
   start)
     label="${AGENTTALKS_LABEL:-$(basename "$PWD")}"
-    atalk me "$label" >/dev/null 2>&1
-    status=$(atalk status 2>/dev/null || true)
+    at me "$label" >/dev/null 2>&1
+    status=$(at status 2>/dev/null || true)
     [ -n "$status" ] || exit 0
     emit "KANAL AGENTTALKS jest aktywny. Twoja sesja: ${sid:0:8} (etykieta: $label).
 $status
@@ -51,8 +65,8 @@ Ludzie tez sa uczestnikami - piszesz do nich tak samo jak do agentow." SessionSt
   tick)
     # busy w tle: uzycie narzedzia to odpowiednik "pisze..." dla agenta.
     # Sygnal MUSI pochodzic z pracy, nie z pollowania - inaczej nic nie znaczy.
-    (atalk busy >/dev/null 2>&1 &)
-    new=$(atalk read 2>/dev/null | grep -v '^Brak nowych' || true)
+    (at busy >/dev/null 2>&1 &)
+    new=$(at read 2>/dev/null | grep -v '^Brak nowych' || true)
     [ -n "$new" ] || exit 0
     emit "NOWE WIADOMOSCI (AgentTalks):
 $new
@@ -61,7 +75,7 @@ Odpowiedz: atalk say <tekst> | atalk to @kto <tekst> | atalk thread <id> <tekst>
     ;;
 
   end)
-    atalk bye >/dev/null 2>&1
+    at bye >/dev/null 2>&1
     ;;
 esac
 exit 0

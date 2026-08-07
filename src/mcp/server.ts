@@ -67,6 +67,11 @@ const CONV_DESC =
 
 export const TOOLS: ToolDef[] = [
   {
+    name: "talk_whoami",
+    description: "Kim jestem wedlug serwera (handle i rodzaj).",
+    inputSchema: S({}),
+  },
+  {
     name: "talk_status",
     description:
       "Pelny obraz kanalu w jednym wywolaniu: kto jest, nieprzeczytane, otwarte pytania, " +
@@ -238,8 +243,10 @@ function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation 
   }
   if (raw.startsWith("#")) {
     const conv = getBySlug(ctx, raw);
-    if (!conv) throw notFound("kanal", `nie ma kanalu ${raw}`);
-    return assertCanRead(ctx, conv.id, actor.id);
+    // Kanal nieistniejacy i prywatny-bez-dostepu MUSZA dac ten sam blad: inaczej
+    // roznica tresci ("nie ma kanalu" vs "brak dostepu") jest wyrocznia istnienia
+    // kanalu prywatnego po nazwie. assertCanRead z niemozliwym id daje spojny blad.
+    return assertCanRead(ctx, conv ? conv.id : -1, actor.id);
   }
   // '@a' albo '@a,@b' -> rozmowa bezposrednia (dm/grupa), zakladana w locie.
   const handles = raw.split(/[\s,]+/).filter(Boolean);
@@ -458,11 +465,11 @@ async function callTool(
       const root = num(args.messageId) ?? 0;
       const first = ctx.db.prepare("SELECT conversation_id, thread_id FROM messages WHERE id = ?")
         .get(root) as { conversation_id: number; thread_id: number | null } | undefined;
-      if (!first) throw notFound("wiadomosc", `nie ma wiadomosci ${root}`);
-      // Kontrola dostepu ta sama sciezka co wszedzie; nieistniejaca i cudza
-      // wiadomosc daja ten sam efekt koncowy dla wolajacego.
-      resolveConversation(ctx, actor, String(first.conversation_id));
-      const messages = listThread(ctx, first.thread_id ?? root);
+      // Nieistniejaca wiadomosc i wiadomosc z kanalu bez dostepu daja ten sam blad
+      // ("brak dostepu" z assertCanRead) - id sa globalne, wiec rozne odpowiedzi
+      // zdradzalyby istnienie tresci w cudzych kanalach.
+      resolveConversation(ctx, actor, String(first ? first.conversation_id : -1));
+      const messages = listThread(ctx, first!.thread_id ?? root);
       return text(messages.map((m) => fmtMsg(ctx, m)).join("\n"));
     }
 
@@ -604,9 +611,13 @@ function waitForInbox(
       resolve(inboxAfter(ctx, actorId, afterId));
     };
     const unsubscribe = ctx.bus.subscribe(actorId, (event) => {
-      if (event.type === "message") finish();
+      // Budzimy sie tylko na CUDZE wiadomosci: inboxAfter i tak pomija wlasne,
+      // wiec obudzenie sie na wlasnej konczylo long-poll pusta lista, choc dla
+      // aktora nadal moglo nic nie byc - i klient odpytywal od nowa bez potrzeby.
+      if (event.type === "message" && event.message.actorId !== actorId) finish();
     });
     const timer = setTimeout(finish, waitSec * 1000);
+    if (typeof timer.unref === "function") timer.unref();
   });
 }
 
