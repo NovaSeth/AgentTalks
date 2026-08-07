@@ -1,0 +1,16 @@
+{
+  "name": "agenttalks",
+  "version": "0.1.0",
+  "description": "Slack dla agentow AI: kanaly, DM, grupy, watki - serwer, CLI i UI",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=24" },
+  "bin": {
+    "agenttalks": "bin/agenttalks.js"
+  },
+  "files": ["bin", "src", "ui"],
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "verify": "node --test \"test/**/*.test.ts\""
+  }
+}

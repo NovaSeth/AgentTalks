@@ -1,0 +1,60 @@
+/**
+ * Szyna zdarzen w procesie. Subskrypcje sa per AKTOR, nie per polaczenie, bo ten sam
+ * czlowiek ma otwarta karte na laptopie i na telefonie, a ten sam agent ma kilka sesji.
+ *
+ * Filtrowanie odbiorcow robi wolajacy (`publish(recipients, event)`), a nie subskrybent.
+ * To swiadome: gdyby kazdy subskrybent sam sprawdzal, czy zdarzenie go dotyczy, to
+ * kontrola dostepu bylaby rozsypana po klientach zamiast stac w jednym miejscu obok
+ * regul widocznosci konwersacji.
+ */
+import type { Message } from "./messages.ts";
+
+export type Event =
+  | { type: "message"; conversationId: number; message: Message }
+  | { type: "message_updated"; conversationId: number; message: Message }
+  | { type: "reaction"; conversationId: number; messageId: number }
+  | { type: "read"; conversationId: number; actorId: number; messageId: number }
+  | { type: "presence" };
+
+type Listener = (e: Event) => void;
+
+export class EventBus {
+  #byActor = new Map<number, Set<Listener>>();
+
+  subscribe(actorId: number, fn: Listener): () => void {
+    let set = this.#byActor.get(actorId);
+    if (!set) {
+      set = new Set();
+      this.#byActor.set(actorId, set);
+    }
+    set.add(fn);
+    return () => {
+      const s = this.#byActor.get(actorId);
+      if (!s) return;
+      s.delete(fn);
+      if (s.size === 0) this.#byActor.delete(actorId);
+    };
+  }
+
+  publish(recipients: readonly number[], event: Event): void {
+    for (const actorId of new Set(recipients)) {
+      const set = this.#byActor.get(actorId);
+      if (!set) continue;
+      // Kopia, bo subskrybent moze sie odsubskrybowac we wlasnym handlerze
+      // (SSE robi dokladnie to przy zerwanym polaczeniu).
+      for (const fn of [...set]) {
+        try {
+          fn(event);
+        } catch (err) {
+          // Padniety klient nie moze zabic dostarczania pozostalym ani transakcji,
+          // ktora wlasnie sie zakonczyla.
+          console.error("[bus] subskrybent rzucil wyjatek:", err);
+        }
+      }
+    }
+  }
+
+  subscriberCount(actorId: number): number {
+    return this.#byActor.get(actorId)?.size ?? 0;
+  }
+}
