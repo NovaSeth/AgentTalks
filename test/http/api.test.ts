@@ -293,3 +293,37 @@ test("otwarte pytanie zamyka odpowiedz od kogokolwiek", async () => {
   assert.equal(po.questions.length, 0);
   await s.close();
 });
+
+test("lista konwersacji rozroznia kanal moj od kanalu, ktory tylko widze", async () => {
+  const s = await startTestServer();
+  const { tokenB, kanalId } = seed(s);
+  const przed = await (await fetch(s.url + "/api/conversations", {
+    headers: bearer(tokenB),
+  })).json();
+  assert.ok(
+    przed.conversations.some((c: any) => c.id === kanalId),
+    "kanal publiczny ma byc widoczny",
+  );
+  assert.equal(
+    przed.memberships.some((m: any) => m.conversationId === kanalId), false,
+    "bob jeszcze nie dolaczyl",
+  );
+  await fetch(`${s.url}/api/conversations/${kanalId}/join`, {
+    method: "POST", headers: bearer(tokenB),
+  });
+  const po = await (await fetch(s.url + "/api/conversations", {
+    headers: bearer(tokenB),
+  })).json();
+  assert.ok(po.memberships.some((m: any) => m.conversationId === kanalId));
+  await s.close();
+});
+
+test("nie da sie dolaczyc do kanalu prywatnego przez join", async () => {
+  const s = await startTestServer();
+  const { tokenB, prywatnyId } = seed(s);
+  const r = await fetch(`${s.url}/api/conversations/${prywatnyId}/join`, {
+    method: "POST", headers: bearer(tokenB),
+  });
+  assert.equal(r.status, 403);
+  await s.close();
+});

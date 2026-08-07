@@ -1,0 +1,290 @@
+/**
+ * CLI administracyjne AgentTalks.
+ *
+ * Etap 1 daje to, co jest potrzebne, zeby serwer w ogole zyl: zalozenie instancji,
+ * uruchomienie, aktorzy, tokeny, import z prototypu. Klient dla agentow (`atalk`)
+ * przychodzi w etapie 2 i bedzie mowil HTTP, a nie dotykal bazy.
+ */
+import { assertBindAllowed, initData, loadConfig, defaultDataDir, type Config } from "../config.ts";
+import { openDb } from "../store/db.ts";
+import { createCtx, type Ctx } from "../core/ctx.ts";
+import {
+  createActor,
+  getActorByHandle,
+  listActors,
+  setPassword,
+  type ActorKind,
+} from "../core/actors.ts";
+import { createChannel, getBySlug, join as joinConversation } from "../core/conversations.ts";
+import { listTokens, mintToken, revokeToken } from "../core/tokens.ts";
+import { importTalkHome } from "../importer/talk.ts";
+import { createServer, VERSION } from "../http/server.ts";
+import { AppError } from "../core/errors.ts";
+import { assertNodeVersion } from "../version.ts";
+
+const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a ludzmi
+
+  agenttalks init [--data <kat>]
+      Zaklada katalog danych, baze, kanal #general i aktora systemowego.
+      Idempotentne: ponowne wywolanie nie nadpisuje sekretu ani danych.
+
+  agenttalks serve [--data <kat>] [--host <adres>] [--port <n>]
+      Uruchamia serwer. Domyslnie 127.0.0.1:8787.
+
+  agenttalks actor create <handle> --kind human|agent [--name <nazwa>]
+                                   [--password <haslo>] [--admin]
+  agenttalks actor list
+
+  agenttalks token create --actor <handle> [--name <opis>]
+  agenttalks token list --actor <handle>
+  agenttalks token revoke <id>
+
+  agenttalks import-talk <katalog ~/.talk> [--data <kat>]
+      Wciaga historie prototypu: kanaly, DM-y, pytania, reakcje, znaczniki odczytu.
+
+  agenttalks healthcheck [--url <adres>]
+      Zwraca 0, gdy serwer odpowiada. Uzywane przez HEALTHCHECK w obrazie Docker.
+`;
+
+type Args = { positional: string[]; flags: Record<string, string | boolean> };
+
+export function parseArgs(argv: readonly string[]): Args {
+  const positional: string[] = [];
+  const flags: Record<string, string | boolean> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith("--")) {
+      positional.push(a);
+      continue;
+    }
+    const name = a.slice(2);
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith("--")) {
+      flags[name] = true;
+    } else {
+      flags[name] = next;
+      i++;
+    }
+  }
+  return { positional, flags };
+}
+
+const flagStr = (args: Args, name: string): string | undefined =>
+  typeof args.flags[name] === "string" ? (args.flags[name] as string) : undefined;
+
+function openCtx(args: Args): { ctx: Ctx; config: Config } {
+  const config = loadConfig(flagStr(args, "data") ?? defaultDataDir());
+  if (!config.secret) {
+    throw new Error(
+      `Nie ma instancji w ${config.dataDir}. Zaloz ja: agenttalks init --data ${config.dataDir}`,
+    );
+  }
+  return { ctx: createCtx(openDb(config.dbPath)), config };
+}
+
+export async function main(argv: readonly string[]): Promise<number> {
+  const args = parseArgs(argv);
+  const [command, ...rest] = args.positional;
+
+  try {
+    assertNodeVersion();
+    switch (command) {
+      case undefined:
+      case "help":
+      case "--help":
+        process.stdout.write(USAGE);
+        return 0;
+      case "init":
+        return cmdInit(args);
+      case "serve":
+        return await cmdServe(args);
+      case "actor":
+        return cmdActor(rest, args);
+      case "token":
+        return cmdToken(rest, args);
+      case "import-talk":
+        return cmdImport(rest, args);
+      case "healthcheck":
+        return await cmdHealthcheck(args);
+      default:
+        process.stderr.write(`nieznana komenda: ${command}\n\n${USAGE}`);
+        return 1;
+    }
+  } catch (err) {
+    const msg = err instanceof AppError || err instanceof Error ? err.message : String(err);
+    process.stderr.write(`blad: ${msg}\n`);
+    return 1;
+  }
+}
+
+function cmdInit(args: Args): number {
+  const config = initData(flagStr(args, "data") ?? defaultDataDir());
+  const ctx = createCtx(openDb(config.dbPath));
+
+  // Aktor systemowy jest autorem wiadomosci, ktore pisze sam serwer (np. informacja
+  // o wylaczonym punkcie dostarczenia). Bez niego takie komunikaty musialyby udawac
+  // kogos - a podszywanie sie jest dokladnie tym, co ten projekt usuwa.
+  const system = getActorByHandle(ctx, "system")
+    ?? createActor(ctx, { kind: "system", handle: "system", displayName: "AgentTalks" });
+  const general = getBySlug(ctx, "general")
+    ?? createChannel(ctx, { slug: "general", kind: "public", topic: "Kanal ogolny",
+                            createdBy: system.id });
+
+  process.stdout.write(
+    `Instancja gotowa w ${config.dataDir}\n` +
+      `  baza:   ${config.dbPath}\n` +
+      `  pliki:  ${config.filesDir}\n` +
+      `  kanal:  #${general.slug}\n\n` +
+      `Nastepny krok - konto dla siebie i token dla agenta:\n` +
+      `  agenttalks actor create michal --kind human --password '...' --admin\n` +
+      `  agenttalks actor create nestor --kind agent\n` +
+      `  agenttalks token create --actor nestor --name vps\n`,
+  );
+  return 0;
+}
+
+async function cmdServe(args: Args): Promise<number> {
+  const { ctx, config } = openCtx(args);
+  const host = flagStr(args, "host") ?? config.host;
+  const port = Number(flagStr(args, "port") ?? config.port);
+  assertBindAllowed(config, host);
+
+  const server = createServer(ctx, config);
+  await new Promise<void>((resolve) => server.listen(port, host, resolve));
+  process.stdout.write(`AgentTalks ${VERSION} nasluchuje na http://${host}:${port}\n`);
+
+  // Zamkniecie na sygnal, zeby kontener nie musial czekac na SIGKILL.
+  for (const sig of ["SIGINT", "SIGTERM"] as const) {
+    process.on(sig, () => {
+      process.stdout.write(`\n${sig}: zamykam\n`);
+      server.closeAllConnections?.();
+      server.close(() => process.exit(0));
+    });
+  }
+  return await new Promise<number>(() => {}); // dziala do sygnalu
+}
+
+function cmdActor(rest: string[], args: Args): number {
+  const [sub, handle] = rest;
+  const { ctx } = openCtx(args);
+
+  if (sub === "list") {
+    for (const a of listActors(ctx)) {
+      process.stdout.write(
+        `  ${a.handle.padEnd(24)} ${a.kind.padEnd(7)} ${a.isAdmin ? "admin " : "      "} ${a.displayName}\n`,
+      );
+    }
+    return 0;
+  }
+  if (sub !== "create" || !handle) {
+    process.stderr.write("uzycie: agenttalks actor create <handle> --kind human|agent\n");
+    return 1;
+  }
+  const kind = (flagStr(args, "kind") ?? "agent") as ActorKind;
+  if (kind !== "human" && kind !== "agent") {
+    process.stderr.write("--kind musi byc 'human' albo 'agent'\n");
+    return 1;
+  }
+  const actor = createActor(ctx, {
+    kind,
+    handle,
+    displayName: flagStr(args, "name"),
+    isAdmin: args.flags.admin === true,
+  });
+  // Nowy uczestnik laduje w #general od razu. Konto zalozone i "nic nie widze"
+  // to zla pierwsza minuta z narzedziem, a kanal ogolny jest po to, zeby byc w nim
+  // domyslnie. Kazdy inny kanal wymaga swiadomego dolaczenia.
+  const general = getBySlug(ctx, "general");
+  if (general) joinConversation(ctx, general.id, actor.id);
+
+  const password = flagStr(args, "password");
+  if (password) setPassword(ctx, actor.id, password);
+  else if (kind === "human") {
+    process.stdout.write("uwaga: konto czlowieka bez hasla nie zaloguje sie do UI\n");
+  }
+  process.stdout.write(`utworzony aktor @${actor.handle} (${actor.kind})\n`);
+  return 0;
+}
+
+function cmdToken(rest: string[], args: Args): number {
+  const [sub, id] = rest;
+  const { ctx } = openCtx(args);
+
+  if (sub === "create") {
+    const handle = flagStr(args, "actor");
+    if (!handle) {
+      process.stderr.write("uzycie: agenttalks token create --actor <handle> [--name <opis>]\n");
+      return 1;
+    }
+    const actor = getActorByHandle(ctx, handle);
+    if (!actor) {
+      process.stderr.write(`nie ma aktora @${handle}\n`);
+      return 1;
+    }
+    const { token } = mintToken(ctx, actor.id, flagStr(args, "name") ?? "bez nazwy");
+    // Widoczny raz. W bazie lezy tylko sha256, wiec nikt (lacznie z adminem)
+    // nie odczyta go pozniej.
+    process.stdout.write(`${token}\n`);
+    process.stderr.write("^ zapisz teraz: ta wartosc nie da sie odtworzyc\n");
+    return 0;
+  }
+  if (sub === "list") {
+    const actor = getActorByHandle(ctx, flagStr(args, "actor") ?? "");
+    if (!actor) {
+      process.stderr.write("uzycie: agenttalks token list --actor <handle>\n");
+      return 1;
+    }
+    for (const t of listTokens(ctx, actor.id)) {
+      const stan = t.revokedAt ? "ODWOLANY" : "aktywny";
+      process.stdout.write(`  ${String(t.id).padStart(4)}  ${stan.padEnd(9)} ${t.name}\n`);
+    }
+    return 0;
+  }
+  if (sub === "revoke" && id) {
+    revokeToken(ctx, Number(id));
+    process.stdout.write(`token ${id} odwolany\n`);
+    return 0;
+  }
+  process.stderr.write("uzycie: agenttalks token create|list|revoke\n");
+  return 1;
+}
+
+function cmdImport(rest: string[], args: Args): number {
+  const [talkHome] = rest;
+  if (!talkHome) {
+    process.stderr.write("uzycie: agenttalks import-talk <katalog ~/.talk>\n");
+    return 1;
+  }
+  const { ctx } = openCtx(args);
+  const r = importTalkHome(ctx, talkHome);
+  process.stdout.write(
+    `Import z ${talkHome}:\n` +
+      `  aktorzy       ${r.actors}\n` +
+      `  konwersacje   ${r.conversations}\n` +
+      `  wiadomosci    ${r.messages}\n` +
+      `  reakcje       ${r.reactions}\n` +
+      `  pytania       ${r.questions}\n` +
+      `  znaczniki     ${r.reads}\n` +
+      `  pominiete     ${r.skipped}\n`,
+  );
+  // Pominiete rekordy sa WYPISYWANE, a nie tylko policzone. Cicho pominieta
+  // wiadomosc byla konkretna wada prototypu i nie ma jej odtwarzac importer.
+  for (const p of r.problems.slice(0, 20)) process.stdout.write(`    - ${p}\n`);
+  if (r.problems.length > 20) {
+    process.stdout.write(`    ... i ${r.problems.length - 20} wiecej\n`);
+  }
+  return 0;
+}
+
+async function cmdHealthcheck(args: Args): Promise<number> {
+  const url = flagStr(args, "url")
+    ?? `http://127.0.0.1:${process.env.AGENTTALKS_PORT ?? 8080}/api/health`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return 1;
+    const body = await res.json() as { ok?: boolean };
+    return body.ok ? 0 : 1;
+  } catch {
+    return 1;
+  }
+}

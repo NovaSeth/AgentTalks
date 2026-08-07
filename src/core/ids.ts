@@ -13,15 +13,31 @@ const HANDLE_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,47}$/;
 
 /**
+ * Transliteracja przed odsianiem znakow. Bez tego "Michal" pisane z ogonkami dawaloby
+ * "micha" (samo `ł` zniknelo, bo NFD go nie rozklada - to osobny znak, nie litera
+ * z diakrytykiem). Handle ma byc rozpoznawalny dla czlowieka, a nie okaleczony.
+ */
+const POLSKIE: Record<string, string> = {
+  "ą": "a", "ć": "c", "ę": "e", "ł": "l",
+  "ń": "n", "ó": "o", "ś": "s", "ź": "z", "ż": "z",
+};
+
+function transliterate(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[ąćęłńóśźż]/g, (c) => POLSKIE[c])
+    // Reszta alfabetow lacinskich: rozklad NFD zdejmuje znaki diakrytyczne.
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+/**
  * "@Nestor" -> "nestor", "bs/uzytkownik" -> "bs-uzytkownik".
  * Ukosnik i spacja staja sie mysnikiem, bo prototyp uzywal ich w etykietach
  * ("Nestor/motowolt", "bs/sceptyk") i import ma je odwzorowac bez utraty sensu.
  */
 export function normalizeHandle(raw: string): string {
-  const cleaned = String(raw ?? "")
-    .trim()
-    .replace(/^@+/, "")
-    .toLowerCase()
+  const cleaned = transliterate(String(raw ?? "").trim().replace(/^@+/, ""))
     .replace(/[\s/\\]+/g, "-")
     .replace(/[^a-z0-9._-]/g, "")
     .replace(/-{2,}/g, "-")
@@ -38,10 +54,7 @@ export function normalizeHandle(raw: string): string {
 /** "#general" -> "general". Kanaly w prototypie mialy krzyzyk w nazwie; tutaj krzyzyk
  *  jest ozdoba interfejsu, a nie czescia identyfikatora. */
 export function normalizeSlug(raw: string): string {
-  const cleaned = String(raw ?? "")
-    .trim()
-    .replace(/^#+/, "")
-    .toLowerCase()
+  const cleaned = transliterate(String(raw ?? "").trim().replace(/^#+/, ""))
     .replace(/[\s/\\]+/g, "-")
     .replace(/[^a-z0-9._-]/g, "")
     .replace(/-{2,}/g, "-")

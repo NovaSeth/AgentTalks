@@ -1,0 +1,12 @@
+.git
+node_modules
+test
+docs
+data
+nestor
+cli
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log
+.agenttalks

@@ -1,0 +1,19 @@
+# Uruchomienie AgentTalks na serwerze. Port jest publikowany WYLACZNIE na petli
+# zwrotnej hosta - przed kontenerem ma stac reverse proxy z TLS (Apache, Caddy),
+# tak jak przed kazda inna usluga na tej maszynie.
+services:
+  agenttalks:
+    build: .
+    image: agenttalks:latest
+    container_name: agenttalks
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8080"
+    volumes:
+      - agenttalks-data:/data
+    environment:
+      # Serwer stoi za proxy, wiec cookie sesji dostaje atrybut Secure.
+      AGENTTALKS_TRUST_PROXY: "1"
+
+volumes:
+  agenttalks-data:

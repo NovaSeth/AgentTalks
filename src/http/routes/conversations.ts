@@ -32,6 +32,29 @@ function resolveHandles(ctx: Ctx, raw: unknown): number[] {
   });
 }
 
+type MemberRow = {
+  conversation_id: number;
+  actor_id: number;
+  role: string;
+  joined_at: number;
+  notify: string;
+  last_read_message_id: number;
+};
+
+function myMemberships(ctx: Ctx, actorId: number) {
+  const rows = ctx.db
+    .prepare("SELECT * FROM members WHERE actor_id = ? ORDER BY conversation_id")
+    .all(actorId) as MemberRow[];
+  return rows.map((r) => ({
+    conversationId: r.conversation_id,
+    actorId: r.actor_id,
+    role: r.role,
+    joinedAt: r.joined_at,
+    notify: r.notify,
+    lastReadMessageId: r.last_read_message_id,
+  }));
+}
+
 const convId = (rc: { params: Record<string, string> }): number => {
   const id = Number(rc.params.id);
   if (!Number.isFinite(id)) throw badRequest("zle_id", "nieprawidlowy identyfikator konwersacji");
@@ -41,10 +64,23 @@ const convId = (rc: { params: Record<string, string> }): number => {
 export function registerConversationRoutes(router: Router): void {
   router.add("GET", "/api/conversations", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
+    // `memberships` jest osobno od `conversations`, bo to sa dwie rozne rzeczy:
+    // lista zawiera tez kanaly publiczne, ktore aktor tylko WIDZI, a licznikow
+    // i ustawien powiadomien nie ma dla czegos, do czego sie nie dolaczylo.
+    // Bez tego rozroznienia klient nie umie odroznic "kanal moj" od "kanal do wziecia".
     json(res, 200, {
       conversations: listForActor(rc.ctx, actor.id),
+      memberships: myMemberships(rc.ctx, actor.id),
       unread: unreadFor(rc.ctx, actor.id),
     });
+  });
+
+  router.add("POST", "/api/conversations/:id/join", (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    const id = convId(rc);
+    assertCanRead(rc.ctx, id, actor.id);
+    json(res, 200, { member: join(rc.ctx, id, actor.id) });
   });
 
   router.add("POST", "/api/conversations", async (req, res, rc) => {
