@@ -11,7 +11,7 @@ import { postMessage } from "../../src/core/messages.ts";
 import { markRead } from "../../src/core/unread.ts";
 import { acquire, listLeases, release } from "../../src/core/leases.ts";
 import { getFileInfo, listFiles, readFile, storeFile, sweepExpired } from "../../src/core/files.ts";
-import { registerWake, setWake, signWake, getWake, WAKE_MAX_FAILURES } from "../../src/core/wake.ts";
+import { registerWake, setWake, signWake, getWake, isWakeable, WAKE_MAX_FAILURES } from "../../src/core/wake.ts";
 import { digestFor } from "../../src/core/digest.ts";
 import { mentionsOf } from "../../src/core/mentions.ts";
 import { listPins, pin, unpin } from "../../src/core/pins.ts";
@@ -416,4 +416,14 @@ test("isBlockedIp: prywatne blokowane, publiczne przepuszczane, loopback za zgod
   assert.equal(isBlockedIp("10.0.0.1"), true);
   assert.equal(isBlockedIp("::ffff:127.0.0.1"), true);
   assert.equal(isBlockedIp("8.8.8.8"), false);
+});
+
+test("isWakeable: rozroznia zarejestrowany webhook od jego braku", () => {
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala");
+  assert.equal(isWakeable(ctx, a.id), false);
+  setWake(ctx, a.id, "https://most.example/wake");
+  assert.equal(isWakeable(ctx, a.id), true);
+  ctx.db.prepare("UPDATE actors SET wake_disabled_at = 1 WHERE id = ?").run(a.id);
+  assert.equal(isWakeable(ctx, a.id), false);
 });

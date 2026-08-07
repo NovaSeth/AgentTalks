@@ -18,6 +18,7 @@ import { answer, ask, openQuestions } from "../../core/questions.ts";
 import { reactionsFor } from "../../core/reactions.ts";
 import { markRead, unreadFor } from "../../core/unread.ts";
 import { actorLiveness } from "../../core/presence.ts";
+import { isWakeable } from "../../core/wake.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
 import { int, json, readJson, str } from "../respond.ts";
 import type { Router } from "../router.ts";
@@ -172,13 +173,21 @@ export function registerConversationRoutes(router: Router): void {
     // godzinie. W rozmowie prywatnej odpowiedz niesie wiec zywotnosc adresatow -
     // dane juz sa w obecnosci, wystarczy je pokazac PRZY zapisie.
     const conversation = getConversation(rc.ctx, id)!;
-    let delivery: Array<{ handle: string; online: boolean; lastSeenAt: number | null }> | undefined;
+    let delivery:
+      | Array<{ handle: string; online: boolean; lastSeenAt: number | null;
+                wakeable: boolean; reachable: boolean }>
+      | undefined;
     if (conversation.kind === "dm" || conversation.kind === "group") {
       delivery = members(rc.ctx, id)
         .filter((m) => m.actorId !== actor.id)
         .map((m) => {
           const a = getActor(rc.ctx, m.actorId);
-          return { handle: a?.handle ?? "?", ...actorLiveness(rc.ctx, m.actorId) };
+          const live = actorLiveness(rc.ctx, m.actorId);
+          const wakeable = isWakeable(rc.ctx, m.actorId);
+          // reachable = dojdzie do adresata TERAZ albo przez wake. Nieobecny
+          // i nieobudzalny = wiadomosc czeka, ale nikt jej nie zobaczy - to
+          // sygnal, ktory ma dojsc do nadawcy przy zapisie.
+          return { handle: a?.handle ?? "?", ...live, wakeable, reachable: live.online || wakeable };
         });
     }
     json(res, 201, { message, ...(delivery ? { delivery } : {}) });

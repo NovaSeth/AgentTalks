@@ -38,6 +38,7 @@ import { inboxAfter, lastMessageId, listMessages, listThread, postMessage, type 
   from "../core/messages.ts";
 import { actorLiveness, presence, registerSession, setDoing, signal, type SessionKind }
   from "../core/presence.ts";
+import { isWakeable } from "../core/wake.ts";
 import { answer, ask, openQuestions } from "../core/questions.ts";
 import { react } from "../core/reactions.ts";
 import { search } from "../core/search.ts";
@@ -370,11 +371,14 @@ async function callTool(
             const handle = (ctx.db.prepare("SELECT handle FROM actors WHERE id = ?")
               .get(m.actorId) as { handle: string }).handle;
             const live = actorLiveness(ctx, m.actorId);
+            const wakeable = isWakeable(ctx, m.actorId);
             const state = live.online
               ? "zywa"
-              : live.lastSeenAt
-                ? `cisza ${Math.round((ctx.now() - live.lastSeenAt) / 60)} min`
-                : "NIEOBECNA (zadnej zywej sesji)";
+              : wakeable
+                ? `nieobecna, ale OBUDZE przez webhook`
+                : live.lastSeenAt
+                  ? `cisza ${Math.round((ctx.now() - live.lastSeenAt) / 60)} min, BEZ wake - nie dojdzie teraz`
+                  : "NIEOBECNA i BEZ wake - wiadomosc czeka, nikt jej nie zobaczy";
             return `  @${handle}: ${state}`;
           })
           .join("\n");

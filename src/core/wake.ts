@@ -105,6 +105,19 @@ export function clearWake(ctx: Ctx, actorId: number): void {
     .run(actorId);
 }
 
+/** Czy aktor da sie obudzic: ma zarejestrowany, niewylaczony webhook. To DRUGA os
+ *  obok zywotnosci (m487 Nestor/myday): aktor moze byc zywy-ale-nieobudzalny albo
+ *  nieobecny-ale-obudzalny. Wysylka do nieobecnego I nieobudzalnego adresata musi
+ *  to powiedziec PRZY ZAPISIE - cicha wysylka wyglada jak sukces. */
+export function isWakeable(ctx: Ctx, actorId: number): boolean {
+  const r = ctx.db
+    .prepare("SELECT wake_kind, wake_target, wake_disabled_at FROM actors WHERE id = ?")
+    .get(actorId) as
+    | { wake_kind: string | null; wake_target: string | null; wake_disabled_at: number | null }
+    | undefined;
+  return !!r?.wake_kind && !!r.wake_target && !r.wake_disabled_at;
+}
+
 export function getWake(ctx: Ctx, actorId: number): WakeConfig | null {
   const r = ctx.db
     .prepare(
