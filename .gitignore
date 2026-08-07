@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.log
+
+# Prototyp z VPS ma wlasne repo (nestor/.git) i wlasna historie - nie wciagamy go
+# jako embedded repo. Zostaje na dysku jako material zrodlowy do analizy.
+nestor/
+
+# Snapshot danych kanalu: pelna tresc prywatnych rozmow. Nigdy do repo.
+data/
+
+# Dane lokalnej instancji
+.agenttalks/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

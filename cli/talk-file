@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""talk-file - CLI helper for the talkdrop file service.
+
+Commands:
+  talk-file put <path>          upload a file; prints id + ready download URL
+  talk-file get <id> <path>     download to a file
+  talk-file list                list files
+
+Reads TOKEN from env TALKDROP_TOKEN or /opt/talkdrop/token.
+Base URL from env TALKDROP_URL (default https://szkolenia.monokoda.com/drop).
+"""
+import json
+import os
+import sys
+import urllib.request
+from urllib.parse import quote
+
+BASE = os.environ.get("TALKDROP_URL", "https://szkolenia.monokoda.com/drop").rstrip("/")
+
+
+def get_token():
+    tok = os.environ.get("TALKDROP_TOKEN")
+    if tok:
+        return tok.strip()
+    try:
+        with open("/opt/talkdrop/token") as f:
+            return f.read().strip()
+    except OSError:
+        sys.exit("error: no token (set TALKDROP_TOKEN or /opt/talkdrop/token)")
+
+
+def req(url, method="GET", data=None, headers=None):
+    r = urllib.request.Request(url, data=data, method=method)
+    for k, v in (headers or {}).items():
+        r.add_header(k, v)
+    return urllib.request.urlopen(r)
+
+
+def cmd_put(path):
+    tok = get_token()
+    with open(path, "rb") as f:
+        data = f.read()
+    name = os.path.basename(path)
+    headers = {
+        "X-Talk-Token": tok,
+        "X-Filename": name,
+        "X-From": os.environ.get("TALK_FROM", os.environ.get("USER", "")),
+        "Content-Type": "application/octet-stream",
+        "Content-Length": str(len(data)),
+    }
+    resp = req(BASE + "/up", method="POST", data=data, headers=headers)
+    obj = json.loads(resp.read())
+    fid = obj["id"]
+    dl = "%s/%s?t=%s" % (BASE, fid, quote(tok, safe=""))
+    print("id:   %s" % fid)
+    print("name: %s" % obj["name"])
+    print("size: %d bytes" % obj["size"])
+    print("url:  %s" % dl)
+
+
+def cmd_get(fid, path):
+    tok = get_token()
+    url = "%s/%s" % (BASE, fid)
+    resp = req(url, headers={"X-Talk-Token": tok})
+    with open(path, "wb") as out:
+        while True:
+            chunk = resp.read(1024 * 256)
+            if not chunk:
+                break
+            out.write(chunk)
+    print("saved -> %s" % path)
+
+
+def cmd_list():
+    tok = get_token()
+    resp = req(BASE + "/list", headers={"X-Talk-Token": tok})
+    obj = json.loads(resp.read())
+    files = obj.get("files", [])
+    if not files:
+        print("(empty)")
+        return
+    for e in files:
+        print("%s  %10d  %-30s  from=%s  ts=%s" % (
+            e.get("id", "?"), e.get("size", 0), e.get("name", "?"),
+            e.get("from", ""), e.get("ts", "")))
+
+
+def main():
+    a = sys.argv[1:]
+    if not a:
+        sys.exit(__doc__)
+    c = a[0]
+    if c == "put" and len(a) == 2:
+        cmd_put(a[1])
+    elif c == "get" and len(a) == 3:
+        cmd_get(a[1], a[2])
+    elif c == "list" and len(a) == 1:
+        cmd_list()
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main()
