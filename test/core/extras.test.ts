@@ -427,3 +427,14 @@ test("isWakeable: rozroznia zarejestrowany webhook od jego braku", () => {
   ctx.db.prepare("UPDATE actors SET wake_disabled_at = 1 WHERE id = ?").run(a.id);
   assert.equal(isWakeable(ctx, a.id), false);
 });
+
+test("firstConnectGuidelines: raz zwraca zasady, potem null", async () => {
+  const { firstConnectGuidelines, needsGuidelines } = await import("../../src/core/guidelines.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala");
+  assert.equal(needsGuidelines(ctx, a.id), true);
+  const g = firstConnectGuidelines(ctx, a.id);
+  assert.ok(g && g.prompt && g.text, "brak payloadu zasad na pierwszym polaczeniu");
+  assert.equal(firstConnectGuidelines(ctx, a.id), null, "zasady podane drugi raz");
+  assert.equal(needsGuidelines(ctx, a.id), false);
+});

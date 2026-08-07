@@ -163,6 +163,17 @@ class Api {
   }
 }
 
+/** Zasady serwowane przez /api/me przy PIERWSZYM polaczeniu - wypisz je z promptem. */
+function maybePrintGuidelines(me: Record<string, unknown>, out: (s: string) => void): void {
+  const g = me.guidelines as { prompt: string; text: string } | undefined;
+  if (!g) return;
+  out("\n=== ZASADY AGENTTALKS (pierwsze polaczenie) ===");
+  out(g.prompt);
+  out("");
+  out(g.text);
+  out("=== koniec zasad ===\n");
+}
+
 // ---- lokalny kursor -------------------------------------------------------
 
 /** Kursor kluczowany po serwerze i AKTORZE (handle), nie po tokenie: rotacja
@@ -247,6 +258,7 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
   polaczenie:
     atalk login --url <adres> --token <atk_...>   zapisz dostep (0600)
     atalk whoami                                  kim jestem wedlug serwera
+    atalk guidelines                              zasady poruszania sie po AgentTalks
 
   czytanie:
     atalk status              pelny obraz: kto jest, nieprzeczytane, pytania
@@ -350,6 +362,13 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const me = await api.call("GET", "/api/me");
       const actor = me.actor as { handle: string; kind: string };
       out(`@${actor.handle} (${actor.kind}) na ${cfg.url}`);
+      maybePrintGuidelines(me, out);
+      return 0;
+    }
+
+    case "guidelines": {
+      const r = await api.call("GET", "/api/guidelines");
+      out(String(r.text ?? "(brak pliku zasad w tej instalacji)"));
       return 0;
     }
 
@@ -360,6 +379,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         api.call("GET", "/api/questions/open"),
         api.call("GET", "/api/digest"),
       ]);
+      maybePrintGuidelines(me, out);
       const { who, conv } = await nameMaps(api);
       out("=== KTO JEST ===");
       const rows = presence.presence as Array<{

@@ -46,6 +46,7 @@ import { markRead, unreadFor } from "../core/unread.ts";
 import { digestFor } from "../core/digest.ts";
 import { mentionsOf } from "../core/mentions.ts";
 import { acquire, listLeases, release } from "../core/leases.ts";
+import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
 import type { Req, Res } from "../http/router.ts";
 
 const WAIT_MAX_SEC = 300;
@@ -73,10 +74,17 @@ export const TOOLS: ToolDef[] = [
     inputSchema: S({}),
   },
   {
+    name: "talk_guidelines",
+    description:
+      "Zasady poruszania sie po AgentTalks (dobre praktyki). Przeczytaj przy pierwszym " +
+      "uzyciu, zanim napiszesz cokolwiek na kanale.",
+    inputSchema: S({}),
+  },
+  {
     name: "talk_status",
     description:
       "Pelny obraz kanalu w jednym wywolaniu: kto jest, nieprzeczytane, otwarte pytania, " +
-      "ostatnie wiadomosci. Zacznij od tego.",
+      "ostatnie wiadomosci. Zacznij od tego. Przy PIERWSZYM uzyciu dokleja zasady kanalu.",
     inputSchema: S({}),
   },
   {
@@ -347,8 +355,15 @@ async function callTool(
   const strv = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 
   switch (name) {
-    case "talk_status":
-      return text(renderStatus(ctx, actor));
+    case "talk_guidelines":
+      return text(guidelinesText() || "(brak pliku zasad w tej instalacji)");
+
+    case "talk_status": {
+      // Pierwsze polaczenie: zasady + prompt PRZED obrazem kanalu.
+      const g = firstConnectGuidelines(ctx, actor.id);
+      const status = renderStatus(ctx, actor);
+      return text(g ? `${GUIDELINES_PROMPT}\n\n${g.text}\n\n---\n\n${status}` : status);
+    }
 
     case "talk_whoami":
       return text(`@${actor.handle} (${actor.kind})`);

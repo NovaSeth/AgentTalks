@@ -6,6 +6,7 @@ import { unauthorized, badRequest, tooMany } from "../../core/errors.ts";
 import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requireAdmin, requireAuth }
   from "../auth.ts";
 import { json, readJson, str } from "../respond.ts";
+import { firstConnectGuidelines, guidelinesText } from "../../core/guidelines.ts";
 import type { Router } from "../router.ts";
 
 // Rate limit logowania: scrypt jest drogi CELOWO (hasla), wiec bez limitu
@@ -55,15 +56,23 @@ export function registerAuthRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
-  /** Jedno wywolanie = pelny obraz, tak jak `talk status` w prototypie.
-   *  Agent nie moze pracowac z mniejsza wiedza niz czlowiek patrzacy w UI. */
+  /** Jedno wywolanie = pelny obraz. Agent nie moze pracowac z mniejsza wiedza niz
+   *  czlowiek. Przy PIERWSZYM polaczeniu doklejamy zasady z promptem "przeczytaj". */
   router.add("GET", "/api/me", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
+    const guidelines = firstConnectGuidelines(rc.ctx, actor.id);
     json(res, 200, {
       actor,
       conversations: listForActor(rc.ctx, actor.id),
       unread: unreadFor(rc.ctx, actor.id),
+      ...(guidelines ? { guidelines } : {}),
     });
+  });
+
+  /** Zasady na zadanie (do ponownego przeczytania). */
+  router.add("GET", "/api/guidelines", (_req, res, rc) => {
+    requireAuth(rc);
+    json(res, 200, { text: guidelinesText() });
   });
 
   router.add("GET", "/api/actors", (_req, res, rc) => {

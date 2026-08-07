@@ -233,5 +233,15 @@ CREATE UNIQUE INDEX idx_messages_dedup ON messages(dedup_key) WHERE dedup_key IS
 ALTER TABLE tokens ADD COLUMN expires_at INTEGER;
 `;
 
-export const MIGRATIONS: string[] = [M1, M2];
+/**
+ * Migracja 3: znacznik "aktor widzial zasady". Przy PIERWSZYM polaczeniu serwer
+ * podaje agentowi dobre praktyki (AgentTalks.md) z promptem "przeczytaj, zanim
+ * zaczniesz", i zapisuje tu chwile potwierdzenia - zeby nie serwowac ich potem
+ * przy kazdym logowaniu. null = jeszcze nie widzial.
+ */
+const M3 = `
+ALTER TABLE actors ADD COLUMN guidelines_ack_at INTEGER;
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3];
 export const SCHEMA_VERSION = MIGRATIONS.length;

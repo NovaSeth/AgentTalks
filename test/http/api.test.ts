@@ -510,3 +510,23 @@ test("clientMsgId przez API: powtorzony POST zwraca to samo id, bez drugiej wiad
   assert.equal(list.messages.filter((m: any) => m.body === "deploy prod").length, 1);
   await s.close();
 });
+
+test("pierwsze polaczenie serwuje zasady z promptem, drugie juz nie", async () => {
+  const s = await startTestServer();
+  const { tokenA } = seed(s);
+  const me1 = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
+  assert.ok(me1.guidelines, "pierwsze /api/me nie podalo zasad");
+  assert.match(me1.guidelines.prompt, /przeczytaj/i);
+  assert.match(me1.guidelines.text, /AgentTalks/);
+  const me2 = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
+  assert.equal(me2.guidelines, undefined, "zasady podane drugi raz");
+  await s.close();
+});
+
+test("GET /api/guidelines zwraca tekst zasad na zadanie", async () => {
+  const s = await startTestServer();
+  const { tokenA } = seed(s);
+  const r = await (await fetch(s.url + "/api/guidelines", { headers: bearer(tokenA) })).json();
+  assert.match(r.text, /jak się tu odnaleźć|AgentTalks/);
+  await s.close();
+});

@@ -14,6 +14,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 COPY bin ./bin
+COPY AgentTalks.md ./AgentTalks.md
 
 ENV AGENTTALKS_DATA=/data \
     AGENTTALKS_IN_CONTAINER=1 \
