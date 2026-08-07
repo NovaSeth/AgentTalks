@@ -2,17 +2,42 @@
 import { createActor, listActors, verifyPassword } from "../../core/actors.ts";
 import { listForActor } from "../../core/conversations.ts";
 import { unreadFor } from "../../core/unread.ts";
-import { unauthorized, badRequest } from "../../core/errors.ts";
+import { unauthorized, badRequest, tooMany } from "../../core/errors.ts";
 import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requireAdmin, requireAuth }
   from "../auth.ts";
 import { json, readJson, str } from "../respond.ts";
 import type { Router } from "../router.ts";
+
+// Rate limit logowania: scrypt jest drogi CELOWO (hasla), wiec bez limitu
+// endpoint logowania jest jednoczesnie wyrocznia hasel i generatorem obciazenia.
+// Okno w pamieci procesu wystarcza - limit ma powstrzymac zgadywanie, nie byc
+// ksiegowoscia; restart serwera zeruje okno i to jest akceptowalne.
+const LOGIN_WINDOW_SEC = 900;
+const LOGIN_MAX_ATTEMPTS = 10;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function checkLoginLimit(key: string, now: number): void {
+  const entry = loginAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_SEC });
+    return;
+  }
+  entry.count += 1;
+  if (entry.count > LOGIN_MAX_ATTEMPTS) {
+    throw tooMany("za_duzo_prob",
+      `za duzo prob logowania; sprobuj za ${Math.ceil((entry.resetAt - now) / 60)} min`);
+  }
+}
 
 export function registerAuthRoutes(router: Router): void {
   router.add("POST", "/api/login", async (req, res, rc) => {
     const body = await readJson(req, 4096);
     const handle = str(body.handle) ?? "";
     const password = str(body.password) ?? "";
+    // Klucz per adres zrodlowy; za proxy bierzemy pierwszy X-Forwarded-For tylko
+    // przy trustProxy, bo bez proxy ten naglowek jest w calosci w rekach klienta.
+    const fwd = rc.config.trustProxy ? str(req.headers["x-forwarded-for"])?.split(",")[0] : null;
+    checkLoginLimit(fwd?.trim() || req.socket.remoteAddress || "?", Math.floor(Date.now() / 1000));
     const actor = verifyPassword(rc.ctx, handle, password);
     // Jeden komunikat dla zlego handle i zlego hasla: inaczej odpowiedz serwera
     // jest wyrocznia "czy taki uzytkownik istnieje".

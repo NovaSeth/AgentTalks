@@ -1,7 +1,7 @@
 /** Operacje na pojedynczej wiadomosci, watki, reakcje, wyszukiwanie, obecnosc. */
 import { deleteMessage, editMessage, getMessage, listThread } from "../../core/messages.ts";
-import { assertCanRead } from "../../core/conversations.ts";
-import { notFound } from "../../core/errors.ts";
+import { canRead } from "../../core/conversations.ts";
+import { forbidden, notFound } from "../../core/errors.ts";
 import { react, reactionsFor } from "../../core/reactions.ts";
 import { search } from "../../core/search.ts";
 import {
@@ -35,8 +35,11 @@ export function registerMessageRoutes(router: Router): void {
   router.add("GET", "/api/messages/:id/thread", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
     const root = getMessage(rc.ctx, Number(rc.params.id));
-    if (!root) throw notFound("wiadomosc", `nie ma wiadomosci ${rc.params.id}`);
-    assertCanRead(rc.ctx, root.conversationId, actor.id);
+    // Jeden blad dla "nie ma" i "brak dostepu" - id wiadomosci sa globalne,
+    // wiec rozne odpowiedzi zdradzalyby istnienie tresci w cudzych kanalach.
+    if (!root || !canRead(rc.ctx, root.conversationId, actor.id)) {
+      throw notFound("wiadomosc", `nie ma wiadomosci ${rc.params.id} (albo brak dostepu)`);
+    }
     const messages = listThread(rc.ctx, root.threadId ?? root.id);
     json(res, 200, { messages, reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)) });
   });
@@ -60,6 +63,8 @@ export function registerMessageRoutes(router: Router): void {
         text: rc.query.get("q") ?? "",
         conversationId: int(rc.query.get("conversationId") ?? undefined),
         limit: int(rc.query.get("limit") ?? undefined),
+        sinceTs: int(rc.query.get("sinceTs") ?? undefined),
+        untilTs: int(rc.query.get("untilTs") ?? undefined),
       }),
     });
   });
@@ -80,6 +85,13 @@ export function registerMessageRoutes(router: Router): void {
       json(res, 400, { error: "brak sessionId", code: "brak_sessionid" });
       return;
     }
+    // Rejestracja ISTNIEJACEJ sesji nalezacej do innego aktora to proba przejecia
+    // jej tozsamosci w obecnosci - odrzucana z tym samym kodem, co sygnaly.
+    const owner = rc.ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?")
+      .get(sessionId) as { actor_id: number } | undefined;
+    if (owner && owner.actor_id !== actor.id) {
+      throw forbidden("nie_twoja_sesja", "ta sesja nalezy do innego aktora");
+    }
     const kind = str(body.kind);
     registerSession(rc.ctx, {
       sessionId,
@@ -93,11 +105,27 @@ export function registerMessageRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
+  /** Sesja nalezy do aktora - sygnalizowac i konczyc mozna WYLACZNIE wlasna.
+   *  Bez tego sprawdzenia kazdy uwierzytelniony aktor moglby udawac, ze cudza
+   *  sesja pracuje, albo ja "zakonczyc" - czyli falszowac obecnosc, na ktorej
+   *  inni polegaja przy decyzji "jest, mozna pytac". */
+  const assertOwnSession = (rc: { ctx: import("../../core/ctx.ts").Ctx }, sessionId: string,
+                            actorId: number): void => {
+    const row = rc.ctx.db
+      .prepare("SELECT actor_id FROM sessions WHERE id = ?")
+      .get(sessionId) as { actor_id: number } | undefined;
+    if (!row) throw notFound("sesja", `nie ma sesji ${sessionId}`);
+    if (row.actor_id !== actorId) {
+      throw forbidden("nie_twoja_sesja", "ta sesja nalezy do innego aktora");
+    }
+  };
+
   /** typing i busy to DWA ROZNE sygnaly. "Pracuje" ma pochodzic z uzycia narzedzia
    *  (hook PostToolUse), nigdy z pollowania API - inaczej otwarta karta udaje prace. */
   router.add("POST", "/api/sessions/:id/signal", async (req, res, rc) => {
-    requireAuth(rc);
+    const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
+    assertOwnSession(rc, rc.params.id, actor.id);
     const body = await readJson(req, 1024);
     const kind = str(body.kind);
     if (kind !== "typing" && kind !== "busy") {
@@ -109,8 +137,9 @@ export function registerMessageRoutes(router: Router): void {
   });
 
   router.add("DELETE", "/api/sessions/:id", (req, res, rc) => {
-    requireAuth(rc);
+    const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
+    assertOwnSession(rc, rc.params.id, actor.id);
     endSession(rc.ctx, rc.params.id);
     json(res, 200, { ok: true });
   });

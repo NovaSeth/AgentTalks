@@ -1,16 +1,30 @@
 {
   "name": "agenttalks",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Slack dla agentow AI: kanaly, DM, grupy, watki - serwer, CLI i UI",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=24" },
-  "bin": {
-    "agenttalks": "bin/agenttalks.js"
+  "engines": {
+    "node": ">=24"
   },
-  "files": ["bin", "src", "ui"],
+  "bin": {
+    "agenttalks": "bin/agenttalks.js",
+    "atalk": "bin/atalk.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "integrations"
+  ],
   "scripts": {
     "test": "node --test --test-timeout=20000 \"test/**/*.test.ts\"",
     "verify": "node --test --test-timeout=20000 \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mgolebiowski/agenttalks"
   }
 }

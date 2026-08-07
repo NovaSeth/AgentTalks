@@ -172,3 +172,73 @@ test("znacznik odczytu przelicza sie z czasu na id wiadomosci", () => {
   const raz = msgs.find((m) => m.body === "raz")!;
   assert.equal(row.id, raz.id, "znacznik ma wskazywac ostatnia wiadomosc sprzed ts=200");
 });
+
+test("drugi przebieg nie dubluje reakcji, pytan ani znacznikow", () => {
+  const home = fixture([
+    { ts: 100, sid: "s1", label: "alfa", kind: "ask", chan: "#issues", text: "q?",
+      mid: "m1", id: "q1" },
+    { ts: 110, sid: "s2", label: "beta", kind: "answer", chan: "#issues", text: "odp",
+      mid: "m2", ref: "q1" },
+    { ts: 120, sid: "s2", label: "beta", kind: "react", chan: "#issues", text: "",
+      ref: "m1", emoji: "OK", mid: "m3" },
+  ]);
+  const ctx = testCtx();
+  importTalkHome(ctx, home);
+  importTalkHome(ctx, home);
+  const q = ctx.db.prepare("SELECT count(*) AS n FROM questions").get() as { n: number };
+  const r = ctx.db.prepare("SELECT count(*) AS n FROM reactions").get() as { n: number };
+  const m = ctx.db.prepare("SELECT count(*) AS n FROM messages").get() as { n: number };
+  assert.equal(q.n, 1);
+  assert.equal(r.n, 1);
+  assert.equal(m.n, 2);
+});
+
+test("import przyrostowy: reakcja z drugiego pliku trafia w wiadomosc z pierwszego", () => {
+  const ctx = testCtx();
+  importTalkHome(ctx, fixture([
+    { ts: 100, sid: "s1", label: "alfa", kind: "say", chan: "#general", text: "baza", mid: "m1" },
+  ]));
+  const rep = importTalkHome(ctx, fixture([
+    { ts: 110, sid: "s2", label: "beta", kind: "react", chan: "#general", text: "",
+      ref: "m1", emoji: "OK", mid: "m2" },
+  ]));
+  assert.equal(rep.reactions, 1, "reakcja do wiadomosci z poprzedniego przebiegu przepadla");
+});
+
+test("dwie ROZNE etykiety zderzone w jeden handle nie sa zlewane w jednego aktora", () => {
+  const home = fixture([
+    { ts: 100, sid: "s1", label: "mac/general", kind: "say", chan: "#g", text: "a", mid: "m1" },
+    { ts: 110, sid: "s2", label: "mac general", kind: "say", chan: "#g", text: "b", mid: "m2" },
+  ]);
+  const ctx = testCtx();
+  importTalkHome(ctx, home);
+  const authors = ctx.db.prepare(
+    "SELECT DISTINCT actor_id FROM messages",
+  ).all() as Array<{ actor_id: number }>;
+  assert.equal(authors.length, 2, "dwoch rozmowcow zlanych w jednego");
+});
+
+test("zly kanal w jednym rekordzie nie wywala calego importu", () => {
+  const home = fixture([
+    { ts: 100, sid: "s1", label: "alfa", kind: "say", chan: "#!!!", text: "zly", mid: "m1" },
+    { ts: 110, sid: "s1", label: "alfa", kind: "say", chan: "#general", text: "dobry", mid: "m2" },
+  ]);
+  const ctx = testCtx();
+  const rep = importTalkHome(ctx, home);
+  assert.equal(rep.messages, 1);
+  assert.equal(rep.skipped, 1);
+});
+
+test("znaczniki odczytu DM-ow sa przenoszone", () => {
+  const home = fixture([
+    { ts: 100, sid: "sid-nestor", label: "nestor", kind: "say", chan: "#general",
+      to: "Michal", text: "prywatna", mid: "m1" },
+    { ts: 50, sid: "michal", label: "Michal", kind: "say", chan: "#general",
+      text: "jestem", mid: "m0" },
+  ]);
+  mkdirSync(join(home, "read", "michal"), { recursive: true });
+  writeFileSync(join(home, "read", "michal", "dm_sid-nestor"), String(200 * 1000));
+  const ctx = testCtx();
+  const rep = importTalkHome(ctx, home);
+  assert.equal(rep.reads, 1, "znacznik odczytu DM-a przepadl");
+});

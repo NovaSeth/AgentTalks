@@ -14,7 +14,8 @@
  * i przez to zderzal sie z rozjazdem zegarow oraz z wiadomosciami o tym samym ts.
  */
 import type { Ctx } from "./ctx.ts";
-import { getConversation, join, isMember } from "./conversations.ts";
+import { canRead, join, isMember } from "./conversations.ts";
+import { onCommitted } from "../store/db.ts";
 import { lastMessageId } from "./messages.ts";
 
 export type UnreadRow = {
@@ -31,6 +32,7 @@ export function unreadFor(ctx: Ctx, actorId: number): UnreadRow[] {
          mem.conversation_id                                   AS conversation_id,
          COUNT(m.id)                                           AS unread,
          SUM(CASE
+               WHEN m.id IS NULL             THEN 0
                WHEN c.kind IN ('dm','group') THEN 1
                WHEN mn.actor_id IS NOT NULL  THEN 1
                ELSE 0
@@ -73,7 +75,10 @@ export function totalBadge(ctx: Ctx, actorId: number): number {
  * odebrac sobie nawzajem przeczytanych wiadomosci.
  */
 export function markRead(ctx: Ctx, actorId: number, convId: number, messageId?: number): void {
-  if (!getConversation(ctx, convId)) return;
+  // Guard w rdzeniu, nie tylko w trasach: markRead dolacza do konwersacji,
+  // wiec bez tego sprawdzenia kazde "oznacz przeczytane" byloby furtka
+  // do wejscia w cudzy kanal prywatny (znaleziona przez sciezke MCP).
+  if (!canRead(ctx, convId, actorId)) return;
   if (!isMember(ctx, convId, actorId)) join(ctx, convId, actorId);
   const target = messageId ?? lastMessageId(ctx);
   ctx.db
@@ -83,10 +88,10 @@ export function markRead(ctx: Ctx, actorId: number, convId: number, messageId?: 
         WHERE conversation_id = ? AND actor_id = ?`,
     )
     .run(target, convId, actorId);
-  ctx.bus.publish([actorId], {
+  onCommitted(ctx.db, () => ctx.bus.publish([actorId], {
     type: "read",
     conversationId: convId,
     actorId,
     messageId: target,
-  });
+  }));
 }

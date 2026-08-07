@@ -8,16 +8,34 @@
  * i tylko z konwersacji, ktorych jest czlonkiem.
  */
 import type { Event } from "../core/events.ts";
-import { inboxAfter } from "../core/messages.ts";
+import { inboxAfter, updatedBefore } from "../core/messages.ts";
 import { requireAuth } from "./auth.ts";
 import { json } from "./respond.ts";
+import { tooMany } from "../core/errors.ts";
 import type { Req, Res, RouteCtx } from "./router.ts";
 
 const PING_MS = 20_000;
 const MAX_WAIT_SEC = 300;
+const RESUME_PAGE = 200;
+// Okno odtwarzania edycji/kasowan przy wznowieniu. Kursor id nie niesie zmian
+// starych wiadomosci, wiec po zerwaniu dosylamy message_updated dla wszystkiego,
+// co zmienilo sie w tym oknie. Realne zerwania mierzy sie w minutach; 24 h to
+// zapas na laptop zamkniety na noc.
+const RESUME_EDIT_WINDOW_SEC = 24 * 3600;
+// Limit rownoleglych strumieni per aktor: SSE trzyma zasoby po stronie serwera,
+// a klient w petli reconnect potrafi otworzyc setki polaczen w minute.
+const MAX_STREAMS_PER_ACTOR = 8;
+// Prog odciecia zapchanego klienta: gdy bufor zapisu urosnie ponad to, klient
+// nie odbiera - dalsze pisanie tylko konsumuje pamiec serwera. Zerwanie jest
+// bezpieczne, bo klient wznowi sie od Last-Event-ID.
+const MAX_BUFFERED_BYTES = 1024 * 1024;
 
 export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   const { actor } = requireAuth(rc);
+  if (rc.ctx.bus.subscriberCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
+    throw tooMany("za_duzo_strumieni",
+      `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych strumieni - zamknij ktorys`);
+  }
 
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
@@ -29,9 +47,13 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   });
 
   const send = (event: Event, id?: number) => {
+    if (res.writableEnded || res.destroyed) return;
     if (id !== undefined) res.write(`id: ${id}\n`);
     res.write(`event: ${event.type}\n`);
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
+    const ok = res.write(`data: ${JSON.stringify(event)}\n\n`);
+    // Backpressure: klient nie nadaza. Po przekroczeniu progu zrywamy - to nie
+    // kara, tylko przejscie na sciezke wznowienia, ktora i tak istnieje.
+    if (!ok && res.writableLength > MAX_BUFFERED_BYTES) res.destroy();
   };
 
   // Wznowienie po zerwaniu: klient podaje ostatnie widziane id wiadomosci, a my
@@ -44,8 +66,25 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   const cursorRaw = req.headers["last-event-id"] ?? rc.query.get("after") ?? undefined;
   if (cursorRaw !== undefined && cursorRaw !== null && String(cursorRaw) !== "") {
     const lastSeen = Number(cursorRaw) || 0;
-    for (const message of inboxAfter(rc.ctx, actor.id, lastSeen)) {
-      send({ type: "message", conversationId: message.conversationId, message }, message.id);
+    // Stronami az do wyczerpania: pojedyncza strona z limitem gubila bez sladu
+    // wszystko powyzej 200 zaleglych wiadomosci. Wlasne wiadomosci WCHODZA do
+    // dosylki (includeOwn) - zywy strumien je dostarcza, wiec wznowienie musi
+    // widziec to samo, inaczej drugie urzadzenie tego samego aktora traci
+    // wlasne wpisy z okresu zerwania.
+    let cursor = lastSeen;
+    for (;;) {
+      const batch = inboxAfter(rc.ctx, actor.id, cursor, RESUME_PAGE, { includeOwn: true });
+      for (const message of batch) {
+        send({ type: "message", conversationId: message.conversationId, message }, message.id);
+      }
+      if (batch.length < RESUME_PAGE) break;
+      cursor = batch[batch.length - 1].id;
+    }
+    // Edycje i kasowania sprzed kursora: kursor id ich nie obejmuje.
+    const changed = updatedBefore(rc.ctx, actor.id, lastSeen,
+      rc.ctx.now() - RESUME_EDIT_WINDOW_SEC);
+    for (const message of changed) {
+      send({ type: "message_updated", conversationId: message.conversationId, message });
     }
   }
   res.write(": polaczono\n\n");
@@ -56,7 +95,9 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
 
   // Komentarz co 20 s. Bez niego proxy z timeoutem bezczynnosci zrywa polaczenie,
   // a klient nie wie, czy to cisza w kanale, czy awaria.
-  const ping = setInterval(() => res.write(": ping\n\n"), PING_MS);
+  const ping = setInterval(() => {
+    if (!res.writableEnded && !res.destroyed) res.write(": ping\n\n");
+  }, PING_MS);
   if (typeof ping.unref === "function") ping.unref();
 
   const cleanup = () => {
@@ -72,7 +113,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
  *
  * Zwraca natychmiast, jesli cokolwiek zalega. Inaczej czeka do `wait` sekund na
  * pierwsza nowa wiadomosc. To jest sciezka dla CLI i dla agentow w petli - nie
- * potrzebuja klienta SSE, a i tak nie pollują na pusto.
+ * potrzebuja klienta SSE, a i tak nie polluja na pusto.
  */
 export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void> {
   const { actor } = requireAuth(rc);
@@ -92,8 +133,15 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
       done = true;
       clearTimeout(timer);
       unsubscribe();
-      res.off("close", finish);
+      res.off("close", onClose);
       json(res, 200, { messages: inboxAfter(rc.ctx, actor.id, after) });
+      resolve();
+    };
+    const onClose = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      unsubscribe();
       resolve();
     };
 
@@ -103,12 +151,6 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
     const timer = setTimeout(finish, wait * 1000);
     // Klient, ktory sie rozlaczyl w trakcie czekania, nie moze zostawic
     // subskrypcji i timera na zawsze.
-    res.on("close", () => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      unsubscribe();
-      resolve();
-    });
+    res.on("close", onClose);
   });
 }

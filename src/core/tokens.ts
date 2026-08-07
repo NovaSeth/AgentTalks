@@ -8,7 +8,7 @@
  * To jest miejsce, w ktorym znika najgrozniejsza wlasnosc prototypu: tam kazdy proces
  * majacy dostep do katalogu mogl podac sie za dowolnego uczestnika przez `TALK_SID`.
  */
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { Ctx } from "./ctx.ts";
 import { type Actor, getActor } from "./actors.ts";
 import { notFound } from "./errors.ts";
@@ -66,18 +66,26 @@ export function mintToken(
 export function verifyToken(ctx: Ctx, token: string): Actor | null {
   const raw = String(token ?? "").trim();
   if (!raw.startsWith(PREFIX)) return null;
-  const presented = Buffer.from(hashOf(raw), "hex");
+  // Wyszukanie po sha256 w kolumnie UNIQUE jest cala weryfikacja: token ma
+  // 256 bitow entropii, wiec kolizje i zgadywanie nie sa realnymi wektorami,
+  // a dodatkowe porownania "stalo-czasowe" hasza z nim samym bylyby teatrem.
   const row = ctx.db
     .prepare("SELECT * FROM tokens WHERE hash = ? AND revoked_at IS NULL")
     .get(hashOf(raw)) as TokenRow | undefined;
   if (!row) return null;
-  // Porownanie stalo-czasowe jest tu formalnoscia (wyszukanie po indeksie i tak
-  // zdradza czas), ale kosztuje nic i nie zostawia zlego wzorca do skopiowania.
-  const stored = Buffer.from(hashOf(raw), "hex");
-  if (presented.length !== stored.length || !timingSafeEqual(presented, stored)) return null;
   const actor = getActor(ctx, row.actor_id);
   if (!actor || actor.disabledAt) return null;
-  ctx.db.prepare("UPDATE tokens SET last_used_at = ? WHERE id = ?").run(ctx.now(), row.id);
+  // last_used_at jest telemetryczne, wiec: (a) dlawione do jednego zapisu na
+  // minute, (b) best-effort - gdy inny proces (import CLI) trzyma wlasnie
+  // write-lock, uwierzytelnienie NIE moze sie od tego wywracac, bo polozyloby
+  // to takze wszystkie GET-y agentow.
+  if (row.last_used_at === null || ctx.now() - row.last_used_at >= 60) {
+    try {
+      ctx.db.prepare("UPDATE tokens SET last_used_at = ? WHERE id = ?").run(ctx.now(), row.id);
+    } catch {
+      // zapis telemetryczny - nastepne zadanie sprobuje jeszcze raz
+    }
+  }
   return actor;
 }
 

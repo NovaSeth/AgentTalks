@@ -12,6 +12,12 @@ import {
   postMessage,
 } from "../../src/core/messages.ts";
 import { EventBus, type Event } from "../../src/core/events.ts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as joinPath } from "node:path";
+import { openDb } from "../../src/store/db.ts";
+import { createCtx } from "../../src/core/ctx.ts";
+import { ask } from "../../src/core/questions.ts";
 
 test("parseMentions wyciaga handle bez duplikatow i bez wielkosci liter", () => {
   assert.deepEqual(
@@ -212,15 +218,38 @@ test("postMessage publikuje zdarzenie do czlonkow konwersacji", () => {
   assert.equal(seen[0].type, "message");
 });
 
-test("zdarzenie widzi wiadomosc juz zapisana w bazie", () => {
-  const ctx = testCtx();
+test("zdarzenie widzi wiadomosc juz zapisana w bazie (odczyt DRUGIM polaczeniem)", () => {
+  // Ten sam uchwyt SQLite widzi wlasna niezacommitowana transakcje, wiec czytanie
+  // nim nie odroznia publikacji przed commitem od publikacji po. Drugie polaczenie
+  // do wspolnego pliku widzi wylacznie dane zatwierdzone - i to jest wlasciwy sedzia.
+  const path = joinPath(mkdtempSync(joinPath(tmpdir(), "at-msg-")), "test.sqlite");
+  const ctx = createCtx(openDb(path), new EventBus(), () => 1_000_000);
+  const reader = openDb(path);
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const d = ensureDirect(ctx, [a.id, b.id]);
   let widzianeWBazie: unknown = null;
   ctx.bus.subscribe(b.id, (e) => {
     if (e.type !== "message") return;
-    widzianeWBazie = ctx.db.prepare("SELECT id FROM messages WHERE id=?").get(e.message.id);
+    widzianeWBazie = reader.prepare("SELECT id FROM messages WHERE id=?").get(e.message.id);
   });
   postMessage(ctx, { conversationId: d.id, actorId: a.id, body: "hej" });
   assert.ok(widzianeWBazie, "subskrybent nie znalazl wiadomosci - publikacja przed commitem");
+});
+
+test("ask publikuje zdarzenie dopiero, gdy pytanie JUZ istnieje (drugie polaczenie)", () => {
+  const path = joinPath(mkdtempSync(joinPath(tmpdir(), "at-ask-")), "test.sqlite");
+  const ctx = createCtx(openDb(path), new EventBus(), () => 1_000_000);
+  const reader = openDb(path);
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
+  join(ctx, c.id, b.id);
+  let questionVisible = false;
+  ctx.bus.subscribe(b.id, (e) => {
+    if (e.type !== "message" || e.message.kind !== "ask") return;
+    questionVisible = !!reader.prepare("SELECT 1 FROM questions WHERE message_id = ?")
+      .get(e.message.id);
+  });
+  ask(ctx, { conversationId: c.id, actorId: a.id, body: "atomowe?" });
+  assert.equal(questionVisible, true,
+    "zdarzenie o wiadomosci ask wyszlo, zanim pytanie bylo w bazie");
 });

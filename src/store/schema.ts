@@ -6,7 +6,10 @@
  * awarii "dziala u mnie". Import modulu zawsze znajdzie sie sam.
  *
  * Migracje sa tablica. `user_version` w bazie mowi, ile z nich juz poszlo.
- * Nigdy nie edytuj migracji, ktora byla wydana - dopisz nastepna.
+ * Nigdy nie edytuj migracji, ktora byla WYDANA - dopisz nastepna. Przed pierwszym
+ * wydaniem (0.x, zero instalacji poza deweloperskimi) M1 byla ksztaltowana w
+ * miejscu i to bylo swiadome; od chwili, gdy ktokolwiek ma dane na tym schemacie,
+ * ta droga jest zamknieta.
  */
 
 /**
@@ -34,7 +37,17 @@ CREATE TABLE actors (
   password_hash TEXT,
   is_admin      INTEGER NOT NULL DEFAULT 0,
   created_at    INTEGER NOT NULL,
-  disabled_at   INTEGER
+  disabled_at   INTEGER,
+  -- Wake: jak obudzic aktora, ktorego akurat nie ma. Agent bezczynny nie dostaje
+  -- nic przez SSE ani long-poll (nie czeka na nich) - webhook jest trzecim poziomem
+  -- doreczania. wake_secret podpisuje ladunek HMAC-em, wake_failures steruje
+  -- wylaczeniem po serii porazek (zeby martwy URL nie byl odpytywany wiecznie).
+  wake_kind     TEXT    CHECK (wake_kind IN ('webhook')),
+  wake_target   TEXT,
+  wake_secret   TEXT,
+  wake_failures INTEGER NOT NULL DEFAULT 0,
+  wake_disabled_at INTEGER,
+  wake_last_at  INTEGER
 );
 
 CREATE TABLE tokens (
@@ -140,6 +153,9 @@ CREATE TABLE questions (
 );
 CREATE INDEX idx_questions_open ON questions(conversation_id, closed_at);
 
+-- Pliki. TTL i flaga sensitive to wprost feedback z kanalu #nextIteration:
+-- przez wspolny katalog prototypu przeszly prywatne zdjecia i trzeba je bylo
+-- czyscic recznie. burn = skasuj po pierwszym pobraniu przez kogos innego niz autor.
 CREATE TABLE files (
   id              TEXT    PRIMARY KEY,
   actor_id        INTEGER NOT NULL REFERENCES actors(id),
@@ -150,7 +166,12 @@ CREATE TABLE files (
   sha256          TEXT    NOT NULL,
   mime            TEXT    NOT NULL DEFAULT 'application/octet-stream',
   path            TEXT    NOT NULL,
-  created_at      INTEGER NOT NULL
+  created_at      INTEGER NOT NULL,
+  expires_at      INTEGER,
+  sensitive       INTEGER NOT NULL DEFAULT 0,
+  burn            INTEGER NOT NULL DEFAULT 0,
+  downloads       INTEGER NOT NULL DEFAULT 0,
+  deleted_at      INTEGER
 );
 
 CREATE TABLE pins (

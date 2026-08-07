@@ -11,9 +11,11 @@ import { Router, type RouteCtx } from "./router.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerConversationRoutes } from "./routes/conversations.ts";
 import { registerMessageRoutes } from "./routes/messages.ts";
+import { registerExtraRoutes } from "./routes/extras.ts";
 import { longPollHandler, sseHandler } from "./sse.ts";
+import { unauthorized } from "../core/errors.ts";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 export function buildRouter(): Router {
   const router = new Router();
@@ -21,8 +23,33 @@ export function buildRouter(): Router {
   registerAuthRoutes(router);
   registerConversationRoutes(router);
   registerMessageRoutes(router);
+  registerExtraRoutes(router);
   router.add("GET", "/api/events", sseHandler);
   router.add("GET", "/api/messages", longPollHandler);
+
+  // MCP - glowny interfejs agentow. Modul ladowany dynamicznie: to JEDYNE miejsce
+  // z zaleznoscia npm i serwer ma wstac takze wtedy, gdy ktos uruchamia go ze
+  // zrodel bez `npm install` (wszystko poza /mcp dziala na samej stdlib).
+  router.add("POST", "/mcp", async (req, res, rc) => {
+    if (!rc.auth || rc.auth.via !== "token") {
+      // Wylacznie bearer: klient MCP to agent, a nie karta przegladarki.
+      throw unauthorized("nieuwierzytelniony", "MCP wymaga naglowka Authorization: Bearer <token>");
+    }
+    let mcp;
+    try {
+      mcp = await import("../mcp/server.ts");
+    } catch {
+      json(res, 501, {
+        error: "modul MCP niedostepny - zainstaluj zaleznosci: npm install",
+        code: "mcp_niedostepny",
+      });
+      return;
+    }
+    await mcp.handleMcp(rc.ctx, rc.config, rc.auth.actor, req, res);
+  });
+  router.add("GET", "/mcp", (_req, res) => {
+    json(res, 405, { error: "serwer MCP jest bezstanowy - uzyj POST", code: "tylko_post" });
+  });
   return router;
 }
 

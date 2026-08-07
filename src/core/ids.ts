@@ -22,7 +22,7 @@ const POLSKIE: Record<string, string> = {
   "ń": "n", "ó": "o", "ś": "s", "ź": "z", "ż": "z",
 };
 
-function transliterate(s: string): string {
+export function transliterate(s: string): string {
   return s
     .toLowerCase()
     .replace(/[ąćęłńóśźż]/g, (c) => POLSKIE[c])

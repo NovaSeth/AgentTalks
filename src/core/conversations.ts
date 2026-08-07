@@ -13,6 +13,7 @@
  *   dm      - dokladnie dwoch, tworzona przez ensureDirect
  *   group   - trzech i wiecej, tworzona przez ensureDirect
  */
+import { tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
 import { badRequest, conflict, forbidden, notFound } from "./errors.ts";
 import { normalizeSlug } from "./ids.ts";
@@ -85,15 +86,19 @@ export function createChannel(
 ): Conversation {
   const slug = normalizeSlug(input.slug);
   if (getBySlug(ctx, slug)) throw conflict("kanal_istnieje", `kanal "${slug}" juz istnieje`);
-  const now = ctx.now();
-  ctx.db
-    .prepare(
-      "INSERT INTO conversations(kind, slug, topic, created_by, created_at) VALUES(?,?,?,?,?)",
-    )
-    .run(input.kind, slug, input.topic ?? "", input.createdBy, now);
-  const conv = getBySlug(ctx, slug)!;
-  join(ctx, conv.id, input.createdBy, "admin");
-  return conv;
+  // Jedna transakcja na kanal i czlonkostwo tworcy: awaria posrodku palilaby
+  // unikalny slug na zawsze, zostawiajac kanal-widmo bez zadnego admina.
+  return tx(ctx.db, () => {
+    const now = ctx.now();
+    ctx.db
+      .prepare(
+        "INSERT INTO conversations(kind, slug, topic, created_by, created_at) VALUES(?,?,?,?,?)",
+      )
+      .run(input.kind, slug, input.topic ?? "", input.createdBy, now);
+    const conv = getBySlug(ctx, slug)!;
+    join(ctx, conv.id, input.createdBy, "admin");
+    return conv;
+  });
 }
 
 export function getConversation(ctx: Ctx, id: number): Conversation | null {
@@ -125,29 +130,37 @@ export function ensureDirect(ctx: Ctx, actorIds: readonly number[]): Conversatio
     throw badRequest("za_malo_uczestnikow", "rozmowa wymaga co najmniej dwoch roznych osob");
   }
   const key = ids.join(",");
-  const existing = ctx.db.prepare("SELECT * FROM conversations WHERE member_key = ?").get(key) as
-    | ConvRow
-    | undefined;
-  if (existing) return toConv(existing);
-
-  const now = ctx.now();
-  ctx.db
-    .prepare("INSERT INTO conversations(kind, member_key, created_at) VALUES(?,?,?)")
-    .run(ids.length === 2 ? "dm" : "group", key, now);
-  const row = ctx.db.prepare("SELECT * FROM conversations WHERE member_key = ?").get(key) as ConvRow;
-  for (const actorId of ids) join(ctx, row.id, actorId);
-  // Rozmowa prywatna ma dochodzic w calosci, nie tylko przy wzmiance.
-  ctx.db.prepare("UPDATE members SET notify = 'all' WHERE conversation_id = ?").run(row.id);
-  return toConv(row);
+  // Calosc w jednej transakcji: rozmowa bez kompletu czlonkow to najgorszy mozliwy
+  // stan trwaly ("DM do Boba", ktorego Bob nie widzi), a UNIQUE member_key
+  // utrwalalby go na zawsze. ON CONFLICT DO NOTHING zamyka wyscig miedzy
+  // procesami: przegrany nie dostaje surowego bledu UNIQUE, tylko istniejacy wiersz.
+  // Czlonkowie dokladani takze dla istniejacej rozmowy (INSERT OR IGNORE w join),
+  // wiec ewentualny wczesniejszy stan polowiczny sam sie leczy przy nastepnym uzyciu.
+  return tx(ctx.db, () => {
+    ctx.db
+      .prepare(
+        `INSERT INTO conversations(kind, member_key, created_at) VALUES(?,?,?)
+         ON CONFLICT(member_key) DO NOTHING`,
+      )
+      .run(ids.length === 2 ? "dm" : "group", key, ctx.now());
+    const row = ctx.db.prepare("SELECT * FROM conversations WHERE member_key = ?")
+      .get(key) as ConvRow;
+    for (const actorId of ids) join(ctx, row.id, actorId);
+    // Rozmowa prywatna ma dochodzic w calosci, nie tylko przy wzmiance.
+    ctx.db.prepare("UPDATE members SET notify = 'all' WHERE conversation_id = ?").run(row.id);
+    return toConv(row);
+  });
 }
 
 export function join(ctx: Ctx, convId: number, actorId: number, role: Role = "member"): Member {
   const existing = getMember(ctx, convId, actorId);
   if (existing) return existing;
   if (!getConversation(ctx, convId)) throw notFound("konwersacja", `nie ma konwersacji ${convId}`);
+  // OR IGNORE: dwa procesy dolaczajace ten sam duet w tym samym momencie nie moga
+  // konczyc sie surowym bledem klucza glownego u przegranego.
   ctx.db
     .prepare(
-      "INSERT INTO members(conversation_id, actor_id, role, joined_at) VALUES(?,?,?,?)",
+      "INSERT OR IGNORE INTO members(conversation_id, actor_id, role, joined_at) VALUES(?,?,?,?)",
     )
     .run(convId, actorId, role, ctx.now());
   return getMember(ctx, convId, actorId)!;

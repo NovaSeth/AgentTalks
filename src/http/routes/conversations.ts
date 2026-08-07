@@ -1,11 +1,12 @@
 /** Konwersacje: lista, zakladanie, czlonkostwo, znaczniki odczytu, otwarte pytania. */
-import { getActorByHandle } from "../../core/actors.ts";
+import { getActor, getActorByHandle } from "../../core/actors.ts";
 import {
   assertCanRead,
   createChannel,
   ensureDirect,
   getConversation,
   join,
+  leave,
   listForActor,
   members,
   setNotify,
@@ -16,6 +17,7 @@ import { listMessages, postMessage } from "../../core/messages.ts";
 import { answer, ask, openQuestions } from "../../core/questions.ts";
 import { reactionsFor } from "../../core/reactions.ts";
 import { markRead, unreadFor } from "../../core/unread.ts";
+import { actorLiveness } from "../../core/presence.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
 import { int, json, readJson, str } from "../respond.ts";
 import type { Router } from "../router.ts";
@@ -83,6 +85,13 @@ export function registerConversationRoutes(router: Router): void {
     json(res, 200, { member: join(rc.ctx, id, actor.id) });
   });
 
+  router.add("POST", "/api/conversations/:id/leave", (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    leave(rc.ctx, convId(rc), actor.id);
+    json(res, 200, { ok: true });
+  });
+
   router.add("POST", "/api/conversations", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
@@ -135,19 +144,36 @@ export function registerConversationRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const body = await readJson(req, rc.config.maxMessageBytes + 4096);
-    const kind = str(body.kind);
     // `actorId` z ciala jest ignorowane celowo i bez komunikatu: tozsamosc wynika
     // wylacznie z uwierzytelnienia, wiec proba podania jej w ciele nie jest bledem
     // do zaraportowania, tylko polem, ktore nie istnieje.
+    // `kind` NIE jest przyjmowane: pytania ida przez /ask (wiadomosc + wpis
+    // pytania atomowo), a "ask" przemycone tedy tworzyloby pytanie-sierote,
+    // na ktore nie da sie odpowiedziec.
+    const id = convId(rc);
     const message = postMessage(rc.ctx, {
-      conversationId: convId(rc),
+      conversationId: id,
       actorId: actor.id,
       body: str(body.body) ?? "",
-      kind: kind === "ask" || kind === "text" ? kind : "text",
       threadId: int(body.threadId),
       sessionId: str(body.sessionId) ?? null,
+      maxBytes: rc.config.maxMessageBytes,
     });
-    json(res, 201, { message });
+    // Feedback z #nextIteration: prototypowe `talk to <ktokolwiek>` zawsze mowilo
+    // "wyslane" i o martwym adresacie dowiadywales sie z braku odpowiedzi, po
+    // godzinie. W rozmowie prywatnej odpowiedz niesie wiec zywotnosc adresatow -
+    // dane juz sa w obecnosci, wystarczy je pokazac PRZY zapisie.
+    const conversation = getConversation(rc.ctx, id)!;
+    let delivery: Array<{ handle: string; online: boolean; lastSeenAt: number | null }> | undefined;
+    if (conversation.kind === "dm" || conversation.kind === "group") {
+      delivery = members(rc.ctx, id)
+        .filter((m) => m.actorId !== actor.id)
+        .map((m) => {
+          const a = getActor(rc.ctx, m.actorId);
+          return { handle: a?.handle ?? "?", ...actorLiveness(rc.ctx, m.actorId) };
+        });
+    }
+    json(res, 201, { message, ...(delivery ? { delivery } : {}) });
   });
 
   router.add("POST", "/api/conversations/:id/read", async (req, res, rc) => {
@@ -171,6 +197,13 @@ export function registerConversationRoutes(router: Router): void {
       // Dolozenie osoby do istniejacej rozmowy zmienialoby jej sklad, a wiec i to,
       // kto widzi wczesniejsze wiadomosci. Wlasciwa operacja to nowa rozmowa.
       throw badRequest("nie_dla_rozmow", "do rozmowy bezposredniej nie dodaje sie osob; zaloz nowa");
+    }
+    if (conversation?.kind === "public") {
+      // Do kanalu publicznego kazdy dolacza SAM (join). Przymusowe dopisywanie
+      // cudzych kont to zaproszenie do spamu licznikow - kazdy moglby kazdemu
+      // dolozyc dowolny kanal do nieprzeczytanych.
+      throw badRequest("publiczny_sam",
+        "do kanalu publicznego dolacza sie samemu (POST .../join)");
     }
     const [memberId] = resolveHandles(rc.ctx, [str(body.handle) ?? ""]);
     json(res, 200, { member: join(rc.ctx, id, memberId) });

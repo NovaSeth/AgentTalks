@@ -21,6 +21,7 @@ import type { Ctx } from "../core/ctx.ts";
 import { createActor, getActorByHandle } from "../core/actors.ts";
 import { normalizeHandle, normalizeSlug } from "../core/ids.ts";
 import { createChannel, ensureDirect, getBySlug, join as joinConv } from "../core/conversations.ts";
+import { resolveMentions } from "../core/mentions.ts";
 
 export type ImportReport = {
   actors: number;
@@ -83,7 +84,21 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
       report.problems.push(`nie da sie zrobic handle z etykiety "${raw}"`);
       return null;
     }
-    const existing = getActorByHandle(ctx, handle);
+    // Kolizja po transliteracji ("Michal" z ogonkami i bez to ten sam handle,
+    // ale "mac/general" i "mac general" to ROZNE etykiety): cicha fuzja dwoch
+    // rozmowcow w jednego przeklamywalaby historie. Rozstrzygamy po displayName -
+    // ta sama etykieta to ten sam aktor, inna dostaje sufiks.
+    let existing = getActorByHandle(ctx, handle);
+    if (existing && existing.displayName !== raw) {
+      let n = 2;
+      while (getActorByHandle(ctx, `${handle}-${n}`)?.displayName !== undefined
+             && getActorByHandle(ctx, `${handle}-${n}`)!.displayName !== raw) n++;
+      report.problems.push(
+        `kolizja handle "${handle}": etykieta "${raw}" dostaje "${handle}-${n}"`,
+      );
+      handle = `${handle}-${n}`;
+      existing = getActorByHandle(ctx, handle);
+    }
     const actor = existing ?? createActor(ctx, {
       // "michal" to jedyny czlowiek w historii prototypu; reszta to sesje agentow.
       kind: handle === "michal" ? "human" : "agent",
@@ -96,46 +111,43 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
     return actor.id;
   };
 
-  // Aktorzy z katalogu obecnosci ida pierwsi: dzieki temu adresat DM-a, ktory nigdy
-  // nic nie napisal, i tak da sie rozwiazac.
-  seedFromPresence(ctx, talkHome, actorFor, report);
+  const midToMessage = new Map<string, number>();
+  const qidToQuestion = new Map<string, number>();
+  const channelCache = new Map<string, number>();
 
-  const importer = () => {
-    const midToMessage = new Map<string, number>();
-    const qidToQuestion = new Map<string, number>();
-    const channelCache = new Map<string, number>();
+  const channelFor = (chan: string | undefined, creator: number): number => {
+    const slug = normalizeSlug(chan || "#general");
+    const cached = channelCache.get(slug);
+    if (cached !== undefined) return cached;
+    const conv = getBySlug(ctx, slug)
+      ?? createChannel(ctx, { slug, kind: "public", createdBy: creator });
+    channelCache.set(slug, conv.id);
+    return conv.id;
+  };
 
-    const channelFor = (chan: string | undefined, creator: number): number => {
-      const slug = normalizeSlug(chan || "#general");
-      const cached = channelCache.get(slug);
-      if (cached !== undefined) return cached;
-      const conv = getBySlug(ctx, slug)
-        ?? (report.conversations++,
-            createChannel(ctx, { slug, kind: "public", createdBy: creator }));
-      channelCache.set(slug, conv.id);
-      return conv.id;
-    };
-
-    for (const rec of records) {
-      const kind = rec.kind ?? "say";
+  const importRecord = (rec: TalkRecord, kind: string): void => {
       // join/leave byly czystym szumem juz w prototypie (kazde wywolanie mostu
       // to wejscie i wyjscie); stan obecnosci i tak trzymamy osobno.
       if (kind === "join" || kind === "leave") {
         report.skipped++;
-        continue;
+        return;
       }
       const author = actorFor(rec.label, rec.sid);
       if (author === null) {
         report.skipped++;
-        continue;
+        return;
       }
 
       if (kind === "react") {
-        const target = rec.ref ? midToMessage.get(rec.ref) : undefined;
+        // Najpierw mapa z tego przebiegu, potem baza (import_key) - drugi,
+        // przyrostowy import tez musi umiec przypiac reakcje do wiadomosci
+        // zaimportowanej poprzednim razem.
+        const target = (rec.ref ? midToMessage.get(rec.ref) : undefined)
+          ?? messageByImportKey(ctx, rec.ref);
         if (!target) {
           report.skipped++;
           report.problems.push(`reakcja do nieznanej wiadomosci ${rec.ref ?? "?"}`);
-          continue;
+          return;
         }
         const done = ctx.db
           .prepare(
@@ -144,7 +156,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
           .run(target, author, String(rec.emoji ?? "?").slice(0, 16), Math.floor(rec.ts ?? 0));
         if (done.changes > 0) report.reactions++;
         else report.skipped++;
-        continue;
+        return;
       }
 
       // Adresat DM-a byl w prototypie etykieta albo osmioznakowym skrotem sid.
@@ -154,12 +166,12 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
         if (target === null) {
           report.skipped++;
           report.problems.push(`nie rozwiazano adresata "${rec.to}"`);
-          continue;
+          return;
         }
         if (target === author) {
           report.skipped++;
           report.problems.push(`wiadomosc do samego siebie od "${rec.label ?? rec.sid}"`);
-          continue;
+          return;
         }
         conversationId = ensureDirect(ctx, [author, target]).id;
       } else {
@@ -170,17 +182,17 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
       const importKey = rec.mid ? `talk:${rec.mid}` : null;
       if (importKey && ctx.db.prepare("SELECT 1 FROM messages WHERE import_key = ?").get(importKey)) {
         report.skipped++;
-        continue;
+        return;
       }
 
       const body = String(rec.text ?? "").trim();
       if (!body) {
         report.skipped++;
-        continue;
+        return;
       }
 
       const threadId = kind === "answer" && rec.ref
-        ? questionMessage(ctx, qidToQuestion.get(rec.ref))
+        ? questionMessage(ctx, qidToQuestion.get(rec.ref) ?? questionByAskMid(ctx, rec.ref))
         : null;
 
       ctx.db
@@ -216,7 +228,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
         report.questions++;
       }
       if (kind === "answer" && rec.ref) {
-        const qid = qidToQuestion.get(rec.ref);
+        const qid = qidToQuestion.get(rec.ref) ?? questionByAskMid(ctx, rec.ref);
         if (qid) {
           ctx.db
             .prepare("UPDATE questions SET answer_message_id = ?, closed_at = ? WHERE id = ?")
@@ -225,12 +237,36 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
           report.problems.push(`odpowiedz na nieznane pytanie ${rec.ref}`);
         }
       }
-    }
+  };
 
+  const importer = () => {
+    // Aktorzy z katalogu obecnosci ida pierwsi (adresat DM-a, ktory nigdy nic
+    // nie napisal, tez musi byc rozwiazywalny) - i JUZ WEWNATRZ transakcji,
+    // zeby przerwany import nie zostawial samych aktorow bez historii.
+    seedFromPresence(ctx, talkHome, actorFor, report);
+    for (const rec of records) {
+      // Zly kanal albo inny defekt JEDNEGO rekordu nie moze wywracac calego
+      // importu z rollbackiem po dwustu wiadomosciach - taki rekord jest
+      // pomijany i opisany w raporcie.
+      try {
+        importRecord(rec, rec.kind ?? "say");
+      } catch (err) {
+        report.skipped++;
+        report.problems.push(
+          `rekord ${rec.mid ?? "?"}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
     importReadMarks(ctx, talkHome, labelToActor, sidToActor, report);
   };
 
+  const convsBefore = (ctx.db.prepare("SELECT COUNT(*) AS n FROM conversations").get() as
+    { n: number }).n;
   tx(ctx.db, importer);
+  // Raport liczy WSZYSTKIE utworzone konwersacje (kanaly + DM-y + grupy) z bazy,
+  // a nie z recznego licznika, ktory obejmowal tylko kanaly.
+  report.conversations = (ctx.db.prepare("SELECT COUNT(*) AS n FROM conversations").get() as
+    { n: number }).n - convsBefore;
   return report;
 }
 
@@ -307,6 +343,27 @@ function safeHandleLookup(ctx: Ctx, raw: string): number | undefined {
   }
 }
 
+/** Wiadomosc po kluczu importu (talk:<mid>) - dla przebiegow przyrostowych. */
+function messageByImportKey(ctx: Ctx, mid: string | undefined): number | undefined {
+  if (!mid) return undefined;
+  const row = ctx.db.prepare("SELECT id FROM messages WHERE import_key = ?")
+    .get(`talk:${mid}`) as { id: number } | undefined;
+  return row?.id;
+}
+
+/** Pytanie po midzie wiadomosci ask z POPRZEDNIEGO przebiegu importu.
+ *  Uwaga: qid prototypu ("q7") to inny naming niz mid ("m123") - refy answer
+ *  wskazuja qid, a my mapujemy qid->question w pamieci; fallback dziala przez
+ *  wiadomosc ask, ktora ma import_key, gdy ref jest midem. */
+function questionByAskMid(ctx: Ctx, ref: string | undefined): number | undefined {
+  if (!ref) return undefined;
+  const row = ctx.db.prepare(
+    `SELECT q.id FROM questions q JOIN messages m ON m.id = q.message_id
+      WHERE m.import_key = ?`,
+  ).get(`talk:${ref}`) as { id: number } | undefined;
+  return row?.id;
+}
+
 function questionMessage(ctx: Ctx, questionId: number | undefined): number | null {
   if (!questionId) return null;
   const row = ctx.db.prepare("SELECT message_id FROM questions WHERE id = ?").get(questionId) as
@@ -316,13 +373,12 @@ function questionMessage(ctx: Ctx, questionId: number | undefined): number | nul
 }
 
 function insertMentions(ctx: Ctx, messageId: number, body: string): void {
-  const handles = [...body.matchAll(/(^|[^\p{L}\p{N}_@.-])@([\p{L}\p{N}][\p{L}\p{N}._-]{1,31})/gu)]
-    .map((m) => m[2].toLowerCase().replace(/[._-]+$/, ""));
-  if (handles.length === 0) return;
+  // TA SAMA implementacja parsowania co przy zwyklym zapisie (core/mentions) -
+  // dwie kopie regexa juz raz zdazyly sie rozjechac.
   const stmt = ctx.db.prepare(
-    "INSERT OR IGNORE INTO mentions(message_id, actor_id) SELECT ?, id FROM actors WHERE handle = ?",
+    "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?, ?)",
   );
-  for (const h of new Set(handles)) stmt.run(messageId, h);
+  for (const actorId of resolveMentions(ctx, body)) stmt.run(messageId, actorId);
 }
 
 /** Znacznik czasu w milisekundach zamieniamy na id ostatniej wiadomosci, ktora
@@ -344,8 +400,17 @@ function importReadMarks(
       ?? safeHandleLookup(ctx, who);
     if (!actorId) continue;
     for (const view of readdirSync(join(root, who))) {
-      if (view.startsWith("dm_")) continue; // DM-y maja nowe identyfikatory konwersacji
-      const conv = getBySlug(ctx, view.replace(/^#/, ""));
+      let conv = null;
+      if (view.startsWith("dm_")) {
+        // Znacznik odczytu DM-a: dm_<sid|etykieta> -> rozmowa tego, kto czytal,
+        // z tamtym aktorem. Porzucenie tych znacznikow robilo z kazdego DM-a
+        // "nieprzeczytany" zaraz po migracji.
+        const other = sidToActor.get(view.slice(3).toLowerCase())
+          ?? labelToActor.get(view.slice(3).toLowerCase());
+        if (other && other !== actorId) conv = ensureDirect(ctx, [actorId, other]);
+      } else {
+        conv = getBySlug(ctx, view.replace(/^#/, ""));
+      }
       if (!conv) continue;
       const raw = Number(readFileSync(join(root, who, view), "utf8").trim());
       if (!Number.isFinite(raw)) continue;

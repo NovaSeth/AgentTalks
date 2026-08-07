@@ -43,7 +43,14 @@ export class Router {
       for (let i = 0; i < route.segments.length; i++) {
         const seg = route.segments[i];
         if (seg.startsWith(":")) {
-          params[seg.slice(1)] = decodeURIComponent(parts[i]);
+          try {
+            params[seg.slice(1)] = decodeURIComponent(parts[i]);
+          } catch {
+            // Zepsute %-kodowanie ("%zz") to smieciowe zadanie, nie awaria
+            // serwera - traktowane jak sciezka, ktorej nie ma.
+            ok = false;
+            break;
+          }
         } else if (seg !== parts[i]) {
           ok = false;
           break;

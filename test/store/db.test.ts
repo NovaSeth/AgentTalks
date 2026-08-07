@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openDb, schemaVersion, tx } from "../../src/store/db.ts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { onCommitted, openDb, schemaVersion, tx } from "../../src/store/db.ts";
 
 test("openDb tworzy schemat i ustawia wersje", () => {
   const db = openDb(":memory:");
@@ -15,10 +18,50 @@ test("openDb tworzy schemat i ustawia wersje", () => {
   }
 });
 
-test("openDb jest idempotentne", () => {
+test("openDb jest idempotentne na TYM SAMYM pliku", () => {
+  // Dwie bazy :memory: sa niezalezne i niczego nie dowodza - migracje musza
+  // przejsc "juz zmigrowana" sciezke na wspolnym pliku.
+  const path = join(mkdtempSync(join(tmpdir(), "at-db-")), "test.sqlite");
+  const db1 = openDb(path);
+  assert.equal(schemaVersion(db1), 1);
+  db1.prepare("INSERT INTO actors(kind,handle,display_name,created_at) VALUES(?,?,?,?)")
+    .run("agent", "trwaly", "trwaly", 1);
+  db1.close();
+  const db2 = openDb(path);
+  assert.equal(schemaVersion(db2), 1);
+  const n = db2.prepare("SELECT count(*) AS n FROM actors").get() as { n: number };
+  assert.equal(n.n, 1, "ponowne otwarcie nie moze ruszyc danych");
+});
+
+test("tx zagniezdzone: wewnetrzny rollback nie zabija zewnetrznej transakcji", () => {
   const db = openDb(":memory:");
-  assert.equal(schemaVersion(db), 1);
-  assert.doesNotThrow(() => openDb(":memory:"));
+  const ins = (h) => db.prepare(
+    "INSERT INTO actors(kind,handle,display_name,created_at) VALUES('agent',?,?,1)").run(h, h);
+  tx(db, () => {
+    ins("zewnetrzny");
+    assert.throws(() => tx(db, () => { ins("wewnetrzny"); throw new Error("bum"); }), /bum/);
+    ins("po-wewnetrznym");
+  });
+  const handles = (db.prepare("SELECT handle FROM actors ORDER BY handle").all() as
+    Array<{ handle: string }>).map((r) => r.handle);
+  assert.deepEqual(handles, ["po-wewnetrznym", "zewnetrzny"]);
+});
+
+test("onCommitted w transakcji odklada wywolanie do commita; blad = brak wywolania", () => {
+  const db = openDb(":memory:");
+  const calls: string[] = [];
+  tx(db, () => {
+    onCommitted(db, () => calls.push("a"));
+    assert.deepEqual(calls, [], "callback nie moze wyprzedzic commita");
+  });
+  assert.deepEqual(calls, ["a"]);
+  assert.throws(() => tx(db, () => {
+    onCommitted(db, () => calls.push("b"));
+    throw new Error("bum");
+  }), /bum/);
+  assert.deepEqual(calls, ["a"], "po rollbacku callback nie ma prawa wyjsc");
+  onCommitted(db, () => calls.push("c"));
+  assert.deepEqual(calls, ["a", "c"], "poza transakcja - od razu");
 });
 
 test("FTS5 jest dostepny i synchronizuje sie triggerem", () => {

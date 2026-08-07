@@ -97,10 +97,16 @@ export function setDisplayName(ctx: Ctx, actorId: number, displayName: string): 
 
 const SCRYPT_KEYLEN = 64;
 
-export function setPassword(ctx: Ctx, actorId: number, password: string): void {
+/** Walidacja hasla PRZED jakimkolwiek zapisem - CLI wola to przed utworzeniem
+ *  aktora, zeby blad walidacji nie zostawial konta-wydmuszki bez hasla. */
+export function assertPasswordOk(password: string): void {
   if (!password || password.length < 8) {
     throw badRequest("haslo_za_krotkie", "haslo musi miec co najmniej 8 znakow");
   }
+}
+
+export function setPassword(ctx: Ctx, actorId: number, password: string): void {
+  assertPasswordOk(password);
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, SCRYPT_KEYLEN);
   ctx.db
@@ -108,14 +114,25 @@ export function setPassword(ctx: Ctx, actorId: number, password: string): void {
     .run(`scrypt$${salt.toString("hex")}$${hash.toString("hex")}`, actorId);
 }
 
+const DUMMY_SALT = Buffer.alloc(16, 7);
+
 export function verifyPassword(ctx: Ctx, handle: string, password: string): Actor | null {
   const actor = getActorByHandle(ctx, handle);
-  if (!actor || actor.disabledAt) return null;
+  if (!actor || actor.disabledAt) {
+    // Ta sama cena scrypt dla nieistniejacego konta - patrz nizej.
+    scryptSync(password, DUMMY_SALT, SCRYPT_KEYLEN);
+    return null;
+  }
   const row = ctx.db.prepare("SELECT password_hash FROM actors WHERE id = ?").get(actor.id) as
     | { password_hash: string | null }
     | undefined;
   const stored = row?.password_hash;
-  if (!stored) return null;
+  if (!stored) {
+    // Konto bez hasla placi te sama cene scrypt, co konto z haslem - inaczej
+    // czas odpowiedzi logowania bylby wyrocznia "czy taki uzytkownik istnieje".
+    scryptSync(password, DUMMY_SALT, SCRYPT_KEYLEN);
+    return null;
+  }
   const [scheme, saltHex, hashHex] = stored.split("$");
   if (scheme !== "scrypt" || !saltHex || !hashHex) return null;
   const expected = Buffer.from(hashHex, "hex");

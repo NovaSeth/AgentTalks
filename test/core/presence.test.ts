@@ -38,16 +38,29 @@ test("efemeryda znika z obecnosci szybciej niz sesja trwala", () => {
   assert.equal(byId["trwala"].stale, false);
 });
 
-test("zakonczona efemeryda znika natychmiast, zakonczona sesja trwala zostaje", () => {
+test("zakonczona sesja znika z obecnosci, tozsamosc zostaje w rosterze", () => {
+  // Feedback z #nextIteration: lista uczestnikow prototypu rosla monotonicznie,
+  // bo zakonczone sesje nigdy nie znikaly. Obecnosc pokazuje, z kim mozna
+  // rozmawiac TERAZ; kto ISTNIEJE, mowi roster aktorow.
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   registerSession(ctx, { sessionId: "efem", actorId: a.id, kind: "ephemeral" });
   registerSession(ctx, { sessionId: "trwala", actorId: a.id, kind: "durable" });
   endSession(ctx, "efem");
   endSession(ctx, "trwala");
-  const ids = presence(ctx).map((p) => p.sessionId);
-  assert.deepEqual(ids, ["trwala"]);
-  assert.equal(presence(ctx)[0].online, false);
+  assert.deepEqual(presence(ctx), []);
+});
+
+test("sesja trwala bez heartbeatu znika po oknie retencji, wczesniej jest stale", () => {
+  let t = 1_000_000;
+  const ctx = testCtx(() => t);
+  const a = mkActor(ctx, "ala");
+  registerSession(ctx, { sessionId: "s1", actorId: a.id, kind: "durable" });
+  t += 6 * 24 * 3600;
+  assert.equal(presence(ctx).length, 1);
+  assert.equal(presence(ctx)[0].stale, true);
+  t += 2 * 24 * 3600;
+  assert.deepEqual(presence(ctx), []);
 });
 
 test("rodzaj sesji jest deklarowany, nie zgadywany z ksztaltu nazwy", () => {

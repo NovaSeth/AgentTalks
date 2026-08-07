@@ -87,17 +87,73 @@ test("long-poll wraca natychmiast, gdy sa zalegle wiadomosci", async () => {
   await s.close();
 });
 
-test("long-poll budzi sie na wiadomosc, ktora przyszla w trakcie czekania", async () => {
+test("long-poll budzi sie na wiadomosc NATYCHMIAST, nie przez timeout", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
+  const t0 = Date.now();
   const pending = fetch(`${s.url}/api/messages?after=0&wait=10`, { headers: bearer(tokenB) });
   await new Promise((r) => setTimeout(r, 120));
   await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "w trakcie" }),
   });
   const r = await (await pending).json();
+  const elapsed = Date.now() - t0;
+  // Zepsute wybudzanie tez zwroci wiadomosc - ale dopiero po 10 s timeoutu.
+  // Dowodem dziala wybudzanie jest CZAS, nie sama tresc odpowiedzi.
+  assert.ok(elapsed < 5000, `long-poll wrocil po ${elapsed} ms - to byl timeout, nie wybudzenie`);
   assert.equal(r.messages.length, 1);
   assert.equal(r.messages[0].body, "w trakcie");
+  await s.close();
+});
+
+test("SSE bez kursora NIE dosyla historii - tylko to, co nadejdzie", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, dmId } = seed(s);
+  await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "historia" }),
+  });
+  const es = await openSse(s.url + "/api/events", tokenB);
+  await assert.rejects(() => es.next(400), /timeout/);
+  es.close();
+  await s.close();
+});
+
+test("SSE wznawia z Last-Event-ID i dosyla backlog wiekszy niz jedna strona", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, dmId } = seed(s);
+  // 205 wiadomosci > strona wznowienia (200) - pojedyncza strona ucinalaby ogon
+  for (let i = 0; i < 205; i++) {
+    await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
+      method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "zaleglosc " + i }),
+    });
+  }
+  const es = await openSse(s.url + "/api/events?after=0", tokenB);
+  const got: string[] = [];
+  for (let i = 0; i < 205; i++) {
+    const ev = await es.next(5000) as any;
+    got.push(ev.message.body);
+  }
+  assert.equal(got.length, 205);
+  assert.equal(got[204], "zaleglosc 204", "ogon backlogu powyzej 200 zostal uciety");
+  es.close();
+  await s.close();
+});
+
+test("wznowienie SSE dosyla message_updated dla edycji sprzed kursora", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, dmId } = seed(s);
+  const m = (await (await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "pierwotna" }),
+  })).json()).message;
+  // klient widzial wiadomosc (kursor za nia), rozlaczyl sie, autor edytowal
+  await fetch(`${s.url}/api/messages/${m.id}`, {
+    method: "PATCH", headers: bearer(tokenA), body: JSON.stringify({ body: "po edycji" }),
+  });
+  const es = await openSse(`${s.url}/api/events?after=${m.id}`, tokenB);
+  const ev = await es.next(3000) as any;
+  assert.equal(ev.type, "message_updated");
+  assert.equal(ev.message.body, "po edycji");
+  es.close();
   await s.close();
 });
 

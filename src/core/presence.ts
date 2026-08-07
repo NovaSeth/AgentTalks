@@ -22,6 +22,13 @@ export const BUSY_TTL = 30;
 export const ONLINE_WINDOW = 900;
 export const STALE_DURABLE = 600;
 export const STALE_EPHEMERAL = 60;
+// Sesja trwala bez heartbeatu dluzej niz to znika z obecnosci. Feedback z
+// #nextIteration: lista uczestnikow prototypu rosla monotonicznie i nowa sesja
+// czytala 14 martwych rozmowcow przy 3 zywych. Klucz do bezpieczenstwa tej
+// operacji: znika WPIS OBECNOSCI, nie tozsamosc - aktor zostaje w rosterze
+// (tabela actors) i jego etykieta nie ma jak sie "wyprowadzic", co bylo bledem
+// prototypu przy kasowaniu po bezczynnosci.
+export const PRESENCE_RETENTION = 7 * 24 * 3600;
 
 export type SessionKind = "durable" | "ephemeral";
 
@@ -135,10 +142,14 @@ export function presence(ctx: Ctx): PresenceRow[] {
     const age = now - r.last_seen_at;
     const staleAfter = r.kind === "ephemeral" ? STALE_EPHEMERAL : STALE_DURABLE;
     const stale = age > staleAfter;
-    // Zakonczona albo martwa efemeryda w ogole nie trafia do wyniku: nie da sie z nia
-    // rozmawiac, wiec pokazywanie jej jest czystym szumem. Sesja trwala zostaje
-    // oznaczona jako `stale`, bo do niej mozna wrocic.
-    if (r.kind === "ephemeral" && (stale || r.ended_at)) continue;
+    // Sesja ZAKONCZONA (sygnal konca, np. hook SessionEnd) znika z obecnosci
+    // niezaleznie od rodzaju - obecnosc pokazuje, z kim mozna rozmawiac TERAZ,
+    // a tozsamosc trzyma roster aktorow. Martwa efemeryda znika tez po ciszy,
+    // sesja trwala dopiero po PRESENCE_RETENTION - bo bezczynnosc nie znaczy
+    // koniec, a dla sesji bez petli jest stanem normalnym.
+    if (r.ended_at) continue;
+    if (r.kind === "ephemeral" && stale) continue;
+    if (r.kind === "durable" && age > PRESENCE_RETENTION) continue;
     out.push({
       sessionId: r.id,
       actorId: r.actor_id,
@@ -156,6 +167,25 @@ export function presence(ctx: Ctx): PresenceRow[] {
     });
   }
   return out;
+}
+
+/**
+ * Zywotnosc AKTORA (naj-swiezsza z jego niezakonczonych sesji). Feedback
+ * z #nextIteration: `talk to <ktokolwiek>` zawsze mowilo "wyslane" i nadawca
+ * dowiadywal sie o martwym adresacie z braku odpowiedzi, po godzinie. Ta funkcja
+ * zasila jedna linie potwierdzenia przy zapisie: zywy / cisza N min / nieobecny.
+ */
+export function actorLiveness(
+  ctx: Ctx,
+  actorId: number,
+): { online: boolean; lastSeenAt: number | null } {
+  const row = ctx.db
+    .prepare(
+      "SELECT MAX(last_seen_at) AS seen FROM sessions WHERE actor_id = ? AND ended_at IS NULL",
+    )
+    .get(actorId) as { seen: number | null };
+  if (row.seen === null) return { online: false, lastSeenAt: null };
+  return { online: ctx.now() - row.seen < ONLINE_WINDOW, lastSeenAt: row.seen };
 }
 
 /** Obecnosc jest informacja publiczna w obrebie instancji, wiec zdarzenie idzie

@@ -123,3 +123,14 @@ test("wymagana wersja Node jest sprawdzana z majora", () => {
   assert.equal(nodeMajor("24.1.0"), 24);
   assert.equal(nodeMajor("18.20.1"), 18);
 });
+
+test("clone robi spojna kopie z wlasnym sekretem", async () => {
+  const src = tmpDir(), dst = tmpDir() + "/kopia";
+  await main(["init", "--data", src]);
+  await main(["actor", "create", "probny", "--kind", "agent", "--data", src]);
+  assert.equal(await main(["clone", dst, "--data", src]), 0);
+  const srcCfg = loadConfig(src), dstCfg = loadConfig(dst);
+  assert.notEqual(dstCfg.secret, srcCfg.secret, "kopia nie moze dzielic sekretu sesji");
+  const ctx = createCtx(openDb(dstCfg.dbPath));
+  assert.ok(getActorByHandle(ctx, "probny"), "dane nie przeszly do kopii");
+});

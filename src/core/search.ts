@@ -43,7 +43,17 @@ function toMatchQuery(text: string): string | null {
 
 export function search(
   ctx: Ctx,
-  q: { actorId: number; text: string; conversationId?: number; limit?: number },
+  q: {
+    actorId: number;
+    text: string;
+    conversationId?: number;
+    limit?: number;
+    // Okno czasu (sekundy uniksowe). Feedback z #nextIteration: przy historii,
+    // ktora nie jest kasowana, search bez zakresu dat to dokladnie ta komenda,
+    // ktora zaboli pierwsza.
+    sinceTs?: number;
+    untilTs?: number;
+  },
 ): Message[] {
   const match = toMatchQuery(q.text);
   if (!match) return [];
@@ -53,16 +63,25 @@ export function search(
       `SELECT m.* FROM messages_fts f
          JOIN messages m      ON m.id = f.rowid
          JOIN conversations c ON c.id = m.conversation_id
-        WHERE f.messages_fts MATCH ?
+        WHERE f.messages_fts MATCH :match
           AND m.deleted_at IS NULL
-          AND (? IS NULL OR m.conversation_id = ?)
+          AND (:conv IS NULL OR m.conversation_id = :conv)
+          AND (:since IS NULL OR m.ts >= :since)
+          AND (:until IS NULL OR m.ts <= :until)
           AND (c.kind = 'public'
                OR EXISTS (SELECT 1 FROM members mem
-                           WHERE mem.conversation_id = c.id AND mem.actor_id = ?))
+                           WHERE mem.conversation_id = c.id AND mem.actor_id = :me))
         ORDER BY m.id DESC
-        LIMIT ?`,
+        LIMIT :lim`,
     )
-    .all(match, q.conversationId ?? null, q.conversationId ?? null, q.actorId, limit) as MsgRow[];
+    .all({
+      match,
+      conv: q.conversationId ?? null,
+      since: q.sinceTs ?? null,
+      until: q.untilTs ?? null,
+      me: q.actorId,
+      lim: limit,
+    }) as MsgRow[];
 
   return rows.reverse().map((r) => ({
     id: r.id,

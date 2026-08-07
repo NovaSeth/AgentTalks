@@ -8,10 +8,10 @@ FROM node:26-alpine
 
 WORKDIR /app
 
-# package.json jest kopiowany osobno i pierwszy - gdyby kiedys pojawily sie
-# zaleznosci (etap 2: @modelcontextprotocol/sdk), warstwa z nimi bedzie sie
-# cache'owac niezaleznie od kodu.
-COPY package.json ./
+# Manifesty osobno i pierwsze: warstwa z jedyna zaleznoscia
+# (@modelcontextprotocol/sdk dla /mcp) cache'uje sie niezaleznie od kodu.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 COPY bin ./bin
 

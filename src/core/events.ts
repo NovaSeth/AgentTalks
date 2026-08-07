@@ -18,8 +18,15 @@ export type Event =
 
 type Listener = (e: Event) => void;
 
+/** Tap widzi KAZDA publikacje razem z lista odbiorcow - w odroznieniu od
+ *  subskrybenta, ktory widzi tylko zdarzenia adresowane do jego aktora.
+ *  Uzywa go wake: musi wiedziec, do kogo zdarzenie MIALO dojsc, zeby obudzic
+ *  tych, ktorzy nie sluchaja. */
+export type Tap = (recipients: readonly number[], event: Event) => void;
+
 export class EventBus {
   #byActor = new Map<number, Set<Listener>>();
+  #taps = new Set<Tap>();
 
   subscribe(actorId: number, fn: Listener): () => void {
     let set = this.#byActor.get(actorId);
@@ -36,7 +43,19 @@ export class EventBus {
     };
   }
 
+  tap(fn: Tap): () => void {
+    this.#taps.add(fn);
+    return () => this.#taps.delete(fn);
+  }
+
   publish(recipients: readonly number[], event: Event): void {
+    for (const fn of [...this.#taps]) {
+      try {
+        fn(recipients, event);
+      } catch (err) {
+        console.error("[bus] tap rzucil wyjatek:", err);
+      }
+    }
     for (const actorId of new Set(recipients)) {
       const set = this.#byActor.get(actorId);
       if (!set) continue;

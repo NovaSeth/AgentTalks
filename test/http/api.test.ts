@@ -327,3 +327,141 @@ test("nie da sie dolaczyc do kanalu prywatnego przez join", async () => {
   assert.equal(r.status, 403);
   await s.close();
 });
+
+test("sfalszowane i wygasle cookie sesji daje 401 przez API", async () => {
+  const s = await startTestServer();
+  const { michal } = seed(s);
+  // podpis od innego sekretu
+  const fake = `at_session=${michal.id}.9999999999.deadbeef`;
+  const r1 = await fetch(s.url + "/api/me", { headers: { cookie: fake } });
+  assert.equal(r1.status, 401);
+  // dobre cookie, ale wygasle (expiry w przeszlosci, podpis prawidlowy)
+  const { makeCookie } = await import("../../src/http/auth.ts");
+  const expired = makeCookie(s.config, michal.id, -10).split(";")[0];
+  const r2 = await fetch(s.url + "/api/me", { headers: { cookie: expired } });
+  assert.equal(r2.status, 401);
+  await s.close();
+});
+
+test("zle procent-kodowanie w sciezce daje 404, nie 500", async () => {
+  const s = await startTestServer();
+  const { tokenA } = seed(s);
+  const r = await fetch(s.url + "/api/files/%zz/info", { headers: bearer(tokenA) });
+  assert.equal(r.status, 404);
+  await s.close();
+});
+
+test("watek nieistniejacy i watek bez dostepu daja te sama odpowiedz", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, prywatnyId } = seed(s);
+  const m = (await (await fetch(`${s.url}/api/conversations/${prywatnyId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "tajne" }),
+  })).json()).message;
+  const noAccess = await fetch(`${s.url}/api/messages/${m.id}/thread`, {
+    headers: bearer(tokenB),
+  });
+  const missing = await fetch(`${s.url}/api/messages/999999/thread`, {
+    headers: bearer(tokenB),
+  });
+  assert.equal(noAccess.status, 404);
+  assert.equal(missing.status, 404);
+  await s.close();
+});
+
+test("kind=ask przemycone przez POST /messages nie tworzy pytania-sieroty", async () => {
+  const s = await startTestServer();
+  const { tokenA, kanalId } = seed(s);
+  const r = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    method: "POST", headers: bearer(tokenA),
+    body: JSON.stringify({ body: "podstepne pytanie?", kind: "ask" }),
+  })).json();
+  assert.equal(r.message.kind, "text", "kind ask ma isc wylacznie przez /ask");
+  const n = s.ctx.db.prepare("SELECT count(*) AS n FROM questions").get() as { n: number };
+  assert.equal(n.n, 0);
+  await s.close();
+});
+
+test("nie da sie przymusowo dopisac kogos do kanalu publicznego", async () => {
+  const s = await startTestServer();
+  const { tokenA, kanalId } = seed(s);
+  const r = await fetch(`${s.url}/api/conversations/${kanalId}/members`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ handle: "bob" }),
+  });
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).code, "publiczny_sam");
+  await s.close();
+});
+
+test("edycja wiadomosci aktualizuje indeks wyszukiwania", async () => {
+  const s = await startTestServer();
+  const { tokenA, kanalId } = seed(s);
+  const m = (await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "pierwotna fraza" }),
+  })).json()).message;
+  await fetch(`${s.url}/api/messages/${m.id}`, {
+    method: "PATCH", headers: bearer(tokenA), body: JSON.stringify({ body: "zmieniona tresc" }),
+  });
+  const stara = await (await fetch(s.url + "/api/search?q=pierwotna", {
+    headers: bearer(tokenA),
+  })).json();
+  const nowa = await (await fetch(s.url + "/api/search?q=zmieniona", {
+    headers: bearer(tokenA),
+  })).json();
+  assert.equal(stara.messages.length, 0, "stara tresc nie moze byc znajdowalna");
+  assert.equal(nowa.messages.length, 1);
+  await s.close();
+});
+
+test("dzierzawa przez API: 200 przy zajeciu, 409 z wlascicielem przy odmowie", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB } = seed(s);
+  const ok = await fetch(s.url + "/api/leases", {
+    method: "POST", headers: bearer(tokenA),
+    body: JSON.stringify({ resource: "deploy", ttlSec: 120, note: "wdrazam" }),
+  });
+  assert.equal(ok.status, 200);
+  const denied = await fetch(s.url + "/api/leases", {
+    method: "POST", headers: bearer(tokenB), body: JSON.stringify({ resource: "deploy" }),
+  });
+  assert.equal(denied.status, 409);
+  const body = await denied.json();
+  assert.equal(body.heldBy.handle, "ala");
+  await s.close();
+});
+
+test("upload pliku przez API, pobranie przez czlonka, odmowa dla obcego", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, dmId } = seed(s);
+  const up = await fetch(`${s.url}/api/conversations/${dmId}/files`, {
+    method: "POST",
+    headers: { authorization: (bearer(tokenA) as any).authorization,
+      "content-type": "text/plain", "x-file-name": "raport.txt" },
+    body: "tresc raportu",
+  });
+  assert.equal(up.status, 201);
+  const fileId = (await up.json()).file.id;
+  const got = await fetch(`${s.url}/api/files/${fileId}`, { headers: bearer(tokenB) });
+  assert.equal(got.status, 200);
+  assert.equal(await got.text(), "tresc raportu");
+  const obcy = createActor(s.ctx, { kind: "agent", handle: "obcy" });
+  const tokenObcy = mintToken(s.ctx, obcy.id, "t").token;
+  const denied = await fetch(`${s.url}/api/files/${fileId}`, {
+    headers: bearer(tokenObcy),
+  });
+  assert.equal(denied.status, 404);
+  await s.close();
+});
+
+test("wake: rejestracja zwraca sekret raz, GET pokazuje konfiguracje bez sekretu", async () => {
+  const s = await startTestServer();
+  const { tokenA } = seed(s);
+  const put = await (await fetch(s.url + "/api/wake", {
+    method: "PUT", headers: bearer(tokenA),
+    body: JSON.stringify({ target: "https://most.example/wake" }),
+  })).json();
+  assert.ok(put.secret.length > 20);
+  const got = await (await fetch(s.url + "/api/wake", { headers: bearer(tokenA) })).json();
+  assert.equal(got.wake.target, "https://most.example/wake");
+  assert.equal(got.wake.secret, undefined, "sekret nie moze byc odczytywalny po fakcie");
+  await s.close();
+});

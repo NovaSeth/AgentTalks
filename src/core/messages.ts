@@ -14,7 +14,7 @@
  * 3. Zdarzenie na szyne idzie PO zatwierdzeniu transakcji. Odwrotna kolejnosc
  *    znaczylaby, ze subskrybent moze zapytac o dane, ktorych jeszcze nie ma w bazie.
  */
-import { tx } from "../store/db.ts";
+import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
 import { assertCanPost, assertCanRead, recipientsOf } from "./conversations.ts";
 import { badRequest, forbidden, notFound, tooLarge } from "./errors.ts";
@@ -40,7 +40,7 @@ export type Message = {
   meta: Record<string, unknown> | null;
 };
 
-type MsgRow = {
+export type MsgRow = {
   id: number;
   conversation_id: number;
   actor_id: number;
@@ -55,8 +55,9 @@ type MsgRow = {
 };
 
 /** Skasowana wiadomosc zostaje w kolejnosci (inaczej rozjechalyby sie kursory
- *  i znaczniki odczytu), ale traci tresc. */
-const toMsg = (r: MsgRow): Message => ({
+ *  i znaczniki odczytu), ale traci tresc. Eksportowane, zeby digest i wzmianki
+ *  nie utrzymywaly wlasnych kopii tego mapowania. */
+export const messageFromRow = (r: MsgRow): Message => ({
   id: r.id,
   conversationId: r.conversation_id,
   actorId: r.actor_id,
@@ -70,11 +71,11 @@ const toMsg = (r: MsgRow): Message => ({
   meta: r.meta ? (JSON.parse(r.meta) as Record<string, unknown>) : null,
 });
 
-function validateBody(body: string): string {
+function validateBody(body: string, maxBytes: number): string {
   const text = String(body ?? "").trim();
   if (!text) throw badRequest("puste_cialo", "wiadomosc nie moze byc pusta");
-  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) {
-    throw tooLarge("cialo_za_dlugie", `wiadomosc jest za dluga (limit ${MAX_BODY_BYTES} B)`);
+  if (Buffer.byteLength(text, "utf8") > maxBytes) {
+    throw tooLarge("cialo_za_dlugie", `wiadomosc jest za dluga (limit ${maxBytes} B)`);
   }
   return text;
 }
@@ -90,9 +91,11 @@ export function postMessage(
     threadId?: number | null;
     meta?: Record<string, unknown> | null;
     importKey?: string | null;
+    /** Limit z konfiguracji instancji; bez podania obowiazuje MAX_BODY_BYTES. */
+    maxBytes?: number;
   },
 ): Message {
-  const body = validateBody(input.body);
+  const body = validateBody(input.body, input.maxBytes ?? MAX_BODY_BYTES);
   assertCanPost(ctx, input.conversationId, input.actorId);
 
   const message = tx(ctx.db, () => {
@@ -122,14 +125,17 @@ export function postMessage(
       "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?,?)",
     );
     for (const actorId of resolveMentions(ctx, body)) stmt.run(row.id, actorId);
-    return toMsg(row);
+    return messageFromRow(row);
   });
 
-  ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
+  // Poza transakcja publikuje od razu; wewnatrz transakcji wolajacego (ask,
+  // answer, import) - dopiero po prawdziwym COMMIT. Subskrybent nigdy nie widzi
+  // zdarzenia o danych, ktorych nie ma.
+  onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
     type: "message",
     conversationId: input.conversationId,
     message,
-  });
+  }));
   return message;
 }
 
@@ -148,7 +154,7 @@ function rootOfThread(ctx: Ctx, threadId: number | null, convId: number): number
 
 export function getMessage(ctx: Ctx, id: number): Message | null {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow | undefined;
-  return row ? toMsg(row) : null;
+  return row ? messageFromRow(row) : null;
 }
 
 /**
@@ -166,7 +172,7 @@ export function listMessages(
         "SELECT * FROM messages WHERE conversation_id = ? AND id > ? ORDER BY id LIMIT ?",
       )
       .all(q.conversationId, q.after, limit) as MsgRow[];
-    return rows.map(toMsg);
+    return rows.map(messageFromRow);
   }
   // Bez `after` chcemy OSTATNIE `limit` wiadomosci, ale oddane rosnaco - stad
   // pobranie malejaco i odwrocenie.
@@ -177,14 +183,14 @@ export function listMessages(
         ORDER BY id DESC LIMIT ?`,
     )
     .all(q.conversationId, q.before ?? null, q.before ?? null, limit) as MsgRow[];
-  return rows.reverse().map(toMsg);
+  return rows.reverse().map(messageFromRow);
 }
 
 export function listThread(ctx: Ctx, threadId: number): Message[] {
   const rows = ctx.db
     .prepare("SELECT * FROM messages WHERE id = ? OR thread_id = ? ORDER BY id")
     .all(threadId, threadId) as MsgRow[];
-  return rows.map(toMsg);
+  return rows.map(messageFromRow);
 }
 
 export function editMessage(ctx: Ctx, id: number, actorId: number, body: string): Message {
@@ -192,7 +198,7 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
   if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${id}`);
   if (row.actor_id !== actorId) throw forbidden("nie_autor", "nie jestes autorem tej wiadomosci");
   if (row.deleted_at) throw badRequest("skasowana", "nie da sie edytowac skasowanej wiadomosci");
-  const text = validateBody(body);
+  const text = validateBody(body, MAX_BODY_BYTES);
 
   const message = tx(ctx.db, () => {
     ctx.db.prepare("UPDATE messages SET body = ?, edited_at = ? WHERE id = ?")
@@ -202,14 +208,14 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
       "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?,?)",
     );
     for (const a of resolveMentions(ctx, text)) stmt.run(id, a);
-    return toMsg(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
+    return messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
   });
 
-  ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
+  onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
     type: "message_updated",
     conversationId: row.conversation_id,
     message,
-  });
+  }));
   return message;
 }
 
@@ -224,29 +230,63 @@ export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
     ctx.db.prepare("UPDATE messages SET body = '', deleted_at = ? WHERE id = ?")
       .run(ctx.now(), id);
     ctx.db.prepare("DELETE FROM mentions WHERE message_id = ?").run(id);
-    return toMsg(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
+    return messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
   });
 
-  ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
+  onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
     type: "message_updated",
     conversationId: row.conversation_id,
     message,
-  });
+  }));
   return message;
 }
 
 /** Wszystko nowsze niz `afterId` ze wszystkich konwersacji, ktorych aktor jest czlonkiem.
- *  To jest zrodlo dla long-polla i dla wznowienia SSE po zerwaniu. */
-export function inboxAfter(ctx: Ctx, actorId: number, afterId: number, limit = 200): Message[] {
+ *  To jest zrodlo dla long-polla i dla wznowienia SSE po zerwaniu.
+ *  includeOwn: zywy strumien SSE dostarcza takze wlasne wiadomosci (drugie
+ *  urzadzenie tego samego aktora musi je widziec), wiec wznowienie tez musi. */
+export function inboxAfter(
+  ctx: Ctx,
+  actorId: number,
+  afterId: number,
+  limit = 200,
+  opts: { includeOwn?: boolean } = {},
+): Message[] {
+  const rows = ctx.db
+    .prepare(
+      `SELECT m.* FROM messages m
+         JOIN members mem ON mem.conversation_id = m.conversation_id AND mem.actor_id = :me
+        WHERE m.id > :after AND (:own = 1 OR m.actor_id <> :me)
+        ORDER BY m.id LIMIT :lim`,
+    )
+    .all({ me: actorId, after: afterId, own: opts.includeOwn ? 1 : 0,
+           lim: Math.min(limit, MAX_LIMIT) }) as MsgRow[];
+  return rows.map(messageFromRow);
+}
+
+/**
+ * Wiadomosci sprzed kursora, ktore ZMIENILY SIE (edycja/kasowanie) od `sinceTs` -
+ * do wznowienia SSE. Kursor id nie niesie informacji o zmianach starych wiadomosci,
+ * wiec po zerwaniu klient dostalby nowe, ale nie dowiedzialby sie o edycjach.
+ * Okno czasowe jest ograniczone, bo "wszystkie edycje w historii" to pelny skan,
+ * a realne zerwania mierzy sie w minutach.
+ */
+export function updatedBefore(
+  ctx: Ctx,
+  actorId: number,
+  beforeId: number,
+  sinceTs: number,
+): Message[] {
   const rows = ctx.db
     .prepare(
       `SELECT m.* FROM messages m
          JOIN members mem ON mem.conversation_id = m.conversation_id AND mem.actor_id = ?
-        WHERE m.id > ? AND m.actor_id <> ?
-        ORDER BY m.id LIMIT ?`,
+        WHERE m.id <= ?
+          AND (COALESCE(m.edited_at, 0) >= ? OR COALESCE(m.deleted_at, 0) >= ?)
+        ORDER BY m.id LIMIT 500`,
     )
-    .all(actorId, afterId, actorId, Math.min(limit, MAX_LIMIT)) as MsgRow[];
-  return rows.map(toMsg);
+    .all(actorId, beforeId, sinceTs, sinceTs) as MsgRow[];
+  return rows.map(messageFromRow);
 }
 
 /** Najwyzsze id w systemie. Klient bierze je jako punkt startowy kursora. */
@@ -257,4 +297,3 @@ export function lastMessageId(ctx: Ctx): number {
   return row.id;
 }
 
-export { assertCanRead };

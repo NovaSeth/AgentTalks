@@ -5,10 +5,12 @@
  * uruchomienie, aktorzy, tokeny, import z prototypu. Klient dla agentow (`atalk`)
  * przychodzi w etapie 2 i bedzie mowil HTTP, a nie dotykal bazy.
  */
+import { existsSync, rmSync } from "node:fs";
 import { assertBindAllowed, initData, loadConfig, defaultDataDir, type Config } from "../config.ts";
-import { openDb } from "../store/db.ts";
+import { openDb, tx } from "../store/db.ts";
 import { createCtx, type Ctx } from "../core/ctx.ts";
 import {
+  assertPasswordOk,
   createActor,
   getActorByHandle,
   listActors,
@@ -18,6 +20,8 @@ import {
 import { createChannel, getBySlug, join as joinConversation } from "../core/conversations.ts";
 import { listTokens, mintToken, revokeToken } from "../core/tokens.ts";
 import { importTalkHome } from "../importer/talk.ts";
+import { registerWake } from "../core/wake.ts";
+import { sweepExpired } from "../core/files.ts";
 import { createServer, VERSION } from "../http/server.ts";
 import { AppError } from "../core/errors.ts";
 import { assertNodeVersion } from "../version.ts";
@@ -41,6 +45,11 @@ const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a l
 
   agenttalks import-talk <katalog ~/.talk> [--data <kat>]
       Wciaga historie prototypu: kanaly, DM-y, pytania, reakcje, znaczniki odczytu.
+
+  agenttalks clone <katalog-docelowy> [--data <kat>]
+      Spojna kopia instancji (VACUUM INTO) do pomiarow i testow na boku.
+      Feedback z #nextIteration: "caly ten feedback jest z liczb, a nie z wrazen,
+      wylacznie dlatego, ze moglem zrobic kopie i zmierzyc, nie dotykajac produkcji".
 
   agenttalks healthcheck [--url <adres>]
       Zwraca 0, gdy serwer odpowiada. Uzywane przez HEALTHCHECK w obrazie Docker.
@@ -104,6 +113,8 @@ export async function main(argv: readonly string[]): Promise<number> {
         return cmdToken(rest, args);
       case "import-talk":
         return cmdImport(rest, args);
+      case "clone":
+        return cmdClone(rest, args);
       case "healthcheck":
         return await cmdHealthcheck(args);
       default:
@@ -149,6 +160,19 @@ async function cmdServe(args: Args): Promise<number> {
   const port = Number(flagStr(args, "port") ?? config.port);
   assertBindAllowed(config, host);
 
+  // Wake (budzenie nieobecnych agentow webhookiem) i sprzatanie wygaslych plikow
+  // zyja wylacznie w procesie serwera - komendy administracyjne CLI nie maja
+  // prawa strzelac webhookami w cudzym imieniu.
+  registerWake(ctx);
+  const sweep = setInterval(() => {
+    try {
+      sweepExpired(ctx);
+    } catch (err) {
+      console.error("[files] sprzatanie wygaslych nie wyszlo:", err);
+    }
+  }, 60_000);
+  sweep.unref();
+
   const server = createServer(ctx, config);
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
   process.stdout.write(`AgentTalks ${VERSION} nasluchuje na http://${host}:${port}\n`);
@@ -185,21 +209,27 @@ function cmdActor(rest: string[], args: Args): number {
     process.stderr.write("--kind musi byc 'human' albo 'agent'\n");
     return 1;
   }
-  const actor = createActor(ctx, {
-    kind,
-    handle,
-    displayName: flagStr(args, "name"),
-    isAdmin: args.flags.admin === true,
-  });
-  // Nowy uczestnik laduje w #general od razu. Konto zalozone i "nic nie widze"
-  // to zla pierwsza minuta z narzedziem, a kanal ogolny jest po to, zeby byc w nim
-  // domyslnie. Kazdy inny kanal wymaga swiadomego dolaczenia.
-  const general = getBySlug(ctx, "general");
-  if (general) joinConversation(ctx, general.id, actor.id);
-
+  // Walidacja hasla PRZED jakimkolwiek zapisem i calosc w jednej transakcji:
+  // blad w polowie nie moze zostawic konta-wydmuszki, ktorego nie da sie
+  // naprawic ("handle zajety" przy kazdej kolejnej probie).
   const password = flagStr(args, "password");
-  if (password) setPassword(ctx, actor.id, password);
-  else if (kind === "human") {
+  if (password !== undefined) assertPasswordOk(password);
+  const actor = tx(ctx.db, () => {
+    const created = createActor(ctx, {
+      kind,
+      handle,
+      displayName: flagStr(args, "name"),
+      isAdmin: args.flags.admin === true,
+    });
+    // Nowy uczestnik laduje w #general od razu. Konto zalozone i "nic nie widze"
+    // to zla pierwsza minuta z narzedziem; kazdy inny kanal wymaga swiadomego
+    // dolaczenia.
+    const general = getBySlug(ctx, "general");
+    if (general) joinConversation(ctx, general.id, created.id);
+    if (password) setPassword(ctx, created.id, password);
+    return created;
+  });
+  if (!password && kind === "human") {
     process.stdout.write("uwaga: konto czlowieka bez hasla nie zaloguje sie do UI\n");
   }
   process.stdout.write(`utworzony aktor @${actor.handle} (${actor.kind})\n`);
@@ -241,7 +271,16 @@ function cmdToken(rest: string[], args: Args): number {
     return 0;
   }
   if (sub === "revoke" && id) {
-    revokeToken(ctx, Number(id));
+    const tokenId = Number(id);
+    const exists = Number.isFinite(tokenId)
+      && ctx.db.prepare("SELECT 1 FROM tokens WHERE id = ?").get(tokenId);
+    if (!exists) {
+      // "Odwolany" dla tokenu, ktorego nie ma, to falszywe poczucie bezpieczenstwa
+      // dokladnie w chwili, gdy ktos rotuje wyciekniety token.
+      process.stderr.write(`nie ma tokenu o id ${id} (sprawdz: token list --actor <handle>)\n`);
+      return 1;
+    }
+    revokeToken(ctx, tokenId);
     process.stdout.write(`token ${id} odwolany\n`);
     return 0;
   }
@@ -276,9 +315,40 @@ function cmdImport(rest: string[], args: Args): number {
   return 0;
 }
 
+function cmdClone(rest: string[], args: Args): number {
+  const [dest] = rest;
+  if (!dest) {
+    process.stderr.write("uzycie: agenttalks clone <katalog-docelowy>\n");
+    return 1;
+  }
+  const { ctx, config } = openCtx(args);
+  const destConfig = initData(dest);
+  // VACUUM INTO robi SPOJNA kopie takze przy dzialajacym serwerze (WAL) -
+  // zwykle `cp` w trakcie zapisu potrafi zabrac baze z polowy transakcji.
+  // Kopia dostaje WLASNY sekret (initData) - cookie produkcyjne nie moga
+  // dzialac na instancji testowej.
+  if (existsSync(destConfig.dbPath)) rmSync(destConfig.dbPath);
+  ctx.db.prepare("VACUUM INTO ?").run(destConfig.dbPath);
+  process.stdout.write(
+    `sklonowane do ${dest}\n` +
+      `  uruchom:   agenttalks serve --data ${dest} --port 8788\n` +
+      `  po tescie: rm -rf ${dest}\n` +
+      `Uwaga: katalog plikow (${config.filesDir}) NIE jest kopiowany - metadane\n` +
+      `plikow wskazuja na oryginalne sciezki; do pomiarow wiadomosci to bez znaczenia.\n`,
+  );
+  return 0;
+}
+
 async function cmdHealthcheck(args: Args): Promise<number> {
-  const url = flagStr(args, "url")
-    ?? `http://127.0.0.1:${process.env.AGENTTALKS_PORT ?? 8080}/api/health`;
+  // Port, w kolejnosci pewnosci: jawny --url, srodowisko (kontener ustawia
+  // AGENTTALKS_PORT), konfiguracja instancji, dopiero na koncu domyslny.
+  let port = process.env.AGENTTALKS_PORT;
+  if (!port) {
+    try {
+      port = String(loadConfig(flagStr(args, "data") ?? defaultDataDir()).port);
+    } catch { /* brak instancji - zostaje domyslny */ }
+  }
+  const url = flagStr(args, "url") ?? `http://127.0.0.1:${port ?? 8787}/api/health`;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return 1;

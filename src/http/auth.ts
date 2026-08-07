@@ -105,8 +105,10 @@ export function assertCsrf(rc: RouteCtx, req: Req): void {
   }
 }
 
-/** Token CSRF wyprowadzony z cookie sesji. Klient liczy go tak samo, wiec nie trzeba
- *  osobnego kanalu ani drugiego ciasteczka. */
+/** Token CSRF wyprowadzony z wartosci cookie sesji. Cookie jest HttpOnly, wiec
+ *  klient NIE liczy go sam - dostaje go w odpowiedzi logowania i odsyla w naglowku.
+ *  Obca strona nie zna wartosci cookie, wiec nie policzy tokenu; wlasny frontend
+ *  zna go z logowania. Jeden sekret wystarcza, bo wejscie juz jest tajne. */
 export function csrfFor(sessionCookieValue: string): string {
   return createHmac("sha256", "at-csrf").update(sessionCookieValue).digest("hex").slice(0, 32);
 }

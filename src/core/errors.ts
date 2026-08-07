@@ -21,3 +21,4 @@ export const forbidden = (code: string, message: string) => new AppError(code, m
 export const notFound = (code: string, message: string) => new AppError(code, message, 404);
 export const conflict = (code: string, message: string) => new AppError(code, message, 409);
 export const tooLarge = (code: string, message: string) => new AppError(code, message, 413);
+export const tooMany = (code: string, message: string) => new AppError(code, message, 429);

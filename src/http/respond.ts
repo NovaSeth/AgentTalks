@@ -51,6 +51,22 @@ export async function readJson(req: Req, maxBytes: number): Promise<Record<strin
   }
 }
 
+/** Surowe cialo (upload pliku). Ten sam limit twardy, co przy JSON:
+ *  klient wysylajacy wiecej jest ucinany, a nie buforowany w nieskonczonosc. */
+export async function readRaw(req: Req, maxBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buf = chunk as Buffer;
+    size += buf.length;
+    if (size > maxBytes) {
+      throw tooLarge("cialo_za_duze", `cialo zadania jest za duze (limit ${maxBytes} B)`);
+    }
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks);
+}
+
 export const str = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
 

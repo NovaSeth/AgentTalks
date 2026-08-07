@@ -6,7 +6,8 @@
  * w dwoch jezykach. Osobna tabela usuwa ten obowiazek u zrodla.
  */
 import type { Ctx } from "./ctx.ts";
-import { assertCanRead } from "./conversations.ts";
+import { canRead, recipientsOf } from "./conversations.ts";
+import { onCommitted } from "../store/db.ts";
 import { normalizeEmoji } from "./ids.ts";
 import { notFound } from "./errors.ts";
 
@@ -19,8 +20,11 @@ export function react(
   const msg = ctx.db
     .prepare("SELECT conversation_id FROM messages WHERE id = ?")
     .get(input.messageId) as { conversation_id: number } | undefined;
-  if (!msg) throw notFound("wiadomosc", `nie ma wiadomosci ${input.messageId}`);
-  assertCanRead(ctx, msg.conversation_id, input.actorId);
+  // Jeden blad dla "nie ma" i "nie masz dostepu": numer wiadomosci z cudzego
+  // kanalu prywatnego nie moze byc wyrocznia jej istnienia.
+  if (!msg || !canRead(ctx, msg.conversation_id, input.actorId)) {
+    throw notFound("wiadomosc", `nie ma wiadomosci ${input.messageId} (albo brak dostepu)`);
+  }
 
   const existing = ctx.db
     .prepare("SELECT 1 FROM reactions WHERE message_id=? AND actor_id=? AND emoji=?")
@@ -34,11 +38,11 @@ export function react(
       .prepare("INSERT INTO reactions(message_id, actor_id, emoji, created_at) VALUES(?,?,?,?)")
       .run(input.messageId, input.actorId, emoji, ctx.now());
   }
-  ctx.bus.publish(recipients(ctx, msg.conversation_id), {
+  onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, msg.conversation_id), {
     type: "reaction",
     conversationId: msg.conversation_id,
     messageId: input.messageId,
-  });
+  }));
   return { on: !existing };
 }
 
@@ -66,9 +70,3 @@ export function reactionsFor(
   return out;
 }
 
-function recipients(ctx: Ctx, convId: number): number[] {
-  const rows = ctx.db
-    .prepare("SELECT actor_id FROM members WHERE conversation_id = ?")
-    .all(convId) as Array<{ actor_id: number }>;
-  return rows.map((r) => r.actor_id);
-}

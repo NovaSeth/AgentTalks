@@ -1,0 +1,899 @@
+/**
+ * atalk - klient AgentTalks dla agentow i ludzi w terminalu.
+ *
+ * Mowi WYLACZNIE po HTTP do demona; nie dotyka zadnych plikow danych. To jest
+ * roznica architektoniczna wobec prototypowego `talk`, ktory czytal i pisal
+ * ~/.talk bezposrednio - i przez to dzialal tylko na jednej maszynie i tylko
+ * na Linuksie (tozsamosc z /proc).
+ *
+ * Tozsamosc: token aktora. Zadnego zgadywania z PID-ow ani z katalogu.
+ * Konfiguracja, w kolejnosci: flagi --url/--token, zmienne AGENTTALKS_URL /
+ * AGENTTALKS_TOKEN, plik ~/.config/agenttalks/atalk.json (0600, zapisywany
+ * przez `atalk login`).
+ *
+ * Kursor `atalk read` jest lokalny (per serwer+aktor) - dokladnie jak kursor
+ * sesji w prototypie: "read" dostarcza nowe, "log" przeglada bez ruszania
+ * licznikow, "seen" zeruje liczniki konwersacji.
+ */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir, hostname } from "node:os";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { basename } from "node:path";
+import { parseArgs } from "./main.ts";
+import { assertNodeVersion } from "../version.ts";
+
+const CONFIG_DIR = join(homedir(), ".config", "agenttalks");
+const CONFIG_FILE = join(CONFIG_DIR, "atalk.json");
+
+type ClientConfig = { url: string; token: string };
+
+type Args = ReturnType<typeof parseArgs>;
+
+const flagStr = (args: Args, name: string): string | undefined =>
+  typeof args.flags[name] === "string" ? (args.flags[name] as string) : undefined;
+
+function loadClientConfig(args: Args): ClientConfig {
+  let stored: Partial<ClientConfig> = {};
+  if (existsSync(CONFIG_FILE)) {
+    try {
+      stored = JSON.parse(readFileSync(CONFIG_FILE, "utf8")) as Partial<ClientConfig>;
+    } catch {
+      // uszkodzony plik konfiguracyjny nie moze blokowac trybu przez zmienne
+    }
+  }
+  const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? stored.url
+    ?? "http://127.0.0.1:8787";
+  const token = flagStr(args, "token") ?? process.env.AGENTTALKS_TOKEN ?? stored.token ?? "";
+  if (!token) {
+    throw new Error(
+      "brak tokenu. Ustaw AGENTTALKS_TOKEN, podaj --token, albo zapisz raz: " +
+        "atalk login --url <adres> --token <atk_...>",
+    );
+  }
+  return { url: url.replace(/\/+$/, ""), token };
+}
+
+/** Identyfikator sesji: jawny > srodowisko Claude Code > stabilny dla tej
+ *  kombinacji host+pid rodzica (fallback dla recznych uruchomien). */
+function sessionId(args: Args): string {
+  return (
+    flagStr(args, "session")
+    ?? process.env.AGENTTALKS_SESSION
+    ?? process.env.CLAUDE_CODE_SESSION_ID
+    ?? `cli-${hostname()}-${process.ppid}`
+  );
+}
+
+// ---- klient HTTP ----------------------------------------------------------
+
+class Api {
+  // Zwykle pole, nie "parameter property": Node uruchamia TypeScript w trybie
+  // strip-only i skladnia generujaca kod (constructor(private x)) nie przechodzi.
+  #cfg: ClientConfig;
+
+  constructor(cfg: ClientConfig) {
+    this.#cfg = cfg;
+  }
+
+  headers(extra: Record<string, string> = {}): Record<string, string> {
+    return {
+      authorization: `Bearer ${this.#cfg.token}`,
+      "content-type": "application/json",
+      ...extra,
+    };
+  }
+
+  async call(method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+    let res: Response;
+    try {
+      res = await fetch(this.#cfg.url + path, {
+        method,
+        headers: this.headers(),
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch (err) {
+      throw new Error(
+        `serwer AgentTalks nie odpowiada pod ${this.#cfg.url} ` +
+          `(${err instanceof Error ? err.message : err})`,
+      );
+    }
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      // 409 przy dzierzawach to normalna odpowiedz negocjacyjna, nie awaria.
+      if (res.status === 409) return { ...data, _status: 409 };
+      throw new Error(String(data.error ?? `HTTP ${res.status}`));
+    }
+    return data;
+  }
+
+  async upload(path: string, data: Buffer, headers: Record<string, string>):
+    Promise<Record<string, unknown>> {
+    const res = await fetch(this.#cfg.url + path, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${this.#cfg.token}`,
+        "content-type": "application/octet-stream",
+        ...headers,
+      },
+      body: new Uint8Array(data),
+    });
+    const parsed = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) throw new Error(String(parsed.error ?? `HTTP ${res.status}`));
+    return parsed;
+  }
+
+  async download(path: string): Promise<Buffer> {
+    const res = await fetch(this.#cfg.url + path, {
+      headers: { authorization: `Bearer ${this.#cfg.token}` },
+    });
+    if (!res.ok) {
+      const parsed = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      throw new Error(String(parsed.error ?? `HTTP ${res.status}`));
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  /** Strumien SSE jako async iterator zdarzen. */
+  async *events(after?: number): AsyncGenerator<Record<string, unknown>> {
+    const suffix = after !== undefined ? `?after=${after}` : "";
+    const res = await fetch(`${this.#cfg.url}/api/events${suffix}`, {
+      headers: { authorization: `Bearer ${this.#cfg.token}` },
+    });
+    if (!res.ok || !res.body) throw new Error(`SSE: HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
+        if (dataLine) yield JSON.parse(dataLine.slice(6)) as Record<string, unknown>;
+      }
+    }
+  }
+}
+
+// ---- lokalny kursor -------------------------------------------------------
+
+function cursorFile(cfg: ClientConfig): string {
+  const key = createHash("sha256").update(`${cfg.url}|${cfg.token}`).digest("hex").slice(0, 16);
+  return join(CONFIG_DIR, `cursor-${key}`);
+}
+
+function readCursor(cfg: ClientConfig): number {
+  try {
+    return Number(readFileSync(cursorFile(cfg), "utf8").trim()) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeCursor(cfg: ClientConfig, id: number): void {
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(cursorFile(cfg), String(id));
+}
+
+// ---- rendering ------------------------------------------------------------
+
+type Msg = {
+  id: number; conversationId: number; actorId: number; ts: number; kind: string;
+  body: string; threadId: number | null; deletedAt: number | null;
+};
+
+function hhmm(ts: number): string {
+  return new Date(ts * 1000).toLocaleTimeString("pl-PL", {
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function fmtMsg(m: Msg, who: Map<number, string>, conv: Map<number, string>): string {
+  const author = who.get(m.actorId) ?? `aktor:${m.actorId}`;
+  const where = conv.get(m.conversationId) ?? `konwersacja:${m.conversationId}`;
+  const tags: string[] = [];
+  if (m.kind === "ask") tags.push("PYTANIE");
+  if (m.kind === "answer") tags.push("odpowiedz");
+  if (m.kind === "file") tags.push("plik");
+  if (m.threadId) tags.push(`watek:${m.threadId}`);
+  const tag = tags.length ? ` (${tags.join(", ")})` : "";
+  return `  [${m.id}] ${hhmm(m.ts)} ${where} <${author}>${tag}: ${m.body}`;
+}
+
+/** Mapy id->nazwa do renderowania. Dwa zapytania na wywolanie - CLI zyje krotko. */
+async function nameMaps(api: Api): Promise<{ who: Map<number, string>; conv: Map<number, string> }> {
+  const actors = await api.call("GET", "/api/actors");
+  const convs = await api.call("GET", "/api/conversations");
+  const who = new Map<number, string>();
+  for (const a of actors.actors as Array<{ id: number; handle: string }>) who.set(a.id, a.handle);
+  const conv = new Map<number, string>();
+  for (const c of convs.conversations as Array<{ id: number; kind: string; slug: string | null }>) {
+    conv.set(c.id, c.slug ? `#${c.slug}` : `[${c.kind}:${c.id}]`);
+  }
+  return { who, conv };
+}
+
+/** '#kanal' / '@handle' / '@a,@b' / id -> id konwersacji (dm/grupa zakladana w locie). */
+async function resolveConv(api: Api, ref: string): Promise<number> {
+  const raw = ref.trim();
+  if (/^\d+$/.test(raw)) return Number(raw);
+  if (raw.startsWith("#")) {
+    const convs = await api.call("GET", "/api/conversations");
+    const hit = (convs.conversations as Array<{ id: number; slug: string | null }>)
+      .find((c) => c.slug === raw.slice(1).toLowerCase());
+    if (!hit) throw new Error(`nie ma kanalu ${raw} (zaloz: atalk channel ${raw})`);
+    return hit.id;
+  }
+  const handles = raw.split(/[\s,]+/).filter(Boolean).map((h) => h.replace(/^@/, ""));
+  const created = await api.call("POST", "/api/conversations", {
+    kind: handles.length > 1 ? "group" : "dm",
+    members: handles,
+  });
+  return (created.conversation as { id: number }).id;
+}
+
+const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
+
+  polaczenie:
+    atalk login --url <adres> --token <atk_...>   zapisz dostep (0600)
+    atalk whoami                                  kim jestem wedlug serwera
+
+  czytanie:
+    atalk status              pelny obraz: kto jest, nieprzeczytane, pytania
+    atalk read [--wait N]     nowe wiadomosci dla mnie (przesuwa lokalny kursor)
+    atalk log <#kanal|@kto> [n]   historia konwersacji (oznacza przeczytane)
+    atalk unread              liczniki nieprzeczytanych
+    atalk seen <#kanal|@kto>  wyzeruj licznik bez czytania
+    atalk since               co sie dzialo pod moja nieobecnosc (digest)
+    atalk mentions            wiadomosci wspominajace @mnie
+    atalk search <fraza> [#kanal] [--since-ts N] [--until-ts N]
+    atalk follow [--after id] strumien na zywo (SSE), Ctrl+C konczy
+    atalk who                 kto jest online
+    atalk channels            lista konwersacji
+
+  pisanie:
+    atalk say <tekst>                 na #general
+    atalk in <#kanal> <tekst>         na konkretny kanal
+    atalk to <@kto[,@kto2]> <tekst>   rozmowa prywatna (1:1 albo grupa)
+    atalk thread <id> <tekst>         odpowiedz w watku wiadomosci <id>
+    atalk react <id> <emoji>          reakcja
+    atalk ask <#kanal> <pytanie>      otwarte pytanie do kanalu
+    atalk answer <qid> <tekst>        odpowiedz i zamknij pytanie
+    atalk open [#kanal]               otwarte pytania
+    atalk edit <id> <tekst>           edytuj wlasna wiadomosc
+    atalk rm <id>                     skasuj wlasna wiadomosc
+    atalk pin <id> / unpin <id> / pins <#kanal>
+
+  kanaly:
+    atalk channel <#nazwa> [--private] [--topic ...]   zaloz kanal
+    atalk join <#kanal> / leave <#kanal>
+    atalk invite <#kanal> <@kto>
+    atalk notify <#kanal> all|mentions|none
+
+  obecnosc:
+    atalk me <etykieta>       zarejestruj/odswiez sesje z etykieta
+    atalk doing <opis>        nad czym pracujesz (widoczne dla innych)
+    atalk ping                heartbeat sesji
+    atalk busy | typing       sygnaly (busy WYLACZNIE z hooka po uzyciu narzedzia)
+    atalk bye                 zakoncz sesje (znika z obecnosci)
+
+  zasoby (dzierzawy z TTL - sprawdzane, nie ogloszone):
+    atalk claim <zasob> [--ttl N] [--note ...]    GRANTED albo kto trzyma
+    atalk release <zasob>
+    atalk locks
+
+  pliki:
+    atalk send-file <sciezka> [--to <#kanal|@kto>] [--sensitive] [--ttl N] [--burn]
+    atalk files <#kanal|@kto>
+    atalk get-file <id> <sciezka-docelowa>
+`;
+
+export async function atalkMain(argv: readonly string[]): Promise<number> {
+  const args = parseArgs(argv);
+  const [cmd, ...rest] = args.positional;
+
+  try {
+    assertNodeVersion();
+    if (!cmd || cmd === "help") {
+      process.stdout.write(USAGE);
+      return 0;
+    }
+    if (cmd === "login") {
+      const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? "http://127.0.0.1:8787";
+      const token = flagStr(args, "token");
+      if (!token) {
+        process.stderr.write("uzycie: atalk login --url <adres> --token <atk_...>\n");
+        return 1;
+      }
+      mkdirSync(CONFIG_DIR, { recursive: true });
+      writeFileSync(CONFIG_FILE, JSON.stringify({ url, token }, null, 2), { mode: 0o600 });
+      const api = new Api({ url: url.replace(/\/+$/, ""), token });
+      const me = await api.call("GET", "/api/me");
+      process.stdout.write(
+        `zapisane. Jestes @${(me.actor as { handle: string }).handle} na ${url}\n`,
+      );
+      return 0;
+    }
+
+    const cfg = loadClientConfig(args);
+    const api = new Api(cfg);
+    return await run(api, cfg, cmd, rest, args);
+  } catch (err) {
+    process.stderr.write(`blad: ${err instanceof Error ? err.message : err}\n`);
+    return 1;
+  }
+}
+
+async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], args: Args):
+  Promise<number> {
+  const out = (s: string) => process.stdout.write(s + "\n");
+
+  switch (cmd) {
+    case "whoami": {
+      const me = await api.call("GET", "/api/me");
+      const actor = me.actor as { handle: string; kind: string };
+      out(`@${actor.handle} (${actor.kind}) na ${cfg.url}`);
+      return 0;
+    }
+
+    case "status": {
+      const [me, presence, open, digest] = await Promise.all([
+        api.call("GET", "/api/me"),
+        api.call("GET", "/api/presence"),
+        api.call("GET", "/api/questions/open"),
+        api.call("GET", "/api/digest"),
+      ]);
+      const { who, conv } = await nameMaps(api);
+      out("=== KTO JEST ===");
+      const rows = presence.presence as Array<{
+        handle: string; label: string; online: boolean; typing: boolean; busy: boolean;
+        doing: string | null; lastSeenAt: number;
+      }>;
+      if (rows.length === 0) out("  (nikogo)");
+      for (const p of rows) {
+        const state = p.typing ? "PISZE   " : p.busy ? "pracuje " : p.online ? "aktywna " : "cisza   ";
+        out(`  [${state}] @${p.handle} (${p.label})${p.doing ? ` - robi: ${p.doing}` : ""}`);
+      }
+      out("\n=== NIEPRZECZYTANE ===");
+      const unread = (me.unread as Array<{ conversationId: number; unread: number; badge: number }>)
+        .filter((r) => r.unread > 0);
+      if (unread.length === 0) out("  (nic)");
+      for (const r of unread) {
+        out(`  ${String(r.unread).padStart(3)}  ${conv.get(r.conversationId) ?? r.conversationId}` +
+          (r.badge ? `  (dotyczy Ciebie: ${r.badge})` : ""));
+      }
+      out("\n=== OTWARTE PYTANIA ===");
+      const questions = open.questions as Array<{ id: number; message: Msg }>;
+      if (questions.length === 0) out("  (nic)");
+      for (const q of questions) out(`  [q${q.id}]` + fmtMsg(q.message, who, conv).slice(1));
+      const d = digest.digest as { count: number } | null;
+      if (d) out(`\nPod Twoja nieobecnosc: ${d.count} wiadomosci - szczegoly: atalk since`);
+      return 0;
+    }
+
+    case "read": {
+      const wait = Number(flagStr(args, "wait") ?? 0) || 0;
+      const after = readCursor(cfg);
+      const r = await api.call("GET", `/api/messages?after=${after}&wait=${wait}`);
+      const messages = r.messages as Msg[];
+      if (messages.length === 0) {
+        out("Brak nowych wiadomosci.");
+        return 0;
+      }
+      const { who, conv } = await nameMaps(api);
+      out(`${messages.length} nowych:`);
+      for (const m of messages) out(fmtMsg(m, who, conv));
+      writeCursor(cfg, messages[messages.length - 1].id);
+      return 0;
+    }
+
+    case "log": {
+      const ref = rest.find((a) => a.startsWith("#") || a.startsWith("@"));
+      if (!ref) {
+        process.stderr.write("uzycie: atalk log <#kanal|@kto> [n]\n");
+        return 1;
+      }
+      const n = Number(rest.find((a) => /^\d+$/.test(a)) ?? 20);
+      const id = await resolveConv(api, ref);
+      const r = await api.call("GET", `/api/conversations/${id}/messages?limit=${n}`);
+      const messages = r.messages as Msg[];
+      const { who, conv } = await nameMaps(api);
+      if (messages.length === 0) out("Pusto.");
+      for (const m of messages) out(fmtMsg(m, who, conv));
+      await api.call("POST", `/api/conversations/${id}/read`, {});
+      return 0;
+    }
+
+    case "unread": {
+      const r = await api.call("GET", "/api/unread");
+      const { conv } = await nameMaps(api);
+      const rows = (r.rows as Array<{ conversationId: number; unread: number; badge: number }>)
+        .filter((x) => x.unread > 0);
+      if (rows.length === 0) {
+        out("Wszystko przeczytane.");
+        return 0;
+      }
+      out("Nieprzeczytane:");
+      for (const x of rows.sort((a, b) => b.unread - a.unread)) {
+        out(`  ${String(x.unread).padStart(3)}  ${conv.get(x.conversationId) ?? x.conversationId}` +
+          (x.badge ? `  (dotyczy Ciebie: ${x.badge})` : ""));
+      }
+      return 0;
+    }
+
+    case "seen": {
+      if (!rest[0]) {
+        process.stderr.write("uzycie: atalk seen <#kanal|@kto>\n");
+        return 1;
+      }
+      const id = await resolveConv(api, rest[0]);
+      await api.call("POST", `/api/conversations/${id}/read`, {});
+      out(`oznaczone jako przeczytane: ${rest[0]}`);
+      return 0;
+    }
+
+    case "since": {
+      const r = await api.call("GET", "/api/digest");
+      const d = r.digest as {
+        count: number; byWho: Array<[string, number]>; byConversation: Array<[string, number]>;
+        mentions: Msg[]; open: Array<{ id: number; message: Msg }>;
+      } | null;
+      if (!d) {
+        out("Nic nowego od Twojej ostatniej aktywnosci.");
+        return 0;
+      }
+      out(`Pod Twoja nieobecnosc: ${d.count} wiadomosci`);
+      out("  kto:    " + d.byWho.map(([k, v]) => `${k} x${v}`).join(", "));
+      out("  gdzie:  " + d.byConversation.map(([k, v]) => `${k} x${v}`).join(", "));
+      if (d.mentions.length) {
+        const { who, conv } = await nameMaps(api);
+        out(`\n  DOTYCZY CIEBIE (${d.mentions.length}):`);
+        for (const m of d.mentions.slice(-3)) out("  " + fmtMsg(m, who, conv));
+      }
+      if (d.open.length) {
+        out(`\n  OTWARTE PYTANIA (${d.open.length}):`);
+        for (const q of d.open) out(`    [q${q.id}] ${q.message.body.slice(0, 90)}`);
+      }
+      return 0;
+    }
+
+    case "mentions": {
+      const r = await api.call("GET", "/api/mentions");
+      const messages = r.messages as Msg[];
+      if (messages.length === 0) {
+        out("Brak wzmianek.");
+        return 0;
+      }
+      const { who, conv } = await nameMaps(api);
+      for (const m of messages) out(fmtMsg(m, who, conv));
+      return 0;
+    }
+
+    case "search": {
+      const ref = rest.find((a) => a.startsWith("#"));
+      const q = rest.filter((a) => !a.startsWith("#")).join(" ");
+      if (!q) {
+        process.stderr.write("uzycie: atalk search <fraza> [#kanal]\n");
+        return 1;
+      }
+      const params = new URLSearchParams({ q });
+      if (ref) params.set("conversationId", String(await resolveConv(api, ref)));
+      const sinceTs = flagStr(args, "since-ts");
+      const untilTs = flagStr(args, "until-ts");
+      if (sinceTs) params.set("sinceTs", sinceTs);
+      if (untilTs) params.set("untilTs", untilTs);
+      const r = await api.call("GET", `/api/search?${params}`);
+      const messages = r.messages as Msg[];
+      out(`${messages.length} trafien:`);
+      const { who, conv } = await nameMaps(api);
+      for (const m of messages) out(fmtMsg(m, who, conv));
+      return 0;
+    }
+
+    case "follow": {
+      const { who, conv } = await nameMaps(api);
+      const after = flagStr(args, "after");
+      out("strumien na zywo (Ctrl+C konczy)...");
+      for await (const ev of api.events(after !== undefined ? Number(after) : undefined)) {
+        if (ev.type === "message" || ev.type === "message_updated") {
+          const m = ev.message as Msg;
+          const author = who.get(m.actorId);
+          if (author === undefined) {
+            // nowy rozmowca w trakcie strumienia - odswiez mapy
+            const maps = await nameMaps(api);
+            for (const [k, v] of maps.who) who.set(k, v);
+            for (const [k, v] of maps.conv) conv.set(k, v);
+          }
+          out(fmtMsg(m, who, conv) + (ev.type === "message_updated" ? "  (zmieniona)" : ""));
+        }
+      }
+      return 0;
+    }
+
+    case "who": {
+      const r = await api.call("GET", "/api/presence");
+      const rows = r.presence as Array<{
+        handle: string; label: string; online: boolean; typing: boolean; busy: boolean;
+        doing: string | null; lastSeenAt: number;
+      }>;
+      if (rows.length === 0) {
+        out("Nikogo nie ma.");
+        return 0;
+      }
+      for (const p of rows) {
+        const state = p.typing ? "PISZE" : p.busy ? "pracuje" : p.online ? "aktywna" : "cisza";
+        const age = Math.round(Date.now() / 1000 - p.lastSeenAt);
+        const ago = age < 60 ? `${age}s` : `${Math.round(age / 60)}min`;
+        out(`  [${state.padEnd(8)}] @${p.handle} (${p.label})  ostatnio ${ago} temu` +
+          (p.doing ? `  robi: ${p.doing}` : ""));
+      }
+      return 0;
+    }
+
+    case "channels": {
+      const r = await api.call("GET", "/api/conversations");
+      const memberships = new Set(
+        (r.memberships as Array<{ conversationId: number }>).map((m) => m.conversationId),
+      );
+      for (const c of r.conversations as Array<{
+        id: number; kind: string; slug: string | null; topic: string;
+      }>) {
+        const name = c.slug ? `#${c.slug}` : `[${c.kind}:${c.id}]`;
+        const mine = memberships.has(c.id) ? "" : "  (nie jestes czlonkiem - atalk join)";
+        out(`  ${name}${c.topic ? `  - ${c.topic}` : ""}${mine}`);
+      }
+      return 0;
+    }
+
+    case "say":
+    case "in":
+    case "to":
+    case "thread": {
+      let ref: string, body: string, threadId: number | undefined;
+      if (cmd === "say") {
+        ref = "#general";
+        body = rest.join(" ");
+      } else if (cmd === "thread") {
+        threadId = Number(rest[0]);
+        body = rest.slice(1).join(" ");
+        if (!Number.isFinite(threadId) || !body) {
+          process.stderr.write("uzycie: atalk thread <id-wiadomosci> <tekst>\n");
+          return 1;
+        }
+        // konwersacja wynika z wiadomosci-korzenia
+        const t = await api.call("GET", `/api/messages/${threadId}/thread`);
+        ref = String((t.messages as Msg[])[0].conversationId);
+      } else {
+        ref = rest[0] ?? "";
+        body = rest.slice(1).join(" ");
+      }
+      if (!ref || !body) {
+        process.stderr.write(`uzycie: atalk ${cmd} ${cmd === "say" ? "<tekst>" : "<adres> <tekst>"}\n`);
+        return 1;
+      }
+      const id = await resolveConv(api, ref);
+      const r = await api.call("POST", `/api/conversations/${id}/messages`, {
+        body, threadId, sessionId: sessionId(args),
+      });
+      const m = r.message as { id: number };
+      let deliveryNote = "";
+      if (Array.isArray(r.delivery)) {
+        deliveryNote = "  ->  " + (r.delivery as Array<{
+          handle: string; online: boolean; lastSeenAt: number | null;
+        }>).map((d) => {
+          const state = d.online ? "zywa" : d.lastSeenAt
+            ? `cisza ${Math.round((Date.now() / 1000 - d.lastSeenAt) / 60)} min`
+            : "NIEOBECNA";
+          return `@${d.handle}: ${state}`;
+        }).join(", ");
+      }
+      out(`wyslane [${m.id}]${deliveryNote}`);
+      return 0;
+    }
+
+    case "react": {
+      if (rest.length < 2) {
+        process.stderr.write("uzycie: atalk react <id-wiadomosci> <emoji>\n");
+        return 1;
+      }
+      const r = await api.call("POST", `/api/messages/${rest[0]}/reactions`, { emoji: rest[1] });
+      out(r.on ? "reakcja dodana" : "reakcja zdjeta");
+      return 0;
+    }
+
+    case "ask": {
+      if (rest.length < 2) {
+        process.stderr.write("uzycie: atalk ask <#kanal> <pytanie>\n");
+        return 1;
+      }
+      const id = await resolveConv(api, rest[0]);
+      const r = await api.call("POST", `/api/conversations/${id}/ask`, {
+        body: rest.slice(1).join(" "), sessionId: sessionId(args),
+      });
+      out(`otwarte pytanie [q${r.question}] - odpowie ktokolwiek: atalk answer ${r.question} <tekst>`);
+      return 0;
+    }
+
+    case "answer": {
+      if (rest.length < 2) {
+        process.stderr.write("uzycie: atalk answer <qid> <tekst>\n");
+        return 1;
+      }
+      await api.call("POST", `/api/questions/${rest[0].replace(/^q/, "")}/answer`, {
+        body: rest.slice(1).join(" "), sessionId: sessionId(args),
+      });
+      out(`odpowiedziane na q${rest[0].replace(/^q/, "")}`);
+      return 0;
+    }
+
+    case "open": {
+      const params = rest[0] ? `?conversationId=${await resolveConv(api, rest[0])}` : "";
+      const r = await api.call("GET", `/api/questions/open${params}`);
+      const questions = r.questions as Array<{ id: number; message: Msg }>;
+      if (questions.length === 0) {
+        out("Brak otwartych pytan.");
+        return 0;
+      }
+      const { who, conv } = await nameMaps(api);
+      out(`${questions.length} otwartych:`);
+      for (const q of questions) out(`  [q${q.id}]` + fmtMsg(q.message, who, conv).slice(1));
+      return 0;
+    }
+
+    case "edit": {
+      if (rest.length < 2) {
+        process.stderr.write("uzycie: atalk edit <id> <tekst>\n");
+        return 1;
+      }
+      await api.call("PATCH", `/api/messages/${rest[0]}`, { body: rest.slice(1).join(" ") });
+      out("zmienione");
+      return 0;
+    }
+
+    case "rm": {
+      if (!rest[0]) {
+        process.stderr.write("uzycie: atalk rm <id>\n");
+        return 1;
+      }
+      await api.call("DELETE", `/api/messages/${rest[0]}`);
+      out("skasowane");
+      return 0;
+    }
+
+    case "pin":
+    case "unpin": {
+      if (!rest[0]) {
+        process.stderr.write(`uzycie: atalk ${cmd} <id-wiadomosci>\n`);
+        return 1;
+      }
+      await api.call(cmd === "pin" ? "POST" : "DELETE", `/api/messages/${rest[0]}/pin`);
+      out(cmd === "pin" ? `przypiete ${rest[0]}` : `odpiete ${rest[0]}`);
+      return 0;
+    }
+
+    case "pins": {
+      if (!rest[0]) {
+        process.stderr.write("uzycie: atalk pins <#kanal|@kto>\n");
+        return 1;
+      }
+      const id = await resolveConv(api, rest[0]);
+      const r = await api.call("GET", `/api/conversations/${id}/pins`);
+      const pins = r.pins as Array<{ messageId: number; by: string }>;
+      if (pins.length === 0) {
+        out("Nic nie przypiete.");
+        return 0;
+      }
+      const msgs = await api.call("GET", `/api/conversations/${id}/messages?limit=500`);
+      const byId = new Map((msgs.messages as Msg[]).map((m) => [m.id, m]));
+      for (const p of pins) {
+        const m = byId.get(p.messageId);
+        out(`  [${p.messageId}] ${m ? m.body.slice(0, 100) : "(starsza wiadomosc)"}  ` +
+          `(przypiete przez @${p.by})`);
+      }
+      return 0;
+    }
+
+    case "channel": {
+      if (!rest[0]) {
+        process.stderr.write("uzycie: atalk channel <#nazwa> [--private] [--topic ...]\n");
+        return 1;
+      }
+      const r = await api.call("POST", "/api/conversations", {
+        kind: args.flags.private === true ? "private" : "public",
+        slug: rest[0],
+        topic: flagStr(args, "topic"),
+      });
+      const c = r.conversation as { slug: string; kind: string };
+      out(`zalozony kanal #${c.slug} (${c.kind})`);
+      return 0;
+    }
+
+    case "join":
+    case "leave": {
+      if (!rest[0]) {
+        process.stderr.write(`uzycie: atalk ${cmd} <#kanal>\n`);
+        return 1;
+      }
+      const id = await resolveConv(api, rest[0]);
+      if (cmd === "join") {
+        await api.call("POST", `/api/conversations/${id}/join`);
+        out(`dolaczono do ${rest[0]}`);
+      } else {
+        await api.call("POST", `/api/conversations/${id}/leave`);
+        out(`opuszczono ${rest[0]}`);
+      }
+      return 0;
+    }
+
+    case "invite": {
+      if (rest.length < 2) {
+        process.stderr.write("uzycie: atalk invite <#kanal> <@kto>\n");
+        return 1;
+      }
+      const id = await resolveConv(api, rest[0]);
+      await api.call("POST", `/api/conversations/${id}/members`, {
+        handle: rest[1].replace(/^@/, ""),
+      });
+      out(`zaproszono ${rest[1]} do ${rest[0]}`);
+      return 0;
+    }
+
+    case "notify": {
+      if (rest.length < 2 || !["all", "mentions", "none"].includes(rest[1])) {
+        process.stderr.write("uzycie: atalk notify <#kanal> all|mentions|none\n");
+        return 1;
+      }
+      const id = await resolveConv(api, rest[0]);
+      await api.call("POST", `/api/conversations/${id}/notify`, { notify: rest[1] });
+      out(`powiadomienia dla ${rest[0]}: ${rest[1]}`);
+      return 0;
+    }
+
+    case "me":
+    case "ping":
+    case "doing": {
+      const body: Record<string, unknown> = { sessionId: sessionId(args) };
+      if (cmd === "me" && rest.length) body.label = rest.join(" ");
+      if (cmd === "doing") body.doing = rest.join(" ");
+      if (flagStr(args, "kind") === "ephemeral") body.kind = "ephemeral";
+      await api.call("POST", "/api/sessions", body);
+      if (cmd === "me") out(`sesja ${sessionId(args)} zarejestrowana` +
+        (body.label ? ` jako "${body.label}"` : ""));
+      if (cmd === "doing") out(`ustawione: ${body.doing}`);
+      return 0;
+    }
+
+    case "typing":
+    case "busy": {
+      await api.call("POST", "/api/sessions", { sessionId: sessionId(args) });
+      await api.call("POST", `/api/sessions/${encodeURIComponent(sessionId(args))}/signal`, {
+        kind: cmd,
+      });
+      return 0;
+    }
+
+    case "bye": {
+      await api.call("DELETE", `/api/sessions/${encodeURIComponent(sessionId(args))}`);
+      out("sesja zakonczona");
+      return 0;
+    }
+
+    case "claim": {
+      if (!rest[0]) {
+        process.stderr.write("uzycie: atalk claim <zasob> [--ttl N] [--note ...]\n");
+        return 1;
+      }
+      const r = await api.call("POST", "/api/leases", {
+        resource: rest[0],
+        ttlSec: Number(flagStr(args, "ttl") ?? 0) || undefined,
+        note: flagStr(args, "note"),
+        sessionId: sessionId(args),
+      });
+      if (r.granted) {
+        const lease = r.lease as { expiresAt: number };
+        out(`GRANTED ${rest[0]} na ${lease.expiresAt - Math.floor(Date.now() / 1000)} s`);
+        return 0;
+      }
+      const held = r.heldBy as { handle: string; expiresAt: number; note: string | null };
+      out(`HELD-BY @${held.handle} jeszcze ${held.expiresAt - Math.floor(Date.now() / 1000)} s` +
+        (held.note ? ` (${held.note})` : ""));
+      return 1;
+    }
+
+    case "release": {
+      if (!rest[0]) {
+        process.stderr.write("uzycie: atalk release <zasob>\n");
+        return 1;
+      }
+      const r = await api.call("POST", "/api/leases/release", { resource: rest[0] });
+      if (r.released) {
+        out("UNLOCKED");
+        return 0;
+      }
+      out(`DENIED - trzyma @${(r.heldBy as { handle: string }).handle}`);
+      return 1;
+    }
+
+    case "locks": {
+      const r = await api.call("GET", "/api/leases");
+      const leases = r.leases as Array<{
+        resource: string; handle: string; expiresAt: number; note: string | null;
+      }>;
+      if (leases.length === 0) {
+        out("Nic nie jest zajete.");
+        return 0;
+      }
+      const now = Math.floor(Date.now() / 1000);
+      for (const l of leases) {
+        out(`  ${l.resource.padEnd(30)} @${l.handle.padEnd(16)} ${l.expiresAt - now}s` +
+          (l.note ? `  (${l.note})` : ""));
+      }
+      return 0;
+    }
+
+    case "send-file": {
+      if (!rest[0]) {
+        process.stderr.write("uzycie: atalk send-file <sciezka> [--to <#kanal|@kto>] " +
+          "[--sensitive] [--ttl N] [--burn]\n");
+        return 1;
+      }
+      const data = readFileSync(rest[0]);
+      const id = await resolveConv(api, flagStr(args, "to") ?? "#general");
+      const headers: Record<string, string> = {
+        "x-file-name": encodeURIComponent(basename(rest[0])),
+        "x-session-id": sessionId(args),
+      };
+      if (args.flags.sensitive === true) headers["x-sensitive"] = "1";
+      if (args.flags.burn === true) headers["x-burn"] = "1";
+      const ttl = flagStr(args, "ttl");
+      if (ttl) headers["x-ttl"] = ttl;
+      const r = await api.upload(`/api/conversations/${id}/files`, data, headers);
+      const file = r.file as { id: string; name: string; size: number };
+      out(`wyslane: ${file.name} (${file.size} B)  id=${file.id}`);
+      return 0;
+    }
+
+    case "files": {
+      if (!rest[0]) {
+        process.stderr.write("uzycie: atalk files <#kanal|@kto>\n");
+        return 1;
+      }
+      const id = await resolveConv(api, rest[0]);
+      const r = await api.call("GET", `/api/conversations/${id}/files`);
+      const files = r.files as Array<{
+        id: string; name: string; size: number; sensitive: boolean; expiresAt: number | null;
+      }>;
+      if (files.length === 0) {
+        out("Brak plikow.");
+        return 0;
+      }
+      for (const f of files) {
+        const now = Math.floor(Date.now() / 1000);
+        out(`  [${f.id}] ${f.name} (${f.size} B)` +
+          (f.sensitive ? " [wrazliwy]" : "") +
+          (f.expiresAt ? ` wygasa za ${Math.max(0, f.expiresAt - now)}s` : ""));
+      }
+      out("\nPobierz: atalk get-file <id> <sciezka>");
+      return 0;
+    }
+
+    case "get-file": {
+      if (rest.length < 2) {
+        process.stderr.write("uzycie: atalk get-file <id> <sciezka-docelowa>\n");
+        return 1;
+      }
+      const data = await api.download(`/api/files/${rest[0]}`);
+      writeFileSync(rest[1], data);
+      out(`zapisane ${data.length} B -> ${rest[1]}`);
+      return 0;
+    }
+
+    default:
+      process.stderr.write(`nieznana komenda: ${cmd}\n\n${USAGE}`);
+      return 1;
+  }
+}

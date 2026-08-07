@@ -5,7 +5,7 @@
  * "~/.talk", "~/lowmem-sample.log"), przez co dawal sie uruchomic na dokladnie
  * jednej maszynie jednego uzytkownika. Tutaj wszystko idzie przez ten modul.
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -38,8 +38,11 @@ export function defaultDataDir(): string {
   // rootem" byloby zle: w kontenerze proces chodzi jako `node` i i tak ma /data.
   const system = "/var/lib/agenttalks";
   try {
-    if (existsSync(system) && statSync(system).isDirectory()) return system;
-  } catch { /* brak dostepu - schodzimy do katalogu uzytkownika */ }
+    if (existsSync(system) && statSync(system).isDirectory()) {
+      accessSync(system, constants.W_OK);
+      return system;
+    }
+  } catch { /* nie istnieje albo nie da sie pisac - katalog uzytkownika */ }
   return join(homedir(), ".local", "share", "agenttalks");
 }
 
@@ -56,8 +59,14 @@ const DEFAULTS = {
 /** Zaklada katalog danych, baze i plik konfiguracji. Idempotentne: ponowne wywolanie
  *  NIE nadpisuje sekretu (to wylogowaloby wszystkich ludzi bez powodu). */
 export function initData(dataDir: string = defaultDataDir()): Config {
-  mkdirSync(dataDir, { recursive: true });
-  mkdirSync(join(dataDir, "files"), { recursive: true });
+  // 0700 na katalogach: baza zawiera pelna tresc rozmow i hashe hasel, a pliki
+  // WAL/SHM dziedzicza prawa z katalogu. Sam config 0600 nie wystarczal.
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  mkdirSync(join(dataDir, "files"), { recursive: true, mode: 0o700 });
+  try {
+    chmodSync(dataDir, 0o700);
+    chmodSync(join(dataDir, "files"), 0o700);
+  } catch { /* np. wolumen dockera z innym wlascicielem - nie blokujemy startu */ }
   const cfgPath = join(dataDir, CONFIG_NAME);
   if (!existsSync(cfgPath)) {
     const fresh = { ...DEFAULTS, secret: randomBytes(32).toString("hex") };
@@ -73,7 +82,13 @@ export function loadConfig(dataDir: string = defaultDataDir()): Config {
     stored = JSON.parse(readFileSync(cfgPath, "utf8")) as Record<string, unknown>;
   }
   const num = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d);
-  const bool = (v: unknown, d: boolean) => (v === undefined ? d : v === true || v === "1");
+  // Przyjmujemy typowe zapisy prawdy: "AGENTTALKS_TRUST_PROXY=true" ciche
+  // zinterpretowane jako falsz to cookie bez atrybutu Secure na produkcji.
+  const bool = (v: unknown, d: boolean) => {
+    if (v === undefined || v === null) return d;
+    if (typeof v === "boolean") return v;
+    return ["1", "true", "yes", "on"].includes(String(v).toLowerCase());
+  };
 
   return {
     dataDir,
