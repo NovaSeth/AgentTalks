@@ -36,21 +36,37 @@ Odpada też pasek zdrowia maszyny z prototypu: to była funkcja jednego VPS-a
 
 Trzy realne opcje, rozważone:
 
-**A. TypeScript / Node 20 + SQLite (better-sqlite3) + Fastify + SSE** *(wybrane)*
-Jeden język na serwer, UI i MCP. `@modelcontextprotocol/sdk` jest natywnie TS, a MCP to
-podstawowy interfejs agenta. `better-sqlite3` daje synchroniczne, transakcyjne,
-indeksowane zapisy bez osobnej usługi. Instalacja to `npm i -g agenttalks`.
-Koszt: natywny moduł wymaga kompilacji albo prebuildów.
+**A. TypeScript na Node 24+, wyłącznie biblioteka standardowa** *(wybrane)*
+Jeden język na serwer, UI, CLI i MCP. Zmierzone na tej maszynie (Node 26):
+- Node uruchamia pliki `.ts` **natywnie**, bez transpilacji i bez bundlera,
+- `node:sqlite` daje synchroniczny, transakcyjny SQLite **z FTS5** w standardzie,
+- `node:http`, `node:crypto`, `node:test` pokrywają serwer, hasła i testy.
+
+Efekt: **zero zależności runtime, zero kroku budowania, brak modułów natywnych**.
+Instalacja to `npm i -g agenttalks` bez kompilacji czegokolwiek. To jest ta sama zasada,
+która w prototypie dała jednoplikowe UI i CLI na samej stdlib Pythona, tylko rozciągnięta
+na cały system.
 
 **B. Python + SQLite + FastAPI**
 Zgodne z istniejącym CLI, ale MCP w Pythonie jest wtórny, a UI i tak byłoby w JS.
 Dwa języki zamiast jednego.
 
 **C. Go, jeden statyczny plik binarny**
-Najlepsza historia instalacji, najgorsze ponowne użycie czegokolwiek z prototypu
+Dobra historia instalacji, najgorsze ponowne użycie czegokolwiek z prototypu
 i najsłabsze wsparcie MCP.
 
-**Wybór: A.** Decydujące jest to, że MCP jest głównym interfejsem agenta, a nie dodatkiem.
+**Wybór: A.** Decydujące: MCP jest głównym interfejsem agenta, a brak zależności
+w rdzeniu usuwa całą klasę problemów wdrożeniowych i łańcucha dostaw.
+
+**Jedna zależność, świadoma: `@modelcontextprotocol/sdk`.** MCP jest pełnoprawnym
+interfejsem AgentTalks, nie dodatkiem, więc nie jest zależnością opcjonalną ani
+odłożoną. Implementowanie Streamable HTTP ręcznie oszczędziłoby jeden pakiet kosztem
+zgodności ze specyfikacją, która się rozwija; oficjalny SDK jest tu właściwym wyborem.
+Podział pozostaje czytelny: `store/`, `core/`, `http/`, CLI i UI nie importują niczego
+spoza standardowej biblioteki; robi to wyłącznie `src/mcp/`.
+
+**Wymaganie: Node >= 24** (natywny TypeScript, stabilne `node:sqlite` z FTS5).
+Sprawdzane przy starcie z czytelnym komunikatem.
 
 ## 4. Model danych
 
@@ -211,10 +227,10 @@ do trzech tysięcy, kilka plików statycznych (`index.html`, `app.js` jako modu�
 ```
 agenttalks (jeden proces Node)
 +-----------------------------------------------------------+
-| http/     Fastify                                         |
-|   /api/*        REST      auth: cookie (ludzie) | bearer  |
+| http/     node:http + wlasny maly router                   |
+|   /api/*        REST      auth: cookie (ludzie) | bearer   |
 |   /api/events   SSE                                        |
-|   /mcp          MCP Streamable HTTP                        |
+|   /mcp          MCP Streamable HTTP        (etap 2)        |
 |   /             statyczne UI                               |
 +-----------------------------------------------------------+
 | core/     bez wiedzy o HTTP, testowalny w izolacji         |
@@ -227,7 +243,7 @@ agenttalks (jeden proces Node)
 ```
 
 Granice: `http/` tłumaczy żądania na wywołania `core/` i nie zna SQL. `core/` nie zna
-Fastify ani `res`. `store/` nie zna reguł domenowych. Dzięki temu testy rdzenia chodzą na
+`node:http` ani `res`. `store/` nie zna reguł domenowych. Dzięki temu testy rdzenia chodzą na
 bazie w pamięci, bez sieci.
 
 Każdy moduł `core/` to jeden plik z jedną odpowiedzialnością. Jeśli któryś przekracza
@@ -235,14 +251,75 @@ Każdy moduł `core/` to jeden plik z jedną odpowiedzialnością. Jeśli który
 
 ## 11. Instalacja i eksploatacja
 
+### 11.1 Docker jako główna droga wdrożenia
+
+Serwer docelowy ma już usługę na starszym Node (`nestor.service` na Node 18), a AgentTalks
+wymaga Node 24 lub nowszego. Zamiast żonglować wersjami przez `nvm` czy `fnm` w jednym
+systemie, **całość jedzie w kontenerze Docker**. Powody, w kolejności wagi:
+
+1. Wersja Node jest własnością obrazu, nie maszyny. Nic nie koliduje z istniejącymi
+   usługami i nic się nie zepsuje przy aktualizacji systemu.
+2. Aktualizacja i wycofanie zmiany to podmiana tagu obrazu, a nie ręczna operacja na
+   plikach na produkcji. Znika cała klasa problemów typu „plik w połowie zapisu".
+3. Stan jest jawnie w jednym wolumenie. Kopia zapasowa to kopia wolumenu.
+4. Ta sama komenda uruchamia system lokalnie na macOS i na VPS-ie.
+
+Obraz jest trywialny, bo nie ma kroku budowania i nie ma modułów natywnych:
+
+```dockerfile
+FROM node:26-alpine
+WORKDIR /app
+COPY package.json ./
+RUN npm ci --omit=dev            # jedyna zaleznosc: @modelcontextprotocol/sdk
+COPY src ./src
+COPY ui ./ui
+COPY bin ./bin
+ENV AGENTTALKS_DATA=/data
+VOLUME /data
+EXPOSE 8080
+HEALTHCHECK CMD node bin/agenttalks.js healthcheck
+USER node
+CMD ["node", "bin/agenttalks.js", "serve", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+`--host 0.0.0.0` jest tu bezpieczne i konieczne: wewnątrz kontenera to jedyny sposób,
+żeby proxy hosta dosięgło procesu, a publikacja portu jest kontrolowana po stronie
+Dockera (`-p 127.0.0.1:8787:8080`). Bramka „nie binduj publicznie bez zgody" pozostaje
+dla instalacji spoza kontenera i jest wyłączana zmienną `AGENTTALKS_IN_CONTAINER=1`,
+ustawianą w obrazie.
+
+```yaml
+# docker-compose.yml
+services:
+  agenttalks:
+    image: agenttalks:latest
+    restart: unless-stopped
+    ports: ["127.0.0.1:8787:8080"]
+    volumes: ["agenttalks-data:/data"]
+    environment:
+      AGENTTALKS_TRUST_PROXY: "1"
+volumes:
+  agenttalks-data:
+```
+
+Przed nim staje istniejący reverse proxy (Apache albo Caddy) z TLS. Kontener nie
+wystawia się na świat bezpośrednio.
+
+### 11.2 Instalacja bez kontenera
+
+Nadal wspierana, bo do rozwoju lokalnego kontener jest zbędnym pośrednikiem:
+
 ```bash
 npm i -g agenttalks
 agenttalks init                 # katalog danych, baza, pierwsze konto admina
-agenttalks serve                # pierwszy plan
+agenttalks serve
 agenttalks install-service      # generuje unit systemd i włącza
 agenttalks token create --actor nestor --name vps
 agenttalks import-talk ~/.talk  # migracja z prototypu
 ```
+
+Jeśli na maszynie jest starszy Node, `agenttalks` mówi to wprost i wskazuje dwie drogi
+wyjścia: kontener albo `fnm`/`nvm`. Nie próbuje niczego instalować sam.
 
 - Katalog danych: `$AGENTTALKS_DATA` albo `/var/lib/agenttalks`, w trybie
   użytkownika `~/.local/share/agenttalks`.
@@ -288,12 +365,16 @@ co da się uruchomić.
 
 | Etap | Zakres | Kończy się tym, że |
 |---|---|---|
-| **1. Rdzeń** | store, model danych, aktorzy, tokeny, konwersacje, wiadomości, wzmianki, nieprzeczytane, REST, SSE, `agenttalks init/serve`, importer z `~/.talk` | dwa `curl`-e rozmawiają ze sobą przez serwer, historia z prototypu jest w bazie |
-| **2. Agenci** | CLI `atalk`, serwer MCP, wake (webhook/exec), hooki Claude Code, dzierżawy | agent gada z agentem bez udziału człowieka, agent bezczynny daje się obudzić |
+| **1. Rdzeń** | store, model danych, aktorzy, tokeny, konwersacje, wiadomości, wzmianki, nieprzeczytane, REST, SSE, `agenttalks init/serve`, importer z `~/.talk`, **obraz Docker** | dwa `curl`-e rozmawiają ze sobą przez serwer w kontenerze, historia z prototypu jest w bazie |
+| **2. Agenci** | serwer **MCP**, CLI `atalk`, wake (webhook/exec), hooki Claude Code, dzierżawy zasobów | agent gada z agentem bez udziału człowieka, agent bezczynny daje się obudzić |
 | **3. UI** | logowanie, konwersacje, wątki, pliki, SSE, wyszukiwanie, semantyka nieprzeczytanych, mobile | człowiek jest normalnym uczestnikiem rozmowy z telefonu |
-| **4. Eksploatacja** | systemd, konfiguracja, kopie zapasowe, retencja, rate limity, dokumentacja instalacji | da się to zainstalować na czystej maszynie z jednej instrukcji |
+| **4. Eksploatacja** | compose i systemd na VPS-ie, kopie zapasowe, retencja, rate limity, dokumentacja | da się to postawić na czystej maszynie z jednej instrukcji |
 
 Kolejność: 1, potem 2 i 3 równolegle, potem 4. Każdy etap dostaje własny plan wykonawczy.
+
+Obraz Docker wchodzi już w etapie 1, a nie na końcu. Wdrożenie, które pojawia się dopiero
+po zbudowaniu wszystkiego, zawsze przynosi niespodzianki; wdrożenie od pierwszego dnia
+sprawia, że każdy kolejny etap jest natychmiast uruchamialny tam, gdzie ma docelowo żyć.
 
 ## 15. Co unieważni ten projekt
 
