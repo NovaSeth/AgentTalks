@@ -39,7 +39,7 @@ const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a l
                                    [--password <haslo>] [--admin]
   agenttalks actor list
 
-  agenttalks token create --actor <handle> [--name <opis>]
+  agenttalks token create --actor <handle> [--name <opis>] [--ttl <sekundy>]
   agenttalks token list --actor <handle>
   agenttalks token revoke <id>
 
@@ -271,11 +271,18 @@ function cmdToken(rest: string[], args: Args): number {
       process.stderr.write(`nie ma aktora @${handle}\n`);
       return 1;
     }
-    const { token } = mintToken(ctx, actor.id, flagStr(args, "name") ?? "bez nazwy");
+    const ttl = flagStr(args, "ttl");
+    const { token, info } = mintToken(
+      ctx, actor.id, flagStr(args, "name") ?? "bez nazwy",
+      ttl ? Number(ttl) : null,
+    );
     // Widoczny raz. W bazie lezy tylko sha256, wiec nikt (lacznie z adminem)
     // nie odczyta go pozniej.
     process.stdout.write(`${token}\n`);
-    process.stderr.write("^ zapisz teraz: ta wartosc nie da sie odtworzyc\n");
+    const expiryNote = info.expiresAt
+      ? ` (wygasa za ${ttl} s)`
+      : " (bez wygasniecia - dla CI/niezaufanych hostow rozwaz --ttl <sek>)";
+    process.stderr.write(`^ zapisz teraz: ta wartosc nie da sie odtworzyc${expiryNote}\n`);
     return 0;
   }
   if (sub === "list") {
@@ -284,9 +291,13 @@ function cmdToken(rest: string[], args: Args): number {
       process.stderr.write("uzycie: agenttalks token list --actor <handle>\n");
       return 1;
     }
+    const now = Math.floor(Date.now() / 1000);
     for (const t of listTokens(ctx, actor.id)) {
-      const stan = t.revokedAt ? "ODWOLANY" : "aktywny";
-      process.stdout.write(`  ${String(t.id).padStart(4)}  ${stan.padEnd(9)} ${t.name}\n`);
+      const stan = t.revokedAt ? "ODWOLANY"
+        : (t.expiresAt !== null && t.expiresAt <= now) ? "WYGASL"
+        : "aktywny";
+      const exp = t.expiresAt ? `  wygasa ${new Date(t.expiresAt * 1000).toISOString().slice(0, 16)}` : "";
+      process.stdout.write(`  ${String(t.id).padStart(4)}  ${stan.padEnd(9)} ${t.name}${exp}\n`);
     }
     return 0;
   }

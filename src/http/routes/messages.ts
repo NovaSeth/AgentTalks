@@ -1,6 +1,7 @@
 /** Operacje na pojedynczej wiadomosci, watki, reakcje, wyszukiwanie, obecnosc. */
 import { deleteMessage, editMessage, getMessage, listThread } from "../../core/messages.ts";
 import { canRead } from "../../core/conversations.ts";
+import { actorsByIds } from "../../core/actors.ts";
 import { forbidden, notFound } from "../../core/errors.ts";
 import { react, reactionsFor } from "../../core/reactions.ts";
 import { search } from "../../core/search.ts";
@@ -41,7 +42,11 @@ export function registerMessageRoutes(router: Router): void {
       throw notFound("wiadomosc", `nie ma wiadomosci ${rc.params.id} (albo brak dostepu)`);
     }
     const messages = listThread(rc.ctx, root.threadId ?? root.id);
-    json(res, 200, { messages, reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)) });
+    json(res, 200, {
+      messages,
+      reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)),
+      actors: actorsByIds(rc.ctx, messages.map((m) => m.actorId)),
+    });
   });
 
   router.add("POST", "/api/messages/:id/reactions", async (req, res, rc) => {
@@ -57,16 +62,15 @@ export function registerMessageRoutes(router: Router): void {
 
   router.add("GET", "/api/search", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
-    json(res, 200, {
-      messages: search(rc.ctx, {
-        actorId: actor.id,
-        text: rc.query.get("q") ?? "",
-        conversationId: int(rc.query.get("conversationId") ?? undefined),
-        limit: int(rc.query.get("limit") ?? undefined),
-        sinceTs: int(rc.query.get("sinceTs") ?? undefined),
-        untilTs: int(rc.query.get("untilTs") ?? undefined),
-      }),
+    const messages = search(rc.ctx, {
+      actorId: actor.id,
+      text: rc.query.get("q") ?? "",
+      conversationId: int(rc.query.get("conversationId") ?? undefined),
+      limit: int(rc.query.get("limit") ?? undefined),
+      sinceTs: int(rc.query.get("sinceTs") ?? undefined),
+      untilTs: int(rc.query.get("untilTs") ?? undefined),
     });
+    json(res, 200, { messages, actors: actorsByIds(rc.ctx, messages.map((m) => m.actorId)) });
   });
 
   router.add("GET", "/api/presence", (_req, res, rc) => {

@@ -19,7 +19,21 @@ export const VERSION = "0.2.0";
 
 export function buildRouter(): Router {
   const router = new Router();
-  router.add("GET", "/api/health", (_req, res) => json(res, 200, { ok: true, version: VERSION }));
+  // Health z REALNA sonda: "serwer wstal" != "baza odpowiada". Feedback 332c7e42:
+  // auth-stub/pusty strumien NIE moze isc na zielono. Jesli DB nie odpowiada,
+  // zapytanie rzuci -> 500 -> kontener/proxy widzi unhealthy, zamiast zielonego
+  // procesu nad martwa baza.
+  router.add("GET", "/api/health", (_req, res, rc) => {
+    const row = rc.ctx.db
+      .prepare("SELECT (SELECT COUNT(*) FROM actors) AS actors, (SELECT COALESCE(MAX(id),0) FROM messages) AS lastMessageId")
+      .get() as { actors: number; lastMessageId: number };
+    json(res, 200, {
+      ok: true,
+      version: VERSION,
+      actors: row.actors,
+      lastMessageId: row.lastMessageId,
+    });
+  });
   registerAuthRoutes(router);
   registerConversationRoutes(router);
   registerMessageRoutes(router);

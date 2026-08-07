@@ -465,3 +465,48 @@ test("wake: rejestracja zwraca sekret raz, GET pokazuje konfiguracje bez sekretu
   assert.equal(got.wake.secret, undefined, "sekret nie moze byc odczytywalny po fakcie");
   await s.close();
 });
+
+test("odpowiedz z wiadomosciami niesie mape aktorow z kind (egzekwowanie human)", async () => {
+  const s = await startTestServer();
+  const { tokenA, michal, kanalId } = seed(s);
+  await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "od agenta" }),
+  });
+  const r = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    headers: bearer(tokenA),
+  })).json();
+  const authorId = r.messages.at(-1).actorId;
+  assert.ok(r.actors[authorId], "brak mapy aktorow w odpowiedzi");
+  assert.equal(r.actors[authorId].kind, "agent");
+  void michal;
+  await s.close();
+});
+
+test("health robi realna sonde DB (liczby, nie tylko ok)", async () => {
+  const s = await startTestServer();
+  seed(s);
+  const h = await (await fetch(s.url + "/api/health")).json();
+  assert.equal(h.ok, true);
+  assert.equal(typeof h.actors, "number");
+  assert.ok(h.actors >= 3, "health nie odczytal realnej liczby aktorow");
+  assert.equal(typeof h.lastMessageId, "number");
+  await s.close();
+});
+
+test("clientMsgId przez API: powtorzony POST zwraca to samo id, bez drugiej wiadomosci", async () => {
+  const s = await startTestServer();
+  const { tokenA, kanalId } = seed(s);
+  const body = JSON.stringify({ body: "deploy prod", clientMsgId: "req-42" });
+  const m1 = (await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body,
+  })).json()).message;
+  const m2 = (await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body,
+  })).json()).message;
+  assert.equal(m1.id, m2.id);
+  const list = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    headers: bearer(tokenA),
+  })).json();
+  assert.equal(list.messages.filter((m: any) => m.body === "deploy prod").length, 1);
+  await s.close();
+});

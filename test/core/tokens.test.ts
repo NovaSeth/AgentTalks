@@ -55,3 +55,24 @@ test("token wylaczonego aktora nie dziala", () => {
   ctx.db.prepare("UPDATE actors SET disabled_at = 1 WHERE id = ?").run(a.id);
   assert.equal(verifyToken(ctx, token), null);
 });
+
+test("token z TTL wygasa i przestaje uwierzytelniac", () => {
+  let t = 1000;
+  const ctx = testCtx(() => t);
+  const a = mkActor(ctx, "nestor");
+  const { token, info } = mintToken(ctx, a.id, "ci", 60);
+  assert.equal(info.expiresAt, 1060);
+  assert.equal(verifyToken(ctx, token)?.id, a.id);
+  t = 1061;
+  assert.equal(verifyToken(ctx, token), null, "wygasly token nadal dziala");
+});
+
+test("token bez TTL nie wygasa", () => {
+  let t = 1000;
+  const ctx = testCtx(() => t);
+  const a = mkActor(ctx, "nestor");
+  const { token, info } = mintToken(ctx, a.id, "vps");
+  assert.equal(info.expiresAt, null);
+  t = 10 ** 12;
+  assert.equal(verifyToken(ctx, token)?.id, a.id);
+});

@@ -242,3 +242,18 @@ test("znaczniki odczytu DM-ow sa przenoszone", () => {
   const rep = importTalkHome(ctx, home);
   assert.equal(rep.reads, 1, "znacznik odczytu DM-a przepadl");
 });
+
+test("sufiksy (N) scalaja sie w jednego aktora", () => {
+  const home = fixture([
+    { ts: 100, sid: "s1", label: "Nestor/myday", kind: "say", chan: "#myday", text: "a", mid: "m1" },
+    { ts: 110, sid: "s2", label: "Nestor/myday (2)", kind: "say", chan: "#myday", text: "b", mid: "m2" },
+    { ts: 120, sid: "s3", label: "Nestor/myday (3)", kind: "say", chan: "#myday", text: "c", mid: "m3" },
+  ]);
+  const ctx = testCtx();
+  importTalkHome(ctx, home);
+  const authors = ctx.db.prepare("SELECT DISTINCT actor_id FROM messages").all() as
+    Array<{ actor_id: number }>;
+  assert.equal(authors.length, 1, "sufiksy (N) nie zostaly scalone");
+  assert.ok(getActorByHandle(ctx, "nestor-myday"));
+  assert.equal(getActorByHandle(ctx, "nestor-myday-2"), null, "powstal osobny aktor dla (2)");
+});

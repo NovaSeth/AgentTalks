@@ -69,7 +69,13 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
   const sidToActor = new Map<string, number>();
 
   const actorFor = (label: string | undefined, sid: string | undefined): number | null => {
-    const raw = (label ?? sid ?? "").trim();
+    // Scalanie sufiksow "(N)": w prototypie ten sam agent wystepowal jako
+    // "Nestor/myday", "Nestor/myday (2)", "(3)"... - to byly artefakty tozsamosci
+    // JEDNEJ sesji, nie osobni rozmowcy (pomiar Nestora m436, uwaga claude-general
+    // m476). Bez scalania przenieslibysmy balagan do systemu zbudowanego po to,
+    // zeby tozsamosc byla jednoznaczna. Zdejmujemy sufiks PRZED wszystkim, wiec
+    // "(2)" i baza trafiaja w ten sam klucz, handle i displayName.
+    const raw = (label ?? sid ?? "").trim().replace(/\s*\(\d+\)$/, "");
     if (!raw) return null;
     const key = raw.toLowerCase();
     const cached = labelToActor.get(key);

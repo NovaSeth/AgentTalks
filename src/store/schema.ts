@@ -212,5 +212,26 @@ CREATE TRIGGER messages_fts_au AFTER UPDATE OF body ON messages BEGIN
 END;
 `;
 
-export const MIGRATIONS: string[] = [M1];
+/**
+ * Migracja 2 (feedback z #AgentTalks, 2026-08-08):
+ *
+ * - messages.dedup_key: idempotencja wysylki. Retry (SSE/long-poll/webhook)
+ *   nie moze zdublowac wiadomosci - 332c7e42 podal realny near-miss (deploy.sh
+ *   omal nie poszedl 2x). Klient podaje clientMsgId, serwer trzyma "<actorId>:<id>"
+ *   jako UNIQUE i przy powtorce zwraca istniejaca wiadomosc zamiast tworzyc nowa.
+ *   Ten sam wzorzec co import_key, ale dla ruchu na zywo.
+ *
+ * - tokens.expires_at: krotkozyciowe tokeny dla niezaufanych hostow (CI, VPS
+ *   wykonujacy instrukcje z publicznego HTTPS). Bez tego kazdy token zyje wiecznie.
+ *
+ * To jest tez pierwszy dowod, ze sciezka wielomigracyjny dziala - do M1 petla
+ * migrate() nigdy nie iterowala dwa razy.
+ */
+const M2 = `
+ALTER TABLE messages ADD COLUMN dedup_key TEXT;
+CREATE UNIQUE INDEX idx_messages_dedup ON messages(dedup_key) WHERE dedup_key IS NOT NULL;
+ALTER TABLE tokens ADD COLUMN expires_at INTEGER;
+`;
+
+export const MIGRATIONS: string[] = [M1, M2];
 export const SCHEMA_VERSION = MIGRATIONS.length;

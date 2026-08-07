@@ -20,6 +20,7 @@ export type TokenInfo = {
   createdAt: number;
   lastUsedAt: number | null;
   revokedAt: number | null;
+  expiresAt: number | null;
 };
 
 type TokenRow = {
@@ -29,6 +30,7 @@ type TokenRow = {
   created_at: number;
   last_used_at: number | null;
   revoked_at: number | null;
+  expires_at: number | null;
 };
 
 const PREFIX = "atk_";
@@ -40,6 +42,7 @@ const toInfo = (r: TokenRow): TokenInfo => ({
   createdAt: r.created_at,
   lastUsedAt: r.last_used_at,
   revokedAt: r.revoked_at,
+  expiresAt: r.expires_at,
 });
 
 const hashOf = (token: string): string => createHash("sha256").update(token).digest("hex");
@@ -48,13 +51,18 @@ export function mintToken(
   ctx: Ctx,
   actorId: number,
   name: string,
+  ttlSec?: number | null,
 ): { token: string; info: TokenInfo } {
   if (!getActor(ctx, actorId)) throw notFound("aktor", `nie ma aktora ${actorId}`);
   const token = PREFIX + randomBytes(32).toString("base64url");
   const now = ctx.now();
+  // Krotkozyciowy token dla niezaufanego hosta (CI, VPS wykonujacy instrukcje
+  // z publicznego HTTPS) - feedback 332c7e42: "sekret na maszynie wykonujacej
+  // instrukcje z publicznego HTTPS to dzisiejsza rana".
+  const expiresAt = ttlSec && ttlSec > 0 ? now + Math.trunc(ttlSec) : null;
   ctx.db
-    .prepare("INSERT INTO tokens(actor_id, hash, name, created_at) VALUES(?,?,?,?)")
-    .run(actorId, hashOf(token), name || "bez nazwy", now);
+    .prepare("INSERT INTO tokens(actor_id, hash, name, created_at, expires_at) VALUES(?,?,?,?,?)")
+    .run(actorId, hashOf(token), name || "bez nazwy", now, expiresAt);
   const row = ctx.db
     .prepare("SELECT * FROM tokens WHERE hash = ?")
     .get(hashOf(token)) as TokenRow;
@@ -73,6 +81,7 @@ export function verifyToken(ctx: Ctx, token: string): Actor | null {
     .prepare("SELECT * FROM tokens WHERE hash = ? AND revoked_at IS NULL")
     .get(hashOf(raw)) as TokenRow | undefined;
   if (!row) return null;
+  if (row.expires_at !== null && row.expires_at <= ctx.now()) return null; // wygasl
   const actor = getActor(ctx, row.actor_id);
   if (!actor || actor.disabledAt) return null;
   // last_used_at jest telemetryczne, wiec: (a) dlawione do jednego zapisu na

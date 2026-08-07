@@ -91,21 +91,38 @@ export function postMessage(
     threadId?: number | null;
     meta?: Record<string, unknown> | null;
     importKey?: string | null;
+    /** Idempotencja: przy retry ten sam clientMsgId zwraca istniejaca wiadomosc,
+     *  zamiast tworzyc nowa. Kluczowany per aktor, wiec dwoch aktorow moze uzyc
+     *  tego samego id bez kolizji. */
+    clientMsgId?: string | null;
     /** Limit z konfiguracji instancji; bez podania obowiazuje MAX_BODY_BYTES. */
     maxBytes?: number;
   },
 ): Message {
   const body = validateBody(input.body, input.maxBytes ?? MAX_BODY_BYTES);
   assertCanPost(ctx, input.conversationId, input.actorId);
+  const dedupKey = input.clientMsgId ? `${input.actorId}:${input.clientMsgId}` : null;
 
+  let created = true;
   const message = tx(ctx.db, () => {
+    // Idempotencja: przy retry (SSE/long-poll/webhook potrafia dostarczyc dwa razy)
+    // powtorzony clientMsgId nie moze zdublowac wiadomosci. SELECT-then-INSERT jest
+    // bezpieczne, bo transakcja zewnetrzna to BEGIN IMMEDIATE - procesy sie szereguja.
+    if (dedupKey) {
+      const dup = ctx.db.prepare("SELECT * FROM messages WHERE dedup_key = ?")
+        .get(dedupKey) as MsgRow | undefined;
+      if (dup) {
+        created = false;
+        return messageFromRow(dup);
+      }
+    }
     const threadId = rootOfThread(ctx, input.threadId ?? null, input.conversationId);
     const ts = ctx.now();
     ctx.db
       .prepare(
         `INSERT INTO messages(conversation_id, actor_id, session_id, ts, kind, body,
-                              thread_id, meta, import_key)
-         VALUES(?,?,?,?,?,?,?,?,?)`,
+                              thread_id, meta, import_key, dedup_key)
+         VALUES(?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         input.conversationId,
@@ -117,6 +134,7 @@ export function postMessage(
         threadId,
         input.meta ? JSON.stringify(input.meta) : null,
         input.importKey ?? null,
+        dedupKey,
       );
     const row = ctx.db.prepare("SELECT * FROM messages WHERE id = last_insert_rowid()").get() as
       MsgRow;
@@ -128,14 +146,16 @@ export function postMessage(
     return messageFromRow(row);
   });
 
-  // Poza transakcja publikuje od razu; wewnatrz transakcji wolajacego (ask,
-  // answer, import) - dopiero po prawdziwym COMMIT. Subskrybent nigdy nie widzi
-  // zdarzenia o danych, ktorych nie ma.
-  onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
-    type: "message",
-    conversationId: input.conversationId,
-    message,
-  }));
+  // Zdarzenie WYLACZNIE dla nowo utworzonej wiadomosci: powtorka (dedup) nie
+  // moze wygenerowac drugiego pusha, bo to bylby dokladnie ten zdublowany wake,
+  // przed ktorym idempotencja ma chronic.
+  if (created) {
+    onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
+      type: "message",
+      conversationId: input.conversationId,
+      message,
+    }));
+  }
   return message;
 }
 

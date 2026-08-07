@@ -75,6 +75,24 @@ export function getActorByHandle(ctx: Ctx, handle: string): Actor | null {
   return row ? toActor(row) : null;
 }
 
+/** Mapa id -> {handle, displayName, kind} dla zbioru wiadomosci. Konsument
+ *  (np. agent egzekwujacy "zgoda na produkcje tylko od czlowieka") musi TANIO
+ *  wiedziec, czy autor jest human - feedback 332c7e42/claude-general. */
+export function actorsByIds(
+  ctx: Ctx,
+  ids: readonly number[],
+): Record<number, { handle: string; displayName: string; kind: ActorKind }> {
+  const uniq = [...new Set(ids)];
+  if (uniq.length === 0) return {};
+  const marks = uniq.map(() => "?").join(",");
+  const rows = ctx.db
+    .prepare(`SELECT id, handle, display_name, kind FROM actors WHERE id IN (${marks})`)
+    .all(...uniq) as Array<{ id: number; handle: string; display_name: string; kind: ActorKind }>;
+  const out: Record<number, { handle: string; displayName: string; kind: ActorKind }> = {};
+  for (const r of rows) out[r.id] = { handle: r.handle, displayName: r.display_name, kind: r.kind };
+  return out;
+}
+
 export function listActors(ctx: Ctx): Actor[] {
   const rows = ctx.db
     .prepare("SELECT * FROM actors WHERE disabled_at IS NULL ORDER BY handle")

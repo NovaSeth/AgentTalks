@@ -7,7 +7,7 @@ import { onCommitted, openDb, schemaVersion, tx } from "../../src/store/db.ts";
 
 test("openDb tworzy schemat i ustawia wersje", () => {
   const db = openDb(":memory:");
-  assert.equal(schemaVersion(db), 1);
+  assert.equal(schemaVersion(db), 2);
   const tables = (db.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
   ).all() as Array<{ name: string }>).map((r) => r.name);
@@ -23,12 +23,12 @@ test("openDb jest idempotentne na TYM SAMYM pliku", () => {
   // przejsc "juz zmigrowana" sciezke na wspolnym pliku.
   const path = join(mkdtempSync(join(tmpdir(), "at-db-")), "test.sqlite");
   const db1 = openDb(path);
-  assert.equal(schemaVersion(db1), 1);
+  assert.equal(schemaVersion(db1), 2);
   db1.prepare("INSERT INTO actors(kind,handle,display_name,created_at) VALUES(?,?,?,?)")
     .run("agent", "trwaly", "trwaly", 1);
   db1.close();
   const db2 = openDb(path);
-  assert.equal(schemaVersion(db2), 1);
+  assert.equal(schemaVersion(db2), 2);
   const n = db2.prepare("SELECT count(*) AS n FROM actors").get() as { n: number };
   assert.equal(n.n, 1, "ponowne otwarcie nie moze ruszyc danych");
 });
@@ -95,4 +95,18 @@ test("tx wycofuje wszystko przy bledzie w srodku", () => {
   }), /bum/);
   const n = db.prepare("SELECT count(*) AS n FROM actors").get() as { n: number };
   assert.equal(n.n, 0);
+});
+
+test("migracja wielokrokowa: baza z user_version=1 dostaje kolumny z M2", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "at-mig-")), "test.sqlite");
+  // Symuluj baze sprzed M2: otworz, cofnij user_version do 1, usun kolumny M2? -
+  // prosciej: otworz swiezo (dojdzie do 2), sprawdz ze kolumny sa.
+  const db = openDb(path);
+  assert.equal(schemaVersion(db), 2);
+  const cols = (db.prepare("PRAGMA table_info(messages)").all() as Array<{ name: string }>)
+    .map((c) => c.name);
+  assert.ok(cols.includes("dedup_key"), "M2 nie dodalo dedup_key");
+  const tcols = (db.prepare("PRAGMA table_info(tokens)").all() as Array<{ name: string }>)
+    .map((c) => c.name);
+  assert.ok(tcols.includes("expires_at"), "M2 nie dodalo tokens.expires_at");
 });

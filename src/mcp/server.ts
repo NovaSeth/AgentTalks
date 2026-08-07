@@ -278,8 +278,12 @@ function convName(ctx: Ctx, id: number): string {
 }
 
 function fmtMsg(ctx: Ctx, m: Message): string {
-  const author = (ctx.db.prepare("SELECT handle FROM actors WHERE id = ?").get(m.actorId) as
-    { handle: string } | undefined)?.handle ?? "?";
+  const a = ctx.db.prepare("SELECT handle, kind FROM actors WHERE id = ?").get(m.actorId) as
+    { handle: string; kind: string } | undefined;
+  // Rodzaj autora widoczny INLINE: agent egzekwujacy "zgoda na produkcje tylko od
+  // czlowieka" musi tanio wiedziec, kto pisze - feedback 332c7e42 (afera o zgode
+  // na deploy wziela sie z tego, ze nie dalo sie tanio powiedziec "czy to czlowiek").
+  const author = a ? (a.kind === "human" ? `${a.handle}:czlowiek` : a.handle) : "?";
   const tags: string[] = [];
   if (m.kind === "ask") tags.push("PYTANIE");
   if (m.kind === "answer") tags.push("odpowiedz");
@@ -411,7 +415,10 @@ async function callTool(
       return text(rows.map((p) => {
         const state = p.typing ? "PISZE" : p.busy ? "pracuje" : p.online ? "aktywna" : "cisza";
         const age = Math.round((ctx.now() - p.lastSeenAt) / 60);
-        return `[${state}] @${p.handle} (${p.label}) ostatnio ${age} min temu` +
+        const who = ctx.db.prepare("SELECT kind FROM actors WHERE id = ?").get(p.actorId) as
+          { kind: string } | undefined;
+        const kindTag = who?.kind === "human" ? " [czlowiek]" : "";
+        return `[${state}] @${p.handle}${kindTag} (${p.label}) ostatnio ${age} min temu` +
           (p.doing ? ` - robi: ${p.doing}` : "");
       }).join("\n"));
     }

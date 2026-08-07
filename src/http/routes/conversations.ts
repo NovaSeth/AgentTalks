@@ -1,5 +1,5 @@
 /** Konwersacje: lista, zakladanie, czlonkostwo, znaczniki odczytu, otwarte pytania. */
-import { getActor, getActorByHandle } from "../../core/actors.ts";
+import { actorsByIds, getActor, getActorByHandle } from "../../core/actors.ts";
 import {
   assertCanRead,
   createChannel,
@@ -137,7 +137,11 @@ export function registerConversationRoutes(router: Router): void {
       before: int(rc.query.get("before") ?? undefined),
       limit: int(rc.query.get("limit") ?? undefined),
     });
-    json(res, 200, { messages, reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)) });
+    json(res, 200, {
+      messages,
+      reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)),
+      actors: actorsByIds(rc.ctx, messages.map((m) => m.actorId)),
+    });
   });
 
   router.add("POST", "/api/conversations/:id/messages", async (req, res, rc) => {
@@ -156,6 +160,10 @@ export function registerConversationRoutes(router: Router): void {
       actorId: actor.id,
       body: str(body.body) ?? "",
       threadId: int(body.threadId),
+      // Idempotencja: powtorzony clientMsgId zwraca te sama wiadomosc (to samo id),
+      // bez drugiego wiersza i bez drugiego pusha. Klient rozpoznaje powtorke po
+      // tym, ze dostaje id, ktore juz zna.
+      clientMsgId: str(body.clientMsgId) ?? null,
       sessionId: str(body.sessionId) ?? null,
       maxBytes: rc.config.maxMessageBytes,
     });

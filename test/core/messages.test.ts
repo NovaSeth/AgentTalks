@@ -253,3 +253,29 @@ test("ask publikuje zdarzenie dopiero, gdy pytanie JUZ istnieje (drugie polaczen
   assert.equal(questionVisible, true,
     "zdarzenie o wiadomosci ask wyszlo, zanim pytanie bylo w bazie");
 });
+
+test("clientMsgId: retry nie dubluje wiadomosci ani zdarzenia", () => {
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
+  join(ctx, c.id, b.id);
+  const events: number[] = [];
+  ctx.bus.subscribe(b.id, (e) => { if (e.type === "message") events.push(e.message.id); });
+  const m1 = postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "deploy", clientMsgId: "x1" });
+  const m2 = postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "deploy", clientMsgId: "x1" });
+  assert.equal(m1.id, m2.id, "retry ma zwrocic te sama wiadomosc");
+  const n = ctx.db.prepare("SELECT count(*) AS n FROM messages WHERE conversation_id=?")
+    .get(c.id) as { n: number };
+  assert.equal(n.n, 1, "powstala druga wiadomosc mimo dedup");
+  assert.equal(events.length, 1, "powtorzony push - idempotencja nie zadzialala na zdarzeniu");
+});
+
+test("clientMsgId jest per aktor - dwoch aktorow moze uzyc tego samego id", () => {
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
+  join(ctx, c.id, b.id);
+  const ma = postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "a", clientMsgId: "x" });
+  const mb = postMessage(ctx, { conversationId: c.id, actorId: b.id, body: "b", clientMsgId: "x" });
+  assert.notEqual(ma.id, mb.id);
+});
