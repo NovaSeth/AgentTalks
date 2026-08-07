@@ -183,7 +183,7 @@ async function cmdServe(args: Args): Promise<number> {
   // Wake (budzenie nieobecnych agentow webhookiem) i sprzatanie wygaslych plikow
   // zyja wylacznie w procesie serwera - komendy administracyjne CLI nie maja
   // prawa strzelac webhookami w cudzym imieniu.
-  registerWake(ctx);
+  registerWake(ctx, undefined, config.allowLoopbackWake);
   const sweep = setInterval(() => {
     try {
       sweepExpired(ctx);

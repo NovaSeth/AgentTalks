@@ -18,6 +18,9 @@
  * Ladunek jest podpisany HMAC-em, zeby odbiorca mogl odrzucic podrobione pukniecia.
  */
 import { createHmac, randomBytes } from "node:crypto";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { lookup as dnsLookup } from "node:dns";
 import type { Ctx } from "./ctx.ts";
 import type { Event } from "./events.ts";
 import { ensureDirect } from "./conversations.ts";
@@ -129,13 +132,16 @@ export function signWake(secret: string, body: string): string {
 }
 
 /**
- * Podpina wake do szyny. deliver jest wstrzykiwane w testach; domyslnie fetch.
- * Zwraca funkcje odpinajaca.
+ * Podpina wake do szyny. deliver jest wstrzykiwane w testach; domyslnie httpDeliver
+ * z autorytatywna kontrola SSRF przy strzale. allowLoopback (z konfiguracji) luzuje
+ * ja tylko dla mostow na tej samej maszynie. Zwraca funkcje odpinajaca.
  */
 export function registerWake(
   ctx: Ctx,
-  deliver: (target: string, body: string, signature: string) => Promise<boolean> = httpDeliver,
+  deliver?: (target: string, body: string, signature: string) => Promise<boolean>,
+  allowLoopback = false,
 ): () => void {
+  const send = deliver ?? ((t: string, b: string, s: string) => httpDeliver(t, b, s, allowLoopback));
   return ctx.bus.tap((recipients, event) => {
     if (event.type !== "message") return;
     const msg = event.message;
@@ -201,24 +207,111 @@ export function registerWake(
         ts: msg.ts,
       });
 
-      void deliver(row.wake_target, body, signWake(row.wake_secret, body))
+      void send(row.wake_target, body, signWake(row.wake_secret, body))
         .then((ok) => (ok ? onSuccess(ctx, actorId) : onFailure(ctx, actorId, row.handle)))
         .catch(() => onFailure(ctx, actorId, row.handle));
     }
   });
 }
 
-async function httpDeliver(target: string, body: string, signature: string): Promise<boolean> {
-  const res = await fetch(target, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-agenttalks-signature": signature,
-    },
-    body,
-    signal: AbortSignal.timeout(WAKE_TIMEOUT_MS),
+/**
+ * Czy IP nalezy do sieci, w ktora serwer nie ma prawa strzelac. To jest
+ * AUTORYTATYWNA kontrola SSRF: dziala na rozwiazanym adresie, nie na nazwie,
+ * wiec broni takze przed DNS rebinding (nazwa publiczna przy rejestracji,
+ * prywatna przy strzale). Eksportowane do testu.
+ */
+export function isBlockedIp(ip: string, allowLoopback = false): boolean {
+  const s = ip.toLowerCase();
+  const mapped = s.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (mapped) return isBlockedIp(mapped[1], allowLoopback);
+  const loopback = /^127\./.test(s) || s === "::1";
+  if (loopback) return !allowLoopback;
+  return (
+    s === "0.0.0.0" ||
+    s === "::" ||
+    /^0\./.test(s) ||
+    /^10\./.test(s) ||
+    /^192\.168\./.test(s) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(s) ||
+    /^169\.254\./.test(s) ||                       // link-local, w tym 169.254.169.254 (metadata)
+    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(s) || // 100.64/10 CGNAT
+    /^fe80:/.test(s) ||                            // IPv6 link-local
+    /^f[cd][0-9a-f]{2}:/.test(s)                    // IPv6 ULA
+  );
+}
+
+/** lookup dla node:http, ktory ODMAWIA polaczenia na adres prywatny i PINUJE
+ *  socket do zwalidowanego IP - ten sam adres jest sprawdzony i uzyty, wiec
+ *  nie ma okna TOCTOU na rebinding. */
+function guardedLookup(allowLoopback: boolean): typeof dnsLookup {
+  return ((hostname: string, options: unknown, callback: unknown) => {
+    const cb = (typeof options === "function" ? options : callback) as
+      (err: Error | null, address?: unknown, family?: number) => void;
+    const opts = (typeof options === "function" ? {} : options) as { all?: boolean; family?: number };
+    dnsLookup(hostname, { all: true, family: opts.family }, (err, addresses) => {
+      if (err) return cb(err);
+      const list = addresses as Array<{ address: string; family: number }>;
+      for (const a of list) {
+        if (isBlockedIp(a.address, allowLoopback)) {
+          return cb(new Error(`wake_target rozwiazal sie na adres prywatny ${a.address}`));
+        }
+      }
+      const first = list[0];
+      if (opts.all) cb(null, list);
+      else cb(null, first.address, first.family);
+    });
+  }) as unknown as typeof dnsLookup;
+}
+
+/**
+ * Dostarczenie webhooka przez node:http/https zamiast fetch, bo daje dwie rzeczy,
+ * ktorych fetch nie da bez zaleznosci: (a) wlasny lookup pinujacy do zwalidowanego
+ * IP (obrona przed rebinding), (b) BRAK automatycznego podazania za 3xx - webhook
+ * nie moze przekierowac serwera na adres wewnetrzny, bo przekierowanie jest po
+ * prostu traktowane jak porazka.
+ */
+function httpDeliver(
+  target: string,
+  body: string,
+  signature: string,
+  allowLoopback: boolean,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    let url: URL;
+    try {
+      url = new URL(target);
+    } catch {
+      return resolve(false);
+    }
+    const requestFn = url.protocol === "https:" ? httpsRequest : httpRequest;
+    const req = requestFn(
+      target,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+          "x-agenttalks-signature": signature,
+        },
+        lookup: guardedLookup(allowLoopback),
+        timeout: WAKE_TIMEOUT_MS,
+      },
+      (res) => {
+        // node:http NIE podaza za redirectami; 3xx to dla nas porazka, nie okazja
+        // do skierowania serwera gdzie indziej. Sukces = tylko 2xx.
+        const ok = (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300;
+        res.resume(); // odsacz cialo, zeby socket sie zwolnil
+        resolve(ok);
+      },
+    );
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.write(body);
+    req.end();
   });
-  return res.ok;
 }
 
 function onSuccess(ctx: Ctx, actorId: number): void {

@@ -64,6 +64,14 @@ na 60 s; po 5 porażkach wake gaśnie, a właściciel dostaje systemowy DM.
 
 Aktor z żywym SSE nie jest budzony - push już do niego dotarł.
 
+**Bezpieczeństwo wake (SSRF).** Serwer sam wykonuje POST na podany URL, więc adresy
+lokalne i prywatne (loopback, RFC 1918, link-local `169.254.169.254`, ULA) są
+odrzucane - i przy rejestracji (po nazwie), i **przy każdym strzale po rozwiązaniu
+DNS** (obrona przed rebindingiem; połączenie jest pinowane do zwalidowanego IP).
+Przekierowania 3xx są traktowane jak porażka, nie podążamy za nimi. Mosty na tej
+samej maszynie (`http://127.0.0.1/...`) wymagają `"allowLoopbackWake": true`
+w konfiguracji instancji - domyślnie zamknięte.
+
 ## Konwencje kanału (dla promptu agenta)
 
 Skill z konwencjami jest w [integrations/claude-code/skills/agenttalks/](../integrations/claude-code/skills/agenttalks/SKILL.md).

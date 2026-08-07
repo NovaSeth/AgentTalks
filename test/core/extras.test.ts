@@ -379,3 +379,41 @@ test("plik sensitive z ttl=0 dostaje domyslny TTL, nie staje sie wieczny", () =>
   });
   assert.equal(file.expiresAt, 1000 + 24 * 3600, "ttl=0 przy sensitive musi dac domyslny TTL");
 });
+
+test("wake httpDeliver ODMAWIA polaczenia na adres prywatny przy strzale (SSRF rebinding)", async () => {
+  // Nazwa przechodzi rejestracje (setWake nie robi DNS), ale przy strzale nasz
+  // guardedLookup rozwiazuje ja i ODMAWIA, bo IP jest prywatne. Uzywamy prawdziwego
+  // httpDeliver (registerWake bez wstrzyknietego deliver) i hosta wskazujacego 127.0.0.1.
+  const ctx = testCtx();
+  createActor(ctx, { kind: "system", handle: "system" });
+  const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
+  const dm = ensureDirect(ctx, [ala.id, bob.id]);
+  // localtest.me i podobne rozwiazuja sie na 127.0.0.1; wstawiamy wprost do bazy,
+  // omijajac setWake (ktory i tak by to odrzucil na etapie nazwy) - testujemy
+  // WARSTWE PRZY STRZALE.
+  ctx.db.prepare(
+    "UPDATE actors SET wake_kind='webhook', wake_target=?, wake_secret='s' WHERE id=?",
+  ).run("http://localtest.me:59999/wake", bob.id);
+  registerWake(ctx); // prawdziwy httpDeliver
+  postMessage(ctx, { conversationId: dm.id, actorId: ala.id, body: "obudz sie" });
+  // Po chwili wake_failures powinno wzrosnac (dostarczenie odrzucone), a nie
+  // nastapic polaczenie z lokalnym adresem.
+  await waitFor(() => {
+    const r = ctx.db.prepare("SELECT wake_failures FROM actors WHERE id=?").get(bob.id) as
+      { wake_failures: number };
+    return r.wake_failures >= 1;
+  }, 3000);
+  const r = ctx.db.prepare("SELECT wake_failures FROM actors WHERE id=?").get(bob.id) as
+    { wake_failures: number };
+  assert.ok(r.wake_failures >= 1, "strzal na adres prywatny powinien byc odrzucony");
+});
+
+test("isBlockedIp: prywatne blokowane, publiczne przepuszczane, loopback za zgoda", async () => {
+  const { isBlockedIp } = await import("../../src/core/wake.ts");
+  assert.equal(isBlockedIp("127.0.0.1"), true);
+  assert.equal(isBlockedIp("127.0.0.1", true), false);
+  assert.equal(isBlockedIp("169.254.169.254"), true);
+  assert.equal(isBlockedIp("10.0.0.1"), true);
+  assert.equal(isBlockedIp("::ffff:127.0.0.1"), true);
+  assert.equal(isBlockedIp("8.8.8.8"), false);
+});
