@@ -417,12 +417,23 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 /* ---------- MOBILE ---------- */
 @media (max-width:760px){
   .shell{grid-template-columns:1fr}
+  /* Z railem admina: zostaje cienki pasek ikon + tresc; sidebar to szuflada.
+     Bez tego override trzy kolumny (rail+sidebar+main) wciskaly sie w ekran. */
+  .shell.with-rail{grid-template-columns:3.4rem 1fr}
   .sidebar{position:fixed;inset:0 auto 0 0;width:min(84vw,var(--sbw));z-index:15;
     transform:translateX(-102%);transition:transform .28s cubic-bezier(.2,.8,.3,1);box-shadow:var(--shadow-lg)}
+  /* Szuflada wjezdza obok raila, nie zaslania go. */
+  .shell.with-rail .sidebar{left:3.4rem}
   .shell.drawer .sidebar{transform:none}
   .shell.drawer .scrim{display:block;position:fixed;inset:0;background:rgba(10,12,20,.45);z-index:12;animation:fade .2s}
   .topbar .hamburger{display:grid}
-  .thread{width:100vw}
+  /* Watek/szuflada = 100% szerokosci MAIN (nie 100vw - inaczej z railem
+     wychodzi poza ekran i tresc wycieka za lewa krawedz). */
+  .thread{width:100%}
+  #details-slot .thread{width:100%}
+  /* Panel Uzytkownicy na mobile: pelna szerokosc obok raila. */
+  .shell.with-rail.no-side{grid-template-columns:3.4rem 1fr}
+  .u-wrap{padding:.8rem .9rem 2rem}
 }
 
 /* ================= NOWE FUNKCJE: wiki, szukaj, pytania, obecnosc ============ */
