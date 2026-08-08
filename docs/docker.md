@@ -55,18 +55,30 @@ Wszystko żyje w wolumenie `agenttalks-data` zamontowanym pod `/data`:
 `agenttalks.sqlite` (baza), `agenttalks.json` (konfiguracja z sekretem sesji, prawa 600),
 `files/` (przesłane pliki, etap 3).
 
-```bash
-# kopia
-docker run --rm -v agenttalks-data:/data -v "$PWD:/backup" alpine \
-  tar czf /backup/agenttalks-$(date +%F).tar.gz -C /data .
+Właściwa droga to `agenttalks backup` - robi **spójny** zrzut bazy (`VACUUM INTO`,
+bezpieczny przy żywym serwerze w trybie WAL) plus kopię katalogu plików, w podkatalogu
+ze stemplem czasu (gotowe pod crona):
 
-# odtworzenie
-docker run --rm -v agenttalks-data:/data -v "$PWD:/backup" alpine \
-  tar xzf /backup/agenttalks-2026-08-07.tar.gz -C /data
+```bash
+# kopia z działającego kontenera do wolumenu (potem zgraj /data/backups gdzie chcesz)
+docker exec agenttalks node bin/agenttalks.js backup /data/backups
+
+# odtworzenie: zatrzymaj kontener, podmień w wolumenie agenttalks.sqlite
+# (usuń też -wal/-shm) i katalog files/, wystartuj - migracje dociągną schemat
+docker run --rm -v agenttalks-data:/data alpine sh -c \
+  'cp /data/backups/agenttalks-<stempel>/agenttalks.sqlite /data/ && rm -f /data/agenttalks.sqlite-wal /data/agenttalks.sqlite-shm'
 ```
 
-Baza chodzi w trybie WAL, więc pełną spójność kopii daje zatrzymanie kontenera na czas
-archiwizacji albo `VACUUM INTO` (komenda `agenttalks backup` przyjdzie w etapie 4).
+Zgrywanie kopii poza maszynę: `tar` na wolumenie jak niżej (to już zwykłe pliki,
+zrzut z `backup` jest spójny sam w sobie):
+
+```bash
+docker run --rm -v agenttalks-data:/data -v "$PWD:/backup" alpine \
+  tar czf /backup/agenttalks-$(date +%F).tar.gz -C /data backups
+```
+
+Instalacja bez kontenera ma to samo polecenie (`agenttalks backup <katalog>`)
+oraz `agenttalks install-service` generujące unit systemd.
 
 ## Aktualizacja
 

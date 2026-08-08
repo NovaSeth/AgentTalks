@@ -5,7 +5,10 @@
  * uruchomienie, aktorzy, tokeny, import z prototypu. Klient dla agentow (`atalk`)
  * przychodzi w etapie 2 i bedzie mowil HTTP, a nie dotykal bazy.
  */
-import { existsSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join as joinPath, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 import { assertBindAllowed, initData, loadConfig, defaultDataDir, type Config } from "../config.ts";
 import { openDb, tx } from "../store/db.ts";
 import { createCtx, type Ctx } from "../core/ctx.ts";
@@ -58,6 +61,15 @@ const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a l
       Spojna kopia instancji (VACUUM INTO) do pomiarow i testow na boku.
       Feedback z #nextIteration: "caly ten feedback jest z liczb, a nie z wrazen,
       wylacznie dlatego, ze moglem zrobic kopie i zmierzyc, nie dotykajac produkcji".
+
+  agenttalks backup <katalog-docelowy> [--data <kat>]
+      Kopia zapasowa: spojny zrzut bazy (VACUUM INTO, bezpieczny przy zywym
+      serwerze) + kopia katalogu plikow. Kazde wywolanie tworzy podkatalog
+      ze stemplem czasu - nadaje sie prosto do crona.
+
+  agenttalks install-service [--data <kat>] [--port <n>] [--write]
+      Unit systemd dla instalacji bez kontenera. Domyslnie WYPISUJE unit
+      i instrukcje; --write zapisuje ~/.config/systemd/user/agenttalks.service.
 
   agenttalks healthcheck [--url <adres>]
       Zwraca 0, gdy serwer odpowiada. Uzywane przez HEALTHCHECK w obrazie Docker.
@@ -145,6 +157,10 @@ export async function main(argv: readonly string[]): Promise<number> {
         return cmdImport(rest, args);
       case "clone":
         return cmdClone(rest, args);
+      case "backup":
+        return cmdBackup(rest, args);
+      case "install-service":
+        return cmdInstallService(args);
       case "healthcheck":
         return await cmdHealthcheck(args);
       default:
@@ -427,6 +443,72 @@ function cmdClone(rest: string[], args: Args): number {
       `  po tescie: rm -rf ${dest}\n` +
       `Uwaga: katalog plikow (${config.filesDir}) NIE jest kopiowany - metadane\n` +
       `plikow wskazuja na oryginalne sciezki; do pomiarow wiadomosci to bez znaczenia.\n`,
+  );
+  return 0;
+}
+
+function cmdBackup(rest: string[], args: Args): number {
+  const [destRoot] = rest;
+  if (!destRoot) {
+    process.stderr.write("uzycie: agenttalks backup <katalog-docelowy>\n");
+    return 1;
+  }
+  const { ctx, config } = openCtx(args);
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const dest = joinPath(resolvePath(destRoot), `agenttalks-${stamp}`);
+  mkdirSync(dest, { recursive: true });
+  const dbCopy = joinPath(dest, "agenttalks.sqlite");
+  // VACUUM INTO daje SPOJNA kopie takze przy zywym serwerze (WAL) - zwykle cp
+  // potrafi zabrac baze z polowy transakcji. Wymaga nieistniejacego celu.
+  if (existsSync(dbCopy)) rmSync(dbCopy);
+  ctx.db.prepare("VACUUM INTO ?").run(dbCopy);
+  let filesNote = "  plikow: katalog pusty albo nieobecny\n";
+  if (existsSync(config.filesDir)) {
+    cpSync(config.filesDir, joinPath(dest, "files"), { recursive: true });
+    filesNote = `  pliki:  ${joinPath(dest, "files")}\n`;
+  }
+  process.stdout.write(
+    `kopia zapasowa gotowa: ${dest}\n  baza:   ${dbCopy}\n${filesNote}` +
+      `Odtworzenie: zatrzymaj serwer, podmien ${config.dbPath} (usun tez -wal/-shm)\n` +
+      `i katalog plikow, uruchom ponownie. Migracje doprowadza baze do biezacej wersji.\n`,
+  );
+  return 0;
+}
+
+function cmdInstallService(args: Args): number {
+  const dataDir = resolvePath(flagStr(args, "data") ?? defaultDataDir());
+  const port = flagStr(args, "port") ?? "8787";
+  const binPath = resolvePath(fileURLToPath(new URL("../../bin/agenttalks.js", import.meta.url)));
+  const unit = `[Unit]
+Description=AgentTalks - serwer komunikacji agentow AI i ludzi
+After=network.target
+
+[Service]
+ExecStart=${process.execPath} ${binPath} serve --data ${dataDir} --port ${port}
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
+`;
+  if (args.flags.write === true) {
+    const unitDir = joinPath(homedir(), ".config", "systemd", "user");
+    mkdirSync(unitDir, { recursive: true });
+    const unitPath = joinPath(unitDir, "agenttalks.service");
+    writeFileSync(unitPath, unit);
+    process.stdout.write(
+      `zapisane: ${unitPath}\nWlacz:\n  systemctl --user daemon-reload\n` +
+        `  systemctl --user enable --now agenttalks\n` +
+        `Zeby unit user-level dzialal bez zalogowania: sudo loginctl enable-linger $USER\n`,
+    );
+    return 0;
+  }
+  process.stdout.write(
+    `${unit}\n# Zapis do ~/.config/systemd/user: agenttalks install-service --write\n` +
+      `# Instalacja systemowa: zapisz powyzsze do /etc/systemd/system/agenttalks.service\n` +
+      `# (User=..., WantedBy=multi-user.target), potem: sudo systemctl enable --now agenttalks\n` +
+      `# Docker pozostaje glowna droga wdrozenia - patrz docs/docker.md.\n`,
   );
   return 0;
 }

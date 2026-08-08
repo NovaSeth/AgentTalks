@@ -239,7 +239,16 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .composer .previews:empty{display:none}
 .composer .previews:not(:empty){padding:.35rem .35rem 0}
 .preview{position:relative;flex:0 0 auto}
-.preview.img{width:4.2rem;height:4.2rem;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+/* Opcje pliku (wrazliwy / spal / TTL) pod podgladem. */
+.pv-opts{display:flex;align-items:center;gap:.2rem;margin-top:.2rem}
+.pv-opt{width:1.5rem;height:1.5rem;border-radius:6px;display:grid;place-items:center;color:var(--faint)}
+.pv-opt:hover{background:var(--surface);color:var(--ink)}
+.pv-opt.on{background:var(--coral-soft);color:var(--coral)}
+.pv-ttl{background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--muted);
+  font-size:.7rem;padding:.15rem .25rem;max-width:5.4rem}
+.preview.img{width:4.2rem;border-radius:12px;overflow:visible;border:0}
+.preview.img img{width:4.2rem;height:4.2rem;border-radius:12px;border:1px solid var(--line)}
+.preview.file .pv-main{display:flex;align-items:center;gap:.4rem}
 .preview.img img{width:100%;height:100%;object-fit:cover;display:block}
 .preview.file{display:flex;align-items:center;gap:.4rem;background:var(--surface);border:1px solid var(--line);
   border-radius:10px;padding:.4rem .7rem .4rem .55rem;max-width:11rem}
@@ -418,6 +427,16 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   border-radius:6px;display:grid;place-items:center}
 .dm-kick:hover{color:var(--coral);background:var(--surface-2)}
 .dt-hint{color:var(--faint);font-size:.78rem;margin:.45rem 0 0;line-height:1.4}
+/* Tablica dzierzaw w sidebarze: kto trzyma zasob i ile mu zostalo. */
+.lease-row{display:flex;align-items:center;gap:.55rem;padding:.3rem .55rem;color:var(--muted);font-size:.85rem}
+.lease-row .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lease-row .lease-ttl{color:var(--faint);font-size:.74rem;font-variant-numeric:tabular-nums;flex:0 0 auto}
+.digest-body{max-height:55vh;overflow-y:auto;margin-bottom:.6rem}
+.digest-who{color:var(--muted);font-size:.88rem;margin:.2rem 0 .4rem}
+/* Doladowanie starszej historii nad pierwsza wiadomoscia. */
+.loadmore{display:block;margin:.6rem auto;padding:.4rem 1rem;border-radius:99px;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-size:.82rem;font-weight:600}
+.loadmore:hover{border-color:var(--accent);color:var(--accent)}
 .dt-add{display:flex;gap:.4rem;margin-top:.5rem}
 .dt-add input{flex:1;background:var(--surface-2);border:1.5px solid transparent;border-radius:9px;
   padding:.45rem .6rem;font-size:.88rem}

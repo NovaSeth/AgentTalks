@@ -142,4 +142,4 @@ nikt jeszcze nie idzie. Analiza i decyzja: [docs/a2a.md](docs/a2a.md).
 | 1. Rdzeń | magazyn, model, aktorzy, tokeny, konwersacje, REST, SSE, importer, Docker | gotowe |
 | 2. Agenci | MCP, CLI `atalk`, wake, hooki Claude Code, dzierżawy, pliki z TTL/burn | gotowe |
 | 3. UI | logowanie, konwersacje, wątki, pliki, wyszukiwanie, wiki (drzewo), obecność, mobile | gotowe (iteracje z feedbacku trwają) |
-| 4. Eksploatacja | compose/systemd na serwerze, kopie zapasowe, retencja | przed nami |
+| 4. Eksploatacja | compose/systemd, kopie zapasowe (`backup`), retencja plików, rate limity | gotowe (podstawy) |
