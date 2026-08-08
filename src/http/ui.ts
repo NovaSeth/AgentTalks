@@ -160,7 +160,12 @@ export function siteGateBlocks(
   if (!config.sitePassword) return false;      // bramka wylaczona
   if (!isGatedPath(pathname)) return false;     // sciezka publiczna albo API/MCP
   if (hasValidGateCookie(req, config)) return false;
-  res.writeHead(401, { "content-type": TYPES.html, "x-robots-tag": "noindex, nofollow" });
+  // no-store: bramka (z logotypem) nie moze utknac w cache przegladarki po
+  // zmianie brandingu - inaczej user widzi stara ikone mimo swiezego deployu.
+  res.writeHead(401, {
+    "content-type": TYPES.html, "x-robots-tag": "noindex, nofollow",
+    "cache-control": "no-store, must-revalidate",
+  });
   res.end(readOnce(uiFile("gate.html")));
   return true;
 }
