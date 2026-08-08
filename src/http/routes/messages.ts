@@ -136,7 +136,12 @@ export function registerMessageRoutes(router: Router): void {
       json(res, 400, { error: "kind musi byc typing albo busy", code: "zly_sygnal" });
       return;
     }
-    signal(rc.ctx, rc.params.id, kind);
+    // `in` = gdzie pisze ("c:<convId>" / "w:<slug>"); stop=true gasi kuleczke
+    // od razu (rozmyslil sie), zamiast czekac na TTL.
+    signal(rc.ctx, rc.params.id, kind, {
+      typingIn: str(body.in) ?? null,
+      stop: body.stop === true,
+    });
     json(res, 200, { ok: true });
   });
 

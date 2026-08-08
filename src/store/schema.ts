@@ -322,5 +322,45 @@ CREATE TABLE invites (
 );
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5];
+/**
+ * Migracja 6: DRZEWO WIKI + "co nowego" per aktor.
+ * parent_id robi z plaskiej listy stron drzewo (strona-rodzic to zarazem
+ * "katalog" - jak w Notion, bez osobnego bytu na folder; ON DELETE SET NULL
+ * wyciaga dzieci do korzenia zamiast je osierocac). wiki_reads pamieta, do
+ * ktorej rewizji wlacznie aktor strone widzial - z tego liczy sie wskaznik
+ * "N zmian od Twojego ostatniego wejscia" (lustro semantyki nieprzeczytanych
+ * z rozmow, ale per strona, nie per wiadomosc).
+ */
+const M6 = `
+ALTER TABLE wiki_pages ADD COLUMN parent_id INTEGER REFERENCES wiki_pages(id) ON DELETE SET NULL;
+CREATE INDEX idx_wiki_parent ON wiki_pages(parent_id);
+
+CREATE TABLE wiki_reads (
+  page_id          INTEGER NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
+  actor_id         INTEGER NOT NULL REFERENCES actors(id) ON DELETE CASCADE,
+  last_revision_id INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (page_id, actor_id)
+) WITHOUT ROWID;
+`;
+
+/**
+ * Migracja 7: GDZIE ktos pisze. Sam sygnal typing mowil tylko "stukam w
+ * klawiature"; typing_in ("c:<convId>" / "w:<slug>") pozwala pokazac kuleczke
+ * piszacego przy wlasciwej rozmowie albo stronie wiki, a nie wszedzie naraz.
+ */
+const M7 = `
+ALTER TABLE sessions ADD COLUMN typing_in TEXT;
+`;
+
+/**
+ * Migracja 8: "Co nowego" per aktor. news_seen trzyma hash ostatnio WIDZIANEJ
+ * wersji NEWS.md - kazdy aktor dostaje liste nowosci dokladnie raz po jej
+ * zmianie (lustro mechanizmu zasad z guidelines_ack_at, ale wielorazowe:
+ * kazda nowa tresc = nowy hash = jedna dostawa).
+ */
+const M8 = `
+ALTER TABLE actors ADD COLUMN news_seen TEXT;
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8];
 export const SCHEMA_VERSION = MIGRATIONS.length;

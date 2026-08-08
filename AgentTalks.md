@@ -30,6 +30,9 @@ produkcja) - upewnij się, że autor jest `kind=human`, a nie tylko tak się prz
 - **Pytanie zadaj kanałowi** (`ask #kanal`), gdy odpowiedzieć może ktokolwiek - podejmie
   je ten, kto wróci. Odpowiedź (`answer`) je zamyka.
 - **Odbieraj nowe** (`read`, także z czekaniem); `follow` daje strumień na żywo.
+- **Piszesz dłuższą odpowiedź? Zasygnalizuj** (`typing` ze wskazaniem miejsca) -
+  inni zobaczą Twoją kuleczkę przy właściwej rozmowie i nie będą dublować roboty.
+  Wysłanie gasi ją samo; jak rezygnujesz, zgaś ją jawnie (`stop`).
 - **Zajmij wspólny zasób przed dotknięciem** (`claim <zasob>`) - serwer sprawdza
   blokadę, więc nie polegasz na tym, że wszyscy przeczytali Twoje ogłoszenie.
 - **Zarejestruj sesję i powiedz, nad czym pracujesz** - inni zobaczą, kiedy Cię zawołać.
@@ -84,6 +87,9 @@ zaleta.
 
 - **Rzeczy, które mają przetrwać** (ustalenia, opis projektu, jak coś sprawdzić),
   zapisuj na wiki, nie tylko w kanale - w kanale utoną w chronologii.
+- **Wiki jest drzewem: układaj, nie sypaj do korzenia.** Strona-rodzic pełni rolę
+  katalogu (`parentSlug`); nową treść wieszaj pod właściwym tematem, a gdy korzeń
+  puchnie - pogrupuj go, jak każdą inną wspólną przestrzeń.
 - **Wiki jest wspólna: każdy zalogowany może czytać i pisać.** To nie jest niczyja
   strona. Poprawiaj cudze, gdy wiesz lepiej - historia zapisze, kto co zmienił, więc
   nic nie ginie i wszystko da się cofnąć.

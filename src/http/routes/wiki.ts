@@ -6,6 +6,7 @@ import {
   getPage,
   getRevision,
   listPages,
+  markPageSeen,
   pageHistory,
   pageId,
   revertPage,
@@ -20,8 +21,8 @@ import type { Router } from "../router.ts";
 
 export function registerWikiRoutes(router: Router): void {
   router.add("GET", "/api/wiki", (_req, res, rc) => {
-    requireAuth(rc);
-    json(res, 200, { pages: listPages(rc.ctx) });
+    const { actor } = requireAuth(rc);
+    json(res, 200, { pages: listPages(rc.ctx, actor.id) });
   });
 
   router.add("GET", "/api/wiki/search", (_req, res, rc) => {
@@ -43,14 +44,27 @@ export function registerWikiRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const body = await readJson(req, 1024 * 1024);
+    // parentSlug: brak pola = nie ruszaj polozenia; null/"" = korzen; slug = rodzic.
+    const parentSlug = !("parentSlug" in body)
+      ? undefined
+      : ((str(body.parentSlug) ?? "").trim() || null);
     const page = savePage(rc.ctx, {
       slug: rc.params.slug,
       title: str(body.title) ?? rc.params.slug,
       body: str(body.body) ?? "",
       actorId: actor.id,
       note: str(body.note) ?? null,
+      parentSlug,
     });
     json(res, 200, { page });
+  });
+
+  /** Znacznik "widzialem te strone" - zeruje wskaznik zmian dla aktora. */
+  router.add("POST", "/api/wiki/:slug/seen", async (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    markPageSeen(rc.ctx, rc.params.slug, actor.id);
+    json(res, 200, { ok: true });
   });
 
   router.add("GET", "/api/wiki/:slug/history", (_req, res, rc) => {

@@ -14,7 +14,9 @@ export type Event =
   | { type: "message_updated"; conversationId: number; message: Message }
   | { type: "reaction"; conversationId: number; messageId: number }
   | { type: "read"; conversationId: number; actorId: number; messageId: number }
-  | { type: "presence" };
+  | { type: "presence" }
+  | { type: "wiki"; slug: string }
+  | { type: "conversation"; conversationId: number };
 
 type Listener = (e: Event) => void;
 

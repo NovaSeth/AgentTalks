@@ -10,10 +10,11 @@
  * wlasnoscia. Zaufanie daje historia: kazdy zapis to rewizja (kto, kiedy, co),
  * wiec zmiana jest widoczna i odwracalna - nikt nie nadpisze cudzej pracy po cichu.
  */
-import { tx } from "../store/db.ts";
+import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
 import { badRequest, notFound } from "./errors.ts";
 import { normalizeSlug } from "./ids.ts";
+import { allActorIds } from "./presence.ts";
 
 export const MAX_WIKI_BYTES = 512 * 1024; // strona wiedzy bywa dluga, ale nie bez konca
 const MAX_TITLE = 200;
@@ -28,6 +29,7 @@ export type WikiPage = {
   slug: string;
   title: string;
   body: string;
+  parentSlug: string | null;
   createdBy: string | null;
   createdAt: number;
   updatedBy: string | null;
@@ -38,9 +40,12 @@ export type WikiPage = {
 export type WikiListItem = {
   slug: string;
   title: string;
+  parentSlug: string | null;
   updatedBy: string | null;
   updatedAt: number;
   bytes: number;
+  /** Ile rewizji CUDZYCH przybylo od ostatniego wejscia aktora na strone. */
+  unseen: number;
 };
 
 export type WikiRevision = {
@@ -53,6 +58,7 @@ export type WikiRevision = {
 
 type PageRow = {
   id: number; slug: string; title: string; body: string;
+  parent_id: number | null;
   created_by: number | null; created_at: number;
   updated_by: number | null; updated_at: number;
 };
@@ -65,6 +71,14 @@ const handleOf = (ctx: Ctx, actorId: number | null): string | null => {
   return r?.handle ?? null;
 };
 
+const slugOf = (ctx: Ctx, id: number | null): string | null => {
+  if (id === null) return null;
+  const r = ctx.db.prepare("SELECT slug FROM wiki_pages WHERE id = ?").get(id) as
+    | { slug: string }
+    | undefined;
+  return r?.slug ?? null;
+};
+
 function toPage(ctx: Ctx, r: PageRow): WikiPage {
   const rev = ctx.db.prepare("SELECT COUNT(*) AS n FROM wiki_revisions WHERE page_id = ?")
     .get(r.id) as { n: number };
@@ -72,6 +86,7 @@ function toPage(ctx: Ctx, r: PageRow): WikiPage {
     slug: r.slug,
     title: r.title,
     body: r.body,
+    parentSlug: slugOf(ctx, r.parent_id),
     createdBy: handleOf(ctx, r.created_by),
     createdAt: r.created_at,
     updatedBy: handleOf(ctx, r.updated_by),
@@ -91,11 +106,45 @@ function validate(title: string, body: string): { title: string; body: string } 
   return { title: t, body: b };
 }
 
+/** Rodzic strony: undefined = nie ruszaj, null = do korzenia, slug = pod strone.
+ *  Zwraca id rodzica albo null. Cykl (strona pod wlasnym potomkiem albo soba)
+ *  jest odrzucany - drzewo ma zostac drzewem. */
+function resolveParent(
+  ctx: Ctx,
+  pageIdOrNull: number | null,
+  parentSlug: string | null,
+): number | null {
+  if (parentSlug === null) return null;
+  const parent = ctx.db.prepare("SELECT id, parent_id FROM wiki_pages WHERE slug = ?").get(
+    normalizeSlug(parentSlug),
+  ) as { id: number; parent_id: number | null } | undefined;
+  if (!parent) throw notFound("strona", `nie ma strony wiki "${parentSlug}" na rodzica`);
+  if (pageIdOrNull !== null) {
+    let cur: number | null = parent.id;
+    let hops = 0;
+    while (cur !== null) {
+      if (cur === pageIdOrNull) {
+        throw badRequest("cykl_wiki", "strona nie moze wisiec pod soba ani pod wlasnym potomkiem");
+      }
+      if (++hops > 100) throw badRequest("cykl_wiki", "drzewo wiki jest za glebokie");
+      const row = ctx.db.prepare("SELECT parent_id FROM wiki_pages WHERE id = ?").get(cur) as
+        | { parent_id: number | null }
+        | undefined;
+      cur = row?.parent_id ?? null;
+    }
+  }
+  return parent.id;
+}
+
 /** Zaklada albo aktualizuje strone. Zawsze dopisuje rewizje - w jednej transakcji,
- *  zeby strona i jej historia nigdy sie nie rozjechaly. */
+ *  zeby strona i jej historia nigdy sie nie rozjechaly. parentSlug: undefined =
+ *  bez zmiany polozenia, null = korzen, slug = podstrona tej strony. */
 export function savePage(
   ctx: Ctx,
-  input: { slug: string; title: string; body: string; actorId: number; note?: string | null },
+  input: {
+    slug: string; title: string; body: string; actorId: number;
+    note?: string | null; parentSlug?: string | null;
+  },
 ): WikiPage {
   const slug = normalizeSlug(input.slug);
   if (RESERVED_SLUGS.has(slug)) {
@@ -109,16 +158,24 @@ export function savePage(
       | PageRow
       | undefined;
     if (existing) {
-      ctx.db
-        .prepare("UPDATE wiki_pages SET title = ?, body = ?, updated_by = ?, updated_at = ? WHERE id = ?")
-        .run(title, body, input.actorId, now, existing.id);
-    } else {
+      const parentId = input.parentSlug === undefined
+        ? existing.parent_id
+        : resolveParent(ctx, existing.id, input.parentSlug);
       ctx.db
         .prepare(
-          `INSERT INTO wiki_pages(slug, title, body, created_by, created_at, updated_by, updated_at)
-           VALUES(?,?,?,?,?,?,?)`,
+          "UPDATE wiki_pages SET title = ?, body = ?, parent_id = ?, updated_by = ?, updated_at = ? WHERE id = ?",
         )
-        .run(slug, title, body, input.actorId, now, input.actorId, now);
+        .run(title, body, parentId, input.actorId, now, existing.id);
+    } else {
+      const parentId = input.parentSlug === undefined
+        ? null
+        : resolveParent(ctx, null, input.parentSlug);
+      ctx.db
+        .prepare(
+          `INSERT INTO wiki_pages(slug, title, body, parent_id, created_by, created_at, updated_by, updated_at)
+           VALUES(?,?,?,?,?,?,?,?)`,
+        )
+        .run(slug, title, body, parentId, input.actorId, now, input.actorId, now);
     }
     const page = ctx.db.prepare("SELECT * FROM wiki_pages WHERE slug = ?").get(slug) as PageRow;
     ctx.db
@@ -126,8 +183,34 @@ export function savePage(
         "INSERT INTO wiki_revisions(page_id, actor_id, title, body, note, created_at) VALUES(?,?,?,?,?,?)",
       )
       .run(page.id, input.actorId, title, body, input.note ?? null, now);
+    // Autor widzial to, co wlasnie zapisal - jego wskaznik zmian nie ma rosnac
+    // od wlasnej edycji (unseen liczy tylko cudze rewizje, ale znacznik i tak
+    // przesuwamy, zeby "od ostatniego wejscia" znaczylo to, co mowi).
+    const lastRev = ctx.db.prepare("SELECT MAX(id) AS m FROM wiki_revisions WHERE page_id = ?")
+      .get(page.id) as { m: number };
+    ctx.db
+      .prepare(
+        `INSERT INTO wiki_reads(page_id, actor_id, last_revision_id) VALUES(?,?,?)
+         ON CONFLICT(page_id, actor_id) DO UPDATE SET last_revision_id = excluded.last_revision_id`,
+      )
+      .run(page.id, input.actorId, lastRev.m);
+    onCommitted(ctx.db, () => ctx.bus.publish(allActorIds(ctx), { type: "wiki", slug }));
     return toPage(ctx, page);
   });
+}
+
+/** Znacznik "widzialem": przesuwa wskaznik aktora na najnowsza rewizje strony. */
+export function markPageSeen(ctx: Ctx, slug: string, actorId: number): void {
+  const id = pageId(ctx, slug);
+  if (id === null) throw notFound("strona", `nie ma strony wiki "${slug}"`);
+  const last = ctx.db.prepare("SELECT MAX(id) AS m FROM wiki_revisions WHERE page_id = ?")
+    .get(id) as { m: number | null };
+  ctx.db
+    .prepare(
+      `INSERT INTO wiki_reads(page_id, actor_id, last_revision_id) VALUES(?,?,?)
+       ON CONFLICT(page_id, actor_id) DO UPDATE SET last_revision_id = excluded.last_revision_id`,
+    )
+    .run(id, actorId, last.m ?? 0);
 }
 
 export function getPage(ctx: Ctx, slug: string): WikiPage | null {
@@ -146,18 +229,33 @@ export function pageId(ctx: Ctx, slug: string): number | null {
   return r?.id ?? null;
 }
 
-export function listPages(ctx: Ctx): WikiListItem[] {
+/** Lista stron z licznikiem cudzych rewizji od ostatniego wejscia aktora.
+ *  Wlasne edycje nie podbijaja licznika - "co nowego" znaczy "co zmienili inni". */
+export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
   const rows = ctx.db
     .prepare(
-      `SELECT slug, title, body, updated_by, updated_at FROM wiki_pages ORDER BY updated_at DESC`,
+      `SELECT p.slug, p.title, p.body, p.parent_id, p.updated_by, p.updated_at,
+              (SELECT COUNT(*) FROM wiki_revisions r
+                WHERE r.page_id = p.id
+                  AND r.actor_id <> ?
+                  AND r.id > COALESCE((SELECT wr.last_revision_id FROM wiki_reads wr
+                                        WHERE wr.page_id = p.id AND wr.actor_id = ?), 0)
+              ) AS unseen
+         FROM wiki_pages p
+        ORDER BY p.updated_at DESC`,
     )
-    .all() as Array<{ slug: string; title: string; body: string; updated_by: number | null; updated_at: number }>;
+    .all(actorId, actorId) as Array<{
+      slug: string; title: string; body: string; parent_id: number | null;
+      updated_by: number | null; updated_at: number; unseen: number;
+    }>;
   return rows.map((r) => ({
     slug: r.slug,
     title: r.title,
+    parentSlug: slugOf(ctx, r.parent_id),
     updatedBy: handleOf(ctx, r.updated_by),
     updatedAt: r.updated_at,
     bytes: Buffer.byteLength(r.body, "utf8"),
+    unseen: r.unseen,
   }));
 }
 

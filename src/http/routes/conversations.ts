@@ -1,6 +1,7 @@
 /** Konwersacje: lista, zakladanie, czlonkostwo, znaczniki odczytu, otwarte pytania. */
 import { actorsByIds, getActor, getActorByHandle } from "../../core/actors.ts";
 import {
+  archiveConversation,
   assertCanRead,
   createChannel,
   ensureDirect,
@@ -9,7 +10,9 @@ import {
   leave,
   listForActor,
   members,
+  removeMember,
   setNotify,
+  updateConversation,
   type Notify,
 } from "../../core/conversations.ts";
 import { badRequest, notFound } from "../../core/errors.ts";
@@ -224,6 +227,49 @@ export function registerConversationRoutes(router: Router): void {
     }
     const [memberId] = resolveHandles(rc.ctx, [str(body.handle) ?? ""]);
     json(res, 200, { member: join(rc.ctx, id, memberId) });
+  });
+
+  /** Edycja kanalu (temat, slug). Zarzadza admin kanalu albo admin instancji. */
+  router.add("PATCH", "/api/conversations/:id", async (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    const body = await readJson(req, 4096);
+    const conversation = updateConversation(rc.ctx, {
+      convId: convId(rc),
+      actorId: actor.id,
+      isInstanceAdmin: !!actor.isAdmin,
+      topic: str(body.topic),
+      slug: str(body.slug),
+    });
+    json(res, 200, { conversation });
+  });
+
+  /** "Usun kanal" = archiwizacja (znika z list, nie przyjmuje wiadomosci,
+   *  historia zostaje). Twardego kasowania nie ma z rozmyslem. */
+  router.add("DELETE", "/api/conversations/:id", (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    archiveConversation(rc.ctx, {
+      convId: convId(rc),
+      actorId: actor.id,
+      isInstanceAdmin: !!actor.isAdmin,
+    });
+    json(res, 200, { ok: true });
+  });
+
+  /** Usuniecie uczestnika kanalu (siebie moze kazdy, innych - zarzadzajacy). */
+  router.add("DELETE", "/api/conversations/:id/members/:handle", (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    const target = getActorByHandle(rc.ctx, String(rc.params.handle ?? ""));
+    if (!target) throw notFound("aktor", `nie ma aktora @${rc.params.handle}`);
+    removeMember(rc.ctx, {
+      convId: convId(rc),
+      actorId: actor.id,
+      targetActorId: target.id,
+      isInstanceAdmin: !!actor.isAdmin,
+    });
+    json(res, 200, { ok: true });
   });
 
   router.add("POST", "/api/conversations/:id/notify", async (req, res, rc) => {

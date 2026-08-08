@@ -45,6 +45,8 @@ export type PresenceRow = {
   online: boolean;
   stale: boolean;
   typing: boolean;
+  /** Gdzie pisze: "c:<convId>" / "w:<slug wiki>" / null (sygnal bez miejsca). */
+  typingIn: string | null;
   busy: boolean;
 };
 
@@ -105,11 +107,39 @@ export function setDoing(ctx: Ctx, sessionId: string, doing: string | null): voi
   ctx.bus.publish(allActorIds(ctx), { type: "presence" });
 }
 
-export function signal(ctx: Ctx, sessionId: string, kind: "typing" | "busy"): void {
-  const col = kind === "typing" ? "typing_at" : "busy_at";
+/** Sygnal typing/busy. Dla typing mozna podac MIEJSCE ("c:<convId>" / "w:<slug>")
+ *  oraz stop=true, gdy autor rozmyslil sie i kuleczka ma zniknac od razu
+ *  (zamiast czekac na TTL). */
+export function signal(
+  ctx: Ctx,
+  sessionId: string,
+  kind: "typing" | "busy",
+  opts?: { typingIn?: string | null; stop?: boolean },
+): void {
+  const now = ctx.now();
+  if (kind === "typing") {
+    if (opts?.stop) {
+      ctx.db
+        .prepare("UPDATE sessions SET typing_at = NULL, typing_in = NULL, last_seen_at = ? WHERE id = ?")
+        .run(now, sessionId);
+    } else {
+      ctx.db
+        .prepare("UPDATE sessions SET typing_at = ?, typing_in = ?, last_seen_at = ? WHERE id = ?")
+        .run(now, opts?.typingIn ? String(opts.typingIn).slice(0, 100) : null, now, sessionId);
+    }
+  } else {
+    ctx.db
+      .prepare("UPDATE sessions SET busy_at = ?, last_seen_at = ? WHERE id = ?")
+      .run(now, now, sessionId);
+  }
+  ctx.bus.publish(allActorIds(ctx), { type: "presence" });
+}
+
+/** Wyslanie wiadomosci konczy pisanie - kuleczka znika bez czekania na TTL. */
+export function clearTyping(ctx: Ctx, sessionId: string): void {
   ctx.db
-    .prepare(`UPDATE sessions SET ${col} = ?, last_seen_at = ? WHERE id = ?`)
-    .run(ctx.now(), ctx.now(), sessionId);
+    .prepare("UPDATE sessions SET typing_at = NULL, typing_in = NULL WHERE id = ?")
+    .run(sessionId);
   ctx.bus.publish(allActorIds(ctx), { type: "presence" });
 }
 
@@ -128,6 +158,7 @@ type SessionRow = {
   cwd: string | null;
   last_seen_at: number;
   typing_at: number | null;
+  typing_in: string | null;
   busy_at: number | null;
   doing: string | null;
   ended_at: number | null;
@@ -138,7 +169,7 @@ export function presence(ctx: Ctx): PresenceRow[] {
   const rows = ctx.db
     .prepare(
       `SELECT s.id, s.actor_id, a.handle, a.display_name, s.label, s.kind, s.cwd,
-              s.last_seen_at, s.typing_at, s.busy_at, s.doing, s.ended_at
+              s.last_seen_at, s.typing_at, s.typing_in, s.busy_at, s.doing, s.ended_at
          FROM sessions s JOIN actors a ON a.id = s.actor_id
         ORDER BY a.handle, s.label, s.id`,
     )
@@ -170,6 +201,7 @@ export function presence(ctx: Ctx): PresenceRow[] {
       online: !r.ended_at && age < ONLINE_WINDOW,
       stale,
       typing: r.typing_at !== null && now - r.typing_at < TYPING_TTL,
+      typingIn: r.typing_in,
       busy: r.busy_at !== null && now - r.busy_at < BUSY_TTL,
     });
   }
@@ -196,8 +228,9 @@ export function actorLiveness(
 }
 
 /** Obecnosc jest informacja publiczna w obrebie instancji, wiec zdarzenie idzie
- *  do wszystkich. Lista jest krotka (aktorzy, nie sesje) i czytana z indeksu. */
-function allActorIds(ctx: Ctx): number[] {
+ *  do wszystkich. Lista jest krotka (aktorzy, nie sesje) i czytana z indeksu.
+ *  Eksport: wiki (tez publiczna) uzywa tej samej listy odbiorcow. */
+export function allActorIds(ctx: Ctx): number[] {
   const rows = ctx.db.prepare("SELECT id FROM actors WHERE disabled_at IS NULL").all() as Array<{
     id: number;
   }>;

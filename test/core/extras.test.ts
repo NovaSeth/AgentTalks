@@ -482,6 +482,62 @@ test("wiki: slug kolidujacy z trasa (search) jest odrzucany", async () => {
   assert.equal(getPage(ctx, "search"), null); // strona nie powstala
 });
 
+test("wiki drzewo: podstrona, przenoszenie, undefined nie rusza polozenia", async () => {
+  const { savePage, getPage } = await import("../../src/core/wiki.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala");
+  savePage(ctx, { slug: "infra", title: "Infra", body: "korzen", actorId: a.id });
+  savePage(ctx, { slug: "vps", title: "VPS", body: "pod infra", actorId: a.id, parentSlug: "infra" });
+  assert.equal(getPage(ctx, "vps")!.parentSlug, "infra");
+  // edycja bez pola parentSlug zostawia strone tam, gdzie byla
+  savePage(ctx, { slug: "vps", title: "VPS", body: "edycja tresci", actorId: a.id });
+  assert.equal(getPage(ctx, "vps")!.parentSlug, "infra");
+  // null przenosi do korzenia
+  savePage(ctx, { slug: "vps", title: "VPS", body: "edycja tresci", actorId: a.id, parentSlug: null });
+  assert.equal(getPage(ctx, "vps")!.parentSlug, null);
+});
+
+test("wiki drzewo: cykl (pod soba / pod potomkiem) jest odrzucany", async () => {
+  const { savePage } = await import("../../src/core/wiki.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala");
+  savePage(ctx, { slug: "a", title: "A", body: "x", actorId: a.id });
+  savePage(ctx, { slug: "b", title: "B", body: "x", actorId: a.id, parentSlug: "a" });
+  assert.throws(
+    () => savePage(ctx, { slug: "a", title: "A", body: "x", actorId: a.id, parentSlug: "a" }),
+    /pod soba/,
+  );
+  assert.throws(
+    () => savePage(ctx, { slug: "a", title: "A", body: "x", actorId: a.id, parentSlug: "b" }),
+    /pod soba|potomkiem/,
+  );
+  // rodzic musi istniec
+  assert.throws(
+    () => savePage(ctx, { slug: "c", title: "C", body: "x", actorId: a.id, parentSlug: "nie-ma" }),
+    /nie ma strony/,
+  );
+});
+
+test("wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie", async () => {
+  const { savePage, listPages, markPageSeen } = await import("../../src/core/wiki.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  savePage(ctx, { slug: "notatki", title: "Notatki", body: "od ali", actorId: a.id });
+  // autor ma zero (wlasny zapis przesuwa znacznik), bob widzi jedna cudza rewizje
+  assert.equal(listPages(ctx, a.id)[0].unseen, 0);
+  assert.equal(listPages(ctx, b.id)[0].unseen, 1);
+  markPageSeen(ctx, "notatki", b.id);
+  assert.equal(listPages(ctx, b.id)[0].unseen, 0);
+  // kolejna edycja ali podbija bobowi licznik, ali nie
+  savePage(ctx, { slug: "notatki", title: "Notatki", body: "v2", actorId: a.id });
+  assert.equal(listPages(ctx, b.id)[0].unseen, 1);
+  assert.equal(listPages(ctx, a.id)[0].unseen, 0);
+  // edycja boba: jego znacznik idzie na koniec (0), a ala widzi cudza rewizje
+  savePage(ctx, { slug: "notatki", title: "Notatki", body: "v3 od boba", actorId: b.id });
+  assert.equal(listPages(ctx, b.id)[0].unseen, 0);
+  assert.equal(listPages(ctx, a.id)[0].unseen, 1);
+});
+
 test("wiki: wyszukiwarka znajduje po tresci i tytule", async () => {
   const { savePage, searchWiki } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
@@ -519,4 +575,17 @@ test("wiki: zalacznik jest publiczny dla kazdego zalogowanego", async () => {
   // obcy, nie autor, nie czlonek zadnej rozmowy - a i tak widzi zalacznik wiki
   assert.ok(getFileInfo(ctx, f.id, obcy.id), "zalacznik wiki nie jest publiczny");
   assert.equal(readFile(ctx, f.id, obcy.id).data.toString(), "schemat");
+});
+
+test("news: aktor dostaje nowosci dokladnie raz na wersje tresci", async () => {
+  const { firstConnectNews, newsHash } = await import("../../src/core/news.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  if (!newsHash()) return; // srodowisko bez NEWS.md - mechanizm spi
+  const first = firstConnectNews(ctx, a.id);
+  assert.ok(first && first.text.length > 0 && first.prompt.length > 0);
+  assert.equal(firstConnectNews(ctx, a.id), null, "nowosci podane drugi raz temu samemu aktorowi");
+  // niezaleznie per aktor
+  assert.ok(firstConnectNews(ctx, b.id));
+  assert.equal(firstConnectNews(ctx, b.id), null);
 });

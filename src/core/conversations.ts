@@ -13,7 +13,7 @@
  *   dm      - dokladnie dwoch, tworzona przez ensureDirect
  *   group   - trzech i wiecej, tworzona przez ensureDirect
  */
-import { tx } from "../store/db.ts";
+import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
 import { badRequest, conflict, forbidden, notFound } from "./errors.ts";
 import { normalizeSlug } from "./ids.ts";
@@ -251,4 +251,86 @@ export function recipientsOf(ctx: Ctx, convId: number): number[] {
     .prepare("SELECT actor_id FROM members WHERE conversation_id = ?")
     .all(convId) as Array<{ actor_id: number }>;
   return rows.map((r) => r.actor_id);
+}
+
+// ------------------------------------------------------ zarzadzanie kanalem
+
+/** Kanalem zarzadza jego admin (rola w members) albo admin instancji. */
+function assertCanManage(ctx: Ctx, convId: number, actorId: number, isInstanceAdmin: boolean): Conversation {
+  const conv = getConversation(ctx, convId);
+  if (!conv) throw notFound("konwersacja", `nie ma konwersacji ${convId}`);
+  if (isInstanceAdmin) return conv;
+  const m = getMember(ctx, convId, actorId);
+  if (!m || m.role !== "admin") {
+    throw forbidden("brak_uprawnien", "tym kanalem zarzadza jego admin (albo admin instancji)");
+  }
+  return conv;
+}
+
+/** Edycja kanalu: temat i (dla kanalow) slug. DM/grupa moze zmienic tylko temat -
+ *  nazwa rozmowy bezposredniej to jej uczestnicy, nie etykieta. */
+export function updateConversation(
+  ctx: Ctx,
+  input: { convId: number; actorId: number; isInstanceAdmin: boolean; topic?: string; slug?: string },
+): Conversation {
+  const conv = assertCanManage(ctx, input.convId, input.actorId, input.isInstanceAdmin);
+  return tx(ctx.db, () => {
+    if (input.slug !== undefined) {
+      if (conv.kind !== "public" && conv.kind !== "private") {
+        throw badRequest("bez_slug", "nazwe (slug) ma tylko kanal, nie rozmowa bezposrednia");
+      }
+      const slug = normalizeSlug(input.slug);
+      const taken = getBySlug(ctx, slug);
+      if (taken && taken.id !== conv.id) throw conflict("kanal_istnieje", `kanal "${slug}" juz istnieje`);
+      ctx.db.prepare("UPDATE conversations SET slug = ? WHERE id = ?").run(slug, conv.id);
+    }
+    if (input.topic !== undefined) {
+      ctx.db.prepare("UPDATE conversations SET topic = ? WHERE id = ?").run(String(input.topic), conv.id);
+    }
+    const updated = getConversation(ctx, conv.id)!;
+    onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, conv.id), {
+      type: "conversation", conversationId: conv.id,
+    }));
+    return updated;
+  });
+}
+
+/** "Usuniecie" kanalu = archiwizacja: znika z list i nie przyjmuje wiadomosci,
+ *  ale historia zostaje i operacje da sie cofnac reczna zmiana w bazie.
+ *  Nieodwracalne kasowanie rozmow to nie jest operacja na jeden klik. */
+export function archiveConversation(
+  ctx: Ctx,
+  input: { convId: number; actorId: number; isInstanceAdmin: boolean },
+): void {
+  const conv = assertCanManage(ctx, input.convId, input.actorId, input.isInstanceAdmin);
+  if (conv.kind === "dm") throw badRequest("dm_nie_znika", "rozmowy 1:1 sie nie archiwizuje");
+  if (conv.archivedAt) return; // idempotentnie
+  const audience = recipientsOf(ctx, conv.id);
+  ctx.db.prepare("UPDATE conversations SET archived_at = ? WHERE id = ?").run(ctx.now(), conv.id);
+  onCommitted(ctx.db, () => ctx.bus.publish(audience, {
+    type: "conversation", conversationId: conv.id,
+  }));
+}
+
+/** Usuniecie uczestnika: sam siebie moze kazdy (= leave), innych tylko
+ *  zarzadzajacy kanalem. Z DM-a nie da sie nikogo usunac - to bylaby rozmowa
+ *  z samym soba. */
+export function removeMember(
+  ctx: Ctx,
+  input: { convId: number; actorId: number; targetActorId: number; isInstanceAdmin: boolean },
+): void {
+  const conv = input.targetActorId === input.actorId
+    ? (getConversation(ctx, input.convId) ?? (() => { throw notFound("konwersacja", `nie ma konwersacji ${input.convId}`); })())
+    : assertCanManage(ctx, input.convId, input.actorId, input.isInstanceAdmin);
+  if (conv.kind === "dm" || conv.kind === "group") {
+    // Spojnie z leave(): sklad rozmowy bezposredniej jest staly, ukrywa sie ja,
+    // a nie okraja z uczestnikow.
+    throw badRequest("dm_staly", "z rozmowy bezposredniej nie usuwa sie uczestnikow");
+  }
+  // Odbiorcy zdarzenia LICZENI PRZED usunieciem - usuwany tez ma sie dowiedziec.
+  const audience = recipientsOf(ctx, conv.id);
+  leave(ctx, conv.id, input.targetActorId);
+  onCommitted(ctx.db, () => ctx.bus.publish(audience, {
+    type: "conversation", conversationId: conv.id,
+  }));
 }

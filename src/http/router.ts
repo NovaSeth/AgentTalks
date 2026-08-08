@@ -34,9 +34,12 @@ export class Router {
   }
 
   match(method: string, path: string): { handler: Handler; params: Record<string, string> } | null {
+    // HEAD obsluguje kazda trasa GET: Node sam tnie cialo odpowiedzi dla HEAD,
+    // a monitoring sondujacy HEAD-em nie moze widziec 404 na zywym endpoincie.
+    const m = method.toUpperCase() === "HEAD" ? "GET" : method.toUpperCase();
     const parts = path.split("/").filter(Boolean);
     for (const route of this.#routes) {
-      if (route.method !== method.toUpperCase()) continue;
+      if (route.method !== m) continue;
       if (route.segments.length !== parts.length) continue;
       const params: Record<string, string> = {};
       let ok = true;

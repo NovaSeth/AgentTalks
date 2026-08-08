@@ -19,6 +19,7 @@ import type { Ctx } from "./ctx.ts";
 import { assertCanPost, assertCanRead, recipientsOf } from "./conversations.ts";
 import { badRequest, forbidden, notFound, tooLarge } from "./errors.ts";
 import { resolveMentions } from "./mentions.ts";
+import { clearTyping } from "./presence.ts";
 
 export const MAX_BODY_BYTES = 65536;
 const DEFAULT_LIMIT = 50;
@@ -150,6 +151,8 @@ export function postMessage(
   // moze wygenerowac drugiego pusha, bo to bylby dokladnie ten zdublowany wake,
   // przed ktorym idempotencja ma chronic.
   if (created) {
+    // Wyslana wiadomosc konczy pisanie - kuleczka "pisze" znika natychmiast.
+    if (input.sessionId) clearTyping(ctx, input.sessionId);
     onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
       type: "message",
       conversationId: input.conversationId,

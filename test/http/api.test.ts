@@ -65,6 +65,14 @@ test("health dziala bez uwierzytelnienia", async () => {
   await s.close();
 });
 
+test("HEAD na trasie GET odpowiada jak GET, bez ciala (monitoring)", async () => {
+  const s = await startTestServer();
+  const r = await fetch(s.url + "/api/health", { method: "HEAD" });
+  assert.equal(r.status, 200);
+  assert.equal(await r.text(), "");
+  await s.close();
+});
+
 test("nieznana sciezka daje 404 z kodem", async () => {
   const s = await startTestServer();
   const r = await fetch(s.url + "/api/czegos-takiego-nie-ma");

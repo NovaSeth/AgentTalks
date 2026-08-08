@@ -7,6 +7,7 @@ import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requireAdmin
   from "../auth.ts";
 import { json, readJson, str } from "../respond.ts";
 import { firstConnectGuidelines, guidelinesText } from "../../core/guidelines.ts";
+import { firstConnectNews } from "../../core/news.ts";
 import { redeemInvite } from "../../core/invites.ts";
 import type { Router } from "../router.ts";
 
@@ -105,11 +106,13 @@ export function registerAuthRoutes(router: Router): void {
   router.add("GET", "/api/me", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
     const guidelines = firstConnectGuidelines(rc.ctx, actor.id);
+    const news = firstConnectNews(rc.ctx, actor.id);
     json(res, 200, {
       actor,
       conversations: listForActor(rc.ctx, actor.id),
       unread: unreadFor(rc.ctx, actor.id),
       ...(guidelines ? { guidelines } : {}),
+      ...(news ? { news } : {}),
     });
   });
 

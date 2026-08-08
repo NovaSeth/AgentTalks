@@ -142,3 +142,82 @@ test("setNotify dolacza aktora, jesli jeszcze nie byl czlonkiem", () => {
   setNotify(ctx, c.id, b.id, "all");
   assert.equal(isMember(ctx, c.id, b.id), true);
 });
+
+// --- zarzadzanie kanalem (edycja, archiwum, usuwanie uczestnikow) -----------
+
+test("updateConversation: admin kanalu zmienia temat i slug, zwykly czlonek nie", async () => {
+  const { updateConversation } = await import("../../src/core/conversations.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  const c = createChannel(ctx, { slug: "stary", kind: "public", createdBy: a.id });
+  join(ctx, c.id, b.id);
+  const upd = updateConversation(ctx, {
+    convId: c.id, actorId: a.id, isInstanceAdmin: false, topic: "Nowy temat", slug: "nowy",
+  });
+  assert.equal(upd.topic, "Nowy temat");
+  assert.equal(upd.slug, "nowy");
+  assert.throws(
+    () => updateConversation(ctx, { convId: c.id, actorId: b.id, isInstanceAdmin: false, topic: "hack" }),
+    /zarzadza/,
+  );
+  // admin instancji moze mimo braku roli w kanale
+  const upd2 = updateConversation(ctx, { convId: c.id, actorId: b.id, isInstanceAdmin: true, topic: "od admina" });
+  assert.equal(upd2.topic, "od admina");
+});
+
+test("updateConversation: slug zajety przez inny kanal jest odrzucany, dm bez sluga", async () => {
+  const { updateConversation } = await import("../../src/core/conversations.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  createChannel(ctx, { slug: "zajety", kind: "public", createdBy: a.id });
+  const c2 = createChannel(ctx, { slug: "wolny", kind: "public", createdBy: a.id });
+  assert.throws(
+    () => updateConversation(ctx, { convId: c2.id, actorId: a.id, isInstanceAdmin: false, slug: "zajety" }),
+    /istnieje/,
+  );
+  const dm = ensureDirect(ctx, [a.id, b.id]);
+  assert.throws(
+    () => updateConversation(ctx, { convId: dm.id, actorId: a.id, isInstanceAdmin: true, slug: "x" }),
+    /slug/,
+  );
+});
+
+test("archiveConversation: znika z list, nie przyjmuje wiadomosci, dm nietykalny", async () => {
+  const { archiveConversation, assertCanPost: acp } = await import("../../src/core/conversations.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  const c = createChannel(ctx, { slug: "do-kasacji", kind: "public", createdBy: a.id });
+  archiveConversation(ctx, { convId: c.id, actorId: a.id, isInstanceAdmin: false });
+  assert.equal(listForActor(ctx, a.id).some((x) => x.id === c.id), false);
+  assert.throws(() => acp(ctx, c.id, a.id), /zarchiwizowana/);
+  const dm = ensureDirect(ctx, [a.id, b.id]);
+  assert.throws(
+    () => archiveConversation(ctx, { convId: dm.id, actorId: a.id, isInstanceAdmin: true }),
+    /1:1/,
+  );
+});
+
+test("removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie", async () => {
+  const { removeMember } = await import("../../src/core/conversations.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob"), c3 = mkActor(ctx, "celina");
+  const c = createChannel(ctx, { slug: "priv", kind: "private", createdBy: a.id });
+  join(ctx, c.id, b.id);
+  join(ctx, c.id, c3.id);
+  // zwykly czlonek nie wyrzuca innych
+  assert.throws(
+    () => removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: c3.id, isInstanceAdmin: false }),
+    /zarzadza/,
+  );
+  // sam siebie - wolno
+  removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: b.id, isInstanceAdmin: false });
+  assert.equal(isMember(ctx, c.id, b.id), false);
+  // admin kanalu wyrzuca innych
+  removeMember(ctx, { convId: c.id, actorId: a.id, targetActorId: c3.id, isInstanceAdmin: false });
+  assert.equal(isMember(ctx, c.id, c3.id), false);
+  const grp = ensureDirect(ctx, [a.id, b.id, c3.id]);
+  assert.throws(
+    () => removeMember(ctx, { convId: grp.id, actorId: a.id, targetActorId: b.id, isInstanceAdmin: true }),
+    /bezposredniej/,
+  );
+});

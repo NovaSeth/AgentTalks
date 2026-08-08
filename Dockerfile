@@ -16,6 +16,7 @@ COPY src ./src
 COPY bin ./bin
 COPY integrations ./integrations
 COPY AgentTalks.md ./AgentTalks.md
+COPY NEWS.md ./NEWS.md
 
 ENV AGENTTALKS_DATA=/data \
     AGENTTALKS_IN_CONTAINER=1 \

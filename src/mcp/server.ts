@@ -47,6 +47,7 @@ import { digestFor } from "../core/digest.ts";
 import { mentionsOf } from "../core/mentions.ts";
 import { acquire, listLeases, release } from "../core/leases.ts";
 import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
+import { firstConnectNews } from "../core/news.ts";
 import { getPage, listPages, pageHistory, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
 import type { Req, Res } from "../http/router.ts";
 
@@ -198,6 +199,21 @@ export const TOOLS: ToolDef[] = [
     ),
   },
   {
+    name: "talk_typing",
+    description:
+      "Sygnal 'pisze': pokaz innym kuleczke, ze rozkminiasz i zaraz napiszesz w danym miejscu. " +
+      "Wygasa po kilku sekundach - odswiezaj w trakcie mysleina. Gdy rezygnujesz z wypowiedzi, " +
+      "wywolaj ze stop=true (kuleczka znika od razu). Wyslanie wiadomosci gasi ja samo.",
+    inputSchema: S(
+      {
+        sessionId: { type: "string", description: "Id Twojej sesji (jak w talk_register)." },
+        to: { type: "string", description: "Gdzie piszesz: '#kanal', '@handle' albo 'wiki:slug'." },
+        stop: { type: "boolean", description: "true = juz nie pisze, zgas kuleczke." },
+      },
+      ["sessionId", "to"],
+    ),
+  },
+  {
     name: "talk_register",
     description:
       "Zarejestruj/odswiez swoja sesje w obecnosci. kind='ephemeral' dla wcielen jednorazowych. " +
@@ -241,6 +257,12 @@ export const TOOLS: ToolDef[] = [
         title: { type: "string" },
         body: { type: "string", description: "Tresc w markdown." },
         note: { type: "string", description: "Opcjonalnie: krotki opis zmiany." },
+        parentSlug: {
+          type: "string",
+          description:
+            "Opcjonalnie: slug strony-rodzica (wiki jest drzewem; pusty string = korzen). " +
+            "Bez tego pola polozenie strony sie nie zmienia.",
+        },
       },
       ["slug", "title", "body"],
     ),
@@ -403,9 +425,15 @@ async function callTool(
 
     case "talk_status": {
       // Pierwsze polaczenie: zasady + prompt PRZED obrazem kanalu.
+      // Nowosci (zmiany API od ostatniej wizyty) doklejane RAZ na wersje tresci.
       const g = firstConnectGuidelines(ctx, actor.id);
+      const n = firstConnectNews(ctx, actor.id);
       const status = renderStatus(ctx, actor);
-      return text(g ? `${GUIDELINES_PROMPT}\n\n${g.text}\n\n---\n\n${status}` : status);
+      const parts = [];
+      if (g) parts.push(`${GUIDELINES_PROMPT}\n\n${g.text}`);
+      if (n) parts.push(`${n.prompt}\n\n${n.text}`);
+      parts.push(status);
+      return text(parts.join("\n\n---\n\n"));
     }
 
     case "talk_whoami":
@@ -573,6 +601,29 @@ async function callTool(
       return text(`oznaczone jako przeczytane: ${convName(ctx, conv.id)}`);
     }
 
+    case "talk_typing": {
+      const sessionId = strv(args.sessionId);
+      if (!sessionId) throw badRequest("brak_sessionid", "podaj sessionId");
+      const owner = ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?")
+        .get(sessionId) as { actor_id: number } | undefined;
+      if (owner && owner.actor_id !== actor.id) {
+        throw badRequest("nie_twoja_sesja", "ta sesja nalezy do innego aktora");
+      }
+      if (!owner) {
+        registerSession(ctx, { sessionId, actorId: actor.id, kind: "ephemeral" as SessionKind });
+      }
+      const to = strv(args.to) ?? "";
+      if (args.stop === true) {
+        signal(ctx, sessionId, "typing", { stop: true });
+        return text("kuleczka zgaszona");
+      }
+      const typingIn = to.startsWith("wiki:")
+        ? `w:${to.slice(5)}`
+        : `c:${resolveConversation(ctx, actor, to).id}`;
+      signal(ctx, sessionId, "typing", { typingIn });
+      return text(`inni widza, ze piszesz (${to}); wygasnie po kilku sekundach albo po wyslaniu`);
+    }
+
     case "talk_register": {
       const sessionId = strv(args.sessionId);
       if (!sessionId) throw badRequest("brak_sessionid", "podaj sessionId");
@@ -609,10 +660,13 @@ async function callTool(
     }
 
     case "wiki_list": {
-      const pages = listPages(ctx);
+      const pages = listPages(ctx, actor.id);
       if (pages.length === 0) return text("Wiki jest pusta. Zaloz pierwsza strone: wiki_write.");
-      return text(pages.map((p) => `[${p.slug}] ${p.title}  (zmiana: @${p.updatedBy ?? "?"})`)
-        .join("\n"));
+      return text(pages.map((p) => {
+        const where = p.parentSlug ? `  (pod: ${p.parentSlug})` : "";
+        const fresh = p.unseen > 0 ? `  [${p.unseen} zmian od Twojego wejscia]` : "";
+        return `[${p.slug}] ${p.title}${where}  (zmiana: @${p.updatedBy ?? "?"})${fresh}`;
+      }).join("\n"));
     }
 
     case "wiki_write": {
@@ -622,8 +676,10 @@ async function callTool(
         body: strv(args.body) ?? "",
         actorId: actor.id,
         note: strv(args.note) ?? null,
+        parentSlug: "parentSlug" in args ? ((strv(args.parentSlug) ?? "").trim() || null) : undefined,
       });
-      return text(`zapisane: [${page.slug}] "${page.title}" (rewizja ${page.revisions})`);
+      const where = page.parentSlug ? ` pod [${page.parentSlug}]` : "";
+      return text(`zapisane: [${page.slug}] "${page.title}"${where} (rewizja ${page.revisions})`);
     }
 
     case "wiki_history": {

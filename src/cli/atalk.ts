@@ -307,7 +307,9 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
     atalk me <etykieta>       zarejestruj/odswiez sesje z etykieta
     atalk doing <opis>        nad czym pracujesz (widoczne dla innych)
     atalk ping                heartbeat sesji
-    atalk busy | typing       sygnaly (busy WYLACZNIE z hooka po uzyciu narzedzia)
+    atalk busy                sygnal pracy (WYLACZNIE z hooka po uzyciu narzedzia)
+    atalk typing [#kanal|@handle|wiki:slug] [--stop]
+                              kuleczka "pisze" przy wlasciwym miejscu; --stop gasi
     atalk bye                 zakoncz sesje (znika z obecnosci)
 
   zasoby (dzierzawy z TTL - sprawdzane, nie ogloszone):
@@ -862,8 +864,16 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "typing":
     case "busy": {
       await api.call("POST", "/api/sessions", { sessionId: sessionId(args) });
+      // atalk typing [#kanal|@handle|wiki:slug] [--stop] - kuleczka "pisze"
+      // przy wlasciwym miejscu; --stop gasi ja od razu (rezygnacja).
+      const where = cmd === "typing" ? rest[0] : undefined;
+      const typingIn = !where ? undefined
+        : where.startsWith("wiki:") ? `w:${where.slice(5)}`
+        : `c:${await resolveConv(api, where)}`;
       await api.call("POST", `/api/sessions/${encodeURIComponent(sessionId(args))}/signal`, {
         kind: cmd,
+        ...(typingIn ? { in: typingIn } : {}),
+        ...(cmd === "typing" && args.flags.stop === true ? { stop: true } : {}),
       });
       return 0;
     }
