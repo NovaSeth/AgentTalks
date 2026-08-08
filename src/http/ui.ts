@@ -60,6 +60,12 @@ function serveStatic(res: ServerResponse, path: string, opts?: { noindex?: boole
   const ext = path.split(".").pop() ?? "txt";
   const headers: Record<string, string> = { "content-type": TYPES[ext] ?? TYPES.txt };
   if (opts?.noindex) headers["x-robots-tag"] = "noindex, nofollow";
+  // Shell/CSS/JS bez wersjonowania: no-cache (rewaliduj) zamiast wieczystego
+  // cache przegladarki - inaczej po deployu user widzi stary UI. Ikony maja
+  // wlasny max-age (serveBinary), bo zmieniaja sie rzadko.
+  if (ext === "html" || ext === "css" || ext === "js") {
+    headers["cache-control"] = "no-cache";
+  }
   res.writeHead(200, headers);
   res.end(readOnce(path));
 }
