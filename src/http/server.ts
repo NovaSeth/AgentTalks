@@ -13,6 +13,7 @@ import { registerConversationRoutes } from "./routes/conversations.ts";
 import { registerMessageRoutes } from "./routes/messages.ts";
 import { registerExtraRoutes } from "./routes/extras.ts";
 import { registerWikiRoutes } from "./routes/wiki.ts";
+import { registerUiRoutes, siteGateBlocks } from "./ui.ts";
 import { longPollHandler, sseHandler } from "./sse.ts";
 import { unauthorized } from "../core/errors.ts";
 
@@ -66,6 +67,8 @@ export function buildRouter(): Router {
   router.add("GET", "/mcp", (_req, res) => {
     json(res, 405, { error: "serwer MCP jest bezstanowy - uzyj POST", code: "tylko_post" });
   });
+  // UI, bramka, publiczny onboarding - montowane na koncu (najbardziej ogolne trasy).
+  registerUiRoutes(router);
   return router;
 }
 
@@ -76,6 +79,8 @@ export function createServer(ctx: Ctx, config: Config): Server {
     void (async () => {
       try {
         const url = new URL(req.url ?? "/", "http://localhost");
+        // Bramka anty-bot PRZED routingiem: UI za haslem, API/MCP/publiczne wolne.
+        if (siteGateBlocks(req, res, config, url.pathname)) return;
         const match = router.match(req.method ?? "GET", url.pathname);
         if (!match) {
           json(res, 404, { error: "nie ma takiej sciezki", code: "nie_znaleziono" });

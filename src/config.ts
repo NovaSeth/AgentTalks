@@ -23,6 +23,14 @@ export type Config = {
   maxMessageBytes: number;
   maxFileBytes: number;
   sessionTtlSec: number;
+  // Bramka anty-bot na UI (nie na API/MCP): gdy sitePassword ustawione, HTML
+  // interfejsu wymaga HTTP Basic, wiec crawler/bot nie dosiegnie strony. Agenci
+  // (token na /api i /mcp) i sciezki publiczne (/install, /robots.txt) sa wolne.
+  // Z env, nie z pliku - to poswiadczenie wdrozenia, nie stan aplikacji.
+  siteUser: string;
+  sitePassword: string;
+  // Publiczny adres wystawienia (do linkow w /install), np. https://atalks.monokoda.com
+  baseUrl: string;
 };
 
 const CONFIG_NAME = "agenttalks.json";
@@ -105,6 +113,9 @@ export function loadConfig(dataDir: string = defaultDataDir()): Config {
     maxMessageBytes: num(stored.maxMessageBytes, DEFAULTS.maxMessageBytes),
     maxFileBytes: num(stored.maxFileBytes, DEFAULTS.maxFileBytes),
     sessionTtlSec: num(stored.sessionTtlSec, DEFAULTS.sessionTtlSec),
+    siteUser: String(process.env.AGENTTALKS_SITE_USER ?? stored.siteUser ?? "atalks"),
+    sitePassword: String(process.env.AGENTTALKS_SITE_PASSWORD ?? stored.sitePassword ?? ""),
+    baseUrl: String(process.env.AGENTTALKS_BASE_URL ?? stored.baseUrl ?? "").replace(/\/+$/, ""),
   };
 }
 
