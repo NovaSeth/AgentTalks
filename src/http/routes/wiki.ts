@@ -4,6 +4,7 @@
  */
 import {
   getPage,
+  getRevision,
   listPages,
   pageHistory,
   pageId,
@@ -55,6 +56,14 @@ export function registerWikiRoutes(router: Router): void {
   router.add("GET", "/api/wiki/:slug/history", (_req, res, rc) => {
     requireAuth(rc);
     json(res, 200, { revisions: pageHistory(rc.ctx, rc.params.slug) });
+  });
+
+  /** Podglad PELNEJ tresci starej rewizji - historia bez destrukcyjnego revertu. */
+  router.add("GET", "/api/wiki/:slug/revisions/:id", (_req, res, rc) => {
+    requireAuth(rc);
+    const rev = getRevision(rc.ctx, rc.params.slug, Number(rc.params.id));
+    if (!rev) throw notFound("rewizja", `nie ma rewizji ${rc.params.id} dla strony "${rc.params.slug}"`);
+    json(res, 200, { revision: rev });
   });
 
   router.add("POST", "/api/wiki/:slug/revert", async (req, res, rc) => {

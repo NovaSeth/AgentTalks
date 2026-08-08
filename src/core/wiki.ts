@@ -204,6 +204,35 @@ export function pageHistory(ctx: Ctx, slug: string): WikiRevision[] {
   }));
 }
 
+/** Pelna tresc pojedynczej rewizji - do PODGLADU starej wersji w historii,
+ *  bez destrukcyjnego revertu. Rewizja musi nalezec do strony o danym slugu
+ *  (id rewizji sa globalne, wiec bez tego warunku numer z innej strony bylby
+ *  wyrocznia cudzej tresci... wiki jest publiczna, ale porzadek to porzadek). */
+export function getRevision(
+  ctx: Ctx,
+  slug: string,
+  revisionId: number,
+): (WikiRevision & { body: string }) | null {
+  const id = pageId(ctx, slug);
+  if (id === null) return null;
+  const r = ctx.db
+    .prepare(
+      "SELECT id, actor_id, title, body, note, created_at FROM wiki_revisions WHERE id = ? AND page_id = ?",
+    )
+    .get(revisionId, id) as
+    | { id: number; actor_id: number; title: string; body: string; note: string | null; created_at: number }
+    | undefined;
+  if (!r) return null;
+  return {
+    id: r.id,
+    actor: handleOf(ctx, r.actor_id),
+    title: r.title,
+    body: r.body,
+    note: r.note,
+    createdAt: r.created_at,
+  };
+}
+
 /** Przywraca stronie tresc z rewizji, zapisujac to jako NOWA rewizje - historia
  *  jest dopisywana, nigdy przepisywana, wiec revert tez zostawia slad. */
 export function revertPage(

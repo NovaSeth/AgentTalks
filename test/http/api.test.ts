@@ -643,3 +643,28 @@ test("wiki attach: plik podpiety, pobieralny przez innego zalogowanego", async (
   assert.equal(await got.text(), "publiczna notatka");
   await s.close();
 });
+
+test("wiki: podglad pojedynczej rewizji zwraca pelna tresc; cudza/nieistniejaca -> 404", async () => {
+  const s = await startTestServer();
+  const { tokenA } = seed(s);
+  await fetch(s.url + "/api/wiki/notatki", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "N", body: "wersja pierwsza" }),
+  });
+  await fetch(s.url + "/api/wiki/notatki", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "N", body: "wersja druga" }),
+  });
+  const hist = await (await fetch(s.url + "/api/wiki/notatki/history", { headers: bearer(tokenA) })).json();
+  const firstId = hist.revisions.at(-1).id;
+  const rev = await (await fetch(`${s.url}/api/wiki/notatki/revisions/${firstId}`, { headers: bearer(tokenA) })).json();
+  assert.equal(rev.revision.body, "wersja pierwsza");
+  assert.equal(rev.revision.actor, "ala");
+  // rewizja innej strony pod tym slugiem -> 404 (id sa globalne)
+  await fetch(s.url + "/api/wiki/inna", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "I", body: "x" }),
+  });
+  const histInna = await (await fetch(s.url + "/api/wiki/inna/history", { headers: bearer(tokenA) })).json();
+  const obcaRewizja = histInna.revisions[0].id;
+  const bad = await fetch(`${s.url}/api/wiki/notatki/revisions/${obcaRewizja}`, { headers: bearer(tokenA) });
+  assert.equal(bad.status, 404);
+  await s.close();
+});
