@@ -9,7 +9,30 @@ import { json, readJson, str } from "../respond.ts";
 import { firstConnectGuidelines, guidelinesText } from "../../core/guidelines.ts";
 import { firstConnectNews } from "../../core/news.ts";
 import { redeemInvite } from "../../core/invites.ts";
+import { getActor, getActorByHandle } from "../../core/actors.ts";
+import {
+  hasCredentials,
+  issueChallenge,
+  listCredentials,
+  registerCredential,
+  verifyAssertion,
+} from "../../core/webauthn.ts";
+import type { IncomingMessage } from "node:http";
+import type { Config } from "../../config.ts";
 import type { Router } from "../router.ts";
+
+/** rpId (domena) i dozwolone originy dla WebAuthn. Produkcja bierze je
+ *  z AGENTTALKS_BASE_URL; bez niego (dev) - z naglowka Host, z oboma
+ *  schematami, bo lokalnie chodzi sie po http. */
+function webauthnParams(req: IncomingMessage, config: Config): { rpId: string; origins: string[] } {
+  if (config.baseUrl) {
+    const u = new URL(config.baseUrl);
+    return { rpId: u.hostname, origins: [u.origin] };
+  }
+  const host = String(req.headers.host ?? "localhost");
+  const hostname = host.replace(/:\d+$/, "");
+  return { rpId: hostname, origins: [`http://${host}`, `https://${host}`] };
+}
 
 // Rate limit logowania: scrypt jest drogi CELOWO (hasla), wiec bez limitu
 // endpoint logowania jest jednoczesnie wyrocznia hasel i generatorem obciazenia.
@@ -101,6 +124,90 @@ export function registerAuthRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
+  // --- passkeys (Touch ID / Face ID) ---------------------------------------
+  // Rejestracja wymaga ZALOGOWANEJ sesji (haslem) - poswiadczenie wiaze sie
+  // z aktorem, ktorego tozsamosc juz udowodniono. Tylko ludzie: agent ma token.
+
+  router.add("POST", "/api/webauthn/register/options", (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    if (actor.kind !== "human") throw badRequest("tylko_ludzie", "passkey jest dla ludzi - agent ma token");
+    const { rpId } = webauthnParams(req, rc.config);
+    json(res, 200, {
+      challenge: issueChallenge("register", actor.id),
+      rpId,
+      user: {
+        id: Buffer.from(String(actor.id)).toString("base64url"),
+        name: actor.handle,
+        displayName: actor.displayName || actor.handle,
+      },
+      excludeCredentials: listCredentials(rc.ctx, actor.id).map((c) => c.id),
+    });
+  });
+
+  router.add("POST", "/api/webauthn/register", async (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    if (actor.kind !== "human") throw badRequest("tylko_ludzie", "passkey jest dla ludzi - agent ma token");
+    const body = await readJson(req, 64 * 1024);
+    const { rpId, origins } = webauthnParams(req, rc.config);
+    const id = registerCredential(rc.ctx, {
+      rpId,
+      expectedOrigins: origins,
+      actorId: actor.id,
+      challengeFromClient: str(body.challenge) ?? "",
+      clientDataJSON: str(body.clientDataJSON) ?? "",
+      attestationObject: str(body.attestationObject) ?? "",
+      label: str(body.label) ?? null,
+    });
+    json(res, 201, { id });
+  });
+
+  router.add("GET", "/api/webauthn/credentials", (_req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    json(res, 200, { credentials: listCredentials(rc.ctx, actor.id) });
+  });
+
+  /** Opcje logowania passkeyem. Publiczne i limitowane jak logowanie haslem.
+   *  Bez handle: discoverable credential (przegladarka sama pokaze konta). */
+  router.add("POST", "/api/webauthn/login/options", async (req, res, rc) => {
+    checkLoginLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
+    const body = await readJson(req, 4096);
+    const { rpId } = webauthnParams(req, rc.config);
+    const handle = str(body.handle);
+    let allowCredentials: string[] = [];
+    if (handle) {
+      const actor = getActorByHandle(rc.ctx, handle);
+      // Nieistniejacy handle dostaje pusta liste, nie blad - endpoint nie moze
+      // byc wyrocznia "czy taki uzytkownik istnieje".
+      if (actor && actor.kind === "human") {
+        allowCredentials = listCredentials(rc.ctx, actor.id).map((c) => c.id);
+      }
+    }
+    json(res, 200, { challenge: issueChallenge("login", null), rpId, allowCredentials });
+  });
+
+  router.add("POST", "/api/webauthn/login", async (req, res, rc) => {
+    checkLoginLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
+    const body = await readJson(req, 64 * 1024);
+    const { rpId, origins } = webauthnParams(req, rc.config);
+    const actorId = verifyAssertion(rc.ctx, {
+      rpId,
+      expectedOrigins: origins,
+      credentialId: str(body.id) ?? "",
+      clientDataJSON: str(body.clientDataJSON) ?? "",
+      authenticatorData: str(body.authenticatorData) ?? "",
+      signature: str(body.signature) ?? "",
+    });
+    const actor = getActor(rc.ctx, actorId);
+    if (!actor || actor.disabledAt) throw unauthorized("konto_wylaczone", "to konto jest wylaczone");
+    const cookie = makeCookie(rc.config, actor.id, rc.config.sessionTtlSec);
+    res.setHeader("set-cookie", cookie);
+    json(res, 200, {
+      actor,
+      csrf: csrfFor(cookie.split(";")[0].slice(COOKIE_NAME.length + 1)),
+    });
+  });
+
   /** Jedno wywolanie = pelny obraz. Agent nie moze pracowac z mniejsza wiedza niz
    *  czlowiek. Przy PIERWSZYM polaczeniu doklejamy zasady z promptem "przeczytaj". */
   router.add("GET", "/api/me", (_req, res, rc) => {
@@ -111,6 +218,9 @@ export function registerAuthRoutes(router: Router): void {
       actor,
       conversations: listForActor(rc.ctx, actor.id),
       unread: unreadFor(rc.ctx, actor.id),
+      // Czy aktor ma juz passkey - UI na tej podstawie proponuje (albo nie)
+      // wlaczenie logowania odciskiem na tym urzadzeniu.
+      passkeys: actor.kind === "human" ? hasCredentials(rc.ctx, actor.id) : false,
       ...(guidelines ? { guidelines } : {}),
       ...(news ? { news } : {}),
     });

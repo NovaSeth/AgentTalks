@@ -362,5 +362,23 @@ const M8 = `
 ALTER TABLE actors ADD COLUMN news_seen TEXT;
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8];
+/**
+ * Migracja 9: PASSKEYS (WebAuthn). Logowanie Touch ID / Face ID dla ludzi:
+ * przegladarka trzyma klucz prywatny w Secure Enclave, my tylko klucz publiczny
+ * i licznik podpisow. Jeden aktor moze miec wiele poswiadczen (laptop, telefon).
+ */
+const M9 = `
+CREATE TABLE webauthn_credentials (
+  id           TEXT    PRIMARY KEY,
+  actor_id     INTEGER NOT NULL REFERENCES actors(id) ON DELETE CASCADE,
+  public_key   TEXT    NOT NULL,
+  sign_count   INTEGER NOT NULL DEFAULT 0,
+  label        TEXT,
+  created_at   INTEGER NOT NULL,
+  last_used_at INTEGER
+);
+CREATE INDEX idx_webauthn_actor ON webauthn_credentials(actor_id);
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9];
 export const SCHEMA_VERSION = MIGRATIONS.length;

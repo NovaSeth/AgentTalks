@@ -64,6 +64,15 @@ function serveStatic(res: ServerResponse, path: string, opts?: { noindex?: boole
   res.end(readOnce(path));
 }
 
+// Binaria (PNG ikon): osobny cache Bufferow - readOnce czyta utf8 i zepsulby bajty.
+const binCache = new Map<string, Buffer>();
+function serveBinary(res: ServerResponse, path: string, mime: string): void {
+  let buf = binCache.get(path);
+  if (!buf) { buf = readFileSync(path); binCache.set(path, buf); }
+  res.writeHead(200, { "content-type": mime, "cache-control": "public, max-age=86400" });
+  res.end(buf);
+}
+
 function serveTemplated(
   req: IncomingMessage, res: ServerResponse, config: Config, path: string, noindex: boolean,
 ): void {
@@ -80,7 +89,14 @@ function serveTemplated(
 const GATE_COOKIE = "at_gate";
 const GATE_TTL_SEC = 180 * 24 * 3600; // pol roku - to bramka anty-bot, nie sesja
 
-const PUBLIC = new Set(["/robots.txt", "/install", "/install.md", "/skill.md", "/favicon.ico"]);
+// Ikony sa publiczne: przegladarka pobiera favicon takze na stronie bramki,
+// a iOS apple-touch-icon przy "dodaj do ekranu poczatkowego".
+const PUBLIC = new Set([
+  "/robots.txt", "/install", "/install.md", "/skill.md", "/favicon.ico",
+  "/favicon.svg", "/apple-touch-icon.png",
+  "/icons/icon-16.png", "/icons/icon-32.png", "/icons/icon-180.png",
+  "/icons/icon-192.png", "/icons/icon-512.png",
+]);
 
 function isGatedPath(pathname: string): boolean {
   if (pathname.startsWith("/api/") || pathname === "/mcp" || pathname.startsWith("/.well-known/")) {
@@ -174,6 +190,16 @@ export function registerUiRoutes(router: Router): void {
   router.add("GET", "/app", shell);
   router.add("GET", "/app.css", (_req, res) => serveStatic(res, uiFile("app.css")));
   router.add("GET", "/app.js", (_req, res) => serveStatic(res, uiFile("app.js")));
+
+  // Znak AgentTalks: jeden wektor + PNG dla miejsc, ktore SVG nie wezma
+  // (apple-touch-icon, stare przegladarki, manifest).
+  router.add("GET", "/favicon.svg", (_req, res) => serveStatic(res, uiFile("favicon.svg")));
+  router.add("GET", "/favicon.ico", (_req, res) => serveBinary(res, uiFile("icons/icon-32.png"), "image/png"));
+  router.add("GET", "/apple-touch-icon.png", (_req, res) => serveBinary(res, uiFile("icons/icon-180.png"), "image/png"));
+  for (const size of [16, 32, 180, 192, 512]) {
+    router.add("GET", `/icons/icon-${size}.png`, (_req, res) =>
+      serveBinary(res, uiFile(`icons/icon-${size}.png`), "image/png"));
+  }
 
   // Bez indeksowania - twardo, dla botow, ktore olewaja meta.
   router.add("GET", "/robots.txt", (_req, res) => {

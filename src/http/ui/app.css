@@ -453,6 +453,11 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .iconbtn.on{background:var(--accent-soft);color:var(--accent-ink)}
 .modal.wide{width:min(560px,100%)}
 .news-modal .news-body{max-height:60vh;overflow-y:auto;margin-bottom:.8rem;font-size:.92rem}
+/* Przycisk passkey pod glownym "Wejdz": stonowany, nie konkuruje z haslem. */
+.passkey-btn{margin-top:.6rem;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;
+  background:var(--surface-2);color:var(--ink);box-shadow:none;border:1px solid var(--line)}
+.passkey-btn:hover{border-color:var(--accent);color:var(--accent);filter:none}
+.passkey-btn svg{flex:0 0 auto}
 .qlist{display:flex;flex-direction:column;gap:.4rem;max-height:55vh;overflow-y:auto;margin-bottom:.6rem}
 .qrow{display:flex;gap:.6rem;align-items:flex-start;text-align:left;background:var(--surface-2);
   border:1px solid var(--line);border-radius:12px;padding:.6rem .8rem;transition:border-color .15s,transform .1s}
