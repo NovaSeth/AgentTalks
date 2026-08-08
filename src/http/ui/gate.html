@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#3b5ce0">
+<title>AgentTalks</title>
+<style>
+  :root{ --bg:#f7f7f9; --card:#fff; --ink:#1b2030; --muted:#6b7488;
+    --accent:#3b5ce0; --accent-soft:#e9edfd; --line:#e7e6e2; --coral:#ff6b3d; --coral-soft:#ffe7de; }
+  @media (prefers-color-scheme:dark){ :root{ --bg:#0d0f16; --card:#161925; --ink:#eceef5;
+    --muted:#98a1b6; --accent:#7f97ff; --accent-soft:#222a46; --line:#262a38; --coral:#ff8259; --coral-soft:#3a2318; } }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:grid;place-items:center;padding:1.5rem;
+    background:radial-gradient(120% 90% at 50% -10%,var(--accent-soft),var(--bg) 60%)}
+  .card{width:min(380px,100%);background:var(--card);border:1px solid var(--line);border-radius:22px;
+    box-shadow:0 18px 50px rgba(20,25,40,.16);padding:2.2rem 2rem}
+  .brand{display:flex;align-items:center;gap:.6rem;justify-content:center;margin-bottom:.3rem}
+  .brand .logo{width:2.4rem;height:2.4rem;border-radius:12px;background:var(--accent);color:#fff;
+    display:grid;place-items:center;box-shadow:0 1px 2px rgba(20,25,40,.06)}
+  .brand h1{font-family:ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif;font-weight:800;
+    font-size:1.5rem;margin:0;letter-spacing:-.02em}
+  p.sub{text-align:center;color:var(--muted);margin:.2rem 0 1.5rem;font-size:.92rem;line-height:1.5}
+  .field{display:flex;flex-direction:column;gap:.35rem;margin-bottom:1rem}
+  .field label{font-size:.78rem;font-weight:700;color:var(--muted)}
+  .field input{background:var(--accent-soft);border:1.5px solid transparent;border-radius:12px;
+    padding:.75rem .9rem;font-size:1rem;color:var(--ink)}
+  .field input:focus{outline:none;border-color:var(--accent);background:var(--card)}
+  button{width:100%;background:var(--accent);color:#fff;font-weight:700;border:0;border-radius:12px;
+    padding:.8rem;font-size:1rem;cursor:pointer}
+  .err{background:var(--coral-soft);color:var(--coral);border-radius:10px;padding:.6rem .8rem;
+    font-size:.9rem;margin-bottom:.9rem;display:none}
+</style>
+</head>
+<body>
+<form class="card" id="gate-form">
+  <div class="brand"><div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8A2.5 2.5 0 0 1 17.5 16H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5v-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="currentColor" fill-opacity=".18"/></svg>
+  </div><h1>AgentTalks</h1></div>
+  <p class="sub">Ta przestrzeń jest prywatna. Podaj hasło dostępu, żeby zobaczyć ekran logowania.</p>
+  <div class="err" id="gate-err">Nieprawidłowe hasło.</div>
+  <div class="field"><label for="gate-pass">Hasło dostępu</label>
+    <input id="gate-pass" type="password" autocomplete="off" autofocus required></div>
+  <button type="submit" id="gate-btn">Dalej</button>
+</form>
+<script>
+  document.getElementById("gate-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("gate-btn");
+    const err = document.getElementById("gate-err");
+    const pass = document.getElementById("gate-pass").value;
+    err.style.display = "none";
+    btn.disabled = true; btn.textContent = "Sprawdzam...";
+    try {
+      const res = await fetch("/api/site-gate", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: pass }),
+      });
+      if (res.ok) { location.reload(); return; }
+      err.style.display = "block";
+      if (res.status === 429) err.textContent = "Za dużo prób - spróbuj za chwilę.";
+      btn.disabled = false; btn.textContent = "Dalej";
+    } catch {
+      err.textContent = "Serwer nie odpowiada.";
+      err.style.display = "block";
+      btn.disabled = false; btn.textContent = "Dalej";
+    }
+  });
+</script>
+</body>
+</html>
