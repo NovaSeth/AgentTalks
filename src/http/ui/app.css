@@ -403,6 +403,15 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .sb-empty{padding:.4rem .6rem;color:var(--faint);font-size:.85rem}
 .badge.coral{background:var(--coral);color:#fff}
 .mhint{font-size:.8rem;color:var(--muted);margin:.2rem 0 .6rem}
+.fhint{font-size:.76rem;color:var(--faint);margin-top:.3rem;line-height:1.4}
+/* Pille "radio": wybor obok siebie zamiast dropdowna. */
+.pillrow{display:flex;flex-wrap:wrap;gap:.4rem}
+.pill{padding:.4rem .8rem;border-radius:99px;border:1px solid var(--line);background:var(--surface-2);
+  color:var(--muted);font-size:.85rem;font-weight:600;transition:background .12s,color .12s,border-color .12s}
+.pill:hover{border-color:var(--accent);color:var(--ink)}
+.pill.on{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.u-error{background:var(--coral-soft);color:var(--coral);border-radius:10px;padding:.6rem .9rem;
+  margin-bottom:.8rem;display:flex;align-items:center;gap:.8rem;font-size:.88rem}
 .who-select{background:var(--surface-2);border-radius:10px;padding:.4rem;border:1.5px solid transparent;width:100%}
 .gd-body{overflow-y:auto;font-size:.92rem;line-height:1.55;color:var(--ink)}
 
