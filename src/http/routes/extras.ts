@@ -20,6 +20,13 @@ import { assertCsrf, requireAuth } from "../auth.ts";
 import { int, json, readJson, readRaw, str } from "../respond.ts";
 import type { Router } from "../router.ts";
 
+// Typy MIME, ktore przegladarka umie WYKONAC w origin aplikacji (skrypt, HTML,
+// SVG ze skryptem). Zalacznik wiki jest publiczny i miedzyuzytkownikowy, wiec
+// plik z takim typem, otwarty wprost w karcie, bylby stored-XSS. Przy serwowaniu
+// sprowadzamy je do inertnego octet-stream; nazwa pliku zostaje.
+const ACTIVE_MIME =
+  /^(?:text\/html|application\/xhtml\+xml|image\/svg\+xml|application\/(?:x-)?javascript|text\/javascript|text\/xml|application\/xml)\b/i;
+
 export function registerExtraRoutes(router: Router): void {
   // --- wzmianki i digest ---------------------------------------------------
 
@@ -123,10 +130,17 @@ export function registerExtraRoutes(router: Router): void {
   router.add("GET", "/api/files/:id", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
     const { info, data } = readFile(rc.ctx, rc.params.id, actor.id);
+    // Obrona warstwowa przed stored-XSS z zaladowanego pliku: (1) inertny typ dla
+    // aktywnych MIME, (2) wymuszone pobranie zamiast renderu, (3) brak wachania
+    // typu przez przegladarke, (4) sandbox CSP - nawet otwarty w karcie plik nie
+    // wykona skryptu w naszym origin (a tam siedzi ciasteczko sesji i UI).
+    const safeMime = ACTIVE_MIME.test(info.mime) ? "application/octet-stream" : info.mime;
     res.writeHead(200, {
-      "content-type": info.mime,
+      "content-type": safeMime,
       "content-length": data.length,
       "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(info.name)}`,
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "sandbox; default-src 'none'",
       "cache-control": "no-store",
     });
     res.end(data);

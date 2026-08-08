@@ -452,6 +452,27 @@ test("upload pliku przez API, pobranie przez czlonka, odmowa dla obcego", async 
   await s.close();
 });
 
+test("plik z aktywnym MIME (text/html) jest serwowany inertnie (anty stored-XSS)", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, dmId } = seed(s);
+  const up = await fetch(`${s.url}/api/conversations/${dmId}/files`, {
+    method: "POST",
+    headers: { authorization: (bearer(tokenA) as any).authorization,
+      "content-type": "text/html", "x-file-name": "atak.html" },
+    body: "<script>document.title='xss'</script>",
+  });
+  assert.equal(up.status, 201);
+  const fileId = (await up.json()).file.id;
+  const got = await fetch(`${s.url}/api/files/${fileId}`, { headers: bearer(tokenB) });
+  assert.equal(got.status, 200);
+  // typ zneutralizowany, wymuszone pobranie, brak wachania, sandbox
+  assert.equal(got.headers.get("content-type"), "application/octet-stream");
+  assert.match(got.headers.get("content-disposition") ?? "", /^attachment/);
+  assert.equal(got.headers.get("x-content-type-options"), "nosniff");
+  assert.match(got.headers.get("content-security-policy") ?? "", /sandbox/);
+  await s.close();
+});
+
 test("wake: rejestracja zwraca sekret raz, GET pokazuje konfiguracje bez sekretu", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
