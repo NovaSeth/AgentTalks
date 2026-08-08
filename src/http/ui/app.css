@@ -172,7 +172,8 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .wikilink{color:var(--accent);text-decoration:none;border-bottom:1px dashed color-mix(in srgb,var(--accent) 55%,transparent);font-weight:600}
 .wikilink:hover{border-bottom-style:solid}
 .wikilink.missing{color:var(--coral);border-bottom-color:color-mix(in srgb,var(--coral) 55%,transparent)}
-.messages{flex:1;overflow-y:auto;padding:1.1rem 0 .5rem;min-height:0;scroll-behavior:smooth}
+/* Zapas u dolu = wysokosc doku: ostatnia wiadomosc da sie doczytac nad kapsula. */
+.messages{flex:1;overflow-y:auto;padding:1.1rem 0 5.5rem;min-height:0;scroll-behavior:smooth}
 .day{display:flex;align-items:center;gap:.8rem;margin:1rem 1.2rem .4rem;color:var(--faint);
   font-size:.76rem;font-weight:700}
 .day::before,.day::after{content:"";height:1px;background:var(--line);flex:1}
@@ -251,12 +252,30 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 @keyframes tf-bounce{0%,55%,100%{transform:none}25%{transform:translateY(-4px)}}
 .enter{animation:enter .32s cubic-bezier(.2,.8,.3,1) both}
 
-/* ---------- COMPOSER (kapsula plywajaca nad czatem, wasza i wyśrodkowana - jak Gemini) ---------- */
+/* ---------- COMPOSER (kapsula plywajaca nad czatem - jak Gemini) ---------- */
+/* Dok = pelnoszerokosciowa warstwa nad wiadomosciami. Backdrop-blur + gradient
+   sprawiaja, ze tekst przewijajacy sie POD kapsula jest rozmyty i wygaszony,
+   a nie prześwituje surowo (feedback 2026-08-08). Wiadomosci maja zapas
+   padding-bottom, wiec da sie doczytac ostatnia bez zasloniecia. */
+.dock{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;flex-direction:column;
+  align-items:center;padding-bottom:.2rem;pointer-events:none}
+.dock::before{content:"";position:absolute;inset:0;pointer-events:none;
+  -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);
+  background:linear-gradient(to bottom, transparent, color-mix(in srgb,var(--surface) 82%,transparent) 45%);
+  -webkit-mask:linear-gradient(to bottom, transparent, #000 42%);
+  mask:linear-gradient(to bottom, transparent, #000 42%)}
+.dock > *{pointer-events:auto}
+/* Pill "nowe ponizej": nad kapsula, pojawia sie gdy nie jestes na dole. */
+.jump-newest{position:absolute;bottom:100%;left:50%;transform:translate(-50%,8px);
+  display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .9rem;border-radius:99px;
+  background:var(--accent);color:var(--on-accent);font-size:.83rem;font-weight:700;
+  box-shadow:var(--shadow-lg);opacity:0;visibility:hidden;transition:opacity .18s,transform .18s;
+  white-space:nowrap;margin-bottom:.5rem}
+.jump-newest.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
+.jump-newest svg{width:1.05em;height:1.05em}
+.jump-newest:hover{filter:brightness(1.08)}
 .composer{flex:0 0 auto;padding:0 1.1rem 1.2rem;position:relative;z-index:2;
   max-width:44rem;width:100%;margin:0 auto}
-/* delikatna smuga nad kapsula - wrazenie, ze wiadomosci "wchodza pod" input */
-.composer::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:1.6rem;
-  background:linear-gradient(to bottom, transparent, var(--surface));pointer-events:none}
 .replying{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--muted);
   background:var(--surface-2);border-radius:16px 16px 0 0;padding:.45rem .9rem;
   margin:0 .3rem -.4rem;border:1px solid var(--line);border-bottom:0;position:relative;z-index:1}
@@ -416,9 +435,12 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .gd-body{overflow-y:auto;font-size:.92rem;line-height:1.55;color:var(--ink)}
 
 /* ---------- pasek obecnosci: pisze... / pracuje ---------- */
-.presence-bar{min-height:0;max-height:0;overflow:hidden;padding:0 1.4rem;font-size:.8rem;color:var(--muted);
-  display:flex;gap:1.1rem;align-items:center;transition:max-height .25s ease,padding .25s ease}
-.presence-bar.on{max-height:1.8rem;padding:.2rem 1.4rem .35rem}
+/* Pasek "pisze"/"pracuje" siedzi w doku tuz NAD kapsula, wyrownany do jej
+   szerokosci; wlasny mask sprawia, ze nie znika pod gradientem doku. */
+.presence-bar{min-height:0;max-height:0;overflow:hidden;font-size:.82rem;color:var(--muted);
+  display:flex;gap:1.1rem;align-items:center;transition:max-height .25s ease,padding .25s ease;
+  max-width:44rem;width:100%;margin:0 auto;padding:0 1.7rem;position:relative;z-index:2}
+.presence-bar.on{max-height:2rem;padding:.15rem 1.7rem .3rem}
 .pres{display:inline-flex;align-items:center;gap:.35rem;animation:enter .3s both}
 .pres.busy{color:var(--accent)}
 .pres .dots{display:inline-flex;gap:2px;margin-left:2px}
