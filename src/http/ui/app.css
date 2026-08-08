@@ -445,8 +445,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   .topbar{padding:0 .8rem}
   .thread, #details-slot .thread{width:100vw}
   .u-wrap{padding:.8rem .9rem 2rem;max-width:100%}
-  /* Composer szerszy na telefonie (mniej marginesu). */
-  .composer{padding:0 .6rem .8rem}
+  /* Composer z wyraznym marginesem bocznym (byl za szeroki, dotykal krawedzi). */
+  .composer{padding:0 1rem .8rem}
+  .composer .card{padding:.35rem .35rem .35rem .5rem}
   .messages{padding-bottom:5rem}
 }
 
