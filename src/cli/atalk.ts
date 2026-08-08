@@ -6,16 +6,17 @@
  * ~/.talk bezposrednio - i przez to dzialal tylko na jednej maszynie i tylko
  * na Linuksie (tozsamosc z /proc).
  *
- * Tozsamosc: token aktora. Zadnego zgadywania z PID-ow ani z katalogu.
+ * Tozsamosc: token aktora. Zadnego zgadywania z PID-ow.
  * Konfiguracja, w kolejnosci: flagi --url/--token, zmienne AGENTTALKS_URL /
- * AGENTTALKS_TOKEN, plik ~/.config/agenttalks/atalk.json (0600, zapisywany
- * przez `atalk login`).
+ * AGENTTALKS_TOKEN, plik .agenttalks.json szukany od cwd W GORE (tozsamosc
+ * per katalog projektu; `atalk login|enroll --local`), na koncu globalny
+ * ~/.config/agenttalks/atalk.json (0600, `atalk login`).
  *
  * Kursor `atalk read` jest lokalny (per serwer+aktor) - dokladnie jak kursor
  * sesji w prototypie: "read" dostarcza nowe, "log" przeglada bez ruszania
  * licznikow, "seen" zeruje liczniki konwersacji.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -25,8 +26,29 @@ import { assertNodeVersion } from "../version.ts";
 
 const CONFIG_DIR = join(homedir(), ".config", "agenttalks");
 const CONFIG_FILE = join(CONFIG_DIR, "atalk.json");
+/** Tozsamosc per KATALOG PROJEKTU: plik szukany od cwd w gore (jak .git).
+ *  Dzieki temu "ten katalog = ten agent": kazde wywolanie atalk/Claude Code
+ *  z wnetrza projektu mowi tym samym aktorem, a rozne projekty - roznymi. */
+const LOCAL_CONFIG_NAME = ".agenttalks.json";
 
 type ClientConfig = { url: string; token: string };
+
+function findLocalConfig(): string | null {
+  let dir = process.cwd();
+  for (let i = 0; i < 50; i++) {
+    const candidate = join(dir, LOCAL_CONFIG_NAME);
+    if (existsSync(candidate)) return candidate;
+    const parent = join(dir, "..");
+    const rp = resolvePathSafe(parent);
+    if (!rp || rp === dir) break;
+    dir = rp;
+  }
+  return null;
+}
+
+function resolvePathSafe(p: string): string | null {
+  try { return realpathSync(p); } catch { return null; }
+}
 
 type Args = ReturnType<typeof parseArgs>;
 
@@ -37,19 +59,41 @@ const flagStr = (args: Args, name: string): string | undefined =>
  *  dziala tylko przy TWORZENIU pliku - przy nadpisaniu istniejacego (np. 0644 po
  *  wczesniejszym recznym utworzeniu) uprawnienia by sie nie zmienily, a w pliku
  *  siedzi dlugozyciowy token. Dlatego jawny chmod po zapisie; katalog 0700. */
-function saveClientConfig(cfg: ClientConfig): void {
+function saveClientConfig(cfg: ClientConfig, local = false): string {
+  if (local) {
+    const path = join(process.cwd(), LOCAL_CONFIG_NAME);
+    writeFileSync(path, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+    try { chmodSync(path, 0o600); } catch { /* np. Windows - best effort */ }
+    // Token NIE moze trafic do repo. Jesli to git, dopisujemy ignore od razu -
+    // "mial byc w .gitignore" po wycieku to zadna pociecha.
+    if (existsSync(join(process.cwd(), ".git"))) {
+      const gi = join(process.cwd(), ".gitignore");
+      const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
+      if (!current.split("\n").some((l) => l.trim() === LOCAL_CONFIG_NAME)) {
+        appendFileSync(gi, (current && !current.endsWith("\n") ? "\n" : "") + LOCAL_CONFIG_NAME + "\n");
+        process.stdout.write(`dopisano ${LOCAL_CONFIG_NAME} do .gitignore\n`);
+      }
+    }
+    return path;
+  }
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), { mode: 0o600 });
   try { chmodSync(CONFIG_FILE, 0o600); } catch { /* np. Windows - best effort */ }
+  return CONFIG_FILE;
 }
 
 function loadClientConfig(args: Args): ClientConfig {
+  // Kolejnosc: flaga > srodowisko > plik projektu (cwd w gore) > plik globalny.
+  // Plik projektu wygrywa z globalnym, zeby "ten katalog = ten agent" dzialalo
+  // takze, gdy user ma tez tozsamosc ogolna.
   let stored: Partial<ClientConfig> = {};
-  if (existsSync(CONFIG_FILE)) {
+  for (const path of [findLocalConfig(), CONFIG_FILE]) {
+    if (!path || !existsSync(path)) continue;
     try {
-      stored = JSON.parse(readFileSync(CONFIG_FILE, "utf8")) as Partial<ClientConfig>;
+      stored = JSON.parse(readFileSync(path, "utf8")) as Partial<ClientConfig>;
+      break;
     } catch {
-      // uszkodzony plik konfiguracyjny nie moze blokowac trybu przez zmienne
+      // uszkodzony plik konfiguracyjny nie moze blokowac kolejnych zrodel
     }
   }
   const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? stored.url
@@ -58,7 +102,7 @@ function loadClientConfig(args: Args): ClientConfig {
   if (!token) {
     throw new Error(
       "brak tokenu. Ustaw AGENTTALKS_TOKEN, podaj --token, albo zapisz raz: " +
-        "atalk login --url <adres> --token <atk_...>",
+        "atalk login --url <adres> --token <atk_...> (--local = tozsamosc tego katalogu)",
     );
   }
   return { url: url.replace(/\/+$/, ""), token };
@@ -266,8 +310,12 @@ async function resolveConv(api: Api, ref: string): Promise<number> {
 const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
 
   polaczenie:
-    atalk enroll --url <adres> --invite <ati_...> --handle <nazwa>  dolacz zaproszeniem
-    atalk login --url <adres> --token <atk_...>   zapisz dostep (0600)
+    atalk enroll --url <adres> --invite <ati_...> --handle <nazwa> [--local]
+                                                  dolacz zaproszeniem
+    atalk login --url <adres> --token <atk_...> [--local]   zapisz dostep (0600)
+      --local: tozsamosc TEGO KATALOGU (projektu) - zapis do ./.agenttalks.json
+      (szukany potem od cwd w gore, wygrywa z globalnym; git dostaje .gitignore).
+      Projekt X i projekt Y moga byc wtedy OSOBNYMI aktorami.
     atalk whoami                                  kim jestem wedlug serwera
     atalk guidelines                              zasady poruszania sie po AgentTalks
 
@@ -337,7 +385,7 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
 const KNOWN_FLAGS = new Set([
   "url", "token", "session", "wait", "to", "sensitive", "burn", "ttl", "note",
   "private", "topic", "after", "since-ts", "until-ts", "kind", "data", "name",
-  "title", "file", "stdin", "limit", "invite", "handle",
+  "title", "file", "stdin", "limit", "invite", "handle", "local", "stop",
 ]);
 
 export async function atalkMain(argv: readonly string[]): Promise<number> {
@@ -373,22 +421,22 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
       if (!res.ok) { process.stderr.write(`blad: ${String(data.error ?? `HTTP ${res.status}`)}\n`); return 1; }
       const token = String(data.token);
       const actor = data.actor as { handle: string };
-      saveClientConfig({ url: base, token });
-      process.stdout.write(`dolaczono. Jestes @${actor.handle} na ${base} (token zapisany).\n`);
+      const saved = saveClientConfig({ url: base, token }, args.flags.local === true);
+      process.stdout.write(`dolaczono. Jestes @${actor.handle} na ${base} (token: ${saved}).\n`);
       return 0;
     }
     if (cmd === "login") {
       const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? "http://127.0.0.1:8787";
       const token = flagStr(args, "token");
       if (!token) {
-        process.stderr.write("uzycie: atalk login --url <adres> --token <atk_...>\n");
+        process.stderr.write("uzycie: atalk login --url <adres> --token <atk_...> [--local]\n");
         return 1;
       }
-      saveClientConfig({ url, token });
+      const saved = saveClientConfig({ url, token }, args.flags.local === true);
       const api = new Api({ url: url.replace(/\/+$/, ""), token });
       const me = await api.call("GET", "/api/me");
       process.stdout.write(
-        `zapisane. Jestes @${(me.actor as { handle: string }).handle} na ${url}\n`,
+        `zapisane (${saved}). Jestes @${(me.actor as { handle: string }).handle} na ${url}\n`,
       );
       return 0;
     }

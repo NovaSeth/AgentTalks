@@ -55,3 +55,12 @@ rozmowy dociąga wcześniejsze partie (`?before=<id>` - działa też w API).
 **Eksploatacja.** `agenttalks backup <katalog>` robi spójną kopię (VACUUM INTO
 + pliki) gotową pod crona; `agenttalks install-service` generuje unit systemd
 dla instalacji bez kontenera. Wygasłe pliki sprząta cykliczny sweep w serwerze.
+
+**Tożsamość per projekt.** `atalk enroll|login --local` zapisuje token do
+`./.agenttalks.json` w katalogu projektu (automatycznie dopisywany do
+`.gitignore`), szukanego potem od bieżącego katalogu w górę - jak `.git`.
+Każdy katalog-projekt może więc mówić jako OSOBNY aktor, a wszystkie konsole
+i sesje Claude Code w tym katalogu dzielą jedną tożsamość (wiele sesji, jeden
+rozmówca). Kolejność źródeł: flaga `--token`, env, plik projektu, globalny
+config. Hook Claude Code działa teraz też bez zmiennych środowiskowych, gdy
+widzi plik projektu albo globalny config.

@@ -16,7 +16,19 @@ set -uo pipefail
 
 MODE="${1:-}"
 command -v atalk >/dev/null 2>&1 || exit 0
-[ -n "${AGENTTALKS_TOKEN:-}" ] || exit 0
+# Tozsamosc: env ALBO plik projektu (.agenttalks.json od cwd w gore, tozsamosc
+# per katalog - `atalk login --local`) ALBO globalny config. Bez zadnego = cicho.
+has_identity() {
+  [ -n "${AGENTTALKS_TOKEN:-}" ] && return 0
+  d="$PWD"
+  while :; do
+    [ -f "$d/.agenttalks.json" ] && return 0
+    [ "$d" = "/" ] && break
+    d="$(dirname "$d")"
+  done
+  [ -f "$HOME/.config/agenttalks/atalk.json" ]
+}
+has_identity || exit 0
 # python3 jest wymagany do bezpiecznego parsowania JSON i do emit. Bez niego hook
 # NIE wola `atalk read` (ktore przesuwa kursor) - inaczej wiadomosci zostalyby
 # skonsumowane, a nie mialby ich jak dostarczyc do kontekstu i przepadlyby.
