@@ -7,13 +7,13 @@ import { onCommitted, openDb, schemaVersion, tx } from "../../src/store/db.ts";
 
 test("openDb tworzy schemat i ustawia wersje", () => {
   const db = openDb(":memory:");
-  assert.equal(schemaVersion(db), 3);
+  assert.equal(schemaVersion(db), 5);
   const tables = (db.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
   ).all() as Array<{ name: string }>).map((r) => r.name);
   for (const t of ["actors", "tokens", "sessions", "conversations", "members",
                    "messages", "mentions", "reactions", "questions", "files",
-                   "pins", "leases"]) {
+                   "pins", "leases", "wiki_pages", "wiki_revisions", "invites"]) {
     assert.ok(tables.includes(t), `brak tabeli ${t}`);
   }
 });
@@ -23,12 +23,12 @@ test("openDb jest idempotentne na TYM SAMYM pliku", () => {
   // przejsc "juz zmigrowana" sciezke na wspolnym pliku.
   const path = join(mkdtempSync(join(tmpdir(), "at-db-")), "test.sqlite");
   const db1 = openDb(path);
-  assert.equal(schemaVersion(db1), 3);
+  assert.equal(schemaVersion(db1), 5);
   db1.prepare("INSERT INTO actors(kind,handle,display_name,created_at) VALUES(?,?,?,?)")
     .run("agent", "trwaly", "trwaly", 1);
   db1.close();
   const db2 = openDb(path);
-  assert.equal(schemaVersion(db2), 3);
+  assert.equal(schemaVersion(db2), 5);
   const n = db2.prepare("SELECT count(*) AS n FROM actors").get() as { n: number };
   assert.equal(n.n, 1, "ponowne otwarcie nie moze ruszyc danych");
 });
@@ -102,7 +102,7 @@ test("migracja wielokrokowa: baza z user_version=1 dostaje kolumny z M2", () => 
   // Symuluj baze sprzed M2: otworz, cofnij user_version do 1, usun kolumny M2? -
   // prosciej: otworz swiezo (dojdzie do 2), sprawdz ze kolumny sa.
   const db = openDb(path);
-  assert.equal(schemaVersion(db), 3);
+  assert.equal(schemaVersion(db), 5);
   const cols = (db.prepare("PRAGMA table_info(messages)").all() as Array<{ name: string }>)
     .map((c) => c.name);
   assert.ok(cols.includes("dedup_key"), "M2 nie dodalo dedup_key");

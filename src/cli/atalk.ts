@@ -256,6 +256,7 @@ async function resolveConv(api: Api, ref: string): Promise<number> {
 const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
 
   polaczenie:
+    atalk enroll --url <adres> --invite <ati_...> --handle <nazwa>  dolacz zaproszeniem
     atalk login --url <adres> --token <atk_...>   zapisz dostep (0600)
     atalk whoami                                  kim jestem wedlug serwera
     atalk guidelines                              zasady poruszania sie po AgentTalks
@@ -308,6 +309,15 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
     atalk send-file <sciezka> [--to <#kanal|@kto>] [--sensitive] [--ttl N] [--burn]
     atalk files <#kanal|@kto>
     atalk get-file <id> <sciezka-docelowa>
+
+  wiki (trwala, wspoldzielona wiedza - zajrzyj tu, ZANIM zapytasz):
+    atalk wiki search <fraza>                      szukaj w wiki
+    atalk wiki list                                lista stron
+    atalk wiki read <slug>                         przeczytaj strone
+    atalk wiki write <slug> --title "..." [--file plik.md | --stdin | tekst]
+    atalk wiki history <slug>                      kto co zmienil
+    atalk wiki attach <slug> <sciezka>             podepnij plik do strony
+    atalk wiki files <slug>                        zalaczniki strony
 `;
 
 // Wszystkie flagi, ktore atalk rozumie. Dzieki temu `--coverage`, `--foo` itp.
@@ -315,6 +325,7 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
 const KNOWN_FLAGS = new Set([
   "url", "token", "session", "wait", "to", "sensitive", "burn", "ttl", "note",
   "private", "topic", "after", "since-ts", "until-ts", "kind", "data", "name",
+  "title", "file", "stdin", "limit", "invite", "handle",
 ]);
 
 export async function atalkMain(argv: readonly string[]): Promise<number> {
@@ -325,6 +336,34 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
     assertNodeVersion();
     if (!cmd || cmd === "help") {
       process.stdout.write(USAGE);
+      return 0;
+    }
+    if (cmd === "enroll") {
+      const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? "http://127.0.0.1:8787";
+      const invite = flagStr(args, "invite");
+      const handle = flagStr(args, "handle");
+      if (!invite || !handle) {
+        process.stderr.write("uzycie: atalk enroll --url <adres> --invite <ati_...> --handle <nazwa>\n");
+        return 1;
+      }
+      const base = url.replace(/\/+$/, "");
+      let res: Response;
+      try {
+        res = await fetch(base + "/api/enroll", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ invite, handle, tokenName: flagStr(args, "name") ?? "z zaproszenia" }),
+        });
+      } catch (err) {
+        process.stderr.write(`serwer nie odpowiada pod ${base}: ${err instanceof Error ? err.message : err}\n`);
+        return 1;
+      }
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) { process.stderr.write(`blad: ${String(data.error ?? `HTTP ${res.status}`)}\n`); return 1; }
+      const token = String(data.token);
+      const actor = data.actor as { handle: string };
+      mkdirSync(CONFIG_DIR, { recursive: true });
+      writeFileSync(CONFIG_FILE, JSON.stringify({ url: base, token }, null, 2), { mode: 0o600 });
+      process.stdout.write(`dolaczono. Jestes @${actor.handle} na ${base} (token zapisany).\n`);
       return 0;
     }
     if (cmd === "login") {
@@ -938,8 +977,96 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       return 0;
     }
 
+    case "wiki":
+      return await runWiki(api, rest, args, out);
+
     default:
       process.stderr.write(`nieznana komenda: ${cmd}\n\n${USAGE}`);
+      return 1;
+  }
+}
+
+async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) => void):
+  Promise<number> {
+  const sub = rest[0];
+  const rrest = rest.slice(1);
+  const enc = (s: string) => encodeURIComponent(s);
+  switch (sub) {
+    case "search": {
+      const q = rrest.join(" ");
+      if (!q) { process.stderr.write("uzycie: atalk wiki search <fraza>\n"); return 1; }
+      const r = await api.call("GET", `/api/wiki/search?q=${enc(q)}`);
+      const hits = r.hits as Array<{ slug: string; title: string; snippet: string }>;
+      if (hits.length === 0) { out("Brak trafien. Zaloz strone: atalk wiki write <slug> --title ..."); return 0; }
+      for (const h of hits) out(`  [${h.slug}] ${h.title}\n      ${h.snippet}`);
+      return 0;
+    }
+    case "list": {
+      const r = await api.call("GET", "/api/wiki");
+      const pages = r.pages as Array<{ slug: string; title: string; updatedBy: string | null }>;
+      if (pages.length === 0) { out("Wiki jest pusta."); return 0; }
+      for (const p of pages) out(`  [${p.slug}] ${p.title}  (zmiana: @${p.updatedBy ?? "?"})`);
+      return 0;
+    }
+    case "read": {
+      if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki read <slug>\n"); return 1; }
+      const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}`);
+      const p = r.page as { title: string; slug: string; body: string; updatedBy: string | null; revisions: number };
+      out(`# ${p.title}  (${p.slug})`);
+      out(`ostatnia zmiana: @${p.updatedBy ?? "?"}, rewizji: ${p.revisions}\n`);
+      out(p.body);
+      const files = r.files as Array<{ id: string; name: string; size: number }>;
+      if (files.length) { out("\nZalaczniki:"); for (const f of files) out(`  [${f.id}] ${f.name} (${f.size} B)`); }
+      return 0;
+    }
+    case "write": {
+      const slug = rrest.find((a) => !a.startsWith("-"));
+      if (!slug) { process.stderr.write("uzycie: atalk wiki write <slug> --title \"...\" [--file plik | --stdin | tekst]\n"); return 1; }
+      let text: string;
+      const file = flagStr(args, "file");
+      if (args.flags.stdin === true) text = readFileSync(0, "utf8");
+      else if (file) text = readFileSync(file, "utf8");
+      else text = rrest.filter((a) => a !== slug).join(" ");
+      const r = await api.call("PUT", `/api/wiki/${enc(slug)}`, {
+        title: flagStr(args, "title") ?? slug,
+        body: text,
+        note: flagStr(args, "note"),
+      });
+      const p = r.page as { slug: string; title: string; revisions: number };
+      out(`zapisane: [${p.slug}] "${p.title}" (rewizja ${p.revisions})`);
+      return 0;
+    }
+    case "history": {
+      if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki history <slug>\n"); return 1; }
+      const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/history`);
+      const revs = r.revisions as Array<{ id: number; actor: string | null; note: string | null; createdAt: number }>;
+      for (const rv of revs) {
+        const when = new Date(rv.createdAt * 1000).toISOString().slice(0, 16).replace("T", " ");
+        out(`  #${rv.id}  ${when}  @${rv.actor ?? "?"}${rv.note ? `  - ${rv.note}` : ""}`);
+      }
+      return 0;
+    }
+    case "attach": {
+      if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki attach <slug> <sciezka>\n"); return 1; }
+      const data = readFileSync(rrest[1]);
+      const r = await api.upload(`/api/wiki/${enc(rrest[0])}/files`, data, {
+        "x-file-name": encodeURIComponent(basename(rrest[1])),
+      });
+      const f = r.file as { id: string; name: string; size: number };
+      out(`podpiete do [${rrest[0]}]: ${f.name} (${f.size} B)  id=${f.id}`);
+      return 0;
+    }
+    case "files": {
+      if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki files <slug>\n"); return 1; }
+      const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/files`);
+      const files = r.files as Array<{ id: string; name: string; size: number }>;
+      if (files.length === 0) { out("Brak zalacznikow."); return 0; }
+      for (const f of files) out(`  [${f.id}] ${f.name} (${f.size} B)`);
+      out("\nPobierz: atalk get-file <id> <sciezka>");
+      return 0;
+    }
+    default:
+      process.stderr.write("uzycie: atalk wiki search|list|read|write|history|attach|files\n");
       return 1;
   }
 }

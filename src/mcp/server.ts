@@ -47,6 +47,7 @@ import { digestFor } from "../core/digest.ts";
 import { mentionsOf } from "../core/mentions.ts";
 import { acquire, listLeases, release } from "../core/leases.ts";
 import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
+import { getPage, listPages, pageHistory, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
 import type { Req, Res } from "../http/router.ts";
 
 const WAIT_MAX_SEC = 300;
@@ -212,6 +213,44 @@ export const TOOLS: ToolDef[] = [
     ),
   },
   {
+    name: "wiki_search",
+    description:
+      "Przeszukaj WIKI - trwala, wspoldzielona wiedze (projekty, ustalenia, watki). " +
+      "ZAJRZYJ TU, ZANIM ZADASZ PYTANIE: moze odpowiedz juz jest na stronie.",
+    inputSchema: S({ q: { type: "string", description: "Fraza." },
+                     limit: { type: "number" } }, ["q"]),
+  },
+  {
+    name: "wiki_read",
+    description: "Przeczytaj strone wiki po jej nazwie (slug).",
+    inputSchema: S({ slug: { type: "string" } }, ["slug"]),
+  },
+  {
+    name: "wiki_list",
+    description: "Lista stron wiki, od ostatnio zmienianych.",
+    inputSchema: S({}),
+  },
+  {
+    name: "wiki_write",
+    description:
+      "Zaloz albo zaktualizuj strone wiki (wspolna wiedza, kazdy zalogowany moze pisac). " +
+      "Kazdy zapis zostawia rewizje w historii, wiec zmiana jest widoczna i odwracalna.",
+    inputSchema: S(
+      {
+        slug: { type: "string", description: "Nazwa strony, np. 'projekt-motowolt'." },
+        title: { type: "string" },
+        body: { type: "string", description: "Tresc w markdown." },
+        note: { type: "string", description: "Opcjonalnie: krotki opis zmiany." },
+      },
+      ["slug", "title", "body"],
+    ),
+  },
+  {
+    name: "wiki_history",
+    description: "Historia zmian strony wiki: kto, kiedy, z jakim opisem.",
+    inputSchema: S({ slug: { type: "string" } }, ["slug"]),
+  },
+  {
     name: "talk_claim",
     description:
       "Zajmij zasob na wylacznosc z TTL (dzierzawa). Odpowiedz synchroniczna: GRANTED albo kto " +
@@ -329,6 +368,10 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   out.push("", "=== OSTATNIE WIADOMOSCI DO CIEBIE ===");
   if (last.length === 0) out.push("  (nic nowego)");
   for (const m of last) out.push(`  ${fmtMsg(ctx, m)}`);
+  const wn = wikiPageCount(ctx);
+  if (wn > 0) {
+    out.push("", `=== WIKI ===`, `  ${wn} stron wiedzy - zanim zapytasz, sprawdz: wiki_search`);
+  }
   out.push("", `Kursor do talk_read: afterId=${lastMessageId(ctx)}`);
   return out.join("\n");
 }
@@ -548,6 +591,46 @@ async function callTool(
       signal(ctx, sessionId, "busy");
       if (args.doing !== undefined) setDoing(ctx, sessionId, strv(args.doing) ?? null);
       return text(`sesja ${sessionId} zarejestrowana jako @${actor.handle}`);
+    }
+
+    case "wiki_search": {
+      const hits = searchWiki(ctx, strv(args.q) ?? "", num(args.limit));
+      if (hits.length === 0) return text("Brak trafien w wiki. (Mozesz zalozyc strone: wiki_write)");
+      return text(hits.map((h) => `[${h.slug}] ${h.title}\n    ${h.snippet}`).join("\n"));
+    }
+
+    case "wiki_read": {
+      const page = getPage(ctx, strv(args.slug) ?? "");
+      if (!page) throw notFound("strona", `nie ma strony wiki "${strv(args.slug)}"`);
+      return text(
+        `# ${page.title}  (${page.slug})\n` +
+          `ostatnia zmiana: @${page.updatedBy ?? "?"}, rewizji: ${page.revisions}\n\n${page.body}`,
+      );
+    }
+
+    case "wiki_list": {
+      const pages = listPages(ctx);
+      if (pages.length === 0) return text("Wiki jest pusta. Zaloz pierwsza strone: wiki_write.");
+      return text(pages.map((p) => `[${p.slug}] ${p.title}  (zmiana: @${p.updatedBy ?? "?"})`)
+        .join("\n"));
+    }
+
+    case "wiki_write": {
+      const page = savePage(ctx, {
+        slug: strv(args.slug) ?? "",
+        title: strv(args.title) ?? "",
+        body: strv(args.body) ?? "",
+        actorId: actor.id,
+        note: strv(args.note) ?? null,
+      });
+      return text(`zapisane: [${page.slug}] "${page.title}" (rewizja ${page.revisions})`);
+    }
+
+    case "wiki_history": {
+      const revs = pageHistory(ctx, strv(args.slug) ?? "");
+      return text(revs.map((r) =>
+        `#${r.id}  ${fmtTs(r.createdAt)}  @${r.actor ?? "?"}${r.note ? `  - ${r.note}` : ""}`,
+      ).join("\n"));
     }
 
     case "talk_claim": {

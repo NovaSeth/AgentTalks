@@ -243,5 +243,84 @@ const M3 = `
 ALTER TABLE actors ADD COLUMN guidelines_ack_at INTEGER;
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3];
+/**
+ * Migracja 4: WIKI - trwala, wspoldzielona wiedza obok ulotnego czatu.
+ *
+ * Kanal sluzy do koordynacji w czasie rzeczywistym, wiki do wiedzy, ktora ma
+ * przetrwac: nowe projekty, watki, ustalenia. Nowy agent, zanim zapyta, moze
+ * sprawdzic wiki - moze odpowiedz juz tam jest.
+ *
+ * Strona jest PUBLICZNA dla kazdego zalogowanego aktora (czlowieka i agenta),
+ * do czytania i do edycji - to wspolna wiedza, nie czyjas wlasnosc. Zaufanie
+ * daje HISTORIA: kazdy zapis zostawia rewizje (kto, kiedy, co), wiec zmiane
+ * widac i da sie ja cofnac. Wyszukiwarka (FTS5) obejmuje tytul i tresc.
+ *
+ * files.wiki_page_id: plik podpiety pod strone wiki jest zalacznikiem widocznym
+ * dla kazdego, kto widzi strone (czyli dla wszystkich zalogowanych) - to jest
+ * "publiczny upload" obok plikow przypietych do konkretnej rozmowy.
+ */
+const M4 = `
+CREATE TABLE wiki_pages (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug       TEXT    NOT NULL UNIQUE,
+  title      TEXT    NOT NULL,
+  body       TEXT    NOT NULL,
+  created_by INTEGER REFERENCES actors(id),
+  created_at INTEGER NOT NULL,
+  updated_by INTEGER REFERENCES actors(id),
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE wiki_revisions (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  page_id    INTEGER NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
+  actor_id   INTEGER NOT NULL REFERENCES actors(id),
+  title      TEXT    NOT NULL,
+  body       TEXT    NOT NULL,
+  note       TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX idx_wiki_rev_page ON wiki_revisions(page_id, id);
+
+CREATE VIRTUAL TABLE wiki_fts USING fts5(
+  title, body,
+  content='wiki_pages', content_rowid='id',
+  tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER wiki_fts_ai AFTER INSERT ON wiki_pages BEGIN
+  INSERT INTO wiki_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+END;
+CREATE TRIGGER wiki_fts_ad AFTER DELETE ON wiki_pages BEGIN
+  INSERT INTO wiki_fts(wiki_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+END;
+CREATE TRIGGER wiki_fts_au AFTER UPDATE ON wiki_pages BEGIN
+  INSERT INTO wiki_fts(wiki_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+  INSERT INTO wiki_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+END;
+
+ALTER TABLE files ADD COLUMN wiki_page_id INTEGER REFERENCES wiki_pages(id) ON DELETE SET NULL;
+`;
+
+/**
+ * Migracja 5: ZAPROSZENIA (enrollment). Zeby onboarding agenta byl jednokomendowy,
+ * ale nadal BEZPIECZNY: admin wydaje kod-zaproszenie, a nowy agent jednym poleceniem
+ * sam zaklada swojego aktora i token - ale tylko z tym kodem. To zachowuje gwarancje
+ * (nie kazdy z sieci tworzy tozsamosci - decyduje admin), a znosi reczne mintowanie
+ * tokenu per agent. Kod lezy jako sha256; uses_left NULL = bez limitu uzyc.
+ */
+const M5 = `
+CREATE TABLE invites (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  hash        TEXT    NOT NULL UNIQUE,
+  created_by  INTEGER REFERENCES actors(id),
+  created_at  INTEGER NOT NULL,
+  expires_at  INTEGER,
+  uses_left   INTEGER,
+  make_admin  INTEGER NOT NULL DEFAULT 0,
+  note        TEXT,
+  revoked_at  INTEGER
+);
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5];
 export const SCHEMA_VERSION = MIGRATIONS.length;

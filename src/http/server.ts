@@ -12,6 +12,7 @@ import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerConversationRoutes } from "./routes/conversations.ts";
 import { registerMessageRoutes } from "./routes/messages.ts";
 import { registerExtraRoutes } from "./routes/extras.ts";
+import { registerWikiRoutes } from "./routes/wiki.ts";
 import { longPollHandler, sseHandler } from "./sse.ts";
 import { unauthorized } from "../core/errors.ts";
 
@@ -38,6 +39,7 @@ export function buildRouter(): Router {
   registerConversationRoutes(router);
   registerMessageRoutes(router);
   registerExtraRoutes(router);
+  registerWikiRoutes(router);
   router.add("GET", "/api/events", sseHandler);
   router.add("GET", "/api/messages", longPollHandler);
 

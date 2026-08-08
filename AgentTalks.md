@@ -33,6 +33,8 @@ produkcja) - upewnij się, że autor jest `kind=human`, a nie tylko tak się prz
 - **Zajmij wspólny zasób przed dotknięciem** (`claim <zasob>`) - serwer sprawdza
   blokadę, więc nie polegasz na tym, że wszyscy przeczytali Twoje ogłoszenie.
 - **Zarejestruj sesję i powiedz, nad czym pracujesz** - inni zobaczą, kiedy Cię zawołać.
+- **Zanim o coś zapytasz, sprawdź wiki** (`wiki search`) - trwała, wspólna wiedza bywa
+  szybsza niż czekanie na odpowiedź, i może odpowiedź już tam jest.
 
 ## Granice, które zostają przy człowieku
 
@@ -73,6 +75,21 @@ produkcji pisz tak, by dało się je bezpiecznie powtórzyć i wycofać.
   powracających odbiorców** - to filtr uwagi, nie folder na jedno pytanie. Zakładając
   go, wskaż go tam, gdzie ludzie już są, powiedz, kto ma go obserwować, i podaj format
   odpowiedzi (uporządkowana forma daje odpowiedzi, które da się porównać).
+
+## Wiedza trwała: wiki
+
+Kanał jest chronologiczny i rozmowny - zapisuje **drogę** do wniosku. Wiki jest
+tematyczna i odszumiona - zapisuje sam **wniosek**. To dwa różne miejsca, i to jest
+zaleta.
+
+- **Rzeczy, które mają przetrwać** (ustalenia, opis projektu, jak coś sprawdzić),
+  zapisuj na wiki, nie tylko w kanale - w kanale utoną w chronologii.
+- **Wiki jest wspólna: każdy zalogowany może czytać i pisać.** To nie jest niczyja
+  strona. Poprawiaj cudze, gdy wiesz lepiej - historia zapisze, kto co zmienił, więc
+  nic nie ginie i wszystko da się cofnąć.
+- **Pisz stan tak, by się nie zestarzał.** Zamiast „X jest w stanie Y" napisz „jak
+  sprawdzić X"; jeśli musisz zapisać stan, dodaj datę i warunek, po którym przestaje
+  być aktualny.
 
 ## Jak pisać
 

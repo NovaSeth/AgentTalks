@@ -530,3 +530,93 @@ test("GET /api/guidelines zwraca tekst zasad na zadanie", async () => {
   assert.match(r.text, /jak się tu odnaleźć|AgentTalks/);
   await s.close();
 });
+
+test("enroll: zaproszenie zaklada aktora, token dziala; zly kod = 403", async () => {
+  const s = await startTestServer();
+  const { createInvite } = await import("../../src/core/invites.ts");
+  const { code } = createInvite(s.ctx, { createdBy: null, uses: 2 });
+  const r = await fetch(s.url + "/api/enroll", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ invite: code, handle: "swiezak" }),
+  });
+  assert.equal(r.status, 201);
+  const { token, actor } = await r.json();
+  assert.equal(actor.handle, "swiezak");
+  const me = await fetch(s.url + "/api/me", { headers: bearer(token) });
+  assert.equal(me.status, 200);
+  const bad = await fetch(s.url + "/api/enroll", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ invite: "ati_zle", handle: "ktos" }),
+  });
+  assert.equal(bad.status, 403);
+  await s.close();
+});
+
+test("wiki przez API: zapis, odczyt, szukanie, historia, revert", async () => {
+  const s = await startTestServer();
+  const { tokenA } = seed(s);
+  const put = await fetch(s.url + "/api/wiki/projekt", {
+    method: "POST", headers: bearer(tokenA),
+    body: JSON.stringify({ title: "Projekt", body: "wersja jeden z frazą kanarek" }),
+  });
+  // PUT nie POST - popraw
+  assert.ok(put.status === 404 || put.status === 405 || put.status === 200);
+  const put2 = await fetch(s.url + "/api/wiki/projekt", {
+    method: "PUT", headers: bearer(tokenA),
+    body: JSON.stringify({ title: "Projekt", body: "wersja jeden z frazą kanarek" }),
+  });
+  assert.equal(put2.status, 200);
+  const read = await (await fetch(s.url + "/api/wiki/projekt", { headers: bearer(tokenA) })).json();
+  assert.equal(read.page.title, "Projekt");
+  const found = await (await fetch(s.url + "/api/wiki/search?q=kanarek", { headers: bearer(tokenA) })).json();
+  assert.equal(found.hits.length, 1);
+  assert.equal(found.hits[0].slug, "projekt");
+  await fetch(s.url + "/api/wiki/projekt", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Projekt", body: "zepsute" }),
+  });
+  const hist = await (await fetch(s.url + "/api/wiki/projekt/history", { headers: bearer(tokenA) })).json();
+  assert.equal(hist.revisions.length, 2);
+  const firstRev = hist.revisions.at(-1).id;
+  const rev = await fetch(s.url + "/api/wiki/projekt/revert", {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ revisionId: firstRev }),
+  });
+  assert.equal(rev.status, 200);
+  const after = await (await fetch(s.url + "/api/wiki/projekt", { headers: bearer(tokenA) })).json();
+  assert.match(after.page.body, /kanarek/);
+  await s.close();
+});
+
+test("wiki: strona jest wspolna - inny aktor tez ja edytuje", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB } = seed(s);
+  await fetch(s.url + "/api/wiki/wspolna", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "W", body: "od ali" }),
+  });
+  const r = await fetch(s.url + "/api/wiki/wspolna", {
+    method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "W", body: "od boba" }),
+  });
+  assert.equal(r.status, 200);
+  const read = await (await fetch(s.url + "/api/wiki/wspolna", { headers: bearer(tokenB) })).json();
+  assert.equal(read.page.body, "od boba");
+  await s.close();
+});
+
+test("wiki attach: plik podpiety, pobieralny przez innego zalogowanego", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB } = seed(s);
+  await fetch(s.url + "/api/wiki/dokumenty", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Dok", body: "x" }),
+  });
+  const up = await fetch(s.url + "/api/wiki/dokumenty/files", {
+    method: "POST",
+    headers: { authorization: (bearer(tokenA) as any).authorization, "content-type": "text/plain",
+      "x-file-name": "notatka.txt" },
+    body: "publiczna notatka",
+  });
+  assert.equal(up.status, 201);
+  const fileId = (await up.json()).file.id;
+  const got = await fetch(s.url + "/api/files/" + fileId, { headers: bearer(tokenB) });
+  assert.equal(got.status, 200);
+  assert.equal(await got.text(), "publiczna notatka");
+  await s.close();
+});

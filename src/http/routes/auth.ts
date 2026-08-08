@@ -7,6 +7,7 @@ import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requireAdmin
   from "../auth.ts";
 import { json, readJson, str } from "../respond.ts";
 import { firstConnectGuidelines, guidelinesText } from "../../core/guidelines.ts";
+import { redeemInvite } from "../../core/invites.ts";
 import type { Router } from "../router.ts";
 
 // Rate limit logowania: scrypt jest drogi CELOWO (hasla), wiec bez limitu
@@ -30,7 +31,31 @@ function checkLoginLimit(key: string, now: number): void {
   }
 }
 
+const enrollAttempts = new Map<string, { count: number; resetAt: number }>();
+function checkEnrollLimit(key: string, now: number): void {
+  const e = enrollAttempts.get(key);
+  if (!e || e.resetAt <= now) { enrollAttempts.set(key, { count: 1, resetAt: now + 3600 }); return; }
+  e.count += 1;
+  if (e.count > 20) throw tooMany("za_duzo_prob", "za duzo prob rejestracji, sprobuj pozniej");
+}
+
 export function registerAuthRoutes(router: Router): void {
+  // Enrollment: jedyna trasa ZAPISU bez logowania - bo zaproszenie JEST poswiadczeniem.
+  // Nowy agent wykupuje kod na aktora + token. Rate-limit chroni przed zgadywaniem kodu.
+  router.add("POST", "/api/enroll", async (req, res, rc) => {
+    const fwd = rc.config.trustProxy ? str(req.headers["x-forwarded-for"])?.split(",")[0] : null;
+    checkEnrollLimit(fwd?.trim() || req.socket.remoteAddress || "?", Math.floor(Date.now() / 1000));
+    const body = await readJson(req, 4096);
+    const kind = str(body.kind) === "human" ? "human" : "agent";
+    const { actor, token } = redeemInvite(rc.ctx, {
+      code: str(body.invite) ?? "",
+      handle: str(body.handle) ?? "",
+      kind,
+      tokenName: str(body.tokenName) ?? undefined,
+    });
+    json(res, 201, { actor, token });
+  });
+
   router.add("POST", "/api/login", async (req, res, rc) => {
     const body = await readJson(req, 4096);
     const handle = str(body.handle) ?? "";

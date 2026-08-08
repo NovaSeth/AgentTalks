@@ -19,6 +19,7 @@ import {
 } from "../core/actors.ts";
 import { createChannel, getBySlug, join as joinConversation } from "../core/conversations.ts";
 import { listTokens, mintToken, revokeToken } from "../core/tokens.ts";
+import { createInvite, listInvites, revokeInvite } from "../core/invites.ts";
 import { importTalkHome } from "../importer/talk.ts";
 import { registerWake } from "../core/wake.ts";
 import { sweepExpired } from "../core/files.ts";
@@ -42,6 +43,13 @@ const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a l
   agenttalks token create --actor <handle> [--name <opis>] [--ttl <sekundy>]
   agenttalks token list --actor <handle>
   agenttalks token revoke <id>
+
+  agenttalks invite create [--ttl <sek>] [--uses <n>] [--admin] [--note <opis>]
+      Wydaje kod-zaproszenie. Nowy agent zaklada nim aktora i token jednym
+      poleceniem: atalk enroll --invite <kod> --handle <nazwa>. To Ty decydujesz,
+      kto moze dolaczyc (masz kod), a agent nie tworzy tozsamosci bez zaproszenia.
+  agenttalks invite list
+  agenttalks invite revoke <id>
 
   agenttalks import-talk <katalog ~/.talk> [--data <kat>]
       Wciaga historie prototypu: kanaly, DM-y, pytania, reakcje, znaczniki odczytu.
@@ -131,6 +139,8 @@ export async function main(argv: readonly string[]): Promise<number> {
         return cmdActor(rest, args);
       case "token":
         return cmdToken(rest, args);
+      case "invite":
+        return cmdInvite(rest, args);
       case "import-talk":
         return cmdImport(rest, args);
       case "clone":
@@ -316,6 +326,48 @@ function cmdToken(rest: string[], args: Args): number {
     return 0;
   }
   process.stderr.write("uzycie: agenttalks token create|list|revoke\n");
+  return 1;
+}
+
+function cmdInvite(rest: string[], args: Args): number {
+  const [sub, id] = rest;
+  const { ctx } = openCtx(args);
+  if (sub === "create") {
+    const { code, info } = createInvite(ctx, {
+      createdBy: null,
+      ttlSec: flagStr(args, "ttl") ? Number(flagStr(args, "ttl")) : null,
+      uses: flagStr(args, "uses") ? Number(flagStr(args, "uses")) : null,
+      makeAdmin: args.flags.admin === true,
+      note: flagStr(args, "note"),
+    });
+    process.stdout.write(`${code}\n`);
+    const lim = [
+      info.usesLeft === null ? "bez limitu uzyc" : `${info.usesLeft} uzyc`,
+      info.expiresAt ? `wygasa ${new Date(info.expiresAt * 1000).toISOString().slice(0, 16)}` : "bez terminu",
+      info.makeAdmin ? "nadaje ADMINA" : null,
+    ].filter(Boolean).join(", ");
+    process.stderr.write(`^ przekaz ten kod agentowi. ${lim}. Uzycie:\n` +
+      `  atalk enroll --url <adres> --invite ${code} --handle <nazwa>\n`);
+    return 0;
+  }
+  if (sub === "list") {
+    const now = Math.floor(Date.now() / 1000);
+    for (const i of listInvites(ctx)) {
+      const stan = i.revokedAt ? "ODWOLANE"
+        : (i.expiresAt !== null && i.expiresAt <= now) ? "WYGASLE"
+        : (i.usesLeft !== null && i.usesLeft <= 0) ? "ZUZYTE" : "aktywne";
+      const uses = i.usesLeft === null ? "inf" : String(i.usesLeft);
+      process.stdout.write(`  ${String(i.id).padStart(4)}  ${stan.padEnd(9)} uzyc:${uses}` +
+        `${i.makeAdmin ? " admin" : ""}${i.note ? `  ${i.note}` : ""}\n`);
+    }
+    return 0;
+  }
+  if (sub === "revoke" && id) {
+    revokeInvite(ctx, Number(id));
+    process.stdout.write(`zaproszenie ${id} odwolane\n`);
+    return 0;
+  }
+  process.stderr.write("uzycie: agenttalks invite create|list|revoke\n");
   return 1;
 }
 

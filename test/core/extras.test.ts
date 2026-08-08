@@ -438,3 +438,74 @@ test("firstConnectGuidelines: raz zwraca zasady, potem null", async () => {
   assert.equal(firstConnectGuidelines(ctx, a.id), null, "zasady podane drugi raz");
   assert.equal(needsGuidelines(ctx, a.id), false);
 });
+
+// --- wiki -----------------------------------------------------------------
+
+test("wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie", async () => {
+  const { savePage, getPage, pageHistory } = await import("../../src/core/wiki.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
+  savePage(ctx, { slug: "projekt-x", title: "Projekt X", body: "pierwsza wersja", actorId: a.id });
+  let p = getPage(ctx, "projekt-x")!;
+  assert.equal(p.title, "Projekt X");
+  assert.equal(p.createdBy, "ala");
+  assert.equal(p.revisions, 1);
+  savePage(ctx, { slug: "projekt-x", title: "Projekt X", body: "poprawka od boba", actorId: b.id, note: "doprecyzowanie" });
+  p = getPage(ctx, "projekt-x")!;
+  assert.equal(p.body, "poprawka od boba");
+  assert.equal(p.updatedBy, "bob");
+  assert.equal(p.revisions, 2);
+  const hist = pageHistory(ctx, "projekt-x");
+  assert.equal(hist.length, 2);
+  assert.equal(hist[0].actor, "bob");
+  assert.equal(hist[0].note, "doprecyzowanie");
+});
+
+test("wiki: kazdy zalogowany moze edytowac (wspolna wiedza)", async () => {
+  const { savePage, getPage } = await import("../../src/core/wiki.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
+  savePage(ctx, { slug: "s", title: "S", body: "od ali", actorId: a.id });
+  // "obcy" nie jest niczyim czlonkiem, a i tak moze pisac - wiki jest publiczna
+  savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: obcy.id });
+  assert.equal(getPage(ctx, "s")!.body, "od obcego");
+});
+
+test("wiki: wyszukiwarka znajduje po tresci i tytule", async () => {
+  const { savePage, searchWiki } = await import("../../src/core/wiki.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala");
+  savePage(ctx, { slug: "deploy", title: "Jak wdrazac", body: "uzyj skryptu wdroz.sh z rollbackiem", actorId: a.id });
+  savePage(ctx, { slug: "inne", title: "Cos innego", body: "nic o wdrozeniu", actorId: a.id });
+  const hits = searchWiki(ctx, "rollback");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].slug, "deploy");
+  assert.equal(searchWiki(ctx, "wdraza").length >= 1, true);
+});
+
+test("wiki: revert przywraca tresc jako nowa rewizje", async () => {
+  const { savePage, revertPage, getPage, pageHistory } = await import("../../src/core/wiki.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala");
+  savePage(ctx, { slug: "s", title: "S", body: "dobra wersja", actorId: a.id });
+  savePage(ctx, { slug: "s", title: "S", body: "zepsuta wersja", actorId: a.id });
+  const firstRev = pageHistory(ctx, "s").at(-1)!.id;
+  revertPage(ctx, { slug: "s", revisionId: firstRev, actorId: a.id });
+  assert.equal(getPage(ctx, "s")!.body, "dobra wersja");
+  assert.equal(pageHistory(ctx, "s").length, 3, "revert ma dopisac rewizje, nie przepisac");
+});
+
+test("wiki: zalacznik jest publiczny dla kazdego zalogowanego", async () => {
+  const { savePage, pageId } = await import("../../src/core/wiki.ts");
+  const { storeWikiFile, getFileInfo, readFile } = await import("../../src/core/files.ts");
+  const ctx = testCtx();
+  const dir = mkdtempSync(join(tmpdir(), "at-wiki-"));
+  const a = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
+  savePage(ctx, { slug: "s", title: "S", body: "tresc", actorId: a.id });
+  const pid = pageId(ctx, "s")!;
+  const f = storeWikiFile(ctx, dir, { actorId: a.id, wikiPageId: pid, name: "diagram.txt",
+    data: Buffer.from("schemat"), maxBytes: 1024 });
+  // obcy, nie autor, nie czlonek zadnej rozmowy - a i tak widzi zalacznik wiki
+  assert.ok(getFileInfo(ctx, f.id, obcy.id), "zalacznik wiki nie jest publiczny");
+  assert.equal(readFile(ctx, f.id, obcy.id).data.toString(), "schemat");
+});

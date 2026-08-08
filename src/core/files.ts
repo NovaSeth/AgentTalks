@@ -29,6 +29,7 @@ export type FileInfo = {
   id: string;
   actorId: number;
   conversationId: number | null;
+  wikiPageId: number | null;
   messageId: number | null;
   name: string;
   size: number;
@@ -43,6 +44,7 @@ export type FileInfo = {
 
 type FileRow = {
   id: string; actor_id: number; conversation_id: number | null; message_id: number | null;
+  wiki_page_id: number | null;
   name: string; size: number; sha256: string; mime: string; path: string;
   created_at: number; expires_at: number | null; sensitive: number; burn: number;
   downloads: number; deleted_at: number | null;
@@ -52,6 +54,7 @@ const toInfo = (r: FileRow): FileInfo => ({
   id: r.id,
   actorId: r.actor_id,
   conversationId: r.conversation_id,
+  wikiPageId: r.wiki_page_id,
   messageId: r.message_id,
   name: r.name,
   size: r.size,
@@ -87,14 +90,10 @@ export function storeFile(
     sessionId?: string | null;
   },
 ): { file: FileInfo; message: Message } {
-  if (input.data.length === 0) throw badRequest("pusty_plik", "plik nie moze byc pusty");
-  if (input.data.length > input.maxBytes) {
-    throw tooLarge("plik_za_duzy", `plik jest za duzy (limit ${input.maxBytes} B)`);
-  }
+  // Prawo zapisu PRZED walidacja rozmiaru (walidacja jest w persistBytes): nie
+  // chcemy odpowiadac "za duzy" na kanal, do ktorego i tak nie wolno pisac.
   assertCanPost(ctx, input.conversationId, input.actorId);
 
-  const id = randomBytes(16).toString("base64url");
-  const name = safeName(input.name);
   const sensitive = input.sensitive === true;
   // Wrazliwy plik bez SENSOWNEGO TTL dostaje domyslny. `?? ` nie wystarczy:
   // ttl=0 (albo pusty naglowek X-TTL zamieniony na 0) to nie "podaj TTL", tylko
@@ -102,24 +101,19 @@ export function storeFile(
   // w prototypie. Traktujemy wiec kazde ttl <= 0 jak brak.
   const explicitTtl = input.ttlSec && input.ttlSec > 0 ? Math.trunc(input.ttlSec) : null;
   const ttl = explicitTtl ?? (sensitive ? SENSITIVE_DEFAULT_TTL : null);
-  const now = ctx.now();
 
-  mkdirSync(filesDir, { recursive: true });
-  const path = join(filesDir, id);
-  writeFileSync(path, input.data, { mode: 0o600 });
-
-  ctx.db
-    .prepare(
-      `INSERT INTO files(id, actor_id, conversation_id, name, size, sha256, mime, path,
-                         created_at, expires_at, sensitive, burn)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-    )
-    .run(
-      id, input.actorId, input.conversationId, name, input.data.length,
-      createHash("sha256").update(input.data).digest("hex"),
-      input.mime ?? "application/octet-stream", path, now,
-      ttl ? now + ttl : null, sensitive ? 1 : 0, input.burn ? 1 : 0,
-    );
+  const { id, name } = persistBytes(ctx, filesDir, {
+    actorId: input.actorId,
+    conversationId: input.conversationId,
+    wikiPageId: null,
+    name: input.name,
+    data: input.data,
+    mime: input.mime,
+    maxBytes: input.maxBytes,
+    ttl,
+    sensitive,
+    burn: input.burn === true,
+  });
 
   const human = humanSize(input.data.length);
   const message = postMessage(ctx, {
@@ -135,7 +129,8 @@ export function storeFile(
   return { file: getFileInfo(ctx, id, input.actorId)!, message };
 }
 
-/** Metadane pliku, jesli aktor ma prawo go widziec. */
+/** Metadane pliku, jesli aktor ma prawo go widziec. Zalacznik wiki
+ *  (wiki_page_id) jest publiczny - widzi go kazdy zalogowany, bo wiki jest wspolna. */
 export function getFileInfo(ctx: Ctx, id: string, actorId: number): FileInfo | null {
   const row = ctx.db.prepare("SELECT * FROM files WHERE id = ?").get(id) as FileRow | undefined;
   if (!row || row.deleted_at) return null;
@@ -144,9 +139,44 @@ export function getFileInfo(ctx: Ctx, id: string, actorId: number): FileInfo | n
     return null;
   }
   const allowed = row.actor_id === actorId
+    || row.wiki_page_id !== null
     || (row.conversation_id !== null && canRead(ctx, row.conversation_id, actorId));
   if (!allowed) return null;
   return toInfo(row);
+}
+
+/**
+ * Zalacznik do strony wiki: plik w miejscu PUBLICZNYM, nie w jednej rozmowie.
+ * Nie posta wiadomosci (wiki nie jest kanalem) i nie ma TTL/burn - wiedza trwala
+ * ma trwac. Dostep: kazdy zalogowany, bo wiki jest wspolna.
+ */
+export function storeWikiFile(
+  ctx: Ctx,
+  filesDir: string,
+  input: { actorId: number; wikiPageId: number; name: string; data: Buffer; mime?: string;
+           maxBytes: number },
+): FileInfo {
+  const { id } = persistBytes(ctx, filesDir, {
+    actorId: input.actorId,
+    conversationId: null,
+    wikiPageId: input.wikiPageId,
+    name: input.name,
+    data: input.data,
+    mime: input.mime,
+    maxBytes: input.maxBytes,
+    ttl: null,
+    sensitive: false,
+    burn: false,
+  });
+  return getFileInfo(ctx, id, input.actorId)!;
+}
+
+/** Pliki podpiete pod strone wiki. */
+export function listWikiFiles(ctx: Ctx, wikiPageId: number): FileInfo[] {
+  const rows = ctx.db
+    .prepare("SELECT * FROM files WHERE wiki_page_id = ? AND deleted_at IS NULL ORDER BY created_at")
+    .all(wikiPageId) as FileRow[];
+  return rows.map(toInfo);
 }
 
 /**
@@ -199,6 +229,45 @@ export function sweepExpired(ctx: Ctx): number {
     .all(ctx.now()) as FileRow[];
   for (const row of rows) deleteFileRow(ctx, row);
   return rows.length;
+}
+
+/** Wspolny zapis bajtow: walidacja, zapis na dysk (0600), hash, wiersz w bazie.
+ *  Uzywany i przez pliki rozmow (storeFile), i przez zalaczniki wiki (storeWikiFile),
+ *  zeby format rekordu istnial w jednym miejscu. */
+function persistBytes(
+  ctx: Ctx,
+  filesDir: string,
+  input: {
+    actorId: number; conversationId: number | null; wikiPageId: number | null;
+    name: string; data: Buffer; mime?: string; maxBytes: number;
+    ttl: number | null; sensitive: boolean; burn: boolean;
+  },
+): { id: string; name: string } {
+  if (input.data.length === 0) throw badRequest("pusty_plik", "plik nie moze byc pusty");
+  if (input.data.length > input.maxBytes) {
+    throw tooLarge("plik_za_duzy", `plik jest za duzy (limit ${input.maxBytes} B)`);
+  }
+  const id = randomBytes(16).toString("base64url");
+  const name = safeName(input.name);
+  const now = ctx.now();
+
+  mkdirSync(filesDir, { recursive: true });
+  const path = join(filesDir, id);
+  writeFileSync(path, input.data, { mode: 0o600 });
+
+  ctx.db
+    .prepare(
+      `INSERT INTO files(id, actor_id, conversation_id, wiki_page_id, name, size, sha256, mime,
+                         path, created_at, expires_at, sensitive, burn)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    )
+    .run(
+      id, input.actorId, input.conversationId, input.wikiPageId, name, input.data.length,
+      createHash("sha256").update(input.data).digest("hex"),
+      input.mime ?? "application/octet-stream", path, now,
+      input.ttl ? now + input.ttl : null, input.sensitive ? 1 : 0, input.burn ? 1 : 0,
+    );
+  return { id, name };
 }
 
 function deleteFileRow(ctx: Ctx, row: FileRow): void {
