@@ -415,25 +415,39 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;scroll-behavior:auto}}
 
 /* ---------- MOBILE ---------- */
+/* Dostep do Uzytkownikow: rail na desktopie, ikona w naglowku listy na mobile. */
+.sb-users-m{display:none}
+
+/* ============ MOBILE ADAPTACYJNIE (nie skurczony desktop) ============
+   Wzorzec jak natywna apka: JEDEN ekran naraz. Domyslnie widzisz rozmowe na
+   pelnym ekranie; hamburger otwiera LISTE (kanaly/wiki) tez na pelnym ekranie;
+   wejscie w kanal wraca do rozmowy. Rail admina znika - Uzytkownicy sa w
+   naglowku listy. */
 @media (max-width:760px){
-  .shell{grid-template-columns:1fr}
-  /* Z railem admina: zostaje cienki pasek ikon + tresc; sidebar to szuflada.
-     Bez tego override trzy kolumny (rail+sidebar+main) wciskaly sie w ekran. */
-  .shell.with-rail{grid-template-columns:3.4rem 1fr}
-  .sidebar{position:fixed;inset:0 auto 0 0;width:min(84vw,var(--sbw));z-index:15;
-    transform:translateX(-102%);transition:transform .28s cubic-bezier(.2,.8,.3,1);box-shadow:var(--shadow-lg)}
-  /* Szuflada wjezdza obok raila, nie zaslania go. */
-  .shell.with-rail .sidebar{left:3.4rem}
+  .rail{display:none}
+  .shell, .shell.with-rail, .shell.with-rail.no-side{grid-template-columns:1fr}
+  /* Lista = pelnoekranowy panel wjezdzajacy z lewej. */
+  .sidebar{position:fixed;inset:0;width:100vw;z-index:15;
+    transform:translateX(-102%);transition:transform .26s cubic-bezier(.2,.8,.3,1)}
+  /* Nawet w widoku Uzytkownicy sidebar jest OFF-SCREEN (nie display:none),
+     zeby hamburger mogl go wysunac jako szuflade i wrocic do czatu. */
+  .shell.no-side .sidebar{display:flex}
   .shell.drawer .sidebar{transform:none}
-  .shell.drawer .scrim{display:block;position:fixed;inset:0;background:rgba(10,12,20,.45);z-index:12;animation:fade .2s}
+  .shell.drawer .scrim{display:block;position:fixed;inset:0;background:rgba(10,12,20,.4);z-index:12;animation:fade .2s}
+  .sb-users-m{display:grid}
+  /* Wieksze cele dotykowe na liscie. */
+  .sb-head{padding:0 1rem}
+  .conv{padding:.66rem .7rem;font-size:1rem}
+  .conv .badge{min-width:1.4rem;height:1.4rem}
+  .sb-group h3{font-size:.78rem;margin:.4rem .7rem}
+  /* Rozmowa na pelnym ekranie; hamburger = menu/lista. */
   .topbar .hamburger{display:grid}
-  /* Watek/szuflada = 100% szerokosci MAIN (nie 100vw - inaczej z railem
-     wychodzi poza ekran i tresc wycieka za lewa krawedz). */
-  .thread{width:100%}
-  #details-slot .thread{width:100%}
-  /* Panel Uzytkownicy na mobile: pelna szerokosc obok raila. */
-  .shell.with-rail.no-side{grid-template-columns:3.4rem 1fr}
-  .u-wrap{padding:.8rem .9rem 2rem}
+  .topbar{padding:0 .8rem}
+  .thread, #details-slot .thread{width:100vw}
+  .u-wrap{padding:.8rem .9rem 2rem;max-width:100%}
+  /* Composer szerszy na telefonie (mniej marginesu). */
+  .composer{padding:0 .6rem .8rem}
+  .messages{padding-bottom:5rem}
 }
 
 /* ================= NOWE FUNKCJE: wiki, szukaj, pytania, obecnosc ============ */
