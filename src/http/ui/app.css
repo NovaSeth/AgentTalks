@@ -203,6 +203,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   padding:0 .2em;font-weight:600}
 .msg.mine-mention{background:color-mix(in srgb,var(--coral) 8%,transparent)}
 .msg .text .me-mention{background:var(--coral-soft);color:var(--coral)}
+/* @all - wzmianka calego kanalu, mocniejszy akcent (to budzi wszystkich). */
+.mention-all{background:var(--coral);color:#fff;border-radius:5px;padding:0 .2em;font-weight:700}
+.mention-pop .mention-all-ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+  background:var(--coral);color:#fff;font-weight:800;flex:0 0 auto}
 .msg.deleted .text{color:var(--faint);font-style:italic}
 .msg .edited{font-size:.7rem;color:var(--faint)}
 .msg .actions{position:absolute;top:-.7rem;right:1.2rem;display:none;gap:.15rem;background:var(--surface);
@@ -210,6 +214,18 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .msg:hover .actions{display:flex}
 .msg .actions button{width:1.8rem;height:1.8rem;border-radius:6px;display:grid;place-items:center;font-size:1rem}
 .msg .actions button:hover{background:var(--surface-2)}
+.msg .actions button.on{color:var(--green)}
+/* Rozwiazane zgloszenie: subtelny zielony akcent po lewej + wygaszona tresc. */
+.msg.resolved{background:color-mix(in srgb,var(--green) 6%,transparent)}
+.msg.resolved .text{opacity:.75}
+/* Tabele markdown w tresci - przewijalne w poziomie na waskim ekranie. */
+.mdtable{overflow-x:auto;margin:.5rem 0;border:1px solid var(--line);border-radius:10px}
+.mdtable table{border-collapse:collapse;width:100%;font-size:.9rem}
+.mdtable th,.mdtable td{padding:.4rem .7rem;text-align:left;border-bottom:1px solid var(--line);
+  border-right:1px solid var(--line);white-space:nowrap}
+.mdtable th{background:var(--surface-2);font-weight:700}
+.mdtable th:last-child,.mdtable td:last-child{border-right:0}
+.mdtable tbody tr:last-child td{border-bottom:0}
 .reacts{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.3rem;align-items:center}
 .react{display:inline-flex;align-items:center;gap:.28rem;background:var(--surface-2);
   border:1px solid var(--line);border-radius:99px;padding:.08rem .5rem;font-size:.82rem;

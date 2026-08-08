@@ -380,5 +380,15 @@ CREATE TABLE webauthn_credentials (
 CREATE INDEX idx_webauthn_actor ON webauthn_credentials(actor_id);
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9];
+/**
+ * Migracja 10: ROZWIAZANE wiadomosci. Zgloszenie na kanale (np. #bug) da sie
+ * domknac znacznikiem - wtedy przy wpisie widac check, a rozmowa toczy sie
+ * w watku pod nim. Generyczne (dziala na kazdym kanale), nie tylko dla bugow.
+ */
+const M10 = `
+ALTER TABLE messages ADD COLUMN resolved_at INTEGER;
+ALTER TABLE messages ADD COLUMN resolved_by INTEGER REFERENCES actors(id);
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10];
 export const SCHEMA_VERSION = MIGRATIONS.length;

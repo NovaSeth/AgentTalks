@@ -16,7 +16,7 @@
  */
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
-import { assertCanPost, assertCanRead, recipientsOf } from "./conversations.ts";
+import { assertCanPost, assertCanRead, getMember, recipientsOf } from "./conversations.ts";
 import { badRequest, forbidden, notFound, tooLarge } from "./errors.ts";
 import { resolveMentions } from "./mentions.ts";
 import { clearTyping } from "./presence.ts";
@@ -38,6 +38,8 @@ export type Message = {
   threadId: number | null;
   editedAt: number | null;
   deletedAt: number | null;
+  resolvedAt: number | null;
+  resolvedBy: number | null;   // actorId; UI mapuje na handle
   meta: Record<string, unknown> | null;
 };
 
@@ -52,6 +54,8 @@ export type MsgRow = {
   thread_id: number | null;
   edited_at: number | null;
   deleted_at: number | null;
+  resolved_at: number | null;
+  resolved_by: number | null;
   meta: string | null;
 };
 
@@ -69,6 +73,8 @@ export const messageFromRow = (r: MsgRow): Message => ({
   threadId: r.thread_id,
   editedAt: r.edited_at,
   deletedAt: r.deleted_at,
+  resolvedAt: r.resolved_at ?? null,
+  resolvedBy: r.resolved_by ?? null,
   meta: r.meta ? (JSON.parse(r.meta) as Record<string, unknown>) : null,
 });
 
@@ -143,7 +149,11 @@ export function postMessage(
     const stmt = ctx.db.prepare(
       "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?,?)",
     );
-    for (const actorId of resolveMentions(ctx, body)) stmt.run(row.id, actorId);
+    // conversationId pozwala rozwinac @all na wszystkich czlonkow kanalu.
+    // Autor nie wspomina sam siebie - inaczej @all budzilby tez nadawce.
+    for (const actorId of resolveMentions(ctx, body, input.conversationId)) {
+      if (actorId !== input.actorId) stmt.run(row.id, actorId);
+    }
     return messageFromRow(row);
   });
 
@@ -230,7 +240,9 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
     const stmt = ctx.db.prepare(
       "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?,?)",
     );
-    for (const a of resolveMentions(ctx, text)) stmt.run(id, a);
+    for (const a of resolveMentions(ctx, text, row.conversation_id)) {
+      if (a !== actorId) stmt.run(id, a);
+    }
     return messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
   });
 
@@ -256,6 +268,34 @@ export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
     return messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
   });
 
+  onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
+    type: "message_updated",
+    conversationId: row.conversation_id,
+    message,
+  }));
+  return message;
+}
+
+/** Oznacz wiadomosc jako rozwiazana / cofnij (np. zgloszenie na #bug domkniete).
+ *  Moze: autor wiadomosci, admin instancji, albo admin kanalu. Generyczne -
+ *  na dowolnym kanale. Zdarzenie message_updated odswieza check u wszystkich. */
+export function resolveMessage(
+  ctx: Ctx,
+  input: { id: number; actorId: number; resolved: boolean; isInstanceAdmin: boolean },
+): Message {
+  const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow | undefined;
+  if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${input.id}`);
+  if (row.deleted_at) throw badRequest("skasowana", "skasowanej wiadomosci nie da sie rozwiazac");
+  assertCanRead(ctx, row.conversation_id, input.actorId);
+  if (!input.isInstanceAdmin && row.actor_id !== input.actorId) {
+    const m = getMember(ctx, row.conversation_id, input.actorId);
+    if (!m || m.role !== "admin") {
+      throw forbidden("brak_uprawnien", "rozwiazac moze autor, admin kanalu albo admin instancji");
+    }
+  }
+  ctx.db.prepare("UPDATE messages SET resolved_at = ?, resolved_by = ? WHERE id = ?")
+    .run(input.resolved ? ctx.now() : null, input.resolved ? input.actorId : null, input.id);
+  const message = messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow);
   onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
     type: "message_updated",
     conversationId: row.conversation_id,

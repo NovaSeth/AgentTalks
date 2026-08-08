@@ -31,15 +31,31 @@ export function parseMentions(body: string): string[] {
   return out;
 }
 
-/** Handle, ktore realnie istnieja, na id aktorow. Nieistniejace sa po prostu tekstem. */
-export function resolveMentions(ctx: Ctx, body: string): number[] {
+/** Wzmianki zbiorowe: kazdy z tych aliasow wola WSZYSTKICH czlonkow kanalu. */
+const ALL_ALIASES = new Set(["all", "channel", "here", "wszyscy", "kanal"]);
+
+/** Handle, ktore realnie istnieja, na id aktorow. Nieistniejace sa po prostu tekstem.
+ *  Gdy podano conversationId, `@all` (i aliasy) rozwijaja sie na wszystkich
+ *  czlonkow kanalu - tak, zeby ogloszenie do calego kanalu dotarlo pushem/wake
+ *  do kazdego, kto go obserwuje. */
+export function resolveMentions(ctx: Ctx, body: string, conversationId?: number): number[] {
   const handles = parseMentions(body);
   if (handles.length === 0) return [];
-  const marks = handles.map(() => "?").join(",");
-  const rows = ctx.db
-    .prepare(`SELECT id FROM actors WHERE handle IN (${marks})`)
-    .all(...handles) as Array<{ id: number }>;
-  return rows.map((r) => r.id);
+  const ids = new Set<number>();
+  const named = handles.filter((h) => !ALL_ALIASES.has(h));
+  const wantsAll = conversationId !== undefined && handles.some((h) => ALL_ALIASES.has(h));
+  if (named.length) {
+    const marks = named.map(() => "?").join(",");
+    const rows = ctx.db.prepare(`SELECT id FROM actors WHERE handle IN (${marks})`)
+      .all(...named) as Array<{ id: number }>;
+    for (const r of rows) ids.add(r.id);
+  }
+  if (wantsAll) {
+    const rows = ctx.db.prepare("SELECT actor_id FROM members WHERE conversation_id = ?")
+      .all(conversationId) as Array<{ actor_id: number }>;
+    for (const r of rows) ids.add(r.actor_id);
+  }
+  return [...ids];
 }
 
 /**

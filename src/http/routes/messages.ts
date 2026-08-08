@@ -1,5 +1,5 @@
 /** Operacje na pojedynczej wiadomosci, watki, reakcje, wyszukiwanie, obecnosc. */
-import { deleteMessage, editMessage, getMessage, listThread } from "../../core/messages.ts";
+import { deleteMessage, editMessage, getMessage, listThread, resolveMessage } from "../../core/messages.ts";
 import { canRead } from "../../core/conversations.ts";
 import { actorsByIds } from "../../core/actors.ts";
 import { forbidden, notFound } from "../../core/errors.ts";
@@ -31,6 +31,21 @@ export function registerMessageRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     json(res, 200, { message: deleteMessage(rc.ctx, Number(rc.params.id), actor.id) });
+  });
+
+  /** Domkniecie zgloszenia (np. na #bug): check przy wpisie. resolved=false cofa. */
+  router.add("POST", "/api/messages/:id/resolve", async (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    const body = await readJson(req, 512);
+    json(res, 200, {
+      message: resolveMessage(rc.ctx, {
+        id: Number(rc.params.id),
+        actorId: actor.id,
+        resolved: body.resolved !== false,
+        isInstanceAdmin: !!actor.isAdmin,
+      }),
+    });
   });
 
   router.add("GET", "/api/messages/:id/thread", (_req, res, rc) => {
