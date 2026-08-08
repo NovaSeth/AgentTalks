@@ -53,8 +53,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   border-radius:22px;box-shadow:var(--shadow-lg);padding:2.2rem 2rem;
   animation:pop .5s cubic-bezier(.2,.9,.3,1.2) both}
 .brand{display:flex;align-items:center;gap:.6rem;justify-content:center;margin-bottom:.3rem}
-.brand .logo{width:2.4rem;height:2.4rem;border-radius:12px;background:var(--accent);
-  color:var(--on-accent);display:grid;place-items:center;font-size:1.3rem;box-shadow:var(--shadow-sm)}
+/* Sam glif, bez kafla - dymek w kolorze tekstu (bialy na ciemnym tle). */
+.brand .logo{width:2.4rem;height:2.4rem;display:grid;place-items:center;color:var(--ink)}
+.brand .logo svg{width:2rem;height:2rem}
 .brand h1{font-family:var(--round);font-weight:800;font-size:1.6rem;margin:0;letter-spacing:-.02em}
 .login p.sub{text-align:center;color:var(--muted);margin:.2rem 0 1.5rem}
 .field{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.9rem}
@@ -73,6 +74,35 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
 /* ---------- SHELL ---------- */
 .shell{height:100%;display:grid;grid-template-columns:var(--sbw) 1fr}
+/* Icon-rail (tylko admin-czlowiek): Chaty / Uzytkownicy. */
+.shell.with-rail{grid-template-columns:3.4rem var(--sbw) 1fr}
+.rail{background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;
+  align-items:center;gap:.4rem;padding:.7rem 0}
+.rail-btn{width:2.5rem;height:2.5rem;border-radius:11px;display:grid;place-items:center;color:var(--muted);
+  transition:background .15s,color .15s}
+.rail-btn:hover{background:var(--surface-2);color:var(--ink)}
+.rail-btn.on{background:var(--accent-soft);color:var(--accent-ink)}
+/* Panel Uzytkownicy. */
+.u-wrap{overflow-y:auto;flex:1;padding:1rem 1.2rem 2rem;max-width:64rem}
+.u-row{border:1px solid var(--line);border-radius:12px;margin-bottom:.5rem;background:var(--surface)}
+.u-row.off{opacity:.6}
+.u-head{display:flex;align-items:center;gap:.6rem;width:100%;text-align:left;padding:.55rem .8rem}
+.u-head:hover{background:var(--surface-2);border-radius:12px}
+.u-name{font-weight:700}
+.u-meta{margin-left:auto;color:var(--faint);font-size:.8rem;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap}
+.u-offtag{font-size:.66rem;font-weight:800;text-transform:uppercase;color:var(--coral);
+  background:var(--coral-soft);border-radius:6px;padding:.1rem .4rem}
+.u-body{padding:.2rem 1rem 1rem;border-top:1px solid var(--line)}
+.u-token{display:flex;align-items:center;gap:.6rem;padding:.3rem 0;font-size:.88rem}
+.u-token.dead{opacity:.5}
+.u-tname{font-weight:650;flex:0 0 auto}
+.u-tmeta{color:var(--faint);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.u-activity{max-height:14rem;overflow-y:auto}
+.u-act{font-size:.84rem;padding:.2rem 0;color:var(--muted)}
+.u-act .u-when{color:var(--faint);font-size:.74rem;margin-right:.4rem}
+.u-act .u-priv{color:var(--faint)}
+.ni-paste{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+  padding:.6rem .8rem;font-size:.85rem;font-family:ui-monospace,monospace;margin-bottom:.8rem;resize:none}
 .scrim{display:none}
 
 /* ---------- SIDEBAR ---------- */

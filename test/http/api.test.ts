@@ -676,3 +676,90 @@ test("wiki: podglad pojedynczej rewizji zwraca pelna tresc; cudza/nieistniejaca 
   assert.equal(bad.status, 404);
   await s.close();
 });
+
+// --- panel admina -----------------------------------------------------------
+
+test("panel admina: czlowiek-admin wchodzi, agent (nawet adminowski) nie", async () => {
+  const s = await startTestServer();
+  const { ala, tokenA } = seed(s);
+  // agent bez adminki
+  const r1 = await fetch(s.url + "/api/admin/actors", { headers: bearer(tokenA) });
+  assert.equal(r1.status, 403);
+  // agent Z adminka - nadal nie: panel jest dla czlowieka
+  s.ctx.db.prepare("UPDATE actors SET is_admin = 1 WHERE id = ?").run(ala.id);
+  const r2 = await fetch(s.url + "/api/admin/actors", { headers: bearer(tokenA) });
+  assert.equal(r2.status, 403);
+  // czlowiek-admin przez cookie: 200 + aktorzy z tokenami i zaproszenia
+  const login = await fetch(s.url + "/api/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ handle: "michal", password: "haslo1234" }),
+  });
+  const cookie = login.headers.get("set-cookie")!.split(";")[0];
+  const r3 = await fetch(s.url + "/api/admin/actors", { headers: { cookie } });
+  assert.equal(r3.status, 200);
+  const data = await r3.json();
+  assert.ok(Array.isArray(data.actors) && data.actors.length >= 3);
+  const alaRow = data.actors.find((a: { handle: string }) => a.handle === "ala");
+  assert.ok(alaRow.tokens.length >= 1, "brak tokenow w odpowiedzi admina");
+  await s.close();
+});
+
+test("panel admina: zaproszenie z UI dziala w enrollu, odwolane przestaje", async () => {
+  const s = await startTestServer();
+  seed(s);
+  const login = await fetch(s.url + "/api/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ handle: "michal", password: "haslo1234" }),
+  });
+  const cookie = login.headers.get("set-cookie")!.split(";")[0];
+  const csrf = (await login.json()).csrf as string;
+  const created = await (await fetch(s.url + "/api/admin/invites", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie, "x-at-csrf": csrf },
+    body: JSON.stringify({ note: "test-ui", uses: 1 }),
+  })).json();
+  assert.match(created.code, /^ati_/);
+  // enroll kodem z panelu
+  const enr = await fetch(s.url + "/api/enroll", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ invite: created.code, handle: "nowy-agent" }),
+  });
+  assert.equal(enr.status, 201);
+  // drugie zaproszenie: odwolane przed uzyciem nie dziala
+  const c2 = await (await fetch(s.url + "/api/admin/invites", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie, "x-at-csrf": csrf },
+    body: JSON.stringify({ uses: 1 }),
+  })).json();
+  const rev = await fetch(s.url + `/api/admin/invites/${c2.invite.id}`, {
+    method: "DELETE", headers: { cookie, "x-at-csrf": csrf },
+  });
+  assert.equal(rev.status, 200);
+  const enr2 = await fetch(s.url + "/api/enroll", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ invite: c2.code, handle: "spozniony" }),
+  });
+  assert.equal(enr2.status, 403);
+  await s.close();
+});
+
+test("panel admina: wylaczenie konta gasi token, wlaczenie przywraca", async () => {
+  const s = await startTestServer();
+  const { ala, tokenA } = seed(s);
+  const login = await fetch(s.url + "/api/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ handle: "michal", password: "haslo1234" }),
+  });
+  const cookie = login.headers.get("set-cookie")!.split(";")[0];
+  const csrf = (await login.json()).csrf as string;
+  assert.equal((await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).status, 200);
+  await fetch(s.url + `/api/admin/actors/${ala.id}/disable`, {
+    method: "POST", headers: { cookie, "x-at-csrf": csrf },
+  });
+  assert.equal((await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).status, 401);
+  await fetch(s.url + `/api/admin/actors/${ala.id}/enable`, {
+    method: "POST", headers: { cookie, "x-at-csrf": csrf },
+  });
+  assert.equal((await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).status, 200);
+  await s.close();
+});

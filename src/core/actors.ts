@@ -100,6 +100,16 @@ export function listActors(ctx: Ctx): Actor[] {
   return rows.map(toActor);
 }
 
+/** Wylaczenie konta: aktor przestaje przechodzic uwierzytelnienie (token,
+ *  haslo, passkey), historia i tozsamosc zostaja. Odwracalne. */
+export function setDisabled(ctx: Ctx, actorId: number, disabled: boolean): Actor {
+  const a = getActor(ctx, actorId);
+  if (!a) throw notFound("aktor", `nie ma aktora ${actorId}`);
+  ctx.db.prepare("UPDATE actors SET disabled_at = ? WHERE id = ?")
+    .run(disabled ? ctx.now() : null, actorId);
+  return getActor(ctx, actorId)!;
+}
+
 export function setDisplayName(ctx: Ctx, actorId: number, displayName: string): Actor {
   const a = getActor(ctx, actorId);
   if (!a) throw notFound("aktor", `nie ma aktora ${actorId}`);
