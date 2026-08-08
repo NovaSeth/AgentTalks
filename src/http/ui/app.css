@@ -74,16 +74,14 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
 /* ---------- SHELL ---------- */
 .shell{height:100%;display:grid;grid-template-columns:var(--sbw) 1fr}
-/* Icon-rail (tylko admin-czlowiek): Chaty / Uzytkownicy. */
-.shell.with-rail{grid-template-columns:3.4rem var(--sbw) 1fr}
-.shell.no-side .sidebar{display:none}
-.shell.with-rail.no-side{grid-template-columns:3.4rem 1fr}
-.rail{background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;
-  align-items:center;gap:.4rem;padding:.7rem 0}
-.rail-btn{width:2.5rem;height:2.5rem;border-radius:11px;display:grid;place-items:center;color:var(--muted);
+/* Taby Rozmowy/Uzytkownicy w sidebarze (admin-czlowiek) - zamiast osobnego raila. */
+.sb-tabs{display:flex;gap:.3rem;padding:.4rem .6rem;border-bottom:1px solid var(--line)}
+.sb-tabs button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:.35rem;
+  padding:.4rem .5rem;border-radius:9px;color:var(--muted);font-size:.85rem;font-weight:650;
   transition:background .15s,color .15s}
-.rail-btn:hover{background:var(--surface-2);color:var(--ink)}
-.rail-btn.on{background:var(--accent-soft);color:var(--accent-ink)}
+.sb-tabs button svg{width:1.05em;height:1.05em}
+.sb-tabs button:hover{background:var(--surface-2);color:var(--ink)}
+.sb-tabs button.on{background:var(--accent-soft);color:var(--accent-ink)}
 /* Panel Uzytkownicy. */
 .u-wrap{overflow-y:auto;flex:1;padding:1rem 1.2rem 2rem;max-width:64rem}
 .u-row{border:1px solid var(--line);border-radius:12px;margin-bottom:.5rem;background:var(--surface)}
@@ -414,27 +412,17 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 @keyframes shake{10%,90%{transform:translateX(-1px)}30%,70%{transform:translateX(3px)}50%{transform:translateX(-4px)}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;scroll-behavior:auto}}
 
-/* ---------- MOBILE ---------- */
-/* Dostep do Uzytkownikow: rail na desktopie, ikona w naglowku listy na mobile. */
-.sb-users-m{display:none}
-
 /* ============ MOBILE ADAPTACYJNIE (nie skurczony desktop) ============
    Wzorzec jak natywna apka: JEDEN ekran naraz. Domyslnie widzisz rozmowe na
-   pelnym ekranie; hamburger otwiera LISTE (kanaly/wiki) tez na pelnym ekranie;
-   wejscie w kanal wraca do rozmowy. Rail admina znika - Uzytkownicy sa w
-   naglowku listy. */
+   pelnym ekranie; hamburger otwiera LISTE (kanaly/wiki + taby Rozmowy/
+   Uzytkownicy) tez na pelnym ekranie; wejscie w kanal wraca do rozmowy. */
 @media (max-width:760px){
-  .rail{display:none}
-  .shell, .shell.with-rail, .shell.with-rail.no-side{grid-template-columns:1fr}
+  .shell{grid-template-columns:1fr}
   /* Lista = pelnoekranowy panel wjezdzajacy z lewej. */
   .sidebar{position:fixed;inset:0;width:100vw;z-index:15;
     transform:translateX(-102%);transition:transform .26s cubic-bezier(.2,.8,.3,1)}
-  /* Nawet w widoku Uzytkownicy sidebar jest OFF-SCREEN (nie display:none),
-     zeby hamburger mogl go wysunac jako szuflade i wrocic do czatu. */
-  .shell.no-side .sidebar{display:flex}
   .shell.drawer .sidebar{transform:none}
   .shell.drawer .scrim{display:block;position:fixed;inset:0;background:rgba(10,12,20,.4);z-index:12;animation:fade .2s}
-  .sb-users-m{display:grid}
   /* Wieksze cele dotykowe na liscie. */
   .sb-head{padding:0 1rem}
   .conv{padding:.66rem .7rem;font-size:1rem}
@@ -445,9 +433,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   .topbar{padding:0 .8rem}
   .thread, #details-slot .thread{width:100vw}
   .u-wrap{padding:.8rem .9rem 2rem;max-width:100%}
-  /* Composer z wyraznym marginesem bocznym (byl za szeroki, dotykal krawedzi). */
-  .composer{padding:0 1rem .8rem}
-  .composer .card{padding:.35rem .35rem .35rem .5rem}
+  /* Mniejsze marginesy boczne w czacie (byly za duze) + luzniejszy composer. */
+  .msg{padding-left:.7rem;padding-right:.7rem;gap:.5rem}
+  .day{margin:.5rem .7rem}
+  .composer{padding:0 .7rem .8rem}
   .messages{padding-bottom:5rem}
 }
 
