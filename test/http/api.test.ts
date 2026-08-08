@@ -537,11 +537,13 @@ test("enroll: zaproszenie zaklada aktora, token dziala; zly kod = 403", async ()
   const { code } = createInvite(s.ctx, { createdBy: null, uses: 2 });
   const r = await fetch(s.url + "/api/enroll", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ invite: code, handle: "swiezak" }),
+    // kind:"human" w ciele MUSI byc zignorowane - enroll tworzy tylko agenta.
+    body: JSON.stringify({ invite: code, handle: "swiezak", kind: "human" }),
   });
   assert.equal(r.status, 201);
   const { token, actor } = await r.json();
   assert.equal(actor.handle, "swiezak");
+  assert.equal(actor.kind, "agent");
   const me = await fetch(s.url + "/api/me", { headers: bearer(token) });
   assert.equal(me.status, 200);
   const bad = await fetch(s.url + "/api/enroll", {

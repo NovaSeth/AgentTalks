@@ -18,6 +18,12 @@ import { normalizeSlug } from "./ids.ts";
 export const MAX_WIKI_BYTES = 512 * 1024; // strona wiedzy bywa dluga, ale nie bez konca
 const MAX_TITLE = 200;
 
+// Slugi kolidujace z literalnymi trasami pod /api/wiki (router: pierwsza pasujaca
+// trasa wygrywa, wiec strona o takim slugu bylaby nieodczytalna kanonicznym GET).
+// "search" to jedyny literal na pozycji :slug; rezerwujemy go przy zapisie, zeby
+// takiej strony w ogole nie dalo sie zalozyc.
+const RESERVED_SLUGS = new Set(["search"]);
+
 export type WikiPage = {
   slug: string;
   title: string;
@@ -92,6 +98,9 @@ export function savePage(
   input: { slug: string; title: string; body: string; actorId: number; note?: string | null },
 ): WikiPage {
   const slug = normalizeSlug(input.slug);
+  if (RESERVED_SLUGS.has(slug)) {
+    throw badRequest("slug_zarezerwowany", `nazwa "${slug}" jest zarezerwowana - wybierz inna`);
+  }
   const { title, body } = validate(input.title, input.body);
   const now = ctx.now();
 

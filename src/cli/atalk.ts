@@ -15,7 +15,7 @@
  * sesji w prototypie: "read" dostarcza nowe, "log" przeglada bez ruszania
  * licznikow, "seen" zeruje liczniki konwersacji.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -32,6 +32,16 @@ type Args = ReturnType<typeof parseArgs>;
 
 const flagStr = (args: Args, name: string): string | undefined =>
   typeof args.flags[name] === "string" ? (args.flags[name] as string) : undefined;
+
+/** Zapisuje konfiguracje z tokenem, pilnujac praw 0600. `mode` w writeFileSync
+ *  dziala tylko przy TWORZENIU pliku - przy nadpisaniu istniejacego (np. 0644 po
+ *  wczesniejszym recznym utworzeniu) uprawnienia by sie nie zmienily, a w pliku
+ *  siedzi dlugozyciowy token. Dlatego jawny chmod po zapisie; katalog 0700. */
+function saveClientConfig(cfg: ClientConfig): void {
+  mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+  try { chmodSync(CONFIG_FILE, 0o600); } catch { /* np. Windows - best effort */ }
+}
 
 function loadClientConfig(args: Args): ClientConfig {
   let stored: Partial<ClientConfig> = {};
@@ -361,8 +371,7 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
       if (!res.ok) { process.stderr.write(`blad: ${String(data.error ?? `HTTP ${res.status}`)}\n`); return 1; }
       const token = String(data.token);
       const actor = data.actor as { handle: string };
-      mkdirSync(CONFIG_DIR, { recursive: true });
-      writeFileSync(CONFIG_FILE, JSON.stringify({ url: base, token }, null, 2), { mode: 0o600 });
+      saveClientConfig({ url: base, token });
       process.stdout.write(`dolaczono. Jestes @${actor.handle} na ${base} (token zapisany).\n`);
       return 0;
     }
@@ -373,8 +382,7 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
         process.stderr.write("uzycie: atalk login --url <adres> --token <atk_...>\n");
         return 1;
       }
-      mkdirSync(CONFIG_DIR, { recursive: true });
-      writeFileSync(CONFIG_FILE, JSON.stringify({ url, token }, null, 2), { mode: 0o600 });
+      saveClientConfig({ url, token });
       const api = new Api({ url: url.replace(/\/+$/, ""), token });
       const me = await api.call("GET", "/api/me");
       process.stdout.write(

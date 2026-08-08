@@ -39,18 +39,40 @@ function checkEnrollLimit(key: string, now: number): void {
   if (e.count > 20) throw tooMany("za_duzo_prob", "za duzo prob rejestracji, sprobuj pozniej");
 }
 
+// Klucz limitera per adres zrodlowy. Za proxy X-Forwarded-For to lista, do ktorej
+// KAZDY hop DOPISUJE z prawej: "<to co podal klient>, <IP ktore widzialo nasze proxy>".
+// Element skrajnie LEWY jest w calosci pod kontrola klienta (moze go podac dowolny),
+// wiec kluczowanie po nim daje atakujacemu nieskonczenie wiele swiezych kubelkow.
+// Bierzemy element skrajnie PRAWY - ten dopisalo nasze wlasne proxy - a bez proxy
+// (albo gdy naglowka nie ma) realny adres gniazda. Zaklada jeden zaufany hop.
+export function clientKey(
+  req: { headers: Record<string, unknown>; socket: { remoteAddress?: string } },
+  trustProxy: boolean,
+): string {
+  if (trustProxy) {
+    const xff = str(req.headers["x-forwarded-for"]);
+    if (xff) {
+      const parts = xff.split(",");
+      const last = parts[parts.length - 1]?.trim();
+      if (last) return last;
+    }
+  }
+  return req.socket.remoteAddress || "?";
+}
+
 export function registerAuthRoutes(router: Router): void {
   // Enrollment: jedyna trasa ZAPISU bez logowania - bo zaproszenie JEST poswiadczeniem.
   // Nowy agent wykupuje kod na aktora + token. Rate-limit chroni przed zgadywaniem kodu.
   router.add("POST", "/api/enroll", async (req, res, rc) => {
-    const fwd = rc.config.trustProxy ? str(req.headers["x-forwarded-for"])?.split(",")[0] : null;
-    checkEnrollLimit(fwd?.trim() || req.socket.remoteAddress || "?", Math.floor(Date.now() / 1000));
+    checkEnrollLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 4096);
-    const kind = str(body.kind) === "human" ? "human" : "agent";
+    // kind NIE pochodzi z ciala zadania: samodzielna rejestracja tworzy WYLACZNIE
+    // aktora-agenta. "Jestem czlowiekiem" to sygnal zaufania, ktorego nie wolno
+    // samozadeklarowac przez rozdany kod - aktora-czlowieka zaklada admin (CLI/POST
+    // /api/actors), nie enrollment.
     const { actor, token } = redeemInvite(rc.ctx, {
       code: str(body.invite) ?? "",
       handle: str(body.handle) ?? "",
-      kind,
       tokenName: str(body.tokenName) ?? undefined,
     });
     json(res, 201, { actor, token });
@@ -60,10 +82,7 @@ export function registerAuthRoutes(router: Router): void {
     const body = await readJson(req, 4096);
     const handle = str(body.handle) ?? "";
     const password = str(body.password) ?? "";
-    // Klucz per adres zrodlowy; za proxy bierzemy pierwszy X-Forwarded-For tylko
-    // przy trustProxy, bo bez proxy ten naglowek jest w calosci w rekach klienta.
-    const fwd = rc.config.trustProxy ? str(req.headers["x-forwarded-for"])?.split(",")[0] : null;
-    checkLoginLimit(fwd?.trim() || req.socket.remoteAddress || "?", Math.floor(Date.now() / 1000));
+    checkLoginLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
     const actor = verifyPassword(rc.ctx, handle, password);
     // Jeden komunikat dla zlego handle i zlego hasla: inaczej odpowiedz serwera
     // jest wyrocznia "czy taki uzytkownik istnieje".

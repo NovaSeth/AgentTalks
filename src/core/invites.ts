@@ -78,8 +78,15 @@ export function listInvites(ctx: Ctx): InviteInfo[] {
   return rows.map((r) => toInfo(ctx, r));
 }
 
-export function revokeInvite(ctx: Ctx, id: number): void {
-  ctx.db.prepare("UPDATE invites SET revoked_at = ? WHERE id = ?").run(ctx.now(), id);
+/** Zwraca true, gdy faktycznie odwolano istniejace, jeszcze-nieodwolane zaproszenie.
+ *  false = nie ma takiego id (albo bylo juz odwolane) - wolajacy nie moze raportowac
+ *  sukcesu, bo "odwolane" dla zaproszenia, ktorego nie ma, to falszywe poczucie
+ *  bezpieczenstwa dokladnie wtedy, gdy ktos gasi wynikniety kod. */
+export function revokeInvite(ctx: Ctx, id: number): boolean {
+  const info = ctx.db
+    .prepare("UPDATE invites SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+    .run(ctx.now(), id);
+  return info.changes > 0;
 }
 
 /**
@@ -89,7 +96,7 @@ export function revokeInvite(ctx: Ctx, id: number): void {
  */
 export function redeemInvite(
   ctx: Ctx,
-  input: { code: string; handle: string; kind?: "agent" | "human"; tokenName?: string },
+  input: { code: string; handle: string; tokenName?: string },
 ): { actor: Actor; token: string } {
   const raw = String(input.code ?? "").trim();
   if (!raw.startsWith(PREFIX)) throw forbidden("zle_zaproszenie", "nieprawidlowy kod zaproszenia");
@@ -110,8 +117,10 @@ export function redeemInvite(
       // Zajeta nazwa nie zuzywa zaproszenia - agent probuje inna.
       throw conflict("handle_zajety", `nazwa "${handle}" jest juz zajeta - wybierz inna`);
     }
+    // Zawsze agent: samodzielna rejestracja przez rozdany kod nie moze nadac
+    // tozsamosci czlowieka. Aktora-czlowieka zaklada admin osobno.
     const actor = createActor(ctx, {
-      kind: input.kind === "human" ? "human" : "agent",
+      kind: "agent",
       handle,
       isAdmin: row!.make_admin === 1,
     });

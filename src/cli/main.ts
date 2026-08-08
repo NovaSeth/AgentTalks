@@ -363,7 +363,12 @@ function cmdInvite(rest: string[], args: Args): number {
     return 0;
   }
   if (sub === "revoke" && id) {
-    revokeInvite(ctx, Number(id));
+    // Potwierdz sukces tylko, gdy naprawde odwolano istniejacy kod - inaczej
+    // literowka w id daje falszywe "odwolane", a wynikniety kod dalej dziala.
+    if (!revokeInvite(ctx, Number(id))) {
+      process.stderr.write(`nie ma aktywnego zaproszenia o id ${id}\n`);
+      return 1;
+    }
     process.stdout.write(`zaproszenie ${id} odwolane\n`);
     return 0;
   }

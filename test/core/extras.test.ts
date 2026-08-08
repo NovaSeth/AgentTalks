@@ -471,6 +471,17 @@ test("wiki: kazdy zalogowany moze edytowac (wspolna wiedza)", async () => {
   assert.equal(getPage(ctx, "s")!.body, "od obcego");
 });
 
+test("wiki: slug kolidujacy z trasa (search) jest odrzucany", async () => {
+  const { savePage, getPage } = await import("../../src/core/wiki.ts");
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala");
+  assert.throws(
+    () => savePage(ctx, { slug: "search", title: "S", body: "x", actorId: a.id }),
+    /zarezerwowana/,
+  );
+  assert.equal(getPage(ctx, "search"), null); // strona nie powstala
+});
+
 test("wiki: wyszukiwarka znajduje po tresci i tytule", async () => {
   const { savePage, searchWiki } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
