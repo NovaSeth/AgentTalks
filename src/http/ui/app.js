@@ -9,10 +9,10 @@ const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
 ));
 
-// Reakcje uzywaja prawdziwych emoji jako WARTOSCI (tak dziala protokol reakcji),
-// ale zapisane jako ucieczki unicode - zaden literal nie siedzi w zrodle pliku.
-const THUMB = "\u{1F44D}";
-const HEART = "\u{2764}\u{FE0F}";
+// Popularny zestaw do popovera "dodaj reakcje" - kazda wartosc idzie przez to
+// samo API co dowolna inna reakcja (POST /api/messages/:id/reactions), wiec
+// paleta jest tylko wygoda UI, nie ogranicza tego, co da sie wyslac.
+const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "👏", "✅", "🤔", "😢", "💯", "🙏", "👋", "⭐", "🙌"];
 
 const PALETTE = ["#3b5ce0", "#ff6b3d", "#1fae7a", "#a45ee5", "#e0466b", "#0ea5c4", "#c98a1f", "#5c6bc0"];
 function colorFor(handle) {
@@ -108,7 +108,6 @@ const state = {
   replyTo: null,           // messageId | null
   drawerOpen: false,       // sidebar mobile
   loadingConv: false,
-  toast: null,
   guidelines: null,
   actorsList: [],          // do modala nowej rozmowy
 };
@@ -123,22 +122,48 @@ function mergeActors(map) {
   Object.assign(state.actorsCache, map || {});
 }
 
-// ------------------------------------------------------------------- toast
-let toastTimer = null;
-function showToast(msg) {
-  state.toast = msg;
-  renderToast();
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { state.toast = null; renderToast(); }, 3400);
+// ------------------------------------------------------------------- toasty
+// Stos w prawym gornym rogu - kazdy komunikat ma WLASNY timer i znika osobno,
+// nie nadpisuje poprzedniego. Najechanie wstrzymuje odliczanie tego jednego.
+const TOAST_MS = 4200;
+let toastStack = null;
+function ensureToastStack() {
+  if (!toastStack) {
+    toastStack = document.createElement("div");
+    toastStack.className = "toast-stack";
+    document.body.appendChild(toastStack);
+  }
+  return toastStack;
 }
-function renderToast() {
-  let el = document.querySelector(".toast");
-  if (el) el.remove();
-  if (!state.toast) return;
-  el = document.createElement("div");
+
+function showToast(msg) {
+  const stack = ensureToastStack();
+  const el = document.createElement("div");
   el.className = "toast";
-  el.textContent = state.toast;
-  document.body.appendChild(el);
+  el.innerHTML = `<span class="tmsg"></span><button class="tclose" title="Zamknij">&times;</button>`;
+  el.querySelector(".tmsg").textContent = msg;
+  stack.appendChild(el);
+
+  let remaining = TOAST_MS;
+  let startedAt = Date.now();
+  let timer = setTimeout(dismiss, remaining);
+
+  function dismiss() {
+    clearTimeout(timer);
+    el.removeEventListener("animationend", onLeaveEnd);
+    el.addEventListener("animationend", onLeaveEnd, { once: true });
+    el.classList.add("leaving");
+  }
+  function onLeaveEnd() { el.remove(); }
+  el.addEventListener("mouseenter", () => {
+    clearTimeout(timer);
+    remaining -= Date.now() - startedAt;
+  });
+  el.addEventListener("mouseleave", () => {
+    startedAt = Date.now();
+    timer = setTimeout(dismiss, Math.max(400, remaining));
+  });
+  el.querySelector(".tclose").addEventListener("click", dismiss);
 }
 
 // --------------------------------------------------------------- SSE (na zywo)
@@ -258,6 +283,8 @@ async function openConversation(id) {
   state.drawerOpen = false;
   state.replyTo = null;
   state.threadOpen = null;
+  for (const p of pendingFiles) if (p.url) URL.revokeObjectURL(p.url);
+  pendingFiles = [];
   render();
   if (!state.msgs[id]) {
     state.loadingConv = true;
@@ -424,9 +451,7 @@ function renderSidebar() {
   const el = document.getElementById("sidebar");
   el.innerHTML = `
     <div class="sb-head">
-      <div class="logo">${iconChat()}</div>
       <div class="who">
-        <div class="wsname">AgentTalks</div>
         <div class="me"><span class="dot"></span>@${escapeHtml(state.actor.handle)}</div>
       </div>
       <button class="iconbtn" id="btn-guidelines" title="Zasady kanału">${iconInfo()}</button>
@@ -554,6 +579,7 @@ function scrollToBottom(smooth) {
 function renderMessages() {
   const el = document.getElementById("messages");
   if (!el) return;
+  if (closeEmojiPopover) closeEmojiPopover(); // rerender usuwa kotwice popovera spod stop
   const list = (state.msgs[state.activeId] || []).filter((m) => !m.threadId);
   if (!list.length) { el.innerHTML = emptyStateHtml(iconChat(2.2), "Na razie cicho", "Napisz pierwszą wiadomość."); return; }
 
@@ -577,7 +603,7 @@ function renderMessages() {
   bindMessageEvents(el);
 }
 
-function reactionsHtml(m) {
+function reactionChipsHtml(m) {
   const r = state.reactions[m.id];
   if (!r) return "";
   // normalizeEmoji (core) dopuszcza KAZDY krotki token bez spacji, nie tylko
@@ -585,13 +611,12 @@ function reactionsHtml(m) {
   // niezaufanym wejsciem od innego aktora i MUSI byc escapowana, tak samo jak
   // atrybut - inaczej reakcja typu "<svg/onload=..>" wykonalaby sie u kazdego
   // widza tej wiadomosci (stored XSS przez reakcje).
-  const chips = Object.entries(r).map(([emoji, handles]) => {
+  return Object.entries(r).map(([emoji, handles]) => {
     const mine = handles.includes(state.actor.handle);
     const safeEmoji = escapeHtml(emoji);
     return `<button class="react ${mine ? "mine" : ""}" data-react="${m.id}" data-emoji="${safeEmoji}"
       title="${escapeHtml(handles.join(", "))}">${safeEmoji}<span class="n">${handles.length}</span></button>`;
   }).join("");
-  return chips ? `<div class="reacts">${chips}</div>` : "";
 }
 
 function threadLinkHtml(m) {
@@ -599,6 +624,23 @@ function threadLinkHtml(m) {
   if (!replies.length) return "";
   const last = replies[replies.length - 1];
   return `<button class="thread-link" data-thread="${m.id}">${iconThread()} ${replies.length} ${replies.length === 1 ? "odpowiedź" : "odpowiedzi"} - ${timeAgo(last.ts)}</button>`;
+}
+
+function formatBytes(n) {
+  if (!Number.isFinite(n)) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function attachmentHtml(m) {
+  const meta = m.meta || {};
+  const name = escapeHtml(meta.name ?? "plik");
+  const size = formatBytes(meta.size);
+  return `<a class="attachment" href="/api/files/${encodeURIComponent(meta.fileId)}" download="${name}">
+    <span class="fic">${iconFile()}</span>
+    <span><span class="fname">${name}</span>${size ? `<br><span class="fsize">${size}</span>` : ""}</span>
+  </a>`;
 }
 
 function messageHtml(m, cont) {
@@ -616,14 +658,17 @@ function messageHtml(m, cont) {
           <span class="time">${fmtTime(m.ts)}</span>
           ${m.editedAt ? `<span class="edited">(edytowano)</span>` : ""}
         </div>
-        <div class="text">${m.deletedAt ? "wiadomość usunięta" : renderBody(m.body, state.actor.handle)}</div>
-        ${reactionsHtml(m)}
+        ${m.deletedAt ? `<div class="text">wiadomość usunięta</div>`
+          : m.kind === "file" ? attachmentHtml(m)
+          : `<div class="text">${renderBody(m.body, state.actor.handle)}</div>`}
+        <div class="reacts">
+          ${reactionChipsHtml(m)}
+          ${!m.deletedAt ? `<button class="react addreact" data-addreact="${m.id}" title="Dodaj reakcję">${iconAddReaction()}</button>` : ""}
+        </div>
         ${!m.threadId ? threadLinkHtml(m) : ""}
       </div>
       ${!m.deletedAt ? `
       <div class="actions">
-        <button data-quickreact="${m.id}" data-emoji="${THUMB}" title="Reaguj">${THUMB}</button>
-        <button data-quickreact="${m.id}" data-emoji="${HEART}" title="Reaguj">${HEART}</button>
         <button data-reply="${m.id}" title="Odpowiedz w wątku">${iconThread()}</button>
         ${mine ? `<button data-delete="${m.id}" title="Usuń">${iconTrash()}</button>` : ""}
       </div>` : ""}
@@ -633,8 +678,8 @@ function messageHtml(m, cont) {
 function bindMessageEvents(scope) {
   scope.querySelectorAll("[data-react]").forEach((b) =>
     b.addEventListener("click", () => toggleReaction(Number(b.dataset.react), b.dataset.emoji)));
-  scope.querySelectorAll("[data-quickreact]").forEach((b) =>
-    b.addEventListener("click", () => toggleReaction(Number(b.dataset.quickreact), b.dataset.emoji)));
+  scope.querySelectorAll("[data-addreact]").forEach((b) =>
+    b.addEventListener("click", () => openEmojiPopover(Number(b.dataset.addreact), b)));
   scope.querySelectorAll("[data-reply]").forEach((b) =>
     b.addEventListener("click", () => { state.replyTo = Number(b.dataset.reply); renderComposer(); focusComposer(); }));
   scope.querySelectorAll("[data-thread]").forEach((b) =>
@@ -643,7 +688,49 @@ function bindMessageEvents(scope) {
     b.addEventListener("click", () => { if (confirm("Usunąć tę wiadomość?")) deleteMsg(Number(b.dataset.delete)); }));
 }
 
+// ------------------------------------------------------------- reakcje: popover
+let closeEmojiPopover = null;
+let emojiPopoverAnchor = null;
+function openEmojiPopover(messageId, anchor) {
+  const reopeningSame = emojiPopoverAnchor === anchor;
+  if (closeEmojiPopover) closeEmojiPopover();
+  if (reopeningSame) return; // drugi klik na ten sam przycisk = zamknij, nie otwieraj od nowa
+  emojiPopoverAnchor = anchor;
+  const rect = anchor.getBoundingClientRect();
+  const pop = document.createElement("div");
+  pop.className = "emoji-pop";
+  pop.innerHTML = EMOJI_PALETTE.map((e) => `<button data-pick="${e}">${e}</button>`).join("");
+  document.body.appendChild(pop);
+  const top = rect.top - pop.offsetHeight - 8;
+  pop.style.top = `${Math.max(8, top)}px`;
+  pop.style.left = `${Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8)}px`;
+  const onPick = (e) => {
+    const btn = e.target.closest("[data-pick]");
+    if (!btn) return;
+    toggleReaction(messageId, btn.dataset.pick);
+    close();
+  };
+  const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  function close() {
+    pop.removeEventListener("click", onPick);
+    document.removeEventListener("mousedown", onOutside, true);
+    document.removeEventListener("keydown", onKey);
+    pop.remove();
+    closeEmojiPopover = null;
+    emojiPopoverAnchor = null;
+  }
+  pop.addEventListener("click", onPick);
+  setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  document.addEventListener("keydown", onKey);
+  closeEmojiPopover = close;
+}
+
 // ------------------------------------------------------------- composer
+// Pliki wybrane, ale jeszcze nie wyslane - {file, id, url?} per pozycja. url
+// (object URL) tylko dla obrazow, do miniatury; sprzatane po wyslaniu/usunieciu.
+let pendingFiles = [];
+
 function renderComposer() {
   const el = document.getElementById("composer");
   if (!el) return;
@@ -651,27 +738,97 @@ function renderComposer() {
   el.innerHTML = `
     ${replyMsg ? `<div class="replying">Odpowiadasz <b>@${escapeHtml(actorHandle(replyMsg.actorId))}</b>
       <button id="cancel-reply" title="Anuluj">&times;</button></div>` : ""}
-    <div class="box">
-      <textarea id="composer-input" rows="1" placeholder="Napisz wiadomość..."></textarea>
-      <button class="send" id="composer-send" disabled title="Wyślij (Enter)">${iconSend()}</button>
+    <div class="card" id="composer-card">
+      <div class="previews" id="composer-previews"></div>
+      <div class="row">
+        <button class="attach" id="composer-attach" type="button" title="Załącz pliki">${iconPlus()}</button>
+        <input type="file" id="composer-file" multiple style="display:none">
+        <textarea id="composer-input" rows="1" placeholder="Napisz wiadomość..."></textarea>
+        <button class="send" id="composer-send" disabled title="Wyślij (Enter)">${iconSend()}</button>
+      </div>
     </div>`;
   const ta = document.getElementById("composer-input");
   const send = document.getElementById("composer-send");
   const cancel = document.getElementById("cancel-reply");
+  const attachBtn = document.getElementById("composer-attach");
+  const fileInput = document.getElementById("composer-file");
   if (cancel) cancel.addEventListener("click", () => { state.replyTo = null; renderComposer(); focusComposer(); });
-  const autosize = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, window.innerHeight * 0.4) + "px"; send.disabled = !ta.value.trim(); };
+  const autosize = () => {
+    ta.style.height = "auto";
+    const maxH = window.innerHeight * 0.4;
+    ta.style.height = Math.min(ta.scrollHeight, maxH) + "px";
+    // Pasek przewijania textarea tylko przy PRZEPELNIENIU - inaczej webkitowy
+    // kciuk scrollbara rysuje sie jako pionowa kreska przy strzalce wysylania.
+    ta.style.overflowY = ta.scrollHeight > maxH ? "auto" : "hidden";
+    const can = !!ta.value.trim() || pendingFiles.length > 0;
+    send.disabled = !can;
+    send.classList.toggle("ready", can);
+  };
   ta.addEventListener("input", autosize);
   ta.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
   });
   send.addEventListener("click", submit);
-  function submit() {
+  attachBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    for (const file of fileInput.files) {
+      pendingFiles.push({ file, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        url: file.type.startsWith("image/") ? URL.createObjectURL(file) : null });
+    }
+    fileInput.value = "";
+    renderPreviews();
+    autosize();
+  });
+  async function submit() {
     const v = ta.value.trim();
-    if (!v) return;
-    ta.value = ""; autosize();
-    sendMessage(v);
+    if (!v && !pendingFiles.length) return;
+    const files = pendingFiles; pendingFiles = [];
+    ta.value = ""; renderPreviews(); autosize();
+    for (const p of files) { await uploadAttachment(p.file); if (p.url) URL.revokeObjectURL(p.url); }
+    if (v) await sendMessage(v);
   }
+  renderPreviews();
   autosize();
+}
+
+function renderPreviews() {
+  const box = document.getElementById("composer-previews");
+  if (!box) return;
+  box.innerHTML = pendingFiles.map((p) => p.url
+    ? `<div class="preview img" data-pv="${p.id}"><img src="${p.url}" alt=""><button data-rmpv="${p.id}" title="Usuń">&times;</button></div>`
+    : `<div class="preview file" data-pv="${p.id}">${iconFile()}<span class="pn">${escapeHtml(p.file.name)}</span><button data-rmpv="${p.id}" title="Usuń">&times;</button></div>`
+  ).join("");
+  box.querySelectorAll("[data-rmpv]").forEach((b) => b.addEventListener("click", () => {
+    const id = b.dataset.rmpv;
+    const p = pendingFiles.find((x) => x.id === id);
+    if (p?.url) URL.revokeObjectURL(p.url);
+    pendingFiles = pendingFiles.filter((x) => x.id !== id);
+    renderPreviews();
+    const send = document.getElementById("composer-send");
+    const ta = document.getElementById("composer-input");
+    if (send && ta) send.disabled = !ta.value.trim() && !pendingFiles.length;
+  }));
+}
+
+async function uploadAttachment(file) {
+  const convId = state.activeId;
+  try {
+    const res = await fetch(`/api/conversations/${convId}/files`, {
+      method: "POST",
+      headers: {
+        "content-type": file.type || "application/octet-stream",
+        "x-file-name": encodeURIComponent(file.name),
+        ...(csrf ? { "x-at-csrf": csrf } : {}),
+      },
+      credentials: "same-origin",
+      body: file,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    upsertMessage(convId, data.message);
+    renderMessages();
+    scrollToBottom(true);
+  } catch (e) { showToast(`Nie udało się wysłać pliku: ${e.message}`); }
 }
 function focusComposer() { const ta = document.getElementById("composer-input"); if (ta) ta.focus(); }
 function findMsgById(id) {
@@ -697,10 +854,15 @@ function renderThread() {
   document.getElementById("th-close").addEventListener("click", () => { state.threadOpen = null; renderMain(); });
   bindMessageEvents(document.getElementById("th-msgs"));
   const tc = document.getElementById("th-composer");
-  tc.innerHTML = `<div class="box"><textarea id="th-input" rows="1" placeholder="Odpowiedz w wątku..."></textarea>
-    <button class="send" id="th-send" disabled>${iconSend()}</button></div>`;
+  tc.innerHTML = `<div class="card"><div class="row"><textarea id="th-input" rows="1" placeholder="Odpowiedz w wątku..."></textarea>
+    <button class="send" id="th-send" disabled>${iconSend()}</button></div></div>`;
   const ta = document.getElementById("th-input"), send = document.getElementById("th-send");
-  const autosize = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 200) + "px"; send.disabled = !ta.value.trim(); };
+  const autosize = () => {
+    ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+    ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
+    send.disabled = !ta.value.trim();
+    send.classList.toggle("ready", !!ta.value.trim());
+  };
   ta.addEventListener("input", autosize);
   ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
   send.addEventListener("click", submit);
@@ -814,12 +976,15 @@ async function showGuidelines() {
 // ------------------------------------------------------------------- ikony (SVG, bez emoji)
 const iconChat = (rem) => `<svg viewBox="0 0 24 24" fill="none" ${rem ? `style="width:${rem}rem;height:${rem}rem"` : ""}><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8A2.5 2.5 0 0 1 17.5 16H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5v-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="currentColor" fill-opacity=".14"/></svg>`;
 const iconMenu = () => `<svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
-const iconSend = () => `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-8-6 8 6 8-16-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="currentColor" fill-opacity=".12"/></svg>`;
+const iconSend = () => `<svg viewBox="0 0 24 24" fill="none"><path d="M12 18.5V6M6.2 11.3 12 5.5l5.8 5.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const iconThread = () => `<svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 const iconTrash = () => `<svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const iconOut = () => `<svg viewBox="0 0 24 24" fill="none"><path d="M9 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h3M15 15l4-3-4-3M9 12h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const iconInfo = () => `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v5M12 8v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const iconLock = (inline) => `<svg viewBox="0 0 24 24" fill="none" style="${inline ? "display:inline;vertical-align:-2px;width:.9em;height:.9em" : "width:1em;height:1em"}"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.6"/></svg>`;
+const iconPlus = () => `<svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const iconFile = () => `<svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h7L18.5 8.5V19a1.5 1.5 0 0 1-1.5 1.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3.5V8a1 1 0 0 0 1 1h3.5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+const iconAddReaction = () => `<svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="12.5" r="7.5" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="11" r="1" fill="currentColor"/><circle cx="13" cy="11" r="1" fill="currentColor"/><path d="M7.3 14.2c.8 1.1 2 1.8 3.2 1.8s2.4-.7 3.2-1.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M18.5 3.5v5M16 6h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
 // ------------------------------------------------------------------- boot
 (async function boot() {

@@ -79,11 +79,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .sidebar{background:var(--sidebar);border-right:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0}
 .sb-head{padding:.85rem .9rem;display:flex;align-items:center;gap:.6rem;border-bottom:1px solid var(--line)}
-.sb-head .logo{width:2rem;height:2rem;border-radius:9px;background:var(--accent);color:var(--on-accent);
-  display:grid;place-items:center;font-size:1.05rem;flex:0 0 auto}
 .sb-head .who{min-width:0;flex:1}
-.sb-head .wsname{font-family:var(--round);font-weight:800;font-size:1.02rem;line-height:1.1}
-.sb-head .me{font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:.3rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-head .me{font-family:var(--round);font-weight:700;font-size:.98rem;color:var(--ink);
+  display:flex;align-items:center;gap:.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--green);flex:0 0 auto;box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
 .iconbtn{width:2rem;height:2rem;border-radius:9px;display:grid;place-items:center;color:var(--muted);
   transition:background .15s,color .15s}
@@ -111,7 +109,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .conv .ppresence.on{background:var(--green)}
 
 /* ---------- MAIN ---------- */
-.main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--surface)}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--surface);position:relative}
 .topbar{height:56px;flex:0 0 auto;display:flex;align-items:center;gap:.6rem;padding:0 1rem;
   border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--surface) 88%,transparent);
   backdrop-filter:saturate(1.4) blur(8px);position:relative;z-index:2}
@@ -126,7 +124,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .day::before,.day::after{content:"";height:1px;background:var(--line);flex:1}
 .msg{display:flex;gap:.7rem;padding:.12rem 1.2rem;position:relative}
 .msg:hover{background:var(--surface-2)}
-.msg .av{width:2.2rem;height:2.2rem;border-radius:10px;flex:0 0 auto;display:grid;place-items:center;
+.msg .av{width:2.2rem;height:2.2rem;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
   font-weight:800;color:#fff;font-size:.9rem;margin-top:.15rem}
 .msg .body{min-width:0;flex:1}
 .msg .head{display:flex;align-items:baseline;gap:.5rem}
@@ -157,25 +155,84 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .react:hover{transform:translateY(-1px);border-color:var(--accent)}
 .react.mine{background:var(--accent-soft);border-color:var(--accent)}
 .react .n{font-weight:700;color:var(--muted);font-size:.76rem}
+/* dodaj-reakcje - pod tresc, po lewej, jak w Slacku (nie w rogu na hover) */
+.react.addreact{color:var(--muted);padding:.14rem .45rem;opacity:0;transition:opacity .12s,border-color .15s,color .15s,transform .1s}
+.react.addreact svg{width:1.05rem;height:1.05rem;display:block}
+.msg:hover .react.addreact,.msg:focus-within .react.addreact{opacity:1}
+.react.addreact:hover{transform:translateY(-1px);border-color:var(--accent);color:var(--accent)}
+@media (hover:none){.react.addreact{opacity:.7}}
+
+.emoji-pop{position:fixed;z-index:30;background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;box-shadow:var(--shadow-lg);padding:.4rem;display:grid;
+  grid-template-columns:repeat(8,1fr);gap:.1rem;animation:pop .16s cubic-bezier(.2,.9,.3,1.2) both}
+.emoji-pop button{width:2rem;height:2rem;border-radius:8px;font-size:1.15rem;display:grid;place-items:center;
+  transition:background .12s,transform .1s}
+.emoji-pop button:hover{background:var(--surface-2);transform:scale(1.12)}
 .msg .thread-link{margin-top:.3rem;font-size:.8rem;color:var(--accent);font-weight:600;display:inline-flex;gap:.3rem;align-items:center}
 .enter{animation:enter .32s cubic-bezier(.2,.8,.3,1) both}
 
-/* ---------- COMPOSER ---------- */
-.composer{flex:0 0 auto;padding:.7rem 1rem 1rem;border-top:1px solid var(--line)}
+/* ---------- COMPOSER (kapsula plywajaca nad czatem, wasza i wyśrodkowana - jak Gemini) ---------- */
+.composer{flex:0 0 auto;padding:0 1.1rem 1.2rem;position:relative;z-index:2;
+  max-width:44rem;width:100%;margin:0 auto}
+/* delikatna smuga nad kapsula - wrazenie, ze wiadomosci "wchodza pod" input */
+.composer::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:1.6rem;
+  background:linear-gradient(to bottom, transparent, var(--surface));pointer-events:none}
 .replying{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--muted);
-  background:var(--surface-2);border-radius:9px 9px 0 0;padding:.4rem .7rem;margin:0 .1rem;border:1px solid var(--line);border-bottom:0}
+  background:var(--surface-2);border-radius:16px 16px 0 0;padding:.45rem .9rem;
+  margin:0 .3rem -.4rem;border:1px solid var(--line);border-bottom:0;position:relative;z-index:1}
 .replying b{color:var(--ink)} .replying button{margin-left:auto;color:var(--faint);font-size:1rem}
-.composer .box{display:flex;align-items:flex-end;gap:.5rem;background:var(--surface-2);
-  border:1.5px solid transparent;border-radius:14px;padding:.4rem .4rem .4rem .8rem;transition:border-color .18s,background .18s}
-.composer .box:focus-within{border-color:var(--accent);background:var(--surface)}
-.composer textarea{flex:1;background:none;border:0;resize:none;max-height:40vh;padding:.45rem 0;line-height:1.45}
+.composer .card{display:flex;flex-direction:column;gap:.3rem;background:var(--surface-2);
+  border:1px solid transparent;border-radius:28px;padding:.4rem .4rem .4rem .55rem;
+  box-shadow:0 1px 2px rgba(20,25,40,.05),0 8px 24px rgba(20,25,40,.14);
+  transition:background .18s,box-shadow .18s,border-radius .18s}
+:root[data-theme="dark"] .composer .card,
+:root:not([data-theme="light"]) .composer .card{box-shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.45)}
+.composer .card:focus-within{background:var(--surface);box-shadow:0 0 0 2px var(--accent) inset,0 10px 30px rgba(0,0,0,.2)}
+.composer .card:has(.previews:not(:empty)){border-radius:20px}
+.composer .row{display:flex;align-items:flex-end;gap:.35rem}
+.composer .previews{display:flex;flex-wrap:wrap;gap:.5rem}
+.composer .previews:not(:empty){padding:.35rem .35rem 0}
+.preview{position:relative;flex:0 0 auto}
+.preview.img{width:4.2rem;height:4.2rem;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.preview.img img{width:100%;height:100%;object-fit:cover;display:block}
+.preview.file{display:flex;align-items:center;gap:.4rem;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;padding:.4rem .7rem .4rem .55rem;max-width:11rem}
+.preview.file svg{width:1.1rem;height:1.1rem;color:var(--accent);flex:0 0 auto}
+.preview .pn{font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview [data-rmpv]{position:absolute;top:-.35rem;right:-.35rem;width:1.35rem;height:1.35rem;border-radius:50%;
+  background:var(--ink);color:var(--bg);font-size:.85rem;line-height:1;display:grid;place-items:center;
+  box-shadow:var(--shadow-sm);transition:transform .1s}
+.preview.file [data-rmpv]{position:static;margin-left:.1rem;background:none;color:var(--faint);box-shadow:none;width:1.1rem;height:1.1rem}
+.preview.file [data-rmpv]:hover{color:var(--coral)}
+.preview [data-rmpv]:hover{transform:scale(1.12)}
+/* + i strzalka: 2.25rem = dokladnie wysokosc jednoliniowej textarea (padding
+   .45rem*2 + linia 1.45*15px), wiec w stanie pustym wszystko lezy w pionowej osi */
+.composer .attach{width:2.25rem;height:2.25rem;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+  color:var(--muted);transition:background .15s,color .15s}
+.composer .attach:hover{background:var(--surface);color:var(--ink)}
+.composer .attach svg{width:1.25rem;height:1.25rem}
+.composer textarea{flex:1;background:none;border:0;resize:none;max-height:40vh;
+  padding:.45rem .15rem;line-height:1.45;overflow-y:hidden}
 .composer textarea:focus{outline:none}
-.composer .send{width:2.3rem;height:2.3rem;border-radius:10px;background:var(--accent);color:var(--on-accent);
-  display:grid;place-items:center;flex:0 0 auto;transition:transform .12s,filter .15s,opacity .15s}
-.composer .send:hover{filter:brightness(1.08)} .composer .send:active{transform:scale(.9)}
-.composer .send[disabled]{opacity:.4;cursor:default}
-.composer .send svg{width:1.15rem;height:1.15rem}
+/* Wyslij jak w Gemini: pusto = sama wyciszona strzalka (zero tla), z trescia =
+   kolo akcentowe. Zadnego polprzezroczystego "wylaczonego" kola. */
+.composer .send{width:2.25rem;height:2.25rem;border-radius:50%;background:transparent;color:var(--faint);
+  display:grid;place-items:center;flex:0 0 auto;transition:background .18s,color .18s,transform .12s,filter .15s}
+.composer .send[disabled]{cursor:default}
+.composer .send.ready{background:var(--accent);color:var(--on-accent)}
+.composer .send.ready:hover{filter:brightness(1.08)}
+.composer .send.ready:active{transform:scale(.9)}
+.composer .send svg{width:1.2rem;height:1.2rem}
 .composer .tools{display:flex;gap:.15rem;align-items:center}
+.attachment{display:inline-flex;align-items:center;gap:.55rem;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:12px;padding:.5rem .8rem;margin-top:.2rem;
+  text-decoration:none;color:var(--ink);transition:border-color .15s,transform .1s}
+.attachment:hover{border-color:var(--accent);transform:translateY(-1px)}
+.attachment .fic{width:1.6rem;height:1.6rem;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);
+  display:grid;place-items:center;flex:0 0 auto}
+.attachment .fic svg{width:1rem;height:1rem}
+.attachment .fname{font-weight:650;font-size:.9rem}
+.attachment .fsize{font-size:.76rem;color:var(--muted)}
 .composer .tools .iconbtn{width:2.1rem;height:2.1rem}
 
 /* ---------- THREAD DRAWER ---------- */
@@ -201,8 +258,19 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:2rem}
 .empty .big{font-size:2.6rem;margin-bottom:.4rem}
 .empty h2{font-family:var(--round);color:var(--ink);margin:.2rem 0}
-.toast{position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);
-  padding:.6rem 1rem;border-radius:99px;font-size:.9rem;box-shadow:var(--shadow-lg);z-index:40;animation:pop .3s}
+/* stos powiadomien - prawy gorny rog, kazdy komunikat niezalezny */
+.toast-stack{position:fixed;top:1.1rem;right:1.1rem;z-index:50;display:flex;flex-direction:column;
+  gap:.55rem;align-items:flex-end;max-width:min(22rem,calc(100vw - 2.2rem))}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:.7rem;background:var(--ink);color:var(--bg);
+  padding:.75rem 1rem;border-radius:12px;font-size:.9rem;font-weight:600;line-height:1.35;
+  box-shadow:0 10px 30px rgba(0,0,0,.35),0 2px 6px rgba(0,0,0,.2);
+  animation:toast-in .22s cubic-bezier(.2,.9,.3,1.2) both}
+.toast.leaving{animation:toast-out .2s ease both}
+.toast .tmsg{flex:1}
+.toast .tclose{flex:0 0 auto;color:var(--bg);opacity:.55;font-size:1.05rem;line-height:1;transition:opacity .12s}
+.toast .tclose:hover{opacity:1}
+@keyframes toast-in{from{opacity:0;transform:translateX(16px) scale(.95)}to{opacity:1;transform:none}}
+@keyframes toast-out{to{opacity:0;transform:translateX(16px) scale(.95)}}
 .skeleton{padding:1.2rem}
 .sk-line{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));
   background-size:200% 100%;animation:shimmer 1.3s infinite;margin:.7rem 0;width:60%}
