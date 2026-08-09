@@ -7,6 +7,7 @@
  * sprawdzany jako kontrakt HTTP.
  */
 import type { AddressInfo } from "node:net";
+import { randomBytes } from "node:crypto";
 import { openDb } from "../src/store/db.ts";
 import { createCtx, type Ctx } from "../src/core/ctx.ts";
 import { EventBus } from "../src/core/events.ts";
@@ -21,7 +22,10 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     filesDir: "/tmp/agenttalks-test/files",
     host: "127.0.0.1",
     port: 0,
-    secret: "sekret-testowy-0123456789abcdef",
+    // Sekret UNIKALNY na serwer testowy: limitery sa kluczowane sekretem
+    // instancji, wiec wspolny sekret oznaczalby wspoldzielone liczniki miedzy
+    // testami - i test, ktory celowo wyczerpuje limit, blokowalby nastepny.
+    secret: `sekret-testowy-${randomBytes(8).toString("hex")}`,
     trustProxy: false,
     allowPublicBind: false,
     allowLoopbackWake: false,

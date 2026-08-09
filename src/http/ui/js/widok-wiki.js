@@ -58,8 +58,16 @@ export async function mozeszOpuscicEdytorWiki() {
   });
 }
 
+// Strony wlasnie przez nas kasowane. Serwer roztrasa zdarzenie `wiki` takze dla
+// skasowanej strony, a obsluga tego zdarzenia otwiera strone na nowo, gdy wlasnie
+// sie na nia patrzy. Zdarzenie potrafi wyprzedzic odpowiedz na DELETE, wiec
+// interfejs probowal wczytac strone, ktorej sam przed chwila kazal zniknac - i
+// pokazywal "Nie ma takiej strony wiki" obok wlasnego "Skasowano".
+const kasowaneStrony = new Set();
+
 // ============================================================= WIKI
 export async function openWikiPage(slug) {
+  if (kasowaneStrony.has(slug)) return;
   // Przejscie na inna strone w trakcie pisania to najczestsza droga do utraty
   // tekstu - wiec pytamy tu, a nie dopiero przy Anuluj.
   if (state.wiki.editing && state.wiki.slug !== slug && !(await mozeszOpuscicEdytorWiki())) return;
@@ -102,7 +110,8 @@ export function newWikiPageModal() {
     .join("");
   const { modal, close } = openModal(`
       <h2 id="m-title">Nowa strona wiki</h2>
-      <div class="field"><label for="nw-slug">Adres (slug)</label><input id="nw-slug" placeholder="np. jak-wdrazac"></div>
+      <div class="field"><label for="nw-slug">Adres strony</label><input id="nw-slug" placeholder="np. jak-wdrazac">
+        <span class="fhint">Krótka nazwa w adresie: małe litery, cyfry i myślniki, bez spacji i polskich znaków.</span></div>
       <div class="field"><label for="nw-title">Tytuł</label><input id="nw-title" placeholder="np. Jak wdrażać"></div>
       <div class="field"><label for="nw-parent">Umiejscowienie</label><select id="nw-parent">
         <option value="" ${defaultParent ? "" : "selected"}>(korzeń wiki)</option>${options}
@@ -230,6 +239,26 @@ async function revertWikiTo(revId) {
   } catch (e) { showError(e); }
 }
 
+/** Odtworzenie skasowanej strony z danych, ktore serwer oddal przy kasowaniu.
+ *  baseRevision=0 znaczy "zaloz, jesli takiej nie ma" - a po skasowaniu takiej
+ *  nie ma, wiec to jest dokladnie ta sciezka. Historia sprzed skasowania nie
+ *  wraca i trzeba to powiedziec wprost, zamiast udawac pelne cofniecie. */
+async function odtworzStroneWiki(deleted) {
+  if (!deleted) return;
+  try {
+    await api("PUT", `/api/wiki/${encodeURIComponent(deleted.slug)}`, {
+      title: deleted.title,
+      body: deleted.body,
+      parentSlug: deleted.parentSlug ?? null,
+      note: "przywrócenie skasowanej strony",
+      baseRevision: 0,
+    });
+    await loadWikiList();
+    openWikiPage(deleted.slug);
+    showToast("Strona wróciła. Historia sprzed skasowania nie wróciła - ta wersja jest pierwsza.");
+  } catch (e) { showError(e); }
+}
+
 /** Sciezka przodkow strony ("Infra / VPS / ") - kazdy czlon klikalny. */
 function wikiBreadcrumbHtml(page) {
   if (!page || !page.parentSlug) return "";
@@ -260,7 +289,7 @@ export function renderWikiMain(loading) {
       <div class="title">
         <div class="t">${iconDoc()} ${wikiBreadcrumbHtml(page)}${escapeHtml(title ?? "")}
           <span id="wiki-typing">${widok.pisze(`w:${w.slug}`)}</span></div>
-        <div class="topic">${page ? `rew. ${page.revisions} · @${escapeHtml(page.updatedBy ?? "?")} · ${timeAgo(page.updatedAt)}` : "nowa strona"}</div>
+        <div class="topic">${page ? `wersja ${page.revisions} · ostatnio zmienił(a) @${escapeHtml(page.updatedBy ?? "?")} ${timeAgo(page.updatedAt)}` : "nowa strona, jeszcze niezapisana"}</div>
       </div>
       ${!w.editing && !w.revision && (page || w.draft) ? `<button class="pillbtn" id="wiki-edit">${iconEdit()} Edytuj</button>` : ""}
       ${!w.editing && !w.revision && page && (page.createdBy === state.actor.handle || state.actor.isAdmin)
@@ -277,21 +306,42 @@ export function renderWikiMain(loading) {
     a.addEventListener("click", (e) => { e.preventDefault(); openWikiPage(a.dataset.crumb); }));
   const delBtn = document.getElementById("wiki-delete");
   if (delBtn) delBtn.addEventListener("click", async () => {
-    // Kasowanie jest nieodwracalne (razem z historia), wiec pytamy nazwa strony,
-    // a nie samym "na pewno?" - zeby klik w zly wiersz nie kosztowal dzialu wiki.
-    if (!confirm(`Skasować stronę "${page.title}" wraz z jej historią? Podstrony przejdą wyżej, nie znikną.`)) return;
+    // Kasowanie zabiera takze historie, wiec pytamy NAZWA strony, a nie samym
+    // "na pewno?" - zeby klik w zly wiersz nie kosztowal dzialu wiki.
+    if (!await confirmModal({
+      title: `Skasować stronę „${page.title}”?`,
+      body: "Zniknie razem z historią zmian i załącznikami. Podstrony nie znikną - przejdą o poziom wyżej.",
+      ok: "Skasuj stronę", danger: true,
+    })) return;
+    const kasowany = w.slug;
+    kasowaneStrony.add(kasowany);
     try {
-      await api("DELETE", `/api/wiki/${encodeURIComponent(w.slug)}`);
-      showToast(`Skasowano stronę "${page.title}"`);
+      // Serwer oddaje przy kasowaniu KOMPLET danych strony (tytul, tresc,
+      // rodzica) - czyli wszystko, czego trzeba, zeby ja odtworzyc. Skoro tak,
+      // "skasowane" nie musi znaczyc "nie do odzyskania": daje to na cofniecie
+      // tyle czasu, ile trwa zrozumienie, ze kliknelo sie nie tam.
+      const { deleted } = await api("DELETE", `/api/wiki/${encodeURIComponent(kasowany)}`);
       state.wiki.page = null; state.wiki.slug = null; state.view = "chat";
       loadWikiList(); widok.render();
+      showToast(`Skasowano „${deleted?.title ?? page.title}”.`, {
+        action: { label: "Cofnij", onClick: () => { kasowaneStrony.delete(kasowany); odtworzStroneWiki(deleted); } },
+      });
     } catch (e) { showError(e); }
+    // Blokada zdejmowana z opoznieniem: dosylka SSE potrafi przyjsc po
+    // odpowiedzi na DELETE, a nie tylko przed nia.
+    finally { setTimeout(() => kasowaneStrony.delete(kasowany), 3000); }
   });
   const editBtn = document.getElementById("wiki-edit");
   if (editBtn) editBtn.addEventListener("click", () => {
+    // Wersja robocza z poprzedniego podejscia wygrywa z trescia na serwerze:
+    // jesli cos tu zostalo, to znaczy, ze uzytkownik tego nie dokonczyl.
+    const robocza = wczytajWersjeRobocza(w.slug);
     w.editing = true;
-    w.draft = { title: page?.title ?? w.slug, body: page?.body ?? "" };
+    w.draft = robocza
+      ? { title: robocza.title || page?.title || w.slug, body: robocza.body ?? "", parentSlug: robocza.parentSlug }
+      : { title: page?.title ?? w.slug, body: page?.body ?? "" };
     renderWikiMain();
+    if (robocza) showToast("Wróciłem do Twojej niezapisanej wersji z poprzedniego razu.");
   });
   renderWikiContent(loading);
   renderWikiSide();
@@ -328,24 +378,41 @@ function renderWikiContent(loading) {
         <label class="sr-only" for="we-title">Tytuł strony</label>
         <input id="we-title" class="we-title" placeholder="Tytuł strony">
         <label class="sr-only" for="we-body">Treść strony (markdown)</label>
-        <textarea id="we-body" class="we-body" placeholder="Treść w markdown... # naglowek, **pogrubienie**, - lista, \`\`\`kod\`\`\`"></textarea>
+        <textarea id="we-body" class="we-body" placeholder="Treść w markdown... # nagłówek, **pogrubienie**, - lista, \`\`\`kod\`\`\`"></textarea>
         <div class="we-foot">
+          <span class="we-zapis" id="we-zapis" aria-live="polite"></span>
           <label class="we-where" for="we-parent">w: </label>
           <select id="we-parent" class="we-parent">
             <option value="">(korzeń wiki)</option>${options}
           </select>
           <label class="sr-only" for="we-note">Opis zmiany</label>
-          <input id="we-note" class="we-note" placeholder="Opis zmiany (opcjonalnie)">
+          <input id="we-note" class="we-note" placeholder="Co zmieniasz (opcjonalnie)">
           <button class="btn ghost" id="we-cancel">Anuluj</button>
           <button class="btn slim" id="we-save">Zapisz</button>
         </div>
       </div>`;
     const t = el.querySelector("#we-title"), b = el.querySelector("#we-body"), n = el.querySelector("#we-note");
     const par = el.querySelector("#we-parent");
+    const znacznik = el.querySelector("#we-zapis");
     t.value = d.title; b.value = d.body;
+    // Autozapis wersji roboczej: co sekunde bezruchu, do localStorage. Nie
+    // zastepuje zapisu na serwer i mowi to wprost - ma tylko sprawic, zeby
+    // zamkniecie karty, F5 albo klik w inna strone nie kosztowaly calego tekstu.
+    let autoTimer = null;
+    const autozapis = () => {
+      clearTimeout(autoTimer);
+      autoTimer = setTimeout(() => {
+        zapiszWersjeRobocza(w.slug, { title: t.value, body: b.value, parentSlug: par.value || null });
+        if (znacznik) znacznik.textContent = "wersja robocza zachowana w przeglądarce";
+      }, 1000);
+    };
     // Edycja wiki tez sygnalizuje pisanie - kuleczka przy stronie u innych.
-    b.addEventListener("input", () => signalTyping(`w:${w.slug}`));
-    el.querySelector("#we-cancel").addEventListener("click", () => {
+    b.addEventListener("input", () => { signalTyping(`w:${w.slug}`); autozapis(); });
+    t.addEventListener("input", autozapis);
+    par.addEventListener("change", autozapis);
+    el.querySelector("#we-cancel").addEventListener("click", async () => {
+      if (!await mozeszOpuscicEdytorWiki()) return;
+      clearTimeout(autoTimer);
       w.editing = false; w.draft = null;
       if (!w.page) { state.view = "chat"; widok.sidebar(); widok.glowny(); return; }
       renderWikiMain();
@@ -406,7 +473,7 @@ function renderWikiSide() {
           <span class="fic">${iconFile()}</span>
           <span><span class="fname">${escapeHtml(f.name)}</span><br><span class="fsize">${formatBytes(f.size)}</span></span>
         </a>`).join("")}` : ""}
-    ` : `<p class="sb-empty">Strona jeszcze nie zapisana.</p>`;
+    ` : `<p class="sb-empty">Ta strona nie została jeszcze zapisana - informacje pojawią się po pierwszym zapisie.</p>`;
   } else {
     body.innerHTML = w.history.length ? `
       <div class="wh-list">
@@ -424,7 +491,7 @@ function renderWikiSide() {
             </span>
           </button>`;
         }).join("")}
-      </div>` : `<p class="sb-empty">Brak historii.</p>`;
+      </div>` : `<p class="sb-empty">Historia pojawi się po pierwszym zapisie. Każda zmiana zostaje tu z nazwiskiem i datą.</p>`;
     body.querySelectorAll("[data-rev]").forEach((b) =>
       b.addEventListener("click", () => {
         if (b.dataset.current) { w.revision = null; renderWikiMain(); }

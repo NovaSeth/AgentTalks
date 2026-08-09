@@ -5,7 +5,7 @@ import { answerQuestion, askChannel, deleteMsg, dropPending, fixMsg, joinChannel
 import { api, csrf } from "./api.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./dane.js";
 import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, zachowanieScrolla } from "./dom.js";
-import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconWrench } from "./ikony.js";
+import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./ikony.js";
 import { renderBody } from "./markdown.js";
 import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, czyZgloszenie, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, przytnijCache, pushRecent, saveDraft, state, upsertMessage, widoczneWiadomosci, widok, zgloszenia } from "./stan.js";
 import { showError, showToast } from "./toasty.js";

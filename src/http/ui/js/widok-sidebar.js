@@ -110,7 +110,7 @@ export function renderSidebarList() {
     const label = isDirect ? dmLabel(c) : (c.slug || c.topic || "bez-nazwy");
     const inni = isDirect ? dmOthers(c) : [];
     const online = inni.some((o) => handleOnline(o.handle));
-    // Rozmowa prywatna dostaje TWARZ, nie samą kropkę: nazwy i awatary przychodza
+    // Rozmowa prywatna dostaje TWARZ, nie sama kropke: nazwy i awatary przychodza
     // teraz z serwera (`others`) razem z lista rozmow, wiec nie trzeba juz czekac
     // na otwarcie rozmowy, zeby zobaczyc, z kim sie rozmawia.
     const pre = isDirect
@@ -275,7 +275,7 @@ export function renderSidebarList() {
   el.querySelector("#sb-new-lease")?.addEventListener("click", claimLeaseModal);
   el.querySelectorAll("[data-freelease]").forEach((b) =>
     b.addEventListener("click", async () => {
-      if (await releaseLease(b.dataset.freelease)) refreshDigestAndLeases();
+      if (await releaseLease(b.dataset.freelease)) refreshDigestAndLeases(true);
     }));
   // Lista "Kto tu jest" musi byc czyms wiecej niz autorami wiadomosci - katalog
   // dociagamy w tle przy pierwszym renderze, bez blokowania rysowania.
@@ -426,6 +426,6 @@ function claimLeaseModal() {
     close();
     const ok = await claimLease(res, modal.querySelector("#cl-note").value.trim(),
       Number(modal.querySelector("#cl-ttl").value));
-    if (ok) refreshDigestAndLeases();
+    if (ok) refreshDigestAndLeases(true);
   });
 }

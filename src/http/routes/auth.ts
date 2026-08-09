@@ -79,6 +79,23 @@ function sprzatniecieOkien(mapa: Map<string, { count: number; resetAt: number }>
   for (const [k, v] of mapa) if (v.resetAt <= now) mapa.delete(k);
 }
 
+/**
+ * Klucz limitera jest kluczowany TAKZE sekretem instancji. Powod jest prosty
+ * i wyszedl w testach: mapy sa na poziomie modulu, wiec dwa serwery w jednym
+ * procesie (a tak dzialaja testy) dziela liczniki - test, ktory celowo wyczerpuje
+ * limit, blokowal logowanie w kolejnym tescie. W produkcji nic to nie zmienia
+ * (jeden proces = jedna instancja = jeden sekret), a w testach daje izolacje
+ * bez zadnej furtki "wyzeruj limiter", ktora predzej czy pozniej trafilaby
+ * do kodu produkcyjnego.
+ */
+function kluczLimitu(secret: string, key: string): string {
+  // CALY sekret, nie jego poczatek. Pierwsza wersja brala `slice(0, 8)` - a wszystkie
+  // sekrety testowe zaczynaly sie tak samo, wiec "izolacja" dawala ten sam klucz
+  // dla kazdej instancji i niczego nie izolowala. To jest mapa w pamieci procesu,
+  // wiec pelny sekret jako fragment klucza nie wychodzi nigdzie na zewnatrz.
+  return `${secret}|${key}`;
+}
+
 function checkLoginLimit(key: string, now: number): void {
   sprzatniecieOkien(loginAttempts, now);
   const entry = loginAttempts.get(key);
@@ -135,7 +152,7 @@ export function registerAuthRoutes(router: Router): void {
   // Enrollment: jedyna trasa ZAPISU bez logowania - bo zaproszenie JEST poswiadczeniem.
   // Nowy agent wykupuje kod na aktora + token. Rate-limit chroni przed zgadywaniem kodu.
   router.add("POST", "/api/enroll", async (req, res, rc) => {
-    checkEnrollLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
+    checkEnrollLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 4096);
     // kind NIE pochodzi z ciala zadania: samodzielna rejestracja tworzy WYLACZNIE
     // aktora-agenta. "Jestem czlowiekiem" to sygnal zaufania, ktorego nie wolno
@@ -153,12 +170,12 @@ export function registerAuthRoutes(router: Router): void {
     const body = await readJson(req, 4096);
     const handle = str(body.handle) ?? "";
     const password = str(body.password) ?? "";
-    checkLoginLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
+    checkLoginLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const actor = verifyPassword(rc.ctx, handle, password);
     // Jeden komunikat dla zlego handle i zlego hasla: inaczej odpowiedz serwera
     // jest wyrocznia "czy taki uzytkownik istnieje".
     if (!actor) throw unauthorized("zle_dane", "nieprawidlowy uzytkownik lub haslo");
-    zwolnijLimitLogowania(clientKey(req, rc.config.trustProxy));
+    zwolnijLimitLogowania(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)));
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
     res.setHeader("set-cookie", cookie);
     json(res, 200, {
@@ -217,7 +234,7 @@ export function registerAuthRoutes(router: Router): void {
   /** Opcje logowania passkeyem. Publiczne i limitowane jak logowanie haslem.
    *  Bez handle: discoverable credential (przegladarka sama pokaze konta). */
   router.add("POST", "/api/webauthn/login/options", async (req, res, rc) => {
-    checkLoginLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
+    checkLoginLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 4096);
     const { rpId } = webauthnParams(req, rc.config);
     const handle = str(body.handle);
@@ -239,7 +256,7 @@ export function registerAuthRoutes(router: Router): void {
   });
 
   router.add("POST", "/api/webauthn/login", async (req, res, rc) => {
-    checkLoginLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
+    checkLoginLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 64 * 1024);
     const { rpId, origins } = webauthnParams(req, rc.config);
     const actorId = verifyAssertion(rc.ctx, {

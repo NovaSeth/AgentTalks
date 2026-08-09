@@ -1,7 +1,7 @@
 /**
  * Ekran logowania, passkeys i cykl zycia sesji.
  */
-import { ACTOR_KEY, CSRF_KEY, api, csrf, setCsrf } from "./api.js";
+import { ACTOR_KEY, CSRF_KEY, api, csrf, opiszBlad, setCsrf } from "./api.js";
 import { mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./dane.js";
 import { $app, escapeHtml, openModal } from "./dom.js";
 import { iconChat, iconFingerprint } from "./ikony.js";
@@ -87,7 +87,9 @@ export function renderLogin(errorMsg) {
       await doLogin(e.target.handle.value.trim(), e.target.password.value);
       await widok.poZalogowaniu();
     } catch (err) {
-      renderLogin(err.message || "Nieprawidłowe dane logowania");
+      // Ekran logowania to pierwsze, co czlowiek widzi - nie moze mowic kodami
+      // ani zdaniami pisanymi dla agenta.
+      renderLogin(opiszBlad(err, { zle_haslo: "Nieprawidłowa nazwa albo hasło. Spróbuj jeszcze raz." }));
     }
   });
   // Passkey (Touch ID / Face ID): przycisk tylko tam, gdzie przegladarka
@@ -107,7 +109,7 @@ export function renderLogin(errorMsg) {
     } catch (err) {
       pk.disabled = false;
       if (err && err.name === "NotAllowedError") return; // user anulowal dialog
-      renderLogin(err.message || "Logowanie passkeyem nie wyszlo - wejdz haslem.");
+      renderLogin("Nie udało się wejść odciskiem. Zaloguj się hasłem.");
     }
   });
   document.getElementById("f-handle").focus();
@@ -178,7 +180,7 @@ async function passkeyEnroll() {
     challenge: opts.challenge,
     clientDataJSON: bufToB64u(cred.response.clientDataJSON),
     attestationObject: bufToB64u(cred.response.attestationObject),
-    label: navigator.platform || "urzadzenie",
+    label: navigator.platform || "urządzenie",
   });
 }
 

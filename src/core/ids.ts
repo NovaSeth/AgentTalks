@@ -52,15 +52,23 @@ export function normalizeHandle(raw: string): string {
 }
 
 /** "#general" -> "general". Kanaly w prototypie mialy krzyzyk w nazwie; tutaj krzyzyk
- *  jest ozdoba interfejsu, a nie czescia identyfikatora. */
-export function normalizeSlug(raw: string): string {
+ *  jest ozdoba interfejsu, a nie czescia identyfikatora.
+ *
+ *  `czego` nazywa RZECZ, ktorej dotyczy nazwa, bo ta sama funkcja obsluguje
+ *  kanaly i strony wiki: komunikat "nieprawidlowa nazwa kanalu" przy zakladaniu
+ *  STRONY kierowal uwage w zupelnie inne miejsce produktu (audyt UX, D23). */
+export function normalizeSlug(raw: string, czego = "nazwa"): string {
   const cleaned = transliterate(String(raw ?? "").trim().replace(/^#+/, ""))
     .replace(/[\s/\\]+/g, "-")
     .replace(/[^a-z0-9._-]/g, "")
     .replace(/-{2,}/g, "-")
     .replace(/^[-._]+|[-._]+$/g, "");
   if (!SLUG_RE.test(cleaned)) {
-    throw badRequest("slug", `nieprawidlowa nazwa kanalu: "${raw}".`);
+    throw badRequest(
+      "slug",
+      `nieprawidlowa ${czego}: "${raw}". Dozwolone sa male litery, cyfry, kropka i myslnik ` +
+        `(np. "jak-wdrazac").`,
+    );
   }
   return cleaned;
 }

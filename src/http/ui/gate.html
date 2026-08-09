@@ -64,8 +64,14 @@
         body: JSON.stringify({ password: pass }),
       });
       if (res.ok) { location.reload(); return; }
+      // Tresc komunikatu ustawiamy ZA KAZDYM RAZEM, a nie tylko przy 429.
+      // Wczesniej jedna odmowa z limitu przestawiala tekst na stale i kolejne
+      // zle haslo mowilo "za duzo prob" - czyli komunikat, ktory raz sklamal,
+      // klamal juz do konca sesji.
+      err.textContent = res.status === 429
+        ? "Za dużo prób - odczekaj chwilę i spróbuj jeszcze raz."
+        : "Nieprawidłowe hasło.";
       err.style.display = "block";
-      if (res.status === 429) err.textContent = "Za dużo prób - spróbuj za chwilę.";
       btn.disabled = false; btn.textContent = "Dalej";
       // Fokus wraca do pola: po bledzie nastepny ruch to poprawienie hasla,
       // a nie szukanie, gdzie sie je wpisuje.

@@ -338,13 +338,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .composer .previews:empty{display:none}
 .composer .previews:not(:empty){padding:.35rem .35rem 0}
 .preview{position:relative;flex:0 0 auto}
-/* Opcje pliku (wrazliwy / spal / TTL) pod podgladem. */
-.pv-opts{display:flex;align-items:center;gap:.2rem;margin-top:.2rem}
-.pv-opt{width:1.5rem;height:1.5rem;border-radius:6px;display:grid;place-items:center;color:var(--faint)}
-.pv-opt:hover{background:var(--surface);color:var(--ink)}
-.pv-opt.on{background:var(--coral-soft);color:var(--coral)}
-.pv-ttl{background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--muted);
-  font-size:.7rem;padding:.15rem .25rem;max-width:5.4rem}
+/* Opcje pliku byly rzedem trzech nieopisanych piktogramow (tarcza, plomien,
+   lista) - w tym "spal po odczycie", czyli czynnosc nieodwracalna na jeden klik
+   w obrazek. Zastapione zwinietym menu z pelnymi etykietami; jego style stoja
+   w sekcji poprawek po audycie, razem z reszta tej zmiany. */
 .preview.img{width:4.2rem;border-radius:12px;overflow:visible;border:0}
 .preview.img img{width:4.2rem;height:4.2rem;border-radius:12px;border:1px solid var(--line)}
 .preview.file .pv-main{display:flex;align-items:center;gap:.4rem}
@@ -630,6 +627,116 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .delivery{margin-top:.25rem;font-size:.72rem;color:var(--faint);animation:enter .3s both}
 .delivery .ok{color:var(--green)} .delivery .warn{color:var(--amber)} .delivery .off{color:var(--muted)}
 
+/* ============ POPRAWKI PO AUDYCIE UX 2026-08-09 ============ */
+
+/* Toast z nazwana czynnoscia ("Cofnij"). Komunikat, ktory tylko informuje
+   o rzeczy nieodwracalnej, jest gorszy niz brak komunikatu. */
+.toast .taction{flex:0 0 auto;color:var(--bg);font-weight:800;font-size:.85rem;
+  text-decoration:underline;text-underline-offset:3px;opacity:.9}
+.toast .taction:hover{opacity:1}
+
+/* Przycisk potwierdzajacy czynnosc nieodwracalna - kolor niesie wage, tak samo
+   jak nazwa na przycisku. */
+.btn.danger{background:var(--coral);color:#fff}
+
+/* Pusty stan z czynnoscia: samo "brak" nie mowi, co dalej. */
+.empty .btn.slim{width:auto;margin-top:.9rem}
+.sb-empty .sb-cta{display:block;margin-top:.4rem;color:var(--accent);font-weight:700;
+  font-size:.85rem;text-align:left;padding:0}
+.sb-empty .sb-cta:hover{text-decoration:underline}
+.sb-empty{line-height:1.45}
+
+/* Menu "więcej" przy wiadomosci: pelne nazwy i zdanie o skutku zamiast piktogramu. */
+.msg-menu{position:fixed;z-index:34;min-width:16rem;max-width:22rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:.3rem;
+  display:flex;flex-direction:column;animation:mpop .14s ease-out both}
+.msg-menu button{display:flex;flex-direction:column;gap:.1rem;align-items:flex-start;
+  padding:.5rem .6rem;border-radius:9px;text-align:left;transition:background .1s}
+.msg-menu button:hover,.msg-menu button:focus-visible{background:var(--surface-2)}
+.msg-menu .mm-l{font-weight:650;font-size:.9rem}
+.msg-menu .mm-o{font-size:.78rem;color:var(--muted);line-height:1.35;white-space:normal}
+.msg-menu button.danger .mm-l{color:var(--coral)}
+.msg-menu button.danger:hover{background:var(--coral-soft)}
+
+/* Opcje zalacznika: zwiniete menu z pelnymi etykietami. Byly trzema
+   piktogramami, w tym nieodwracalnym "spal po odczycie" na jeden klik. */
+.pv-opts{margin-top:.25rem}
+/* Podglad pliku jest waski (nazwa w jednym wierszu), ale rozwiniete menu opcji
+   potrzebuje miejsca na pelne zdania - wiec kafelek uklada sie w KOLUMNIE
+   i rozszerza dopiero na czas otwarcia menu. */
+.preview.file{flex-direction:column;align-items:stretch;gap:.3rem}
+.preview.file .pv-main{width:100%}
+.preview:has(.pv-opts[open]){max-width:22rem;width:min(22rem,72vw)}
+.preview.img:has(.pv-opts[open]){width:min(22rem,72vw)}
+.preview.img:has(.pv-opts[open]) img{width:4.2rem;height:4.2rem}
+.pv-opts[open]{width:100%}
+.pv-opts>summary{cursor:pointer;font-size:.72rem;color:var(--muted);padding:.15rem .3rem;
+  border-radius:6px;list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv-opts>summary::-webkit-details-marker{display:none}
+.pv-opts>summary::before{content:"⋯ ";font-weight:800}
+.pv-opts>summary:hover{background:var(--surface);color:var(--ink)}
+.pv-opts[open]>summary{color:var(--ink);font-weight:650}
+.pv-menu{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:.5rem .6rem;margin-top:.25rem;display:flex;flex-direction:column;gap:.55rem}
+.pv-check{display:flex;gap:.5rem;align-items:flex-start;font-size:.8rem;cursor:pointer}
+.pv-check input{margin-top:.15rem;flex:0 0 auto}
+.pv-field{display:flex;flex-direction:column;gap:.2rem;font-size:.8rem}
+.pv-field select{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+  padding:.3rem .4rem;font-size:.8rem;color:var(--ink)}
+.pv-why{color:var(--muted);font-size:.75rem;line-height:1.35;font-weight:400}
+
+/* Composer w trybie pytania do kanalu - czlowiek moze wreszcie ZADAC pytanie,
+   nie tylko odpowiadac na cudze. */
+.asking{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--coral);
+  background:var(--coral-soft);border-radius:16px 16px 0 0;padding:.45rem .9rem;
+  margin:0 .3rem -.4rem;border:1px solid color-mix(in srgb,var(--coral) 30%,transparent);
+  border-bottom:0;position:relative;z-index:1}
+.asking svg{width:1em;height:1em;flex:0 0 auto}
+.asking b{color:var(--coral)}
+.asking button{margin-left:auto;color:var(--coral);font-size:1rem}
+.composer .card.asking-card:focus-within{box-shadow:0 0 0 2px var(--coral) inset,0 10px 30px rgba(0,0,0,.2)}
+.composer .askbtn.on{background:var(--coral);color:#fff}
+.composer .askbtn svg{width:1.2rem;height:1.2rem}
+
+/* Pasek "brak polaczenia" nad rozmowa (wczesniej drobny druk w stopce listy). */
+.offbar{flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:.45rem 1rem;
+  background:var(--coral-soft);color:var(--coral);font-size:.85rem;font-weight:650;
+  border-bottom:1px solid color-mix(in srgb,var(--coral) 30%,transparent);z-index:2}
+.offdot{width:.5rem;height:.5rem;border-radius:50%;background:var(--coral);flex:0 0 auto;
+  animation:qpulse 2s infinite}
+
+/* Twarz przy rozmowie prywatnej i przy osobie na liscie "Kto tu jest".
+   Kropka obecnosci siedzi NA awatarze, jak w kazdym komunikatorze. */
+.conv-face{position:relative;flex:0 0 auto;display:grid;place-items:center;width:22px;height:22px}
+.conv-face .ppresence{position:absolute;right:-2px;bottom:-2px;width:.5rem;height:.5rem;
+  border-radius:50%;background:var(--faint-line);border:2px solid var(--sidebar)}
+.conv-face .ppresence.on{background:var(--green)}
+.conv.active .conv-face .ppresence{border-color:var(--accent)}
+/* Wiersz osoby: nazwa, a za nia plakietka czlowiek/agent - to jest ta jedna
+   rzecz, ktora odroznia ten produkt od kazdego innego komunikatora. */
+.conv.person .kindtag{font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
+  padding:.05rem .3rem;border-radius:5px;background:var(--surface-2);color:var(--muted);flex:0 0 auto}
+.conv.person .kindtag.human{background:var(--accent-soft);color:var(--accent-ink)}
+.conv.active.person .kindtag{background:var(--on-accent);color:var(--accent)}
+
+/* Zwalnianie wlasnego zasobu wprost z listy. */
+.lease-free{flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--accent);
+  padding:.1rem .4rem;border-radius:6px}
+.lease-free:hover{background:var(--accent-soft)}
+
+/* Konflikt wiki: okno z decyzja, nie toast z instrukcja curl-owa. */
+.kw-opcje{display:flex;flex-direction:column;gap:.5rem;margin:.8rem 0 .2rem}
+.kw-opt{display:flex;flex-direction:column;gap:.2rem;align-items:flex-start;text-align:left;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:.7rem .9rem;
+  transition:border-color .15s,transform .1s}
+.kw-opt:hover{border-color:var(--accent);transform:translateY(-1px)}
+.kw-opt b{font-size:.92rem}
+.kw-opt span{font-size:.82rem;color:var(--muted);line-height:1.4}
+
+/* Znacznik autozapisu w edytorze wiki - cichy, ale obecny. */
+.we-zapis{font-size:.74rem;color:var(--faint);flex:0 0 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* ---------- obrazy inline + lightbox ---------- */
 .msg-img-wrap{display:block;margin-top:.2rem;border-radius:14px;overflow:hidden;max-width:320px;
   border:1px solid var(--line);transition:transform .15s,box-shadow .15s;padding:0;line-height:0}
@@ -803,11 +910,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .sb-foot{padding:.35rem .9rem .6rem;font-size:.72rem;color:var(--muted);
   letter-spacing:.02em;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;gap:.15rem}
 .sb-foot .stale{color:var(--accent);font-weight:600}
-/* Stan strumienia zdarzen. Cicha smierc live-update jest gorsza od widocznego
-   bledu - wiec gdy strumien padnie, ma to byc widac. */
-.sb-net{color:var(--coral);font-weight:700}
-.sb-net::before{content:"";display:inline-block;width:.45rem;height:.45rem;border-radius:50%;
-  background:var(--coral);margin-right:.35rem;vertical-align:.05rem}
+/* Stan strumienia zdarzen mieszkal tutaj, w stopce panelu bocznego, drobnym
+   drukiem obok numeru wersji UI. Przeniesiony do paska nad rozmowa (.offbar) -
+   "nie widzisz nowych wiadomosci" nie jest informacja tej samej wagi co numer
+   wersji interfejsu. */
 
 /* ---------- kreska "nowe wiadomosci" ---------- */
 /* Ten sam ksztalt co separator dnia, ale w kolorze wolania: to jedyne miejsce,

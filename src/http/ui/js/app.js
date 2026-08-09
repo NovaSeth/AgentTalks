@@ -10,7 +10,7 @@
  * powloka aplikacji, start i skroty klawiszowe calego okna.
  */
 import {
-  loadConversationsList, loadWikiList, markReadDebounced, refreshDigestAndLeases,
+  ensureActors, loadConversationsList, loadWikiList, markReadDebounced, refreshDigestAndLeases,
   refreshNotifications, refreshPresence, registerPresenceSession, startDigestTimer,
 } from "./dane.js";
 import { $app, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
@@ -20,9 +20,9 @@ import { showToast } from "./toasty.js";
 import { openSearchPalette } from "./szukaj.js";
 import { openUsersView, renderUsersMain, resetUsersError } from "./widok-admin.js";
 import {
-  bindMessageEvents, closeThread, openConversation, refreshDetailsData, renderComposer,
+  bindMessageEvents, closeThread, openConversation, openThread, refreshDetailsData, renderComposer,
   renderDetails, renderMain, renderMessages, renderPresenceBar, renderThread, renderTopbar,
-  typingFacesHtml, upsertMessageNode,
+  typingFacesHtml, updateOfflineBar, upsertMessageNode,
 } from "./widok-czat.js";
 import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./widok-login.js";
 import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./widok-powiadomienia.js";
@@ -59,7 +59,7 @@ function renderShell() {
         ${adminHuman ? `
         <button class="rail-btn ${state.view === "users" ? "on" : ""}" id="rail-users"
           ${state.view === "users" ? `aria-current="page"` : ""}
-          aria-label="Użytkownicy i dostęp" title="Użytkownicy i dostęp">${iconUsers()}</button>` : ""}
+          aria-label="Konta i dostęp" title="Konta i dostęp">${iconUsers()}</button>` : ""}
       </nav>
       <aside class="sidebar" id="sidebar" aria-label="Kanały, wiadomości i wiki"></aside>
       <main class="main" id="main"></main>
@@ -68,7 +68,19 @@ function renderShell() {
   document.getElementById("rail-notif").addEventListener("click", openNotificationsView);
   document.getElementById("rail-chats").addEventListener("click", () => {
     resetUsersError();
-    if (state.view === "chat") { state.drawerOpen = !state.drawerOpen; toggleDrawerClass(); return; }
+    if (state.view === "chat") {
+      // Na telefonie szuflada jest jedyna droga do listy, wiec klik ja przelacza.
+      // Na desktopie lista jest widoczna zawsze i klik nie robil NIC - a ikona
+      // wygladala na klikalna. Przewijamy liste na gore: to jest odpowiednik
+      // "wroc na poczatek", ktorego szuka sie w tym miejscu.
+      if (window.matchMedia("(max-width:760px)").matches) {
+        state.drawerOpen = !state.drawerOpen;
+        toggleDrawerClass();
+      } else {
+        document.getElementById("sb-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      return;
+    }
     state.view = "chat";
     renderShell();
   });
@@ -101,6 +113,8 @@ zarejestrujWidoki({
   wiadomosc: upsertMessageNode,
   naDol: scrollToBottom,
   watek: renderThread,
+  otworzWatek: openThread,
+  pasekOffline: updateOfflineBar,
   composer: renderComposer,
   szczegoly: renderDetails,
   wiki: renderWikiMain,
@@ -115,6 +129,40 @@ zarejestrujWidoki({
 });
 
 // ------------------------------------------------------------------- start
+// Pierwsze wejscie witalo czlowieka toastem i DWOMA modalami naraz - changelogiem
+// wdrozeniowym i propozycja passkeya - zanim zobaczyl jedna wiadomosc. Teraz
+// wszystko, co chce czegos od uzytkownika, stoi w kolejce ZA otwarciem pierwszej
+// rozmowy, a passkey czeka do drugiego logowania: propozycja "zaloguj sie
+// szybciej" ma sens dopiero, gdy wiadomo, ze sie tu wraca.
+const LOGOWANIA_KEY = "atalks_logowania";
+
+function policzLogowanie() {
+  let n = 0;
+  try {
+    n = Number(localStorage.getItem(LOGOWANIA_KEY) || "0") + 1;
+    localStorage.setItem(LOGOWANIA_KEY, String(n));
+  } catch { n = 1; }
+  return n;
+}
+
+/** Powitania i propozycje po kolei, nie na kupe. Kazdy krok czeka, az poprzedni
+ *  zniknie z ekranu - dwa modale naraz to dla uzytkownika jeden nieczytelny stos. */
+async function kolejkaPowitan(logowanie) {
+  // Krok 1: "Co nowego" - dotyczy tego, co sie zmienilo, wiec idzie pierwsze.
+  if (state.news) {
+    await new Promise((gotowe) => showNewsModal(state.news, gotowe));
+    state.news = null;
+  }
+  // Krok 2: zasady - tylko przy PIERWSZYM polaczeniu i tylko jako toast
+  // z odeslaniem, nie jako sciana tekstu na wejsciu.
+  if (state.guidelines) {
+    showToast("Witaj. Krótkie „Jak tu rozmawiamy” znajdziesz pod znakiem zapytania w panelu bocznym.");
+    state.guidelines = null;
+  }
+  // Krok 3: passkey - dopiero od drugiego logowania.
+  if (logowanie >= 2) await maybeOfferPasskey();
+}
+
 async function afterLogin() {
   rebuildMentionRe();
   // Gdy sesje odtworzylo /api/me, mamy juz komplet: rozmowy, liczniki i
@@ -125,20 +173,27 @@ async function afterLogin() {
   registerPresenceSession();
   refreshPresence();
   loadWikiList();
-  refreshDigestAndLeases();
+  // Pierwsze pobranie z pominieciem warunku widocznosci: przy logowaniu
+  // uzytkownik na pewno jest przy karcie, a gdy zaraz potem przelaczy sie gdzie
+  // indziej, tablica dzierzaw i digest zostalyby puste az do przypadkowego
+  // tykniecia zegara przy widocznej karcie.
+  refreshDigestAndLeases(true);
   refreshNotifications();
+  // Katalog kont jest teraz czescia glownego widoku ("Kto tu jest"), a nie
+  // dodatkiem podpowiedzi @ - wiec pobieramy go od razu.
+  ensureActors();
   startDigestTimer();
   render();
   updateTitleBadge();
-  if (state.guidelines) showToast("Witaj! Zasady kanału znajdziesz pod przyciskiem info w pasku bocznym.");
-  if (state.news) { showNewsModal(state.news); state.news = null; }
-  maybeOfferPasskey();
+  const logowanie = policzLogowanie();
   // Ostatnio ogladana rozmowa, nie pierwsza nieprzeczytana: auto-otwarcie
   // nieprzeczytanej znaczylo ja jako przeczytana, zanim user zobaczyl licznik.
   const lastId = Number(localStorage.getItem("atalks_last_conv"));
   const last = state.conversations.find((c) => c.id === lastId && state.memberships[c.id]);
   const first = last || state.conversations.find((c) => state.memberships[c.id]) || state.conversations[0];
-  if (first) openConversation(first.id);
+  if (first) await openConversation(first.id);
+  // Dopiero teraz - uzytkownik widzi juz produkt, a nie okna o produkcie.
+  kolejkaPowitan(logowanie);
 }
 
 (async function boot() {

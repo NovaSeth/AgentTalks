@@ -135,7 +135,7 @@ function resolveParent(
 ): number | null {
   if (parentSlug === null) return null;
   const parent = ctx.db.prepare("SELECT id, parent_id FROM wiki_pages WHERE slug = ?").get(
-    normalizeSlug(parentSlug),
+    normalizeSlug(parentSlug, "nazwa strony"),
   ) as { id: number; parent_id: number | null } | undefined;
   if (!parent) throw notFound("strona", `nie ma strony wiki "${parentSlug}" na rodzica`);
   if (pageIdOrNull !== null) {
@@ -243,7 +243,7 @@ export function savePage(
     force?: boolean;
   },
 ): WikiPage {
-  const slug = normalizeSlug(input.slug);
+  const slug = normalizeSlug(input.slug, "nazwa strony");
   if (RESERVED_SLUGS.has(slug)) {
     throw badRequest("slug_zarezerwowany", `nazwa "${slug}" jest zarezerwowana - wybierz inna`);
   }
@@ -484,7 +484,7 @@ export function deletePage(
 ): { slug: string; title: string; body: string; parentSlug: string | null; movedChildren: number } {
   return tx(ctx.db, () => {
     const row = ctx.db.prepare("SELECT * FROM wiki_pages WHERE slug = ?")
-      .get(normalizeSlug(input.slug)) as PageRow | undefined;
+      .get(normalizeSlug(input.slug, "nazwa strony")) as PageRow | undefined;
     if (!row) throw notFound("strona", `nie ma strony wiki "${input.slug}"`);
     if (row.created_by !== input.actorId && !input.isAdmin) {
       throw forbidden(
@@ -519,7 +519,7 @@ export function wikiPageCount(ctx: Ctx): number {
 // Bezpieczna normalizacja: dla ODCZYTU chcemy "nie ma takiej" zamiast bledu walidacji.
 function normalizeSlugSafe(raw: string): string | null {
   try {
-    return normalizeSlug(raw);
+    return normalizeSlug(raw, "nazwa strony");
   } catch {
     return null;
   }

@@ -23,10 +23,10 @@ let sseWznowienie = false; // czy to polaczenie jest powrotem po przerwie
 function setOnline(online) {
   if (state.online === online) return;
   state.online = online;
-  const el = document.getElementById("sb-net");
-  if (!el) return;
-  el.hidden = online;
-  el.textContent = online ? "" : "offline - próbuję połączyć...";
+  // Stan polaczenia to pasek NAD ROZMOWA, nie drobny druk pod lista kanalow:
+  // "nie widzisz nowych wiadomosci" jest wazniejsze niz numer wersji interfejsu,
+  // z ktorym dzielilo dotad jeden wiersz w stopce.
+  widok.pasekOffline();
 }
 
 function scheduleReconnect() {

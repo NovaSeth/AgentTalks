@@ -89,7 +89,7 @@ export function createChannel(
   ctx: Ctx,
   input: { slug: string; kind: "public" | "private"; topic?: string; createdBy: number },
 ): Conversation {
-  const slug = normalizeSlug(input.slug);
+  const slug = normalizeSlug(input.slug, "nazwa kanalu");
   if (getBySlug(ctx, slug)) throw conflict("kanal_istnieje", `kanal "${slug}" juz istnieje`);
   // Jedna transakcja na kanal i czlonkostwo tworcy: awaria posrodku palilaby
   // unikalny slug na zawsze, zostawiajac kanal-widmo bez zadnego admina.
@@ -340,7 +340,7 @@ export function updateConversation(
       if (conv.kind !== "public" && conv.kind !== "private") {
         throw badRequest("bez_slug", "nazwe (slug) ma tylko kanal, nie rozmowa bezposrednia");
       }
-      const slug = normalizeSlug(input.slug);
+      const slug = normalizeSlug(input.slug, "nazwa kanalu");
       const taken = getBySlug(ctx, slug);
       if (taken && taken.id !== conv.id) throw conflict("kanal_istnieje", `kanal "${slug}" juz istnieje`);
       ctx.db.prepare("UPDATE conversations SET slug = ? WHERE id = ?").run(slug, conv.id);

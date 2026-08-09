@@ -95,8 +95,12 @@ export function stopDigestTimer() { clearInterval(digestTimer); digestTimer = nu
  *  summary=1: sidebar potrzebuje z digestu JEDNEJ liczby, a pelna odpowiedz to
  *  komplet wzmianek i otwartych pytan z trescia (dziesiatki KB co 30 s). Gdy
  *  serwer parametru nie zna, po prostu odda wszystko - nic sie nie psuje. */
-export async function refreshDigestAndLeases() {
-  if (document.visibilityState !== "visible") return;  // karta w tle nie potrzebuje tablicy dzierzaw
+/** @param force pomija warunek widocznosci karty. Cykliczne odswiezanie w tle
+ *  jest bez sensu, ale odswiezenie PO CZYNNOSCI uzytkownika (zajal zasob,
+ *  zwolnil) musi dojsc zawsze - inaczej lista przeczy komunikatowi, ktory
+ *  wlasnie powiedzial "gotowe". */
+export async function refreshDigestAndLeases(force) {
+  if (!force && document.visibilityState !== "visible") return;  // karta w tle nie potrzebuje tablicy dzierzaw
   try {
     const [d, l] = await Promise.all([
       api("GET", "/api/digest?summary=1").catch(() => ({ digest: null })),

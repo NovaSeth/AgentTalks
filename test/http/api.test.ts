@@ -1225,3 +1225,38 @@ test("skill nie kaze juz wklejac tokenu do pliku, ktory idzie do repozytorium", 
   assert.match(skill, /\.agenttalks\.json/);
   await s.close();
 });
+
+test("panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)", async () => {
+  const s = await startTestServer();
+  const { ala } = seed(s);
+  const login = await fetch(s.url + "/api/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ handle: "michal", password: "haslo1234" }),
+  });
+  assert.equal(login.status, 200, `logowanie w tescie nie przeszlo (${login.status})`);
+  const auth = cookieAuth(login.headers.get("set-cookie")!);
+
+  const r = await fetch(s.url + "/api/admin/tokens", {
+    method: "POST", headers: auth, body: JSON.stringify({ actorId: ala.id, name: "rotacja" }),
+  });
+  assert.equal(r.status, 201);
+  const { token } = await r.json();
+  assert.match(token, /^atk_/);
+  // Token ma realnie dzialac dla TEGO aktora - inaczej panel tylko udaje rotacje.
+  const me = await (await fetch(s.url + "/api/me", { headers: bearer(token) })).json();
+  assert.equal(me.actor.handle, "ala");
+
+  // Ten sam prog co w konsoli: krotki TTL tylko swiadomie.
+  const krotki = await fetch(s.url + "/api/admin/tokens", {
+    method: "POST", headers: auth, body: JSON.stringify({ actorId: ala.id, ttlSec: 600 }),
+  });
+  assert.equal(krotki.status, 400);
+  assert.equal((await krotki.json()).code, "ttl_za_krotki");
+
+  // Agent (nawet z tokenem) nie wystawia tokenow - panel jest dla czlowieka.
+  const agent = await fetch(s.url + "/api/admin/tokens", {
+    method: "POST", headers: bearer(token), body: JSON.stringify({ actorId: ala.id }),
+  });
+  assert.equal(agent.status, 403);
+  await s.close();
+});

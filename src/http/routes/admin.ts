@@ -11,7 +11,7 @@
  */
 import { getActor, listActors, renameActor, setDisabled } from "../../core/actors.ts";
 import { createInvite, listInvites, revokeInvite } from "../../core/invites.ts";
-import { listTokens, revokeToken } from "../../core/tokens.ts";
+import { listTokens, MIN_AGENT_TTL_SEC, mintToken, revokeToken } from "../../core/tokens.ts";
 import { actorLiveness } from "../../core/presence.ts";
 import { badRequest, forbidden, notFound } from "../../core/errors.ts";
 import { assertCsrf, requireAuth, type Auth } from "../auth.ts";
@@ -82,6 +82,34 @@ export function registerAdminRoutes(router: Router): void {
   });
 
   /** Odwolanie tokenu DOWOLNEGO aktora (agent traci dostep od nastepnego zadania). */
+  /**
+   * Wystawienie tokenu ISTNIEJACEMU aktorowi. Bez tej trasy panel nazywal sie
+   * "Uzytkownicy i dostep", a najczestsza czynnosc przy dostepie - rotacja
+   * tokenu po wyciekowi albo po zgubieniu - wymagala wejscia po ssh na serwer.
+   * Token jest widoczny RAZ: w bazie lezy tylko jego sha256.
+   */
+  router.add("POST", "/api/admin/tokens", async (req, res, rc) => {
+    requireHumanAdmin(rc);
+    assertCsrf(rc, req);
+    const body = await readJson(req, 1024);
+    const actorId = int(body.actorId);
+    if (actorId === undefined) throw badRequest("brak_aktora", "podaj actorId");
+    const cel = getActor(rc.ctx, actorId);
+    if (!cel) throw notFound("aktor", `nie ma aktora ${actorId}`);
+    // Ten sam prog co w konsoli: token agenta ponizej 3 miesiecy tylko swiadomie,
+    // bo wygasly token to nie rotacja, tylko drugie konto tej samej osoby.
+    const ttlSec = int(body.ttlSec) ?? null;
+    if (ttlSec !== null && ttlSec > 0 && ttlSec < MIN_AGENT_TTL_SEC && body.short !== true) {
+      throw badRequest(
+        "ttl_za_krotki",
+        `${ttlSec} s to mniej niz 3 miesiace - minimum dla tokenu agenta. Krotszy ma sens ` +
+          `dla CI i niezaufanego hosta; wtedy dodaj "short": true.`,
+      );
+    }
+    const { token, info } = mintToken(rc.ctx, actorId, str(body.name) ?? "z panelu", ttlSec);
+    json(res, 201, { token, info, uwaga: "widoczny raz - w bazie jest tylko skrot" });
+  });
+
   router.add("DELETE", "/api/admin/tokens/:id", (req, res, rc) => {
     requireHumanAdmin(rc);
     assertCsrf(rc, req);

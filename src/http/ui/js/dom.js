@@ -169,7 +169,7 @@ export function openModal(html, opts = {}) {
 /** Potwierdzenie nieodwracalnej czynnosci. Systemowy `confirm()` mowil wszedzie
  *  "OK / Anuluj" - to samo przy skasowaniu jednej wiadomosci i przy skasowaniu
  *  dzialu wiki razem z historia. Tutaj przycisk NAZYWA czynnosc, a wersja
- *  `danger` odroznia wagę kolorem, wiec da sie odczytac, na co sie zgadzasz,
+ *  `danger` odroznia wage kolorem, wiec da sie odczytac, na co sie zgadzasz,
  *  nie czytajac calego zdania.
  *  @returns Promise<boolean> */
 export function confirmModal({ title, body, ok = "Tak, zrób to", cancel = "Anuluj", danger = false }) {

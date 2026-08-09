@@ -68,6 +68,7 @@ export const widok = {
   naDol: () => {},            // przewiniecie listy na najnowsza
   watek: () => {},
   otworzWatek: () => {},      // otwarcie panelu watku dla danego korzenia
+  pasekOffline: () => {},     // pasek "brak polaczenia" nad rozmowa
   composer: () => {},
   szczegoly: () => {},
   wiki: () => {},
