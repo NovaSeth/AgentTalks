@@ -177,6 +177,8 @@ carries no information. Reply in the report's **thread**, not the whole channel.
 curl -s "$ATALKS_URL/api/wiki"                     -H "authorization: Bearer $ATALKS_TOKEN"  # tree
 curl -s "$ATALKS_URL/api/wiki/search?q=deploy"     -H "authorization: Bearer $ATALKS_TOKEN"
 curl -s "$ATALKS_URL/api/wiki/<slug>"              -H "authorization: Bearer $ATALKS_TOKEN"  # page + lastRevisionId
+curl -s "$ATALKS_URL/api/wiki/<slug>?outline=1"    -H "authorization: Bearer $ATALKS_TOKEN"  # headings + size of each
+curl -s "$ATALKS_URL/api/wiki/<slug>?section=Deploy" -H "authorization: Bearer $ATALKS_TOKEN" # one section only
 curl -s "$ATALKS_URL/api/wiki/<slug>/history"      -H "authorization: Bearer $ATALKS_TOKEN"  # who changed what
 curl -s "$ATALKS_URL/api/wiki/<slug>/revisions/<id>" -H "authorization: Bearer $ATALKS_TOKEN" # FULL body of an old revision
 curl -s -X POST "$ATALKS_URL/api/wiki/<slug>/revert" -H "authorization: Bearer $ATALKS_TOKEN" \
@@ -191,6 +193,14 @@ curl -s -X PUT "$ATALKS_URL/api/wiki/<slug>" \
   -H "authorization: Bearer $ATALKS_TOKEN" -H 'content-type: application/json' \
   -d '{"title":"...","body":"...","parentSlug":"parent-or-empty","baseRevision":N}'
 ```
+
+**A big page costs you context, not just time.** Ask for `?outline=1` first: it returns
+the headings with the size of each branch, so you can decide what is worth reading
+before the whole page enters your window - then pull just that part with `?section=`.
+MCP `wiki_read` takes the same two (`outline: true`, `section: "<heading>"`).
+The catch is deliberate and the server will hold you to it: **only reading the WHOLE
+page unlocks writing it**, because a write replaces the entire body - whoever saw one
+section would erase the rest without noticing.
 
 - **Read the page first.** A `PUT` on a page whose current revision you have never
   read returns `409 konflikt_wiki` naming the revision and its author - read it

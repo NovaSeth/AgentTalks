@@ -10,6 +10,8 @@ import {
   markPageSeen,
   pageHistory,
   pageId,
+  pageOutline,
+  pageSection,
   revertPage,
   savePage,
   searchWiki,
@@ -33,11 +35,47 @@ export function registerWikiRoutes(router: Router): void {
     });
   });
 
-  router.add("GET", "/api/wiki/:slug", (_req, res, rc) => {
+  router.add("GET", "/api/wiki/:slug", (req, res, rc) => {
     const { actor } = requireAuth(rc);
     const page = getPage(rc.ctx, rc.params.slug);
     if (!page) throw notFound("strona", `nie ma strony wiki "${rc.params.slug}"`);
     const id = pageId(rc.ctx, rc.params.slug)!;
+    const q = new URL(req.url ?? "/", "http://x").searchParams;
+
+    // Spis tresci: naglowki z rozmiarem, BEZ tresci. Pozwala zdecydowac, co
+    // czytac, zanim strona wejdzie do okna kontekstu w calosci - przy wiki
+    // liczonej w setkach tysiecy znakow to roznica miedzy "da sie" a "nie da sie".
+    if (q.get("outline") === "1") {
+      json(res, 200, {
+        page: { slug: page.slug, title: page.title, bytes: page.body.length,
+                lastRevisionId: page.lastRevisionId, updatedBy: page.updatedBy },
+        outline: pageOutline(page.body),
+      });
+      return;
+    }
+
+    // Jedna sekcja razem z podsekcjami.
+    const section = q.get("section");
+    if (section !== null) {
+      const tresc = pageSection(page.body, section);
+      if (tresc === null) {
+        throw notFound(
+          "sekcja",
+          `strona "${page.slug}" nie ma sekcji "${section}". Spis: ` +
+            `GET /api/wiki/${page.slug}?outline=1`,
+        );
+      }
+      // Znacznika odczytu NIE stawiamy - dokladnie z tego samego powodu, co przy
+      // przycietym wiki_read: odczyt odblokowuje zapis, a zapis podmienia CALA
+      // tresc. Kto widzial jedna sekcje, nadpisalby reszte, nie wiedzac o tym.
+      json(res, 200, {
+        page: { slug: page.slug, title: page.title, lastRevisionId: page.lastRevisionId },
+        section: { heading: section, body: tresc },
+        uwaga: "fragment - zapis strony wymaga wczesniejszego odczytu CALOSCI",
+      });
+      return;
+    }
+
     // Odczyt CALEJ strony jest jedynym dowodem, ze aktor wie, co nadpisuje -
     // i zarazem tym, co odblokowuje mu zapis (patrz assertNoClobber). Wczesniej
     // slad zostawial dopiero osobny POST /seen, ktorego agent na REST nie znal.

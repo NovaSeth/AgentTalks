@@ -331,6 +331,70 @@ export function getPage(ctx: Ctx, slug: string): WikiPage | null {
   return r ? toPage(ctx, r) : null;
 }
 
+export type Sekcja = {
+  /** Tekst naglowka bez krzyzykow, tak jak widzi go czlowiek. */
+  heading: string;
+  /** 1-6, z liczby krzyzykow. */
+  level: number;
+  /** Numer pierwszej linii sekcji (od 1) - do zacytowania w rozmowie. */
+  line: number;
+  /** Ile znakow ma ta sekcja RAZEM z naglowkiem. */
+  bytes: number;
+};
+
+/**
+ * Spis tresci strony: naglowki markdown z ich rozmiarem.
+ *
+ * Powod jest mierzalny, nie estetyczny. Strona wchodzi do okna kontekstu agenta
+ * W CALOSCI, niezaleznie od tego, ile z niej potrzebuje - a wiki tej instancji
+ * urosla do ~270 tys. znakow, czyli wiecej, niz miesci sie w jednym oknie.
+ * Zapytanie @milosza z #general [185] brzmi wprost: "czy da sie pobierac tylko
+ * potrzebny fragment". Spis pozwala ZDECYDOWAC, zanim sie zaplaci: rozmiar przy
+ * kazdym naglowku mowi, ile kosztuje kazda galaz.
+ *
+ * Bloki kodu sa pomijane, bo `# komentarz` w bashu nie jest naglowkiem strony -
+ * a akurat w tej wiki przyklady powlokowe sa wszedzie.
+ */
+export function pageOutline(body: string): Sekcja[] {
+  const linie = body.split("\n");
+  const out: Sekcja[] = [];
+  let wKodzie = false;
+  for (let i = 0; i < linie.length; i++) {
+    const l = linie[i];
+    if (/^\s*```/.test(l)) { wKodzie = !wKodzie; continue; }
+    if (wKodzie) continue;
+    const m = l.match(/^(#{1,6})\s+(.+?)\s*$/);
+    if (!m) continue;
+    out.push({ heading: m[2], level: m[1].length, line: i + 1, bytes: 0 });
+  }
+  // Rozmiar sekcji = do nastepnego naglowka TEGO SAMEGO albo wyzszego poziomu.
+  // Podsekcje licza sie do rodzica, bo agent pobierajacy "## Wdrozenie" oczekuje
+  // takze jej "### Krok 1" - inaczej dostalby naglowek bez tresci.
+  for (let i = 0; i < out.length; i++) {
+    const nast = out.findIndex((s2, j) => j > i && s2.level <= out[i].level);
+    const koniec = nast === -1 ? linie.length : out[nast].line - 1;
+    out[i].bytes = linie.slice(out[i].line - 1, koniec).join("\n").length;
+  }
+  return out;
+}
+
+/**
+ * Tresc JEDNEJ sekcji, razem z jej podsekcjami. `null`, gdy nie ma takiego naglowka.
+ * Dopasowanie po tekscie naglowka, bez rozroznienia wielkosci liter - agent cytuje
+ * to, co zobaczyl w spisie, a nie identyfikator, ktorego nie ma.
+ */
+export function pageSection(body: string, heading: string): string | null {
+  const szukane = String(heading ?? "").trim().toLowerCase();
+  if (!szukane) return null;
+  const spis = pageOutline(body);
+  const i = spis.findIndex((s2) => s2.heading.toLowerCase() === szukane);
+  if (i === -1) return null;
+  const linie = body.split("\n");
+  const nast = spis.findIndex((s2, j) => j > i && s2.level <= spis[i].level);
+  const koniec = nast === -1 ? linie.length : spis[nast].line - 1;
+  return linie.slice(spis[i].line - 1, koniec).join("\n");
+}
+
 export function pageId(ctx: Ctx, slug: string): number | null {
   const s = normalizeSlugSafe(slug);
   if (!s) return null;

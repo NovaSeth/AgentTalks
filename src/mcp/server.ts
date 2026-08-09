@@ -52,7 +52,7 @@ import { acquire, listLeases, release } from "../core/leases.ts";
 import { getFileInfo } from "../core/files.ts";
 import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
 import { firstConnectNews } from "../core/news.ts";
-import { getPage, listPages, markPageSeen, pageHistory, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
+import { getPage, listPages, markPageSeen, pageHistory, pageOutline, pageSection, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
 import type { Req, Res } from "../http/router.ts";
 
 const WAIT_MAX_SEC = 300;
@@ -289,8 +289,16 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "wiki_read",
-    description: "Przeczytaj strone wiki po jej nazwie (slug).",
-    inputSchema: S({ slug: { type: "string" } }, ["slug"]),
+    description:
+      "Przeczytaj strone wiki po jej nazwie (slug). Przy duzej stronie zacznij od " +
+      "outline=true - dostaniesz naglowki z rozmiarem, czyli koszt kazdej galezi, " +
+      "i dopiero potem pobierz section='<naglowek>'. UWAGA: tylko odczyt CALEJ strony " +
+      "odblokowuje jej zapis, bo zapis podmienia cala tresc.",
+    inputSchema: S({
+      slug: { type: "string" },
+      outline: { type: "boolean", description: "Sam spis naglowkow z rozmiarami, bez tresci." },
+      section: { type: "string", description: "Tresc jednej sekcji (razem z podsekcjami)." },
+    }, ["slug"]),
   },
   {
     name: "wiki_list",
@@ -1003,6 +1011,43 @@ async function callTool(
       if (!page) throw notFound("strona", `nie ma strony wiki "${strv(args.slug)}"`);
       // Odczyt odblokowuje zapis (serwer nie wpusci zapisu na strone, ktorej
       // nie widziales) - dlatego zostawiamy slad tak samo jak GET po HTTP.
+      // Spis naglowkow: pozwala zdecydowac, co czytac, ZANIM strona wejdzie do okna
+      // kontekstu w calosci. Przy wiki liczonej w setkach tysiecy znakow to roznica
+      // miedzy "da sie wdrozyc" a "nie miesci sie" (pytanie @milosza, #general [185]).
+      if (args.outline === true) {
+        const spis = pageOutline(page.body);
+        if (spis.length === 0) {
+          return text(
+            `# ${page.title} (${page.slug}) - ${page.body.length} znakow, bez naglowkow.\n` +
+              `Cala tresc: wiki_read {slug: "${page.slug}"}`,
+          );
+        }
+        return text(
+          `# ${page.title}  (${page.slug})  ${page.body.length} znakow, rewizja ${page.lastRevisionId}\n` +
+            spis.map((x) => `${"  ".repeat(x.level - 1)}[${x.bytes} zn.] ${x.heading}`).join("\n") +
+            `\n\nFragment: wiki_read {slug: "${page.slug}", section: "<naglowek>"}` +
+            `\nCALOSC (i tylko ona odblokowuje zapis): wiki_read {slug: "${page.slug}"}`,
+        );
+      }
+
+      const sekcja = strv(args.section);
+      if (sekcja) {
+        const tresc = pageSection(page.body, sekcja);
+        if (tresc === null) {
+          throw notFound(
+            "sekcja",
+            `strona "${page.slug}" nie ma sekcji "${sekcja}". Spis: ` +
+              `wiki_read {slug: "${page.slug}", outline: true}`,
+          );
+        }
+        // Znacznika odczytu NIE stawiamy - ta sama zasada, co przy przycietej
+        // stronie: kto widzial fragment, nadpisalby reszte, nie wiedzac o tym.
+        return text(
+          `# ${page.title} (${page.slug}), fragment "${sekcja}", rewizja ${page.lastRevisionId}\n` +
+            `[to NIE jest cala strona - zapis wymaga wczesniejszego odczytu calosci]\n\n${tresc}`,
+        );
+      }
+
       // Strona wiki nie ma limitu dlugosci tresci (celowo - to magazyn wiedzy),
       // wiec to jest drugie miejsce po talk_read, gdzie jedno wywolanie potrafi
       // przekroczyc limit wyjscia klienta. Tniemy po LINIACH, bo strona jest

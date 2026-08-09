@@ -1359,3 +1359,71 @@ test("POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa"
     await s.close();
   }
 });
+
+/**
+ * Spis tresci i pobranie jednej sekcji strony wiki.
+ *
+ * Powod jest zmierzony, nie estetyczny: strona wchodzi do okna kontekstu agenta
+ * W CALOSCI, a wiki tej instancji urosla do ~270 tys. znakow - wiecej, niz miesci
+ * sie w jednym oknie. "Przeczytaj wiki, zanim zapytasz" stalo sie fizycznie
+ * niewykonalne, i nikt tego nie zauwazyl, bo nic sie nie psulo (pytanie @milosza
+ * z #general [185]).
+ *
+ * Najwazniejsza asercja jest ostatnia: fragment NIE odblokowuje zapisu. Odczyt
+ * jest dowodem "wiem, co nadpisuje", a zapis podmienia CALA tresc - kto widzial
+ * jedna sekcje, skasowalby reszte, nie wiedzac o tym.
+ */
+test("wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu", async () => {
+  const s = await startTestServer();
+  try {
+    const { tokenA, tokenB } = seed(s);
+    const { savePage } = await import("../../src/core/wiki.ts");
+    const autor = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
+    savePage(s.ctx, {
+      slug: "duza", title: "Duza", actorId: autor.id,
+      body: [
+        "Wstep.", "", "# Wdrozenie", "krok po kroku", "", "### Krok 1", "zrob to", "",
+        "```bash", "# to NIE jest naglowek, tylko komentarz w kodzie", "echo hej", "```", "",
+        "## Wycofanie", "jak sie cofnac", "", "# Bezpieczenstwo", "o kluczach",
+      ].join("\n"),
+    });
+    const daj = async (q: string, token = tokenB) =>
+      (await fetch(`${s.url}/api/wiki/duza${q}`, { headers: bearer(token) })).json();
+
+    const spis = (await daj("?outline=1")).outline as
+      Array<{ heading: string; level: number; bytes: number }>;
+    assert.deepEqual(spis.map((x) => x.heading), ["Wdrozenie", "Krok 1", "Wycofanie", "Bezpieczenstwo"],
+      "komentarz '#' w bloku kodu nie moze byc naglowkiem strony");
+    assert.ok(spis[0].bytes > spis[3].bytes, "rozmiar sekcji ma miec sens: rodzic > liscie");
+
+    const sekcja = (await daj("?section=Wdrozenie")).section as { body: string };
+    assert.match(sekcja.body, /### Krok 1/, "sekcja ma zawierac swoje podsekcje");
+    assert.doesNotMatch(sekcja.body, /Bezpieczenstwo/, "sekcja nie moze siegac za nastepny naglowek");
+
+    // Dopasowanie po tekscie naglowka, bez wielkosci liter - agent cytuje to,
+    // co zobaczyl w spisie.
+    assert.ok(((await daj("?section=wdrozenie")).section as { body: string }).body.length > 0);
+
+    const brak = await (await fetch(`${s.url}/api/wiki/duza?section=Nie%20ma`, { headers: bearer(tokenB) }));
+    assert.equal(brak.status, 404);
+    assert.match((await brak.json()).error, /outline=1/, "blad ma podac, gdzie szukac nazw sekcji");
+
+    // Sedno: po spisie i fragmencie zapis MA sie odbic o ochrone przed nadpisaniem.
+    const zapis = await fetch(`${s.url}/api/wiki/duza`, {
+      method: "PUT", headers: bearer(tokenB),
+      body: JSON.stringify({ title: "Duza", body: "tylko moj akapit" }),
+    });
+    assert.equal(zapis.status, 409, "fragment odblokowal zapis - to cicha kasacja reszty strony");
+
+    // A pelny odczyt - odblokowuje, bo wtedy autor wie, co nadpisuje.
+    await daj("");
+    const poCalosci = await fetch(`${s.url}/api/wiki/duza`, {
+      method: "PUT", headers: bearer(tokenB),
+      body: JSON.stringify({ title: "Duza", body: "tylko moj akapit" }),
+    });
+    assert.equal(poCalosci.status, 200);
+    assert.ok(tokenA);
+  } finally {
+    await s.close();
+  }
+});
