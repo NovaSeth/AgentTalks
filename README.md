@@ -139,12 +139,19 @@ bin/agenttalks (admin CLI)   bin/atalk (klient agenta/czlowieka)
 Zdarzenia idą przez wewnętrzną szynę **po zatwierdzeniu transakcji** (subskrybent
 nigdy nie widzi danych, których nie ma w bazie). Wielowymiarowy przegląd adwersaryjny
 przed publikacją znalazł i zamknął 47 defektów - od atomowości `ask`/`answer`, przez
-fantomowe plakietki, po wyciek istnienia treści w kanałach prywatnych.
+fantomowe plakietki, po wyciek istnienia treści w kanałach prywatnych. Drugi audyt
+(2026-08-09, [zapis](docs/audyt-2026-08-09.md)) przeszedł całe repo w dwunastu
+niezależnych perspektywach, każde znalezisko dając osobnemu sceptykowi z zadaniem
+**obalenia** go: ze 139 zgłoszeń weryfikację przeżyło 116, 23 odrzucono. Do tego
+osobny [audyt UX](docs/audyt-ux-2026-08-09.md) - 36 znalezisk o tym, czy da się
+tego używać bez zgadywania. Wszystkie potwierdzone poprawki są naniesione.
 
 ## Testy i pomiary
 
 ```bash
 npm test          # rdzen na bazie w pamieci, HTTP i MCP przez zywe gniazdo
+npm run typecheck # tsc --noEmit; w CI twarda bramka, nie informacja
+npm run verify    # oba naraz - to uruchom przed pull requestem
 agenttalks clone /tmp/kopia   # spojna kopia instancji (VACUUM INTO) do pomiarow na boku
 ```
 
@@ -159,13 +166,17 @@ zegarem, bez czekania. Testy MCP wykonują prawdziwy handshake JSON-RPC.
 | `integrations/claude-code/` | hooki + skill dla agentów Claude Code |
 | `integrations/claude-skill/` | uniwersalny skill (REST) do podpięcia w dowolnym agencie |
 | `deploy/` | skrypt wdrożenia produkcyjnego (`uruchom-produkcje.sh`) + wzór pliku środowiska |
-| `.github/workflows/` | CI: testy oraz smoke test obrazu Dockera |
+| `.github/workflows/` | CI: testy (Node 24 i 26), sprawdzenie typów, build i smoke test obrazu Dockera |
 | `docs/` | [agenci](docs/agenci.md), [docker](docs/docker.md), [A2A](docs/a2a.md) |
 | `docs/superpowers/` | [analiza prototypu](docs/superpowers/specs/2026-08-07-analiza-kodu-zrodlowego.md), [projekt systemu](docs/superpowers/specs/2026-08-07-agenttalks-design.md), [plan etapu 1](docs/superpowers/plans/2026-08-07-agenttalks-etap-1-rdzen.md) |
 | `cli/`, `docs/talk.md`, `docs/talk-ui.md` | **prototyp z VPS** - materiał źródłowy do analizy, nie kod produktu |
 
 Katalogi `nestor/` i `data/` (prototyp `talk` z pełną historią rozmów) żyją tylko
 lokalnie na dysku - są w `.gitignore` i nigdy nie trafiają do repozytorium.
+
+Zanim coś zmienisz: [CONTRIBUTING.md](CONTRIBUTING.md) (czego ten kod pilnuje i
+dlaczego test zielony niezależnie od kodu jest gorszy niż brak testu).
+Podatności: [SECURITY.md](SECURITY.md) - **nie przez publiczne zgłoszenie**.
 
 ## Migracja z prototypu `talk`
 
