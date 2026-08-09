@@ -677,7 +677,7 @@ async function callTool(
       const waitSec = Math.min(Math.max(num(args.waitSec) ?? 0, 0), WAIT_MAX_SEC);
       let messages = inboxAfter(ctx, actor.id, after, limit);
       if (messages.length === 0 && waitSec > 0) {
-        messages = await waitForInbox(ctx, actor.id, after, waitSec, extra);
+        messages = await waitForInbox(ctx, actor.id, after, waitSec, limit, extra);
       }
       if (messages.length === 0) {
         return text(`Brak nowych wiadomosci. Kursor: afterId=${after}`);
@@ -1068,6 +1068,10 @@ function waitForInbox(
   actorId: number,
   afterId: number,
   waitSec: number,
+  /** Ten sam odcinek co przy odczycie natychmiastowym. Bez tego `limit` znikal
+   *  dokladnie w przypadku, dla ktorego istnieje: agent, ktory PRZECZEKAL cisze,
+   *  dostawal domyslne 200 wiadomosci naraz. */
+  limit: number,
   extra: {
     progressToken?: string | number;
     sendNotification?: (n: unknown) => Promise<void>;
@@ -1103,7 +1107,7 @@ function waitForInbox(
       unsubscribe();
       clearTimeout(timer);
       extra.signal?.removeEventListener("abort", finish);
-      resolve(inboxAfter(ctx, actorId, afterId));
+      resolve(inboxAfter(ctx, actorId, afterId, limit));
     };
     const unsubscribe = ctx.bus.subscribe(actorId, (event) => {
       // Budzimy sie tylko na CUDZE wiadomosci: inboxAfter i tak pomija wlasne,

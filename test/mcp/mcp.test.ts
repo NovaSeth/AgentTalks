@@ -11,6 +11,7 @@ import { mintToken } from "../../src/core/tokens.ts";
 import { createChannel, ensureDirect, join } from "../../src/core/conversations.ts";
 import { postMessage } from "../../src/core/messages.ts";
 import { savePage } from "../../src/core/wiki.ts";
+import { tx } from "../../src/store/db.ts";
 
 type Rpc = { jsonrpc: "2.0"; id?: number; method: string; params?: unknown };
 
@@ -347,6 +348,52 @@ test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", 
     assert.match(t, /^> \[\d+\].*zerknij prosze$/m);
     // Nazwa rozmowy jest w naglowku bloku, wiec nie powtarza sie w kazdej linii.
     assert.equal((t.match(/#general/g) ?? []).length, 1);
+  } finally {
+    await s.close();
+  }
+});
+
+/**
+ * `limit` musi obowiazywac TAKZE po przeczekaniu ciszy.
+ *
+ * Long-poll szedl wlasna sciezka do skrzynki i nie dostawal odcinka, wiec agent,
+ * ktory poczekal na wiadomosci, mogl dostac domyslne 200 naraz. Bledu nie widac
+ * w zwyklym uzyciu, bo przy waitSec=0 wszystko dziala.
+ *
+ * Zeby to w ogole DALO SIE sprawdzic, wiadomosci musza dojsc HURTEM: czekajacy
+ * budzi sie na pierwszej, wiec przy zapisie po jednej w chwili przebudzenia
+ * istnieje dokladnie jedna i limit nie ma czego przyciac. Jedna transakcja to
+ * zalatwia - publikacje ida po commicie, wiec w chwili przebudzenia stoi juz
+ * caly komplet. To nie jest sztuczka pod test: tak wyglada import i kazdy
+ * zapis zbiorczy.
+ *
+ * Pierwsze dwie wersje tego testu przechodzily TAKZE bez naprawy (sprawdzone
+ * przez cofniecie jej) - dlatego ta wersja jest zweryfikowana w obie strony.
+ */
+test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
+  const s = await startTestServer();
+  try {
+    const { ala, kanal, token } = seed(s);
+    await mcpCall(s.url, token, INIT);
+
+    const wolanie = mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 500, method: "tools/call",
+      params: { name: "talk_read", arguments: { afterId: 0, limit: 2, waitSec: 5 } },
+    });
+    // Pauza: bez niej pierwszy, natychmiastowy odczyt zlapalby wiadomosci
+    // i sciezka long-poll nie wykonalaby sie wcale.
+    await new Promise((r) => setTimeout(r, 300));
+    tx(s.ctx.db, () => {
+      for (let i = 0; i < 9; i++) {
+        postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: `wiadomosc ${i}` });
+      }
+    });
+
+    const r = await wolanie;
+    const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
+    const ile = Number(t.match(/^(\d+) nowych/)![1]);
+    assert.ok(ile <= 2, `long-poll oddal ${ile} wiadomosci mimo limit: 2:\n${t.slice(0, 300)}`);
+    assert.match(t, /To nie wszystko - powtorz talk_read z afterId=/);
   } finally {
     await s.close();
   }
