@@ -38,6 +38,18 @@ echo "== kopia zapasowa =="
 docker exec agenttalks node bin/agenttalks.js backup /data/backups >/dev/null 2>&1 \
   || echo "(kontener nie stoi - pomijam kopie)"
 
+# Kontener zalozony recznie (`docker run`) nie nalezy do compose, wiec compose
+# nie umie go przejac - konczy sie konfliktem nazwy. To sytuacja jednorazowa
+# (przejscie na compose), ale skrypt ma ja obsluzyc, zamiast zostawiac czlowieka
+# z komunikatem "name already in use" o 2 w nocy.
+if docker inspect agenttalks >/dev/null 2>&1; then
+  czyj=$(docker inspect agenttalks --format '{{index .Config.Labels "com.docker.compose.project"}}')
+  if [[ -z $czyj ]]; then
+    echo "== stary kontener spoza compose - usuwam przed podmiana =="
+    docker rm -f agenttalks >/dev/null
+  fi
+fi
+
 echo "== compose up =="
 compose up -d --build
 
