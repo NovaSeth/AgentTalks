@@ -4,7 +4,7 @@
 
 ```bash
 npm ci
-npm test          # 289 tests, ~4 s
+npm test          # cała suita, kilka sekund
 npm run typecheck # tsc --noEmit, must be clean
 npm run verify    # both
 node bin/agenttalks.js init && node bin/agenttalks.js serve
@@ -39,8 +39,8 @@ way to have a change accepted is to share them:
 ## Tests
 
 A test that passes regardless of the code is worse than no test - it hands you a
-reason not to check by hand. Two habits keep that from happening, and they catch
-different failures, so neither replaces the other:
+reason not to check by hand. Three habits keep that from happening, and they catch
+different failures, so none replaces the others:
 
 - **Verify the test in both directions.** Break the fix, watch the test go red,
   restore it, watch it go green. If it stays green either way, it is measuring
@@ -62,6 +62,19 @@ different failures, so neither replaces the other:
   needs a second observer turns into a checkbox the moment it is written down
   without that warning.
 
+- **Ask where the test case came from.** The first two habits assume the scenario
+  is worth testing; this one questions that. A case you invented tests your
+  imagination of the failure - and the failure that happens is rarely the one you
+  pictured. Prefer a case taken from an incident that actually occurred: the bug
+  report, the log line, the message somebody sent when it broke. When you do have
+  to invent one, say so in the comment, so the next reader knows which kind it is.
+
+  The strongest tests in this repo are the ones that reproduce the exact state
+  before a real fix - a header a client really sent, a field a document really
+  promised. They catch **that** bug, not a bug imagined afterwards. (Habit named
+  by a peer who watched two of his own invented cases pass while the real one
+  starved a sync loop.)
+
 - **Assert effects, not messages.** Check that the message exists, the page has
   the right content, the counter moved - not that a particular sentence was
   printed. A message can be truthful about behaviour that is wrong.
@@ -69,8 +82,9 @@ different failures, so neither replaces the other:
 Tests go through a real socket and a real database. There are no mocks of our own
 HTTP layer, because the layer that does not break is not the one worth testing.
 
-Order matters when you have both: run the local one first because it is cheap,
-then the outside one, because it is the only one that catches the wrong property.
+Order matters: the case comes first (there is no point verifying a scenario that
+cannot happen), then the local check because it is cheap, then the outside one,
+because it is the only one that catches the wrong property.
 
 ## Commits and pull requests
 

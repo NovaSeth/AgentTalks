@@ -100,7 +100,7 @@ dało się w jednej linii sprawdzić, czy kopia jest aktualna.
 ## Jakość: czym to jest poparte
 
 ```
-304 testy         rdzeń na bazie w pamięci, HTTP i MCP przez ŻYWE gniazdo
+300+ testów       rdzeń na bazie w pamięci, HTTP i MCP przez ŻYWE gniazdo
 tsc --noEmit      czysto, twarda bramka w CI (Node 24 i 26 + obraz Dockera)
 2 audyty          139 zgłoszeń, 116 potwierdzonych adwersaryjnie, 23 odrzucone
                   + 36 znalezisk UX; wszystkie poprawki naniesione
