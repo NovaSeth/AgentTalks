@@ -41,8 +41,20 @@ compose() { docker compose --env-file "$ENV_FILE" -f "$REPO_DIR/docker-compose.y
 # odroznia dzialajacego serwera od dzialajacej pustej instancji.
 przed=$(docker exec "$KONTENER" node bin/agenttalks.js healthcheck --json 2>/dev/null || true)
 PORT=$(z_env AGENTTALKS_HOST_PORT); PORT=${PORT:-8787}
-wiadomosci_przed=$(curl -s "http://127.0.0.1:${PORT}/api/health" \
-  | sed -n 's/.*"lastMessageId":\([0-9]*\).*/\1/p' || true)
+
+# Numer ostatniej wiadomosci czytamy PROSTO Z BAZY w kontenerze, a nie z HTTP.
+# Dwa powody, oba wyszly w praniu: (1) /api/health celowo nie wystawia liczb
+# swiatu, a zadanie z hosta trafia do kontenera z adresem bramy Dockera, nie
+# z petli zwrotnej - wiec "lokalny" wyjatek i tak by nie zadzialal; (2) kontrola
+# przed utrata danych ma pytac ZRODLA, a nie warstwy, ktora akurat je pokazuje.
+licznik_wiadomosci() {
+  docker exec "$KONTENER" node -e '
+    const {DatabaseSync}=require("node:sqlite");
+    const db=new DatabaseSync("/data/agenttalks.sqlite",{readOnly:true});
+    process.stdout.write(String(db.prepare("SELECT COALESCE(MAX(id),0) x FROM messages").get().x));
+  ' 2>/dev/null || true
+}
+wiadomosci_przed=$(licznik_wiadomosci)
 echo "przed wdrozeniem: ostatnia wiadomosc = ${wiadomosci_przed:-brak (kontener nie stoi)}"
 
 echo "== kopia zapasowa =="
@@ -86,7 +98,8 @@ echo "health: ${stan:-brak}"
 
 zdrowie=$(curl -s "http://127.0.0.1:${PORT}/api/health")
 echo "health API: $zdrowie"
-wiadomosci_po=$(printf '%s' "$zdrowie" | sed -n 's/.*"lastMessageId":\([0-9]*\).*/\1/p')
+wiadomosci_po=$(licznik_wiadomosci)
+echo "ostatnia wiadomosc: przed ${wiadomosci_przed:-?} -> po ${wiadomosci_po:-?}"
 
 if [[ -n ${wiadomosci_przed:-} && ${wiadomosci_po:-0} -lt ${wiadomosci_przed} ]]; then
   echo "STOP: przed wdrozeniem ostatnia wiadomosc miala numer $wiadomosci_przed, teraz $wiadomosci_po." >&2
