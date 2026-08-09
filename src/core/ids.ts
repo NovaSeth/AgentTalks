@@ -74,3 +74,20 @@ export function normalizeEmoji(raw: string): string {
   }
   return e;
 }
+
+
+/**
+ * Zapytanie uzytkownika -> fraza FTS5 z przedrostkami. JEDNO miejsce, bo ta sama
+ * regula obowiazuje wyszukiwarke wiadomosci i wyszukiwarke wiki - a dwie kopie
+ * tego samego escapowania to dwie okazje, zeby jedna z nich zapomniec poprawic.
+ * Cudzyslow jest usuwany, nie escapowany: w FTS5 sluzy do cytowania frazy, wiec
+ * przepuszczony zmienialby znaczenie zapytania.
+ */
+export function ftsMatch(text: string): string | null {
+  const slowa = String(text ?? "")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}_]+/u)
+    .filter((w) => w.length > 0);
+  if (slowa.length === 0) return null;
+  return slowa.map((w) => `"${w.replace(/"/g, "")}"*`).join(" ");
+}

@@ -34,9 +34,17 @@ export function announce(text) {
 }
 
 /** Licznik nieprzeczytanych w tytule karty. To jedyny (obok powiadomien systemowych)
- *  sygnal, ktory dziala, gdy karta jest w tle - a tam jest przez wiekszosc czasu. */
+ *  sygnal, ktory dziala, gdy karta jest w tle - a tam jest przez wiekszosc czasu.
+ *
+ *  Liczymy WIADOMOSCI, nie powiadomienia: kazda wzmianka i kazdy DM ma i wiersz
+ *  nieprzeczytanych, i powiadomienie, wiec proste `unread + notifUnread` liczylo
+ *  te sama rzecz dwa razy i tytul przeczyl plakietkom w panelu bocznym. Doliczamy
+ *  tylko te powiadomienia, ktore NIE maja odpowiednika w licznikach rozmow -
+ *  czyli zmiany stron wiki. */
 export function updateTitleBadge() {
-  const suma = Object.values(state.unread).reduce((n, v) => n + (v || 0), 0) + (state.notifUnread || 0);
+  const rozmowy = Object.values(state.unread).reduce((n, v) => n + (v || 0), 0);
+  const wiki = (state.notifications || []).filter((n) => !n.readAt && n.wikiSlug).length;
+  const suma = rozmowy + wiki;
   document.title = suma > 0 ? `(${suma > 99 ? "99+" : suma}) AgentTalks` : "AgentTalks";
 }
 
@@ -112,7 +120,10 @@ export const IMG_RE = /\.(png|jpe?g|gif|webp|avif)$/i;
 // uzytkownik klawiatury zaczyna nawigacje od poczatku dokumentu.
 const FOKUSOWALNE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-/** @param html tresc modala; naglowek powinien miec id="m-title" (aria-labelledby). */
+/** @param html tresc modala; naglowek powinien miec id="m-title" (aria-labelledby).
+ *  @param opts.trwaly okno, ktorego NIE da sie zamknac Escapem ani klikiem w tlo.
+ *         Zarezerwowane dla tresci pokazywanej raz i nie do odzyskania (kod
+ *         zaproszenia): odruchowy Escape kosztowal tam cala czynnosc od nowa. */
 export function openModal(html, opts = {}) {
   const wrocDo = document.activeElement;
   const ov = document.createElement("div");
@@ -122,7 +133,7 @@ export function openModal(html, opts = {}) {
   document.body.appendChild(ov);
 
   const onKey = (e) => {
-    if (e.key === "Escape") { e.preventDefault(); close(); return; }
+    if (e.key === "Escape" && !ov.dataset.trwaly) { e.preventDefault(); close(); return; }
     if (e.key !== "Tab") return;
     const f = [...ov.querySelectorAll(FOKUSOWALNE)].filter((el) => el.offsetParent !== null);
     if (!f.length) return;
@@ -138,13 +149,54 @@ export function openModal(html, opts = {}) {
     if (wrocDo && document.contains(wrocDo)) wrocDo.focus();
   }
   document.addEventListener("keydown", onKey, true);
-  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  ov.addEventListener("click", (e) => { if (e.target === ov && !ov.dataset.trwaly) close(); });
   const modal = ov.querySelector(".modal");
+  if (opts.trwaly) ov.dataset.trwaly = "1";
   // Fokus na pierwszym polu, a gdy okno jest samym komunikatem - na oknie.
   const firstField = modal.querySelector('input:not([type="hidden"]),textarea,select,button');
   if (firstField) firstField.focus();
   else { modal.tabIndex = -1; modal.focus(); }
-  return { overlay: ov, modal, close };
+  // Zamiana okna w "nie do zgubienia" po jego otwarciu: kod zaproszenia powstaje
+  // dopiero po kliknieciu "Utwórz", czyli juz w otwartym oknie.
+  return {
+    overlay: ov,
+    modal,
+    close,
+    zablokujZamykanie: () => { ov.dataset.trwaly = "1"; },
+  };
+}
+
+/** Potwierdzenie nieodwracalnej czynnosci. Systemowy `confirm()` mowil wszedzie
+ *  "OK / Anuluj" - to samo przy skasowaniu jednej wiadomosci i przy skasowaniu
+ *  dzialu wiki razem z historia. Tutaj przycisk NAZYWA czynnosc, a wersja
+ *  `danger` odroznia wagę kolorem, wiec da sie odczytac, na co sie zgadzasz,
+ *  nie czytajac calego zdania.
+ *  @returns Promise<boolean> */
+export function confirmModal({ title, body, ok = "Tak, zrób to", cancel = "Anuluj", danger = false }) {
+  return new Promise((resolve) => {
+    const { modal, close } = openModal(`
+      <h2 id="m-title">${escapeHtml(title)}</h2>
+      ${body ? `<p class="mhint">${escapeHtml(body)}</p>` : ""}
+      <div class="row">
+        <button class="btn ghost" id="cf-no">${escapeHtml(cancel)}</button>
+        <button class="btn ${danger ? "danger" : ""}" id="cf-yes">${escapeHtml(ok)}</button>
+      </div>`);
+    let odpowiedziano = false;
+    const zakoncz = (v) => { if (odpowiedziano) return; odpowiedziano = true; resolve(v); };
+    // Escape i klik w tlo znacza "nie" - a bez tego obietnica nigdy by sie nie
+    // rozwiazala i wywolujacy czekalby w nieskonczonosc.
+    modal.closest(".overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) zakoncz(false); });
+    document.addEventListener("keydown", function esc(e) {
+      if (e.key !== "Escape") return;
+      document.removeEventListener("keydown", esc, true);
+      zakoncz(false);
+    }, true);
+    modal.querySelector("#cf-no").addEventListener("click", () => { close(); zakoncz(false); });
+    modal.querySelector("#cf-yes").addEventListener("click", () => { close(); zakoncz(true); });
+    // Fokus na wyjsciu, nie na czynnosci: Enter odruchowo nacisniety w oknie
+    // ostrzegajacym nie moze potwierdzac kasowania.
+    modal.querySelector("#cf-no").focus();
+  });
 }
 
 export function toggleDrawerClass() {
@@ -175,8 +227,19 @@ export function leaseCountdown(expiresAt) {
 export const hamburgerHtml = () => `<button class="iconbtn hamburger" id="btn-menu" aria-label="Lista rozmów"
   aria-expanded="${state.drawerOpen}" aria-controls="sidebar" title="Lista rozmów">${iconMenu()}</button>`;
 
-export function emptyStateHtml(iconHtml, title, sub) {
-  return `<div class="empty"><div class="big">${iconHtml}</div><h2>${escapeHtml(title)}</h2><p>${escapeHtml(sub)}</p></div>`;
+/** Pusty stan mowi, CO TU ZROBIC, a nie tylko "brak". Trzeci argument to
+ *  opcjonalny przycisk {id, label} - podpiecie zostaje po stronie widoku,
+ *  bo to on wie, co ma sie stac. */
+export function emptyStateHtml(iconHtml, title, sub, akcja) {
+  return `<div class="empty"><div class="big">${iconHtml}</div><h2>${escapeHtml(title)}</h2>
+    <p>${escapeHtml(sub)}</p>
+    ${akcja ? `<button class="btn slim" id="${akcja.id}">${escapeHtml(akcja.label)}</button>` : ""}</div>`;
+}
+
+/** Pusta sekcja panelu bocznego: jedno zdanie i, gdy jest co zrobic, przycisk. */
+export function sidebarEmptyHtml(text, akcja) {
+  return `<div class="sb-empty">${escapeHtml(text)}
+    ${akcja ? `<button class="sb-cta" id="${akcja.id}">${escapeHtml(akcja.label)}</button>` : ""}</div>`;
 }
 
 export function skeletonHtml() {

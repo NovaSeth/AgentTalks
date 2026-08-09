@@ -40,6 +40,7 @@ export const state = {
   pendingFiles: [],        // pliki czekajace na wyslanie (podglady w composerze)
   sseCursor: 0,            // najwyzsze widziane id wiadomosci = kursor dosylki SSE (?after=)
   newBelow: 0,             // ile nowych przyszlo, gdy lista byla przewinieta w gore
+  askMode: false,          // composer wysyla PYTANIE do kanalu zamiast zwyklej wiadomosci
   view: "chat",            // "chat" | "wiki" | "users" | "notifications"
   notifUnread: 0,          // licznik centrum powiadomien (dzwonek w sidebarze)
   notifications: [],       // ostatnie powiadomienia (GET /api/notifications)
@@ -66,6 +67,7 @@ export const widok = {
   wiadomosc: () => {},        // JEDEN dymek
   naDol: () => {},            // przewiniecie listy na najnowsza
   watek: () => {},
+  otworzWatek: () => {},      // otwarcie panelu watku dla danego korzenia
   composer: () => {},
   szczegoly: () => {},
   wiki: () => {},
@@ -219,6 +221,14 @@ export function actorOnline(actorId) {
   return state.presence.some((p) => p.actorId === actorId && p.online);
 }
 
+/** Obecnosc po nazwie, nie po id. Rozmowcy z `others` przychodza z serwera jako
+ *  handle/displayName/kind - bez identyfikatorow - a lista rozmow ma pokazywac
+ *  kropke obecnosci od pierwszej klatki, jeszcze zanim katalog aktorow dojdzie. */
+export function handleOnline(handle) {
+  const low = String(handle ?? "").toLowerCase();
+  return state.presence.some((p) => p.online && String(p.handle).toLowerCase() === low);
+}
+
 // Zwiniete galezie drzewa wiki - pamiec per przegladarka.
 export const wikiCollapsed = new Set((() => {
   try { return JSON.parse(localStorage.getItem("atalks_wiki_collapsed") || "[]"); }
@@ -227,10 +237,39 @@ export const wikiCollapsed = new Set((() => {
 
 export const dmMembersCache = {}; // convId -> [actorId,...] (bez mnie)
 
-export function dmLabel(c) {
+/** Rozmowcy rozmowy prywatnej: [{handle, displayName, kind}], bez mnie.
+ *
+ *  Zrodlem prawdy jest pole `others` z serwera (GET /api/me i /api/conversations) -
+ *  dzieki niemu lista rozmow ma nazwy i twarze OD RAZU. Cache po autorach
+ *  wiadomosci zostaje jako zapas dla starszego serwera, ktory `others` nie zna;
+ *  wczesniej byl jedynym zrodlem, wiec kazda rozmowa prywatna nazywala sie
+ *  "Wiadomosc" do czasu, az sie ja otworzylo. */
+export function dmOthers(c) {
+  if (Array.isArray(c.others) && c.others.length) return c.others;
   const ids = dmMembersCache[c.id];
-  if (ids && ids.length) return ids.map((id) => "@" + actorHandle(id)).join(", ");
-  return c.topic || (c.kind === "group" ? "Grupa" : "Wiadomość");
+  if (ids && ids.length) {
+    return ids.map((id) => state.actorsCache[id] || { handle: actorHandle(id), displayName: "", kind: "agent" });
+  }
+  return [];
+}
+
+export function dmLabel(c) {
+  const others = dmOthers(c);
+  if (others.length) return others.map((o) => "@" + o.handle).join(", ");
+  return c.topic || (c.kind === "group" ? "Rozmowa grupowa" : "Rozmowa prywatna");
+}
+
+/** Wiadomosci "w obiegu zgloszen": tylko przy nich ma sens klucz "naprawiłem"
+ *  i check "potwierdzam". Serwer nie ma pola "to jest zgloszenie" - jest tylko
+ *  slad po czynnosciach (fixedAt/resolvedAt) - wiec jawne wskazanie przez
+ *  czlowieka ("Potraktuj jako zgłoszenie") trzymamy tutaj, w pamieci karty.
+ *  Bez tego oba przyciski wisialy przy KAZDEJ cudzej wiadomosci, takze w
+ *  rozmowie prywatnej o obiedzie, a przypadkowy klik wysylal komus falszywe
+ *  zadanie potwierdzenia. */
+export const zgloszenia = new Set();
+
+export function czyZgloszenie(m) {
+  return !!(m && (m.fixedAt || m.resolvedAt || zgloszenia.has(m.id)));
 }
 
 /** Czy moge zarzadzac ta rozmowa (rola admin w kanale albo admin instancji). */

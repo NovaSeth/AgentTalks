@@ -10,7 +10,7 @@ import { tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
 import { assertCanRead } from "./conversations.ts";
 import { badRequest, notFound } from "./errors.ts";
-import { getMessage, type Message, postMessage } from "./messages.ts";
+import { messageFromRow, type MsgRow, getMessage, type Message, postMessage } from "./messages.ts";
 
 export type OpenQuestion = { id: number; message: Message };
 
@@ -87,11 +87,16 @@ export function openQuestions(
   q: { actorId: number; conversationId?: number },
 ): OpenQuestion[] {
   if (q.conversationId !== undefined) assertCanRead(ctx, q.conversationId, q.actorId);
+  // Wiadomosc pobierana W TYM SAMYM zapytaniu: wczesniej kazde pytanie kosztowalo
+  // osobne `getMessage`, wiec panel z 40 otwartymi pytaniami robil 41 zapytan.
+  // Do tego LIMIT - lista "do podjecia" bez ograniczenia to zaproszenie do
+  // odpowiedzi, ktora rosnie z historia instancji.
   const rows = ctx.db
     .prepare(
-      `SELECT qu.id AS qid, qu.message_id
+      `SELECT qu.id AS qid, qu.message_id, m.*
          FROM questions qu
          JOIN conversations c ON c.id = qu.conversation_id
+         JOIN messages m ON m.id = qu.message_id AND m.deleted_at IS NULL
         WHERE qu.closed_at IS NULL
           -- Kanal zarchiwizowany nie przyjmuje juz wiadomosci, wiec na pytanie
           -- w nim NIE DA SIE odpowiedziec. Zostawianie go na liscie "do podjecia"
@@ -101,13 +106,11 @@ export function openQuestions(
           AND (c.kind = 'public'
                OR EXISTS (SELECT 1 FROM members m
                            WHERE m.conversation_id = c.id AND m.actor_id = ?))
-        ORDER BY qu.id`,
+        ORDER BY qu.id
+        LIMIT 200`,
     )
-    .all(q.conversationId ?? null, q.conversationId ?? null, q.actorId) as Array<{
-      qid: number;
-      message_id: number;
-    }>;
-  return rows
-    .map((r) => ({ id: r.qid, message: getMessage(ctx, r.message_id)! }))
-    .filter((x) => x.message && !x.message.deletedAt);
+    .all(q.conversationId ?? null, q.conversationId ?? null, q.actorId) as Array<
+      MsgRow & { qid: number }
+    >;
+  return rows.map((r) => ({ id: r.qid, message: messageFromRow(r) }));
 }

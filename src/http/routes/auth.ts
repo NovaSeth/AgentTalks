@@ -202,7 +202,6 @@ export function registerAuthRoutes(router: Router): void {
       rpId,
       expectedOrigins: origins,
       actorId: actor.id,
-      challengeFromClient: str(body.challenge) ?? "",
       clientDataJSON: str(body.clientDataJSON) ?? "",
       attestationObject: str(body.attestationObject) ?? "",
       label: str(body.label) ?? null,

@@ -160,7 +160,11 @@ export type RegistrationInput = {
   rpId: string;
   expectedOrigins: readonly string[];
   actorId: number;
-  challengeFromClient: string;      // echo challenge z clientDataJSON
+  // Pole `challengeFromClient` USUNIETE. Bylo martwe: nikt go nie czytal, a jego
+  // komentarz sugerowal kontrole, ktorej nie bylo. Wiarygodny challenge i tak
+  // pochodzi WYLACZNIE z clientDataJSON (podpisanego przez authenticator) i tam
+  // jest zuzywany - kopia podana obok przez klienta niczego by nie dowodzila,
+  // bo klient moglby podac dowolna. Lepsze puste miejsce niz pozorna kontrola.
   clientDataJSON: string;           // base64url
   attestationObject: string;        // base64url
   label?: string | null;
@@ -168,7 +172,27 @@ export type RegistrationInput = {
 
 /** Rejestracja poswiadczenia: sprawdza challenge/origin/rpId/flagi, wyciaga
  *  credentialId + klucz publiczny i zapisuje. Zwraca id poswiadczenia. */
+/** Wywolanie, ktore MOZE dostac smiec od klienta, opakowane tak, zeby smiec
+ *  konczyl sie bledem 400 ("przyslales cos nie tak"), a nie 500 ("serwer sie
+ *  wywrocil"). Odczyty bufora (readUInt16BE, subarray, CBOR) rzucaja RangeError
+ *  na obcietych danych - a nieobsluzony RangeError to nasza awaria w odpowiedzi
+ *  na cudzy blad, czyli komunikat mowiacy nieprawde o tym, kto zawinil. */
+function zeSmieciemJako400<T>(co: () => T): T {
+  try {
+    return co();
+  } catch (err) {
+    if (err instanceof RangeError || err instanceof TypeError) {
+      throw badRequest("webauthn", "dane rejestracji klucza sa niekompletne albo uszkodzone");
+    }
+    throw err;
+  }
+}
+
 export function registerCredential(ctx: Ctx, input: RegistrationInput): string {
+  return zeSmieciemJako400(() => registerCredentialWewn(ctx, input));
+}
+
+function registerCredentialWewn(ctx: Ctx, input: RegistrationInput): string {
   const client = parseClientData(b64u.dec(input.clientDataJSON));
   if (client.type !== "webauthn.create") throw badRequest("webauthn", "zly typ clientData");
   const ch = consumeChallenge(client.challenge, "register");

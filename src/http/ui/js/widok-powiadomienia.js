@@ -7,7 +7,7 @@ import { emptyStateHtml, escapeHtml, fmtDateTime, hamburgerHtml, openModal, togg
 import { iconBell, iconChat, iconDoc } from "./ikony.js";
 import { mdToHtml } from "./markdown.js";
 import { dmLabel, state, widok } from "./stan.js";
-import { showToast } from "./toasty.js";
+import { showError, showToast } from "./toasty.js";
 import { openWikiPage } from "./widok-wiki.js";
 
 /** Prosba o zgode na powiadomienia. Wolana z centrum powiadomien - czyli w
@@ -114,7 +114,7 @@ export function renderNotificationsMain() {
     try {
       await api("POST", "/api/notifications/read", {});
       await refreshNotifications();
-    } catch (e) { showToast(e.message, { alert: true }); }
+    } catch (e) { showError(e); }
   });
   el.querySelectorAll("[data-notif]").forEach((b) =>
     b.addEventListener("click", () => openNotification(Number(b.dataset.notif))));

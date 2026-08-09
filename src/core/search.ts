@@ -8,6 +8,7 @@
  * miejscem na wyciek tresci z kanalu prywatnego.
  */
 import type { Ctx } from "./ctx.ts";
+import { ftsMatch } from "./ids.ts";
 import type { Message } from "./messages.ts";
 
 const DEFAULT_LIMIT = 40;
@@ -27,19 +28,6 @@ type MsgRow = {
   meta: string | null;
 };
 
-/**
- * Zapytanie uzytkownika jest tekstem, nie skladnia FTS. Kazde slowo idzie w cudzyslow
- * i dostaje gwiazdke (dopasowanie przedrostkowe). Bez tego wpisanie nawiasu albo
- * slowa "AND" wywracaloby zapytanie bledem skladni zamiast czegokolwiek znalezc.
- */
-function toMatchQuery(text: string): string | null {
-  const words = String(text ?? "")
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}_]+/u)
-    .filter((w) => w.length > 0);
-  if (words.length === 0) return null;
-  return words.map((w) => `"${w.replace(/"/g, "")}"*`).join(" ");
-}
 
 export function search(
   ctx: Ctx,
@@ -55,7 +43,10 @@ export function search(
     untilTs?: number;
   },
 ): Message[] {
-  const match = toMatchQuery(q.text);
+  // Zapytanie uzytkownika jest TEKSTEM, nie skladnia FTS - zamiana na fraze
+  // z przedrostkami mieszka w ids.ts, wspolnie z wyszukiwarka wiki. Dwie kopie
+  // tej samej reguly to dwie okazje, zeby jedna z nich zapomniec poprawic.
+  const match = ftsMatch(q.text);
   if (!match) return [];
   const limit = Math.min(Math.max(q.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
   const rows = ctx.db

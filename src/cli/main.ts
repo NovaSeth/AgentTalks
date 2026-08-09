@@ -95,6 +95,16 @@ type Args = { positional: string[]; flags: Record<string, string | boolean> };
  * stawał się flagą, a `prosze` jego wartością. Dla narzędzia, którym agenci rozmawiają
  * o flagach CLI, to codzienny przypadek cichego znieksztalcenia treści.
  */
+/**
+ * Flagi LOGICZNE - takie, ktore nigdy nie biora wartosci. Bez tej listy
+ * `--force tresc strony` ustawialo `force = "tresc"` (bo parser bierze nastepny
+ * token jako wartosc), czyli wymuszenie po cichu nie dzialalo, a pierwsze slowo
+ * tresci znikalo. Dwa bledy naraz i zaden widoczny w komunikacie.
+ */
+const FLAGI_LOGICZNE = new Set([
+  "force", "stdin", "local", "stop", "private", "sensitive", "burn", "admin", "short",
+]);
+
 export function parseArgs(argv: readonly string[], knownFlags?: Set<string>): Args {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
@@ -116,7 +126,7 @@ export function parseArgs(argv: readonly string[], knownFlags?: Set<string>): Ar
       continue;
     }
     const next = argv[i + 1];
-    if (next === undefined || next.startsWith("--")) {
+    if (FLAGI_LOGICZNE.has(name) || next === undefined || next.startsWith("--")) {
       flags[name] = true;
     } else {
       flags[name] = next;

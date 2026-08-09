@@ -39,9 +39,12 @@ export type TestServer = {
   close: () => Promise<void>;
 };
 
-export async function startTestServer(): Promise<TestServer> {
+/** Serwer testowy z mozliwoscia nadpisania konfiguracji. Bez tego parametru
+ *  bramka anty-bot byla NIETESTOWALNA (wlacza sie tylko przy ustawionym hasle),
+ *  wiec kontrola dostepu do calego interfejsu nie miala ani jednego testu. */
+export async function startTestServer(overrides: Partial<Config> = {}): Promise<TestServer> {
   const ctx = createCtx(openDb(":memory:"), new EventBus());
-  const config = testConfig();
+  const config = testConfig(overrides);
   const server = createServer(ctx, config);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;

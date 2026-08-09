@@ -1,13 +1,15 @@
 /**
  * Panel boczny: kanaly, wiadomosci, drzewo wiki, dzierzawy, digest.
  */
+import { claimLease, releaseLease, startDirect } from "./akcje.js";
 import { api } from "./api.js";
-import { UI_STAMP, escapeHtml, leaseCountdown, openModal } from "./dom.js";
-import { iconChevron, iconDigest, iconDoc, iconInfo, iconLock, iconOut, iconSearch } from "./ikony.js";
+import { ensureActors, refreshDigestAndLeases } from "./dane.js";
+import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
+import { iconChevron, iconDigest, iconDoc, iconLock, iconOut, iconQuestion, iconSearch } from "./ikony.js";
 import { mdToHtml } from "./markdown.js";
-import { actorHandle, actorOnline, dmLabel, dmMembersCache, state, wikiCollapsed } from "./stan.js";
+import { actorHandle, dmLabel, dmOthers, handleOnline, state, wikiCollapsed } from "./stan.js";
 import { openSearchPalette } from "./szukaj.js";
-import { showToast } from "./toasty.js";
+import { showError } from "./toasty.js";
 import { openConversation, openNewConversationModal, openQuestionsPanel } from "./widok-czat.js";
 import { doLogout } from "./widok-login.js";
 import { newWikiPageModal, openWikiPage } from "./widok-wiki.js";
@@ -21,13 +23,12 @@ export function renderSidebar() {
         <div class="me"><span class="dot"></span><span class="mename">@${escapeHtml(state.actor.handle)}</span></div>
       </div>
       <button class="iconbtn" id="btn-search" aria-label="Szukaj i przełącz rozmowę (Cmd+K)" title="Szukaj (Cmd+K)">${iconSearch()}</button>
-      <button class="iconbtn" id="btn-guidelines" aria-label="Zasady kanału" title="Zasady kanału">${iconInfo()}</button>
+      <button class="iconbtn" id="btn-guidelines" aria-label="Jak tu rozmawiamy" title="Jak tu rozmawiamy">${iconQuestion()}</button>
       <button class="iconbtn" id="btn-logout" aria-label="Wyloguj" title="Wyloguj">${iconOut()}</button>
     </div>
     <div class="sb-scroll" id="sb-scroll"></div>
     <div class="sb-foot" id="sb-foot">
-      <span class="sb-net" id="sb-net" hidden></span>
-      <span id="sb-ui" title="Wersja interfejsu, ktory wlasnie masz zaladowany. Jesli po wdrozeniu sie nie zmienila, to Twoja przegladarka trzyma stara kopie (odswiez z pominieciem cache)."></span>
+      <span id="sb-ui" title="Wersja interfejsu, który masz teraz załadowany. Jeśli po wdrożeniu się nie zmieniła, Twoja przeglądarka trzyma starą kopię - odśwież stronę z pominięciem pamięci podręcznej."></span>
     </div>`;
   document.getElementById("btn-logout").addEventListener("click", doLogout);
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
@@ -43,14 +44,12 @@ export function renderSidebar() {
       if (UI_STAMP && v.stamp !== UI_STAMP) {
         foot.textContent = `UI ${UI_STAMP} - serwer ma ${v.stamp}`;
         foot.classList.add("stale");
-        foot.title = "Masz starszy interfejs niz serwer. Odswiez strone z pominieciem cache.";
+        foot.title = "Masz starszy interfejs niż serwer. Odśwież stronę z pominięciem pamięci podręcznej.";
       }
     }).catch(() => {});
   }
-  // Stan strumienia zdarzen odtwarzamy po kazdej przebudowie panelu - inaczej
-  // po przerysowaniu sidebara "offline" znikaloby mimo zerwanego polaczenia.
-  const net = document.getElementById("sb-net");
-  if (net) { net.hidden = state.online; net.textContent = state.online ? "" : "offline - próbuję połączyć..."; }
+  // Stan strumienia zdarzen wyprowadzil sie stad do paska nad rozmowa: "nie
+  // widzisz nowych wiadomosci" nie moze dzielic drobnego druku z numerem wersji.
   renderSidebarList();
 }
 
@@ -76,14 +75,19 @@ export function updateConvRow(convId) {
   badge.textContent = unread > 99 ? "99+" : String(unread);
 }
 
-/** Kropki obecnosci - jedyne, co zmienia w sidebarze heartbeat sesji co 30 s. */
+/** Kropki obecnosci - jedyne, co zmienia w sidebarze heartbeat sesji co 30 s.
+ *  Obecnosc czytamy po NAZWIE, bo rozmowcy z serwera (`others`) nie niosa
+ *  identyfikatorow, a lista "Kto tu jest" i tak stoi na nazwach. */
 export function updatePresenceDots() {
   for (const row of document.querySelectorAll("#sb-scroll [data-open]")) {
     const dot = row.querySelector(".ppresence");
     if (!dot) continue;
-    const ids = dmMembersCache[Number(row.dataset.open)];
-    const other = ids && ids[0];
-    dot.classList.toggle("on", other != null && actorOnline(other));
+    const c = state.conversations.find((x) => x.id === Number(row.dataset.open));
+    if (!c) continue;
+    dot.classList.toggle("on", dmOthers(c).some((o) => handleOnline(o.handle)));
+  }
+  for (const row of document.querySelectorAll("#sb-scroll [data-person]")) {
+    row.querySelector(".ppresence")?.classList.toggle("on", handleOnline(row.dataset.person));
   }
 }
 
@@ -104,9 +108,13 @@ export function renderSidebarList() {
     const unread = state.unread[c.id] || 0;
     const isDirect = c.kind === "dm" || c.kind === "group";
     const label = isDirect ? dmLabel(c) : (c.slug || c.topic || "bez-nazwy");
-    const other = isDirect ? (dmMembersCache[c.id] && dmMembersCache[c.id][0]) : null;
-    const online = other != null && actorOnline(other);
-    const pre = isDirect ? `<span class="ppresence ${online ? "on" : ""}"></span>`
+    const inni = isDirect ? dmOthers(c) : [];
+    const online = inni.some((o) => handleOnline(o.handle));
+    // Rozmowa prywatna dostaje TWARZ, nie samą kropkę: nazwy i awatary przychodza
+    // teraz z serwera (`others`) razem z lista rozmow, wiec nie trzeba juz czekac
+    // na otwarcie rozmowy, zeby zobaczyc, z kim sie rozmawia.
+    const pre = isDirect
+      ? `<span class="conv-face">${avatarHtml(inni[0]?.handle ?? "?", 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>`
       : c.kind === "private" ? `<span class="pre">${iconLock()}</span>` : `<span class="pre">#</span>`;
     return `
       <button class="conv ${active ? "active" : ""} ${unread ? "unread" : ""}" data-open="${c.id}"
@@ -118,11 +126,41 @@ export function renderSidebarList() {
       </button>`;
   };
 
+  // "Kto tu jest" - lista, bez ktorej caly produkt jest niewidoczny. Do tej pory
+  // sklad serwera dalo sie zobaczyc WYLACZNIE w panelu szczegolow pojedynczej
+  // rozmowy, czyli czlowiek nie wiedzial, z kim w ogole moglby porozmawiac.
+  // Klik zaklada rozmowe prywatna - to jedyna rzecz, ktora ma sens zrobic z
+  // czyjas nazwa.
+  const ludzieHtml = () => {
+    const lista = state.actorsList.filter((a) => a.handle !== state.actor.handle && a.kind !== "system");
+    if (!lista.length) return sidebarEmptyHtml("Jesteś tu na razie sam. Zaproś agenta albo człowieka.");
+    // Najpierw obecni, potem reszta - "z kim moge pogadac teraz" to pierwsze pytanie.
+    const wg = [...lista].sort((a, b) => {
+      const oa = handleOnline(a.handle), ob = handleOnline(b.handle);
+      if (oa !== ob) return oa ? -1 : 1;
+      return a.handle.localeCompare(b.handle, "pl");
+    });
+    return wg.map((a) => {
+      const online = handleOnline(a.handle);
+      return `
+      <button class="conv person" data-person="${escapeHtml(a.handle)}"
+        title="Napisz do @${escapeHtml(a.handle)} prywatnie"
+        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? "człowiek" : "agent"}${online ? ", jest teraz online" : ", offline"} - napisz prywatnie">
+        <span class="conv-face">${avatarHtml(a.handle, 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>
+        <span class="nm">@${escapeHtml(a.handle)}</span>
+        <span class="kindtag ${a.kind}">${a.kind === "human" ? "człowiek" : "agent"}</span>
+      </button>`;
+    }).join("");
+  };
+
   // Wiki jest drzewem: strona-rodzic gra role katalogu. Zwiniete galezie
   // pamietamy per przegladarka; badge na zwinietym rodzicu sumuje poddrzewo.
   const wikiTreeHtml = () => {
     const pages = state.wiki.pages;
-    if (!pages.length) return `<div class="sb-empty">jeszcze pusto</div>`;
+    if (!pages.length) {
+      return sidebarEmptyHtml("Nic tu jeszcze nie ma. Wiki to wspólna pamięć - agenci czytają ją, zanim zapytają.",
+        { id: "sb-new-wiki", label: "Załóż pierwszą stronę" });
+    }
     const bySlug = new Set(pages.map((p) => p.slug));
     const kids = new Map();
     for (const p of pages) {
@@ -168,47 +206,80 @@ export function renderSidebarList() {
   // aria-label na przycisku i aria-hidden na samym znaku.
   const plus = (kind, label) =>
     `<button data-new="${kind}" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span></button>`;
+  // KOLEJNOSC SEKCJI = kolejnosc pytan, z ktorymi sie tu wraca. Najpierw "co
+  // mnie ominelo i co na mnie czeka" (po to wracasz po dwoch dniach), potem
+  // "gdzie rozmawiam", potem "kto tu jest", a dopiero na koncu wiki i zasoby.
+  // Wczesniej drzewo wiki stalo NAD otwartymi pytaniami i digestem, wiec to,
+  // po co przyszedles, bylo pod widokiem - za lista, ktora rosnie bez konca.
+  //
+  // Otwarte pytania i digest trafily do JEDNEJ sekcji: mowily o tej samej
+  // rzeczy trzema jezykami, w trzech miejscach, z trzema licznikami.
+  const doNadrobienia = openCount > 0 || (state.digest && state.digest.count > 0);
   el.innerHTML = `
+    ${doNadrobienia ? `
+    <div class="sb-group">
+      <h3>Do nadrobienia</h3>
+      ${state.digest && state.digest.count > 0 ? `
+      <button class="conv" id="btn-digest">
+        <span class="pre">${iconDigest()}</span><span class="nm">Co się działo bez Ciebie</span>
+        <span class="badge soft">${state.digest.count > 99 ? "99+" : state.digest.count}</span>
+      </button>` : ""}
+      ${openCount ? `
+      <button class="conv qcount" id="btn-questions">
+        <span class="pre">?</span><span class="nm">Pytania czekające na odpowiedź</span>
+        <span class="badge coral">${openCount}</span>
+      </button>` : ""}
+    </div>` : ""}
     <div class="sb-group">
       <h3>Kanały ${plus("channel", "Nowy kanał")}</h3>
-      ${channels.map(row).join("") || `<div class="sb-empty">brak</div>`}
+      ${channels.map(row).join("") || sidebarEmptyHtml("Nie jesteś jeszcze na żadnym kanale.",
+        { id: "sb-new-chan", label: "Załóż kanał" })}
     </div>
     <div class="sb-group">
-      <h3>Wiadomości ${plus("dm", "Nowa wiadomość")}</h3>
-      ${directs.map(row).join("") || `<div class="sb-empty">brak</div>`}
+      <h3>Rozmowy prywatne ${plus("dm", "Nowa rozmowa prywatna")}</h3>
+      ${directs.map(row).join("") || sidebarEmptyHtml("Jeszcze z nikim nie rozmawiasz na osobności.",
+        { id: "sb-new-dm", label: "Napisz do kogoś" })}
     </div>
     <div class="sb-group">
-      <h3>Wiki ${plus("wiki", "Nowa strona")}</h3>
+      <h3>Kto tu jest</h3>
+      ${ludzieHtml()}
+    </div>
+    <div class="sb-group">
+      <h3>Wiki ${plus("wiki", "Nowa strona wiki")}</h3>
       ${wikiTreeHtml()}
     </div>
-    ${openCount ? `
     <div class="sb-group">
-      <h3>Do podjęcia</h3>
-      <button class="conv qcount" id="btn-questions">
-        <span class="pre">?</span><span class="nm">Otwarte pytania</span>
-        <span class="badge coral">${openCount}</span>
-      </button>
-    </div>` : ""}
-    ${state.digest && state.digest.count > 0 ? `
-    <div class="sb-group">
-      <button class="conv" id="btn-digest">
-        <span class="pre">${iconDigest()}</span><span class="nm">Co Cię ominęło</span>
-        <span class="badge soft">${state.digest.count > 99 ? "99+" : state.digest.count}</span>
-      </button>
-    </div>` : ""}
-    ${state.leases.length ? `
-    <div class="sb-group">
-      <h3 title="Dzierżawy: agent przed dotknięciem wspólnego zasobu (np. deployu) rezerwuje go na czas pracy (atalk claim / talk_claim). Inni dostaną odmowę, dopóki blokada nie wygaśnie.">Zajęte zasoby</h3>
-      ${state.leases.map((l) => `
-      <div class="lease-row" title="Zasób &quot;${escapeHtml(l.resource)}&quot; zajęty przez @${escapeHtml(l.handle)}${l.note ? ` - ${escapeHtml(l.note)}` : ""}. Blokada puści za ${leaseCountdown(l.expiresAt)} (albo gdy właściciel zwolni).">
+      <h3 title="Zanim ktoś ruszy coś wspólnego (wdrożenie, migrację, plik konfiguracyjny), zajmuje to tutaj. Reszta widzi, że jest zajęte, i czeka - zamiast wejść w to samo w tym samym czasie.">Zajęte zasoby ${plus("lease", "Zajmij zasób")}</h3>
+      ${state.leases.length ? state.leases.map((l) => {
+        const moj = l.handle === state.actor.handle;
+        return `
+      <div class="lease-row" title="„${escapeHtml(l.resource)}” zajmuje @${escapeHtml(l.handle)}${l.note ? ` - ${escapeHtml(l.note)}` : ""}. Zwolni się samo za ${leaseCountdown(l.expiresAt)}.">
         <span class="pre">${iconLock()}</span>
         <span class="nm"><b>${escapeHtml(l.resource)}</b> · @${escapeHtml(l.handle)}</span>
         <span class="lease-ttl">${leaseCountdown(l.expiresAt)}</span>
-      </div>`).join("")}
-    </div>` : ""}
-    ${discoverable.length ? `<div class="sb-group"><h3>Do odkrycia</h3>${discoverable.map(row).join("")}</div>` : ""}
+        ${moj ? `<button class="lease-free" data-freelease="${escapeHtml(l.resource)}"
+          aria-label="Zwolnij ${escapeHtml(l.resource)}" title="Zwolnij - inni będą mogli to ruszyć">Zwolnij</button>` : ""}
+      </div>`;
+      }).join("") : sidebarEmptyHtml("Nikt nic teraz nie blokuje.",
+        { id: "sb-new-lease", label: "Zajmij zasób" })}
+    </div>
+    ${discoverable.length ? `<div class="sb-group">
+      <h3>Kanały, do których możesz dołączyć</h3>${discoverable.map(row).join("")}</div>` : ""}
   `;
   el.scrollTop = scrollTop;
+  el.querySelectorAll("[data-person]").forEach((b) =>
+    b.addEventListener("click", () => startDirect(b.dataset.person)));
+  el.querySelector("#sb-new-chan")?.addEventListener("click", () => openNewConversationModal("channel"));
+  el.querySelector("#sb-new-dm")?.addEventListener("click", () => openNewConversationModal("dm"));
+  el.querySelector("#sb-new-wiki")?.addEventListener("click", newWikiPageModal);
+  el.querySelector("#sb-new-lease")?.addEventListener("click", claimLeaseModal);
+  el.querySelectorAll("[data-freelease]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      if (await releaseLease(b.dataset.freelease)) refreshDigestAndLeases();
+    }));
+  // Lista "Kto tu jest" musi byc czyms wiecej niz autorami wiadomosci - katalog
+  // dociagamy w tle przy pierwszym renderze, bez blokowania rysowania.
+  if (!state.actorsList.length) ensureActors().then(() => renderSidebarList());
   el.querySelectorAll("[data-open]").forEach((b) =>
     b.addEventListener("click", () => openConversation(Number(b.dataset.open))));
   el.querySelectorAll("[data-wikipage]").forEach((b) =>
@@ -225,6 +296,7 @@ export function renderSidebarList() {
   el.querySelectorAll("[data-new]").forEach((b) =>
     b.addEventListener("click", () => {
       if (b.dataset.new === "wiki") newWikiPageModal();
+      else if (b.dataset.new === "lease") claimLeaseModal();
       else openNewConversationModal(b.dataset.new);
     }));
   const qb = el.querySelector("#btn-questions");
@@ -242,7 +314,7 @@ async function openDigestModal() {
   let d = state.digest;
   if (!d || !Array.isArray(d.byConversation)) {
     try { d = (await api("GET", "/api/digest")).digest; }
-    catch (e) { showToast(e.message, { alert: true }); return; }
+    catch (e) { showError(e); return; }
   }
   if (!d) return;
   const convRow = ([name, n]) => {
@@ -281,15 +353,79 @@ async function openDigestModal() {
   if (dq) dq.addEventListener("click", () => { close(); openQuestionsPanel(); });
 }
 
-async function showGuidelines() {
-  let text = (state.guidelines && state.guidelines.text) || null;
-  if (!text) {
-    try { text = (await api("GET", "/api/guidelines")).text; } catch (e) { showToast(e.message, { alert: true }); return; }
-  }
+// Tekst dla CZLOWIEKA, napisany wprost tutaj. Przycisk (i) otwieral dotad
+// AgentTalks.md - instrukcje operacyjna dla agenta, zaczynajaca sie od "Jestes
+// aktorem uwierzytelnianym tokenem" i mowiaca o baseRevision i MCP. Czlowiek,
+// ktory ja przeczytal, wyciagal jedyny mozliwy wniosek: ten produkt nie jest
+// dla mnie. Zasady dla agentow zostaja - jedno klikniecie nizej, dla ciekawych.
+const JAK_TU_ROZMAWIAMY = [
+  "To jest wspólna przestrzeń rozmów dla ludzi i agentów AI. Nie ma tu botów do wydawania komend - każdy uczestnik, człowiek czy agent, pisze i czyta tak samo.",
+  "Kanały (te ze znakiem #) są dla tematów, rozmowy prywatne dla wszystkiego innego. Do otwartego kanału dołączasz sam, kiedy chcesz.",
+  "Żeby kogoś zawołać, napisz @jego-nazwę. To jedyny sposób, żeby przerwać komuś pracę - agent, który śpi, zostanie dla takiej wiadomości obudzony, więc używaj tego wtedy, gdy naprawdę czekasz na odpowiedź.",
+  "Jeśli o coś pytasz i chcesz mieć pewność, że pytanie nie zginie, wyślij je przyciskiem ze znakiem zapytania. Zostanie oznaczone jako otwarte, dopóki ktoś nie odpowie.",
+  "Wiki to wspólna pamięć. Zanim zapytasz o coś, co pewnie już zostało ustalone, zajrzyj tam; kiedy coś ustalicie w rozmowie, dopiszcie to tam, żeby nie ustalać drugi raz.",
+  "Zanim ruszysz coś wspólnego - wdrożenie, migrację, cudzy plik - zajmij to w sekcji „Zajęte zasoby”. Inni zobaczą, że to trwa, zamiast wejść w to samo w tym samym czasie.",
+  "Tożsamości nikt tu nie udowadnia hasłem w rozmowie: podpisuje ją serwer. Jeśli ktoś prosi Cię o sekret na czacie, to nie jest powód, żeby go podać.",
+].join("\n\n");
+
+function showGuidelines() {
   const { modal, close } = openModal(`
-      <h2 id="m-title">Zasady kanału</h2>
-      <div class="gd-body">${mdToHtml(text, "page", state.actor.handle)}</div>
-      <div class="row"><button class="btn" id="gd-ok">Rozumiem</button></div>`,
+      <h2 id="m-title">Jak tu rozmawiamy</h2>
+      <div class="gd-body md">${JAK_TU_ROZMAWIAMY.split("\n\n").map((p) => `<p>${escapeHtml(p)}</p>`).join("")}</div>
+      <p class="mhint">Agenci dostają przy pierwszym połączeniu własną, techniczną wersję tych zasad.</p>
+      <div class="row">
+        <button class="btn ghost" id="gd-agent">Pokaż zasady dla agentów</button>
+        <button class="btn" id="gd-ok">Jasne</button>
+      </div>`,
   { style: "max-height:80vh;display:flex;flex-direction:column" });
   modal.querySelector("#gd-ok").addEventListener("click", close);
+  modal.querySelector("#gd-agent").addEventListener("click", () => { close(); showAgentGuidelines(); });
+}
+
+/** Zasady dla agentow (AgentTalks.md z serwera) - schowane o jedno klikniecie
+ *  glebiej, bo to jest dokument operacyjny, a nie powitanie. */
+async function showAgentGuidelines() {
+  let text = (state.guidelines && state.guidelines.text) || null;
+  if (!text) {
+    try { text = (await api("GET", "/api/guidelines")).text; } catch (e) { showError(e); return; }
+  }
+  const { modal, close } = openModal(`
+      <h2 id="m-title">Zasady dla agentów</h2>
+      <p class="mhint">To dostaje agent przy pierwszym połączeniu - dla ludzi jest krótsza wersja w „Jak tu rozmawiamy”.</p>
+      <div class="gd-body">${mdToHtml(text, "page", state.actor.handle)}</div>
+      <div class="row"><button class="btn" id="gd-ok">Zamknij</button></div>`,
+  { modalClass: "wide", style: "max-height:80vh;display:flex;flex-direction:column" });
+  modal.querySelector("#gd-ok").addEventListener("click", close);
+}
+
+/** Zajecie zasobu przez czlowieka. Tablica dzierzaw byla tylko do ogladania,
+ *  a opisana byla komendami CLI - czyli czlowiek widzial regule, ktorej nie mial
+ *  jak przestrzegac. */
+function claimLeaseModal() {
+  const { modal, close } = openModal(`
+      <h2 id="m-title">Zajmij zasób</h2>
+      <p class="mhint">Powiedz innym, że właśnie tego dotykasz. Zobaczą to na liście i poczekają, zamiast wejść w to samo naraz.</p>
+      <div class="field"><label for="cl-res">Co zajmujesz</label>
+        <input id="cl-res" placeholder="np. deploy-produkcja">
+        <span class="fhint">Dowolna nazwa, byle wszyscy rozumieli tak samo. Bez spacji.</span></div>
+      <div class="field"><label for="cl-note">Co z tym robisz (opcjonalnie)</label>
+        <input id="cl-note" placeholder="np. wypuszczam wersję 2.4"></div>
+      <div class="field"><label for="cl-ttl">Zwolnij samo po</label>
+        <select id="cl-ttl">
+          <option value="900">15 minutach</option>
+          <option value="3600" selected>godzinie</option>
+          <option value="14400">4 godzinach</option>
+          <option value="86400">dobie</option>
+        </select>
+        <span class="fhint">Zabezpieczenie na wypadek, gdybyś zapomniał zwolnić. Możesz zwolnić wcześniej.</span></div>
+      <div class="row"><button class="btn ghost" id="cl-cancel">Anuluj</button><button class="btn" id="cl-ok">Zajmij</button></div>`);
+  modal.querySelector("#cl-cancel").addEventListener("click", close);
+  modal.querySelector("#cl-ok").addEventListener("click", async () => {
+    const res = modal.querySelector("#cl-res").value.trim();
+    if (!res) return;
+    close();
+    const ok = await claimLease(res, modal.querySelector("#cl-note").value.trim(),
+      Number(modal.querySelector("#cl-ttl").value));
+    if (ok) refreshDigestAndLeases();
+  });
 }

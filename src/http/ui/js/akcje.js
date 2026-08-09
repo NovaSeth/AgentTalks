@@ -6,7 +6,7 @@ import { api } from "./api.js";
 import { loadConversationsList, mySessionId, refreshQuestions } from "./dane.js";
 import { iconCheck } from "./ikony.js";
 import { clearDraft, findMsgById, state, upsertMessage, widok } from "./stan.js";
-import { showToast } from "./toasty.js";
+import { showError, showToast } from "./toasty.js";
 
 // Wysylka optymistyczna. Dymek pojawia sie NATYCHMIAST (wyszarzony), bo w chwili
 // wyczyszczenia pola tekstowego jest to jedyna kopia tego, co uzytkownik napisal.
@@ -41,19 +41,36 @@ export async function sendMessage(text, opts = {}) {
     if (data.delivery) {
       state.lastDelivery = { conversationId: convId, messageId: data.message.id, delivery: data.delivery };
       const unreachable = data.delivery.filter((d) => !d.reachable);
-      if (unreachable.length) showToast(`Nie dotrze teraz do: ${unreachable.map((d) => "@" + d.handle).join(", ")}`);
+      if (unreachable.length) {
+        showToast(`${unreachable.map((d) => "@" + d.handle).join(", ")} nie odbierze tego teraz - `
+          + "wiadomość czeka i zostanie doręczona, gdy wróci.");
+      }
     }
-    // Odpowiedz w watku nie dotyka ani szkicu, ani composera glownej rozmowy.
-    if (!rec.threadId) {
+    // Wysylka z panelu watku sama rysuje swoja liste i nie dotyka glownego pola.
+    // Wszystko inne przechodzi tedy - LACZNIE z odpowiedzia w watku napisana
+    // w glownym polu (przycisk "Odpowiedz w wątku" ustawia state.replyTo).
+    // Wczesniej taka wiadomosc znikala bez sladu: z glownej listy jest
+    // odfiltrowana jako odpowiedz watku, a watek byl zamkniety - wiec jedyna
+    // kopia tego, co uzytkownik napisal, przestawala istniec na ekranie.
+    if (!opts.threadId) {
       clearDraft(convId);
       state.replyTo = null;
-      if (state.activeId === convId) { widok.wiadomosc(data.message); widok.composer(); widok.naDol(true); }
+      if (state.activeId === convId) {
+        widok.composer();
+        if (rec.threadId) {
+          widok.wiadomosc(findMsgById(rec.threadId));   // pasek "N odpowiedzi" pod korzeniem
+          widok.otworzWatek(rec.threadId);              // i sam watek, zeby bylo widac wyslane
+        } else {
+          widok.wiadomosc(data.message);
+          widok.naDol(true);
+        }
+      }
     }
     return data.message;
   } catch (e) {
     rec.pending = false; rec.failed = true; rec.error = e.message;
     if (state.activeId === convId && !rec.threadId) widok.wiadomosc(rec);
-    showToast(`Nie wysłano: ${e.message}`, { alert: true });
+    showError(e);
     return null;
   }
 }
@@ -86,7 +103,7 @@ export async function toggleReaction(messageId, emoji) {
     if (!Object.keys(mapa).length) delete state.reactions[messageId];
     if (state.view === "chat") widok.wiadomosc(findMsgById(messageId));
     if (state.threadOpen) widok.watek();
-  } catch (e) { showToast(e.message, { alert: true }); }
+  } catch (e) { showError(e); }
 }
 
 /** Jedna sciezka aktualizacji wiadomosci po odpowiedzi serwera: stan, dymek na
@@ -105,7 +122,7 @@ export async function deleteMsg(messageId) {
   try {
     const data = await api("DELETE", `/api/messages/${messageId}`);
     applyMessageUpdate(data.message);
-  } catch (e) { showToast(e.message, { alert: true }); }
+  } catch (e) { showError(e); }
 }
 
 /** Domkniecie zgloszenia (np. na #bug): check przy wpisie. */
@@ -114,17 +131,86 @@ export async function fixMsg(messageId, fixed) {
     const data = await api("POST", `/api/messages/${messageId}/fix`, { fixed });
     applyMessageUpdate(data.message);
     showToast(fixed
-      ? "Oznaczone jako naprawione - zgłaszający dostał powiadomienie do potwierdzenia"
-      : "Cofnięto 'naprawione'");
-  } catch (e) { showToast(e.message); }
+      ? "Oznaczone jako naprawione. Osoba, która to zgłosiła, dostała prośbę o potwierdzenie, że objaw zniknął."
+      : "Cofnięto oznaczenie „naprawione”.");
+  } catch (e) { showError(e); }
 }
 
 export async function resolveMsg(messageId, resolved) {
   try {
     const data = await api("POST", `/api/messages/${messageId}/resolve`, { resolved });
     applyMessageUpdate(data.message);
-    showToast(resolved ? "Oznaczone jako rozwiązane" : "Cofnięto rozwiązanie");
-  } catch (e) { showToast(e.message, { alert: true }); }
+    showToast(resolved ? "Potwierdzone - zgłoszenie zamknięte." : "Cofnięto potwierdzenie.");
+  } catch (e) { showError(e); }
+}
+
+/** Przypiecie wiadomosci. API istnialo od poczatku, ale w interfejsie byla tylko
+ *  sekcja "Przypięte" - czyli widac bylo skutek czynnosci, ktorej nie dalo sie
+ *  wykonac. */
+export async function togglePin(messageId, przypnij) {
+  try {
+    if (przypnij) {
+      const data = await api("POST", `/api/messages/${messageId}/pin`, {});
+      state.convPins = [...state.convPins.filter((p) => p.messageId !== messageId), data.pin];
+      showToast("Przypięto. Znajdziesz to w szczegółach rozmowy.");
+    } else {
+      await api("DELETE", `/api/messages/${messageId}/pin`);
+      state.convPins = state.convPins.filter((p) => p.messageId !== messageId);
+      showToast("Odpięto.");
+    }
+    widok.wiadomosc(findMsgById(messageId));
+    if (state.detailsOpen) widok.szczegoly();
+  } catch (e) { showError(e); }
+}
+
+/** Pytanie do kanalu. Czlowiek mogl PODJAC cudze pytanie, ale nie mogl zadac
+ *  wlasnego - czyli dostawal role wykonawcy zadan agentow, dokladnie odwrotnie
+ *  niz obiecuje "rowni uczestnicy". */
+export async function askChannel(text) {
+  const convId = state.activeId;
+  try {
+    const data = await api("POST", `/api/conversations/${convId}/ask`, {
+      body: text, sessionId: mySessionId || undefined,
+    });
+    if (data.message) upsertMessage(convId, data.message);
+    clearDraft(convId);
+    state.askMode = false;
+    await refreshQuestions(convId);
+    widok.wiadomosci();
+    widok.composer();
+    widok.naDol(true);
+    showToast("Pytanie poszło na kanał. Zobaczysz je jako otwarte, dopóki ktoś nie odpowie.");
+    return true;
+  } catch (e) { showError(e); return false; }
+}
+
+// ------------------------------------------------------------- zajete zasoby
+/** Zajecie zasobu przez czlowieka. Tablica dzierzaw byla dotad do samego
+ *  ogladania, opisana komendami CLI - a "ogloszenie, zanim ruszysz wspolny
+ *  zasob" to regula, ktora obowiazuje ludzi tak samo jak agentow. */
+export async function claimLease(resource, note, ttlSec) {
+  try {
+    const res = await api("POST", "/api/leases", {
+      resource, note: note || undefined, ttlSec: ttlSec || undefined,
+      sessionId: mySessionId || undefined,
+    });
+    showToast(`Zasób „${resource}” jest teraz Twój. Zwolnij go, gdy skończysz.`);
+    return res;
+  } catch (e) {
+    // 409 niesie w ciele, kto trzyma i do kiedy - to jest odpowiedz na pytanie
+    // "dlaczego nie", a nie awaria.
+    if (e.status === 409) showToast(`Zasób „${resource}” trzyma teraz ktoś inny. Poczekaj albo dogadaj się na kanale.`, { alert: true });
+    else showError(e);
+    return null;
+  }
+}
+
+export async function releaseLease(resource) {
+  try {
+    await api("POST", "/api/leases/release", { resource });
+    showToast(`Zwolniono „${resource}”.`);
+    return true;
+  } catch (e) { showError(e); return false; }
 }
 
 export async function saveEditedMsg(messageId, text) {
@@ -146,7 +232,7 @@ export async function joinChannel(id, btn) {
     if (btn) btn.innerHTML = iconCheck();
     await loadConversationsList();
     setTimeout(() => { widok.sidebar(); widok.glowny(); }, 350);
-  } catch (e) { showToast(e.message); if (btn) { btn.disabled = false; btn.textContent = "Dołącz"; } }
+  } catch (e) { showError(e); if (btn) { btn.disabled = false; btn.textContent = "Dołącz"; } }
 }
 
 /** Rozmowa prywatna z palety: jeden Enter zamiast modala "Nowa rozmowa". */
@@ -156,5 +242,5 @@ export async function startDirect(handle) {
     await loadConversationsList();
     widok.sidebar();
     widok.otworzRozmowe(data.conversation.id);
-  } catch (e) { showToast(e.message, { alert: true }); }
+  } catch (e) { showError(e); }
 }

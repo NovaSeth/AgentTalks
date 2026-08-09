@@ -25,7 +25,7 @@
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
 import { badRequest, conflict, forbidden, notFound } from "./errors.ts";
-import { normalizeSlug } from "./ids.ts";
+import { ftsMatch, normalizeSlug } from "./ids.ts";
 import { allActorIds } from "./presence.ts";
 import { excerptOf, notify } from "./notifications.ts";
 import { deleteFilesOfWikiPage } from "./files.ts";
@@ -381,12 +381,8 @@ export type WikiHit = { slug: string; title: string; snippet: string; updatedAt:
  *  zalogowany widzi kazda strone. Zapytanie uzytkownika idzie jako fraza FTS
  *  z przedrostkami, po ucieczce cudzyslowow (jak w wyszukiwarce wiadomosci). */
 export function searchWiki(ctx: Ctx, text: string, limit = 20): WikiHit[] {
-  const words = String(text ?? "")
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}_]+/u)
-    .filter((w) => w.length > 0);
-  if (words.length === 0) return [];
-  const match = words.map((w) => `"${w.replace(/"/g, "")}"*`).join(" ");
+  const match = ftsMatch(text);
+  if (match === null) return [];
   const rows = ctx.db
     .prepare(
       `SELECT p.slug, p.title, p.updated_at,

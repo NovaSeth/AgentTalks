@@ -1083,3 +1083,74 @@ test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => 
   assert.match(err.error, /o 100 B za dluga/);
   await s.close();
 });
+
+// --- bramka anty-bot --------------------------------------------------------
+
+test("bramka: strona zamknieta bez ciasteczka, wlasciwe haslo wpuszcza, zle nie", async () => {
+  const s = await startTestServer({ sitePassword: "tajne-haslo-bramki" });
+  // Interfejs jest zamkniety...
+  const zamknieta = await fetch(s.url + "/");
+  assert.equal(zamknieta.status, 401);
+  // ...ale API i onboarding NIE, bo agent uwierzytelnia sie tokenem, a swiezy
+  // agent musi pobrac /install, zanim jakikolwiek token ma.
+  assert.equal((await fetch(s.url + "/api/health")).status, 200);
+  assert.equal((await fetch(s.url + "/install")).status, 200);
+
+  const zle = await fetch(s.url + "/api/site-gate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password: "nie-to-haslo" }),
+  });
+  assert.equal(zle.status, 401);
+
+  const dobre = await fetch(s.url + "/api/site-gate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password: "tajne-haslo-bramki" }),
+  });
+  assert.equal(dobre.status, 200);
+  const cookie = dobre.headers.get("set-cookie")!.split(";")[0];
+  // Samo 401 dowodzi tylko, ze cos jest odrzucane - dopiero to sprawdza, ze
+  // bramka wpuszcza wlascicieli.
+  const po = await fetch(s.url + "/", { headers: { cookie } });
+  assert.equal(po.status, 200);
+  await s.close();
+});
+
+test("bramka wylaczona (brak hasla) nie blokuje niczego", async () => {
+  const s = await startTestServer();
+  assert.equal((await fetch(s.url + "/")).status, 200);
+  await s.close();
+});
+
+test("limit prob logowania: 429 po serii, a udane wejscie zwalnia licznik", async () => {
+  const s = await startTestServer();
+  seed(s);
+  const zleHaslo = () => fetch(s.url + "/api/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ handle: "michal", password: "zle" }),
+  });
+  let widziano429 = false;
+  for (let i = 0; i < 12; i++) {
+    const r = await zleHaslo();
+    if (r.status === 429) { widziano429 = true; break; }
+  }
+  assert.ok(widziano429, "limiter nie zadzialal - zgadywanie hasla bez ograniczen");
+  await s.close();
+});
+
+test("diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktora", async () => {
+  const s = await startTestServer();
+  const { ala, tokenA } = seed(s);
+  const { revokeToken, listTokens } = await import("../../src/core/tokens.ts");
+  assert.equal((await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).status, 200);
+
+  revokeToken(s.ctx, listTokens(s.ctx, ala.id)[0].id);
+  const r = await fetch(s.url + "/api/me", { headers: bearer(tokenA) });
+  assert.equal(r.status, 401);
+  const err = await r.json();
+  assert.equal(err.code, "token_odwolany");
+  // Bez tego zdania agent bez pamieci sesji wyciaga najgorszy wniosek:
+  // "wykupie nowe zaproszenie" - i na kanale robi sie druga tozsamosc.
+  assert.match(err.error, /ala/);
+  assert.match(err.error, /nie o nowe zaproszenie/);
+  await s.close();
+});

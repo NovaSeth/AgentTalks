@@ -3,14 +3,66 @@
  */
 import { api } from "./api.js";
 import { loadWikiList, signalTyping } from "./dane.js";
-import { avatarHtml, escapeHtml, fmtDateTime, formatBytes, hamburgerHtml, openModal, skeletonHtml, timeAgo, toggleDrawerClass } from "./dom.js";
+import { avatarHtml, confirmModal, escapeHtml, fmtDateTime, formatBytes, hamburgerHtml, openModal, skeletonHtml, timeAgo, toggleDrawerClass } from "./dom.js";
 import { iconDoc, iconEdit, iconFile, iconHistory, iconTrash } from "./ikony.js";
 import { mdToHtml } from "./markdown.js";
 import { state, widok } from "./stan.js";
-import { showToast } from "./toasty.js";
+import { showError, showToast } from "./toasty.js";
+
+// ------------------------------------------------ wersja robocza edytora wiki
+// Czat od dawna trzyma szkic wiadomosci przezywajacy F5 i wdrozenie; edytor wiki
+// nie trzymal nic, a to w nim pisze sie najdluzsze teksty. Wyjscie z edytora
+// (Anuluj, klik w inna strone, zamkniecie karty) kasowalo je bez pytania.
+const WIKI_DRAFT_KEY = (slug) => `atalks_wiki_draft_${slug}`;
+
+function zapiszWersjeRobocza(slug, draft) {
+  if (!slug || !draft) return;
+  try { localStorage.setItem(WIKI_DRAFT_KEY(slug), JSON.stringify(draft)); } catch { /* prywatny tryb */ }
+}
+
+function wczytajWersjeRobocza(slug) {
+  try {
+    const raw = localStorage.getItem(WIKI_DRAFT_KEY(slug));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function skasujWersjeRobocza(slug) {
+  try { localStorage.removeItem(WIKI_DRAFT_KEY(slug)); } catch { /* prywatny tryb */ }
+}
+
+/** Czy w edytorze jest cos, czego nie ma na serwerze. */
+function saNiezapisaneZmiany() {
+  const w = state.wiki;
+  if (!w.editing || !w.draft) return false;
+  const tytul = document.getElementById("we-title")?.value ?? w.draft.title;
+  const tresc = document.getElementById("we-body")?.value ?? w.draft.body;
+  return tytul !== (w.page?.title ?? w.slug) || tresc !== (w.page?.body ?? "");
+}
+
+/** Wyjscie z edytora pyta, zamiast kasowac. Zwraca false, gdy uzytkownik zostaje. */
+export async function mozeszOpuscicEdytorWiki() {
+  if (!saNiezapisaneZmiany()) return true;
+  const zapamietaj = () => {
+    zapiszWersjeRobocza(state.wiki.slug, {
+      title: document.getElementById("we-title")?.value ?? "",
+      body: document.getElementById("we-body")?.value ?? "",
+      parentSlug: document.getElementById("we-parent")?.value || null,
+    });
+  };
+  zapamietaj();   // najpierw ratujemy tekst, potem pytamy - w tej kolejnosci
+  return await confirmModal({
+    title: "Masz niezapisane zmiany na tej stronie",
+    body: "Zapisałem je jako wersję roboczą w tej przeglądarce - wrócą, gdy znów otworzysz edytor. Wyjść bez zapisywania na serwerze?",
+    ok: "Wyjdź, wrócę do tego", cancel: "Zostań i zapisz",
+  });
+}
 
 // ============================================================= WIKI
 export async function openWikiPage(slug) {
+  // Przejscie na inna strone w trakcie pisania to najczestsza droga do utraty
+  // tekstu - wiec pytamy tu, a nie dopiero przy Anuluj.
+  if (state.wiki.editing && state.wiki.slug !== slug && !(await mozeszOpuscicEdytorWiki())) return;
   state.view = "wiki";
   state.drawerOpen = false;
   state.wiki.slug = slug;
@@ -34,7 +86,7 @@ export async function openWikiPage(slug) {
     if (item && item.unseen) { item.unseen = 0; widok.sidebar(); }
     api("POST", `/api/wiki/${encodeURIComponent(slug)}/seen`, {}).catch(() => {});
   } catch (e) {
-    if (state.wiki.draft === null) { showToast(e.message, { alert: true }); state.view = "chat"; widok.glowny(); return; }
+    if (state.wiki.draft === null) { showError(e); state.view = "chat"; widok.glowny(); return; }
   }
   renderWikiMain();
 }
@@ -90,22 +142,65 @@ async function saveWikiEdit(title, body, note, parentSlug) {
     state.wiki.page = data.page;
     state.wiki.editing = false;
     state.wiki.draft = null;
+    skasujWersjeRobocza(slug);
     const hist = await api("GET", `/api/wiki/${encodeURIComponent(slug)}/history`);
     state.wiki.history = hist.revisions;
     loadWikiList();
     renderWikiMain();
-    showToast("Zapisano stronę wiki");
+    showToast("Zapisano stronę.");
   } catch (e) {
-    // Konflikt to nie awaria zapisu tylko cudza zmiana - pokazujemy ja, zamiast
-    // kazac uzytkownikowi zgadywac, co poszlo nie tak. Wersja robocza zostaje
-    // w edytorze, wiec nic z jego pracy nie ginie.
-    if (/konflikt/i.test(e.message || "")) {
-      showToast("Ktoś zapisał tę stronę w międzyczasie. Otwórz ją na nowo w drugiej karcie, " +
-        "wkomponuj swoją zmianę i zapisz jeszcze raz - Twój tekst zostaje w edytorze.");
-    } else {
-      showToast(e.message);
-    }
+    // Konflikt to nie awaria zapisu tylko cudza zmiana - i wymaga DECYZJI, a nie
+    // komunikatu znikajacego po czterech sekundach.
+    //
+    // Warunek testowal dotad slowo "konflikt" w TRESCI bledu, a ono jest wylacznie
+    // w jego KODZIE - wiec przyjazna sciezka nie odpalala sie ani razu i czlowiek
+    // dostawal w toascie instrukcje z curl-em, napisana dla agenta.
+    if (e.code === "konflikt_wiki") { pokazKonfliktWiki(title, body, note, parentSlug); return; }
+    showError(e, {
+      slug: "Nieprawidłowy adres strony. Użyj małych liter, cyfr, myślnika i kropki - bez spacji i polskich znaków.",
+      slug_zarezerwowany: "Ten adres jest zarezerwowany przez system. Wybierz inny.",
+    });
   }
+}
+
+/** Okno konfliktu: co sie stalo i trzy wyjscia, z ktorych kazde ratuje tekst.
+ *  Wersja robocza laduje w localStorage ZANIM cokolwiek pokazemy - inaczej
+ *  odswiezenie strony w panice kasowaloby prace, o ktora wlasnie sie bijemy. */
+function pokazKonfliktWiki(title, body, note, parentSlug) {
+  const slug = state.wiki.slug;
+  zapiszWersjeRobocza(slug, { title, body, parentSlug });
+  const { modal, close } = openModal(`
+      <h2 id="m-title">Ktoś zapisał tę stronę przed Tobą</h2>
+      <p class="mhint">Odkąd zacząłeś pisać, ktoś inny zmienił tę stronę. Twój tekst jest bezpieczny -
+        został w edytorze i w tej przeglądarce. Wybierz, co dalej.</p>
+      <div class="kw-opcje">
+        <button class="kw-opt" id="kw-porownaj">
+          <b>Pokaż, co się zmieniło</b>
+          <span>Otworzy aktualną wersję w nowej karcie. Twoja zostaje tutaj, żebyś mógł ją wkomponować.</span>
+        </button>
+        <button class="kw-opt" id="kw-nadpisz">
+          <b>Zapisz moją wersję mimo to</b>
+          <span>Twój tekst stanie się aktualny. Tamta zmiana nie zniknie - zostanie w historii strony.</span>
+        </button>
+        <button class="kw-opt" id="kw-wroc">
+          <b>Wróć do edytora</b>
+          <span>Nic nie zapisuję. Poprawisz tekst i spróbujesz jeszcze raz.</span>
+        </button>
+      </div>`, { modalClass: "wide" });
+  modal.querySelector("#kw-porownaj").addEventListener("click", () => {
+    window.open(`/api/wiki/${encodeURIComponent(slug)}`, "_blank", "noopener");
+  });
+  modal.querySelector("#kw-wroc").addEventListener("click", close);
+  modal.querySelector("#kw-nadpisz").addEventListener("click", async () => {
+    close();
+    try {
+      // Dociagamy AKTUALNY numer wersji i zapisujemy na jego podstawie: to jest
+      // swiadome "wiem, ze ktos zmienil, i tak chce swoje", a nie wyscig.
+      const swieza = await api("GET", `/api/wiki/${encodeURIComponent(slug)}`);
+      state.wiki.page = swieza.page;
+      await saveWikiEdit(title, body, note, parentSlug);
+    } catch (e) { showError(e); }
+  });
 }
 
 async function viewWikiRevision(revId) {
@@ -114,11 +209,15 @@ async function viewWikiRevision(revId) {
     state.wiki.revision = data.revision;
     state.wiki.editing = false;
     renderWikiMain();
-  } catch (e) { showToast(e.message); }
+  } catch (e) { showError(e); }
 }
 
 async function revertWikiTo(revId) {
-  if (!confirm("Przywrócić tę wersję? Zostanie zapisana jako nowa rewizja (nic nie ginie).")) return;
+  if (!await confirmModal({
+    title: "Przywrócić tę wersję?",
+    body: "Treść strony wróci do tego, co widzisz. Nic nie ginie - obecna wersja zostanie w historii i da się do niej wrócić tak samo.",
+    ok: "Przywróć tę wersję",
+  })) return;
   try {
     const data = await api("POST", `/api/wiki/${encodeURIComponent(state.wiki.slug)}/revert`, { revisionId: revId });
     state.wiki.page = data.page;
@@ -127,8 +226,8 @@ async function revertWikiTo(revId) {
     state.wiki.history = hist.revisions;
     loadWikiList();
     renderWikiMain();
-    showToast("Przywrócono wersję (dopisana jako nowa rewizja)");
-  } catch (e) { showToast(e.message); }
+    showToast("Przywrócono. Poprzednia treść została w historii.");
+  } catch (e) { showError(e); }
 }
 
 /** Sciezka przodkow strony ("Infra / VPS / ") - kazdy czlon klikalny. */
@@ -186,7 +285,7 @@ export function renderWikiMain(loading) {
       showToast(`Skasowano stronę "${page.title}"`);
       state.wiki.page = null; state.wiki.slug = null; state.view = "chat";
       loadWikiList(); widok.render();
-    } catch (e) { showToast(e.message); }
+    } catch (e) { showError(e); }
   });
   const editBtn = document.getElementById("wiki-edit");
   if (editBtn) editBtn.addEventListener("click", () => {

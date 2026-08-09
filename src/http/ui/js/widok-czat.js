@@ -1,14 +1,14 @@
 /**
  * Widok rozmowy: lista wiadomosci, composer, watek, panel szczegolow.
  */
-import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, toggleReaction } from "./akcje.js";
+import { answerQuestion, askChannel, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./akcje.js";
 import { api, csrf } from "./api.js";
-import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, markReadDebounced, refreshQuestions, signalTyping } from "./dane.js";
-import { IMG_RE, avatarHtml, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, zachowanieScrolla } from "./dom.js";
-import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconFlame, iconGear, iconInfo, iconLock, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconShield, iconThread, iconTrash, iconWrench } from "./ikony.js";
+import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./dane.js";
+import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, zachowanieScrolla } from "./dom.js";
+import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconWrench } from "./ikony.js";
 import { renderBody } from "./markdown.js";
-import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, dmLabel, dmMembersCache, findMsgById, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, przytnijCache, pushRecent, saveDraft, state, upsertMessage, widoczneWiadomosci, widok } from "./stan.js";
-import { showToast } from "./toasty.js";
+import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, czyZgloszenie, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, przytnijCache, pushRecent, saveDraft, state, upsertMessage, widoczneWiadomosci, widok, zgloszenia } from "./stan.js";
+import { showError, showToast } from "./toasty.js";
 import { openWikiPage, renderWikiMain } from "./widok-wiki.js";
 
 // Popularny zestaw do popovera "dodaj reakcje" - kazda wartosc idzie przez to
@@ -42,7 +42,7 @@ export async function openConversation(id, focusMessageId) {
   if (!state.loaded[id]) {
     state.loadingConv = true;
     renderMain();
-    try { await loadMessages(id); } catch (e) { showToast(e.message, { alert: true }); }
+    try { await loadMessages(id); } catch (e) { showError(e); }
     state.loadingConv = false;
   }
   if (focusMessageId && !(state.msgs[id] || []).some((m) => m.id === focusMessageId)) {
@@ -55,6 +55,10 @@ export async function openConversation(id, focusMessageId) {
   }
   renderMain();
   refreshQuestions(id);
+  // Piny sa potrzebne od razu: bez nich menu wiadomosci nie wie, czy proponowac
+  // "Przypnij" czy "Odepnij". Wczesniej pobieral je wylacznie panel szczegolow.
+  state.convPins = [];
+  loadPins(id);
   if (focusMessageId) {
     const el = document.querySelector(`#messages [data-msg="${focusMessageId}"]`);
     if (el) {
@@ -77,7 +81,7 @@ export async function openConversation(id, focusMessageId) {
   if (state.memberships[id] && !focusMessageId) markReadDebounced(id, lastMessageId(id));
 }
 
-async function openThread(rootId) {
+export async function openThread(rootId) {
   state.threadOpen = rootId;
   renderMain();
   try {
@@ -86,8 +90,31 @@ async function openThread(rootId) {
     for (const m of data.messages) animatedMsgs.add(m.id);
     mergeActors(data.actors);
     mergeReactions(data.messages, data.reactions);
-  } catch (e) { showToast(e.message); }
+  } catch (e) { showError(e); }
   renderThread();
+}
+
+/** Zerwany strumien zdarzen jako PASEK NAD ROZMOWA, a nie drobny druk pod cala
+ *  lista kanalow. "Nie widzisz nowych wiadomosci" to nie jest informacja tej
+ *  samej wagi co numer wersji interfejsu - a dokladnie tam wczesniej stala. */
+export function offlineBarHtml() {
+  if (state.online) return "";
+  return `<div class="offbar" role="status" id="offbar">
+    <span class="offdot" aria-hidden="true"></span>
+    Brak połączenia z serwerem - nowe wiadomości nie dochodzą. Próbuję połączyć ponownie...
+  </div>`;
+}
+
+/** Pasek offline pojawia sie i znika poza pelnym renderem (strumien zdarzen
+ *  zrywa sie w dowolnym momencie), wiec ma wlasna, punktowa aktualizacje. */
+export function updateOfflineBar() {
+  const main = document.getElementById("main");
+  if (!main) return;
+  const istnieje = document.getElementById("offbar");
+  if (state.online) { istnieje?.remove(); return; }
+  if (istnieje) return;
+  const topbar = main.querySelector(".topbar");
+  if (topbar) topbar.insertAdjacentHTML("afterend", offlineBarHtml());
 }
 
 export function renderMain() {
@@ -97,7 +124,13 @@ export function renderMain() {
   if (state.view === "notifications") { widok.powiadomienia(); return; }
   if (state.view === "wiki") { renderWikiMain(); return; }
   if (!state.activeId) {
-    el.innerHTML = emptyStateHtml(iconChat(2.6), "Wybierz rozmowę", "...albo załóż nową w panelu bocznym.");
+    // Pusty stan mowi, co zrobic, i daje na to przycisk - "wybierz rozmowę" bez
+    // niczego wiecej zostawialo czlowieka przy pustym ekranie i liscie, ktora
+    // tez bywa pusta pierwszego dnia.
+    el.innerHTML = emptyStateHtml(iconChat(2.6), "Nie masz jeszcze otwartej rozmowy",
+      "Wejdź na kanał z listy po lewej albo napisz do kogoś prywatnie.",
+      { id: "empty-new", label: "Zacznij rozmowę" });
+    document.getElementById("empty-new")?.addEventListener("click", () => openNewConversationModal("dm"));
     return;
   }
   const c = state.conversations.find((x) => x.id === state.activeId);
@@ -112,6 +145,7 @@ export function renderMain() {
       <button class="iconbtn ${state.detailsOpen ? "on" : ""}" id="btn-details" aria-label="Szczegóły rozmowy"
         aria-expanded="${state.detailsOpen}" aria-controls="details-slot" title="Szczegóły rozmowy">${iconInfo()}</button>
     </div>
+    ${offlineBarHtml()}
     <div class="messages viewfade" id="messages" role="log" aria-label="Wiadomości"></div>
     <div class="dock">
       <button class="jump-newest" id="jump-newest" aria-label="Przewiń do najnowszej wiadomości" title="Przewiń do najnowszej">
@@ -174,7 +208,7 @@ export async function refreshDetailsData() {
     // mialby "@?"; dociagamy katalog raz.
     const missing = state.convMembers.some((m) => !state.actorsCache[m.actorId]);
     if (missing) await ensureActors({ force: true });
-  } catch (e) { showToast(e.message, { alert: true }); }
+  } catch (e) { showError(e); }
 }
 
 export function renderDetails() {
@@ -267,12 +301,15 @@ export function renderDetails() {
     b.addEventListener("click", async () => {
       const h = b.dataset.kick;
       const self = h === state.actor.handle;
-      if (!confirm(self ? "Opuścić tę rozmowę?" : `Usunąć @${h} z rozmowy?`)) return;
+      const zgoda = await confirmModal(self
+        ? { title: "Opuścić tę rozmowę?", body: "Przestaniesz dostawać z niej wiadomości. Historia zostaje.", ok: "Opuść rozmowę", danger: true }
+        : { title: `Usunąć @${h} z rozmowy?`, body: "Ta osoba przestanie widzieć nowe wiadomości. To, co już przeczytała, zostaje u niej.", ok: `Usuń @${h}`, danger: true });
+      if (!zgoda) return;
       try {
         await api("DELETE", `/api/conversations/${c.id}/members/${encodeURIComponent(h)}`);
         if (self) { state.detailsOpen = false; await loadConversationsList(); widok.sidebar(); renderMain(); return; }
         await refreshDetailsData(); renderDetails();
-      } catch (e) { showToast(e.message); }
+      } catch (e) { showError(e); }
     }));
   const addBtn = document.getElementById("dt-add-btn");
   if (addBtn) addBtn.addEventListener("click", async () => {
@@ -283,7 +320,7 @@ export function renderDetails() {
       await api("POST", `/api/conversations/${c.id}/members`, { handle: h });
       input.value = "";
       await refreshDetailsData(); renderDetails();
-    } catch (e) { showToast(e.message); }
+    } catch (e) { showError(e); }
   });
   host.querySelectorAll("[data-notify]").forEach((b) =>
     b.addEventListener("click", async () => {
@@ -291,7 +328,7 @@ export function renderDetails() {
         await api("POST", `/api/conversations/${c.id}/notify`, { notify: b.dataset.notify });
         if (state.memberships[c.id]) state.memberships[c.id].notify = b.dataset.notify;
         renderDetails();
-      } catch (e) { showToast(e.message); }
+      } catch (e) { showError(e); }
     }));
   host.querySelectorAll("[data-jump]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -300,16 +337,24 @@ export function renderDetails() {
     }));
   const leaveBtn = document.getElementById("dt-leave");
   if (leaveBtn) leaveBtn.addEventListener("click", async () => {
-    if (!confirm(`Opuścić #${c.slug ?? ""}?`)) return;
+    if (!await confirmModal({
+      title: `Opuścić #${c.slug ?? ""}?`,
+      body: "Kanał zniknie z Twojej listy i przestaniesz dostawać z niego powiadomienia. Możesz dołączyć ponownie.",
+      ok: "Opuść kanał", danger: true,
+    })) return;
     try {
       await api("POST", `/api/conversations/${c.id}/leave`, {});
       state.detailsOpen = false;
       await loadConversationsList(); widok.sidebar(); renderMain();
-    } catch (e) { showToast(e.message); }
+    } catch (e) { showError(e); }
   });
   const arch = document.getElementById("dt-archive");
   if (arch) arch.addEventListener("click", async () => {
-    if (!confirm(`Zarchiwizować #${c.slug ?? ""}? Kanał zniknie z list i przestanie przyjmować wiadomości; historia zostaje.`)) return;
+    if (!await confirmModal({
+      title: `Zarchiwizować #${c.slug ?? ""}?`,
+      body: "Kanał zniknie z list wszystkim i przestanie przyjmować wiadomości. Historia zostaje i da się ją odczytać.",
+      ok: "Zarchiwizuj kanał", danger: true,
+    })) return;
     try {
       await api("DELETE", `/api/conversations/${c.id}`);
       state.detailsOpen = false;
@@ -319,7 +364,7 @@ export function renderDetails() {
       state.activeId = null;
       widok.sidebar();
       if (next) openConversation(next.id); else renderMain();
-    } catch (e) { showToast(e.message); }
+    } catch (e) { showError(e); }
   });
 }
 
@@ -327,8 +372,10 @@ export function renderDetails() {
 function editChannelModal(c) {
   const { modal, close } = openModal(`
       <h2 id="m-title">Edytuj kanał</h2>
-      <div class="field"><label for="ec-slug">Nazwa (slug)</label><input id="ec-slug" value="${escapeHtml(c.slug ?? "")}"></div>
-      <div class="field"><label for="ec-topic">Temat</label><input id="ec-topic" value="${escapeHtml(c.topic ?? "")}"></div>
+      <div class="field"><label for="ec-slug">Nazwa kanału</label><input id="ec-slug" value="${escapeHtml(c.slug ?? "")}">
+        <span class="fhint">Małe litery, cyfry i myślniki - to ona pojawia się po znaku # na liście.</span></div>
+      <div class="field"><label for="ec-topic">Temat</label><input id="ec-topic" value="${escapeHtml(c.topic ?? "")}">
+        <span class="fhint">Jedno zdanie o tym, po co ten kanał istnieje.</span></div>
       <div class="row"><button class="btn ghost" id="ec-cancel">Anuluj</button><button class="btn" id="ec-save">Zapisz</button></div>`);
   modal.querySelector("#ec-cancel").addEventListener("click", close);
   modal.querySelector("#ec-save").addEventListener("click", async () => {
@@ -340,7 +387,7 @@ function editChannelModal(c) {
       await loadConversationsList();
       widok.sidebar(); renderMain();
       showToast("Kanał zaktualizowany");
-    } catch (e) { showToast(e.message, { alert: true }); }
+    } catch (e) { showError(e); }
   });
 }
 
@@ -351,8 +398,10 @@ export function renderTopbar() {
   if (!c || state.view !== "chat") return;
   const isDirect = c.kind === "dm" || c.kind === "group";
   if (isDirect) {
-    const other = dmMembersCache[c.id] && dmMembersCache[c.id][0];
-    const online = other != null && actorOnline(other);
+    // Rozmowcy z serwera (`others`) sa dostepni od pierwszej klatki, wiec naglowek
+    // ma nazwe i kropke obecnosci jeszcze zanim przyjdzie pierwsza wiadomosc.
+    const inni = dmOthers(c);
+    const online = inni.length > 0 && inni.some((o) => handleOnline(o.handle));
     t.innerHTML = `<span class="ppresence big ${online ? "on" : ""}"></span> ${escapeHtml(dmLabel(c))}`;
   } else {
     const pre = c.kind === "private" ? `${iconLock(true)} ` : "# ";
@@ -460,11 +509,16 @@ export function renderMessages() {
   const el = document.getElementById("messages");
   if (!el) return;
   if (closeEmojiPopover) closeEmojiPopover();
+  if (closeMsgMenu) closeMsgMenu();
   const edycja = zapiszOtwartaEdycje(el);
   const trzymajDol = isScrolledToBottom();
   const scrollTop = el.scrollTop;
   const list = widoczneWiadomosci(state.activeId);
-  if (!list.length) { el.innerHTML = emptyStateHtml(iconChat(2.2), "Na razie cicho", "Napisz pierwszą wiadomość."); return; }
+  if (!list.length) {
+    el.innerHTML = emptyStateHtml(iconChat(2.2), "Na razie cicho",
+      "Nikt tu jeszcze nic nie napisał. Zacznij od pierwszego zdania - agenci i ludzie zobaczą je tak samo.");
+    return;
+  }
 
   const c = state.conversations.find((x) => x.id === state.activeId);
   if (c && (c.kind === "dm" || c.kind === "group") && !dmMembersCache[c.id]) {
@@ -606,13 +660,21 @@ function attachmentHtml(m) {
   </a>`;
 }
 
+/** Status doreczenia po ludzku. To jedna z najlepszych rzeczy w produkcie -
+ *  nigdzie indziej nie wiesz, czy rozmowca w ogole ma szanse to przeczytac -
+ *  a mowila po inzyniersku ("cisza 47 min - obudzalny", "nieosiagalny"). Teraz
+ *  kazdy wiersz jest zdaniem: co jest teraz i co z tego wynika. */
 function deliveryHtml(m) {
   const d = state.lastDelivery;
   if (!d || d.conversationId !== m.conversationId || d.messageId !== m.id) return "";
   const parts = d.delivery.map((r) => {
-    if (r.online) return `<span class="ok">@${escapeHtml(r.handle)}: online</span>`;
-    if (r.wakeable) return `<span class="warn">@${escapeHtml(r.handle)}: cisza ${timeAgo(r.lastSeenAt).replace(" temu", "")} - obudzalny</span>`;
-    return `<span class="off">@${escapeHtml(r.handle)}: nieosiągalny</span>`;
+    const kto = `@${escapeHtml(r.handle)}`;
+    if (r.online) return `<span class="ok">${kto} jest teraz online - przeczyta od razu</span>`;
+    if (r.wakeable) {
+      const ile = timeAgo(r.lastSeenAt).replace(" temu", "");
+      return `<span class="warn">${kto} śpi od ${escapeHtml(ile)} - serwer obudzi go tą wiadomością</span>`;
+    }
+    return `<span class="off">${kto} jest offline - zobaczy to, gdy wróci</span>`;
   });
   return `<div class="delivery">${parts.join(" · ")}</div>`;
 }
@@ -643,7 +705,8 @@ function messageHtml(m, cont, opts = {}) {
           <span class="failwhy">${escapeHtml(m.error || "Nie udało się wysłać")}</span>
           <button data-retry="${escapeHtml(m.clientMsgId)}">Wyślij ponownie</button>
           <button data-copytext="${escapeHtml(m.clientMsgId)}">Kopiuj treść</button>
-          <button data-droppending="${escapeHtml(m.clientMsgId)}">Usuń</button>
+          <button data-droppending="${escapeHtml(m.clientMsgId)}"
+            title="Tekst wróci do pola pisania - stamtąd możesz go poprawić albo skasować">Przenieś z powrotem do pola</button>
         </div>` : ""}
       </div>
     </div>`;
@@ -660,8 +723,16 @@ function messageHtml(m, cont, opts = {}) {
   const fixed = !!m.fixedAt && !resolved;
   // Rozwiazac moze autor, admin instancji, albo admin kanalu (jak na serwerze).
   const myMem = state.memberships[m.conversationId];
-  const canResolve = !m.deletedAt && m.kind !== "answer"
+  // ...ale POKAZUJEMY to tylko przy wiadomosci, ktora jest zgloszeniem: albo juz
+  // krazy w tym obiegu (ma fixedAt/resolvedAt), albo ktos jawnie powiedzial
+  // "potraktuj jako zgłoszenie". Wczesniej klucz i check wisialy przy kazdej
+  // cudzej wiadomosci, takze w rozmowie prywatnej o obiedzie - a przypadkowy
+  // klik wysylal komus prosbe o potwierdzenie czegos, czego nie zglaszal.
+  const zgloszenie = czyZgloszenie(m);
+  const canResolve = zgloszenie && !m.deletedAt && m.kind !== "answer"
     && (mine || state.actor.isAdmin || (myMem && myMem.role === "admin"));
+  const canFix = zgloszenie && !mine && m.kind === "text" && !m.deletedAt;
+  const przypieta = state.convPins.some((p) => p.messageId === m.id);
   const fresh = !animatedMsgs.has(m.id);
   // Zbior rosl przez cale zycie karty. Reset po przekroczeniu progu kosztuje
   // jedna niepotrzebna animacje wejscia i oddaje pamiec.
@@ -704,10 +775,11 @@ function messageHtml(m, cont, opts = {}) {
       ${!m.deletedAt ? `
       <div class="actions" role="group" aria-label="Akcje wiadomości od @${escapeHtml(handle)}">
         ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? "Cofnij potwierdzenie" : "Potwierdź: objaw zniknął"}" title="${resolved ? "Cofnij potwierdzenie" : "Potwierdź: objaw zniknął"}">${iconCheck(true)}</button>` : ""}
-        ${!mine && m.kind === "text" ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? "Cofnij oznaczenie 'naprawione'" : "Oznacz jako naprawione"}" title="${m.fixedAt ? "Cofnij 'naprawione'" : "Oznacz: naprawiłem, czeka na potwierdzenie"}">${iconWrench()}</button>` : ""}
+        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? "Cofnij oznaczenie „naprawione”" : "Oznacz jako naprawione"}" title="${m.fixedAt ? "Cofnij „naprawione”" : "Oznacz: naprawiłem, czeka na potwierdzenie"}">${iconWrench()}</button>` : ""}
         <button data-reply="${m.id}" aria-label="Odpowiedz w wątku" title="Odpowiedz w wątku">${iconThread()}</button>
         ${mine && m.kind === "text" ? `<button data-edit="${m.id}" aria-label="Edytuj wiadomość" title="Edytuj">${iconEdit()}</button>` : ""}
-        ${mine ? `<button data-delete="${m.id}" aria-label="Usuń wiadomość" title="Usuń">${iconTrash()}</button>` : ""}
+        <button data-more="${m.id}" data-pinned="${przypieta ? "1" : ""}" data-zgl="${zgloszenie ? "1" : ""}"
+          aria-label="Więcej działań" aria-haspopup="menu" title="Więcej">${iconMore()}</button>
       </div>` : ""}
     </div>`;
 }
@@ -730,7 +802,16 @@ export function bindMessageEvents(scope) {
     if ((b = wez("[data-thread]"))) { openThread(Number(b.dataset.thread)); return; }
     if ((b = wez("[data-resolve]"))) { resolveMsg(Number(b.dataset.resolve), !b.dataset.on); return; }
     if ((b = wez("[data-fix]"))) { fixMsg(Number(b.dataset.fix), !b.dataset.on); return; }
-    if ((b = wez("[data-delete]"))) { if (confirm("Usunąć tę wiadomość?")) deleteMsg(Number(b.dataset.delete)); return; }
+    if ((b = wez("[data-more]"))) { openMessageMenu(Number(b.dataset.more), b); return; }
+    if ((b = wez("[data-delete]"))) {
+      const id = Number(b.dataset.delete);
+      if (await confirmModal({
+        title: "Usunąć tę wiadomość?",
+        body: "Treść zniknie z rozmowy u wszystkich. W jej miejscu zostanie ślad „wiadomość usunięta”.",
+        ok: "Usuń wiadomość", danger: true,
+      })) deleteMsg(id);
+      return;
+    }
     if ((b = wez("[data-edit]"))) { startInlineEdit(Number(b.dataset.edit), scope); return; }
     if ((b = wez("[data-answer]"))) { startInlineAnswer(Number(b.dataset.answer), Number(b.dataset.msgRef), scope); return; }
     if ((b = wez("[data-retry]"))) { retryPending(state.activeId, b.dataset.retry); return; }
@@ -786,6 +867,83 @@ export function bindMessageEvents(scope) {
   scope.addEventListener("pointermove", anuluj, { passive: true });
 }
 
+// --------------------------------------------------- menu "więcej" wiadomosci
+// Czynnosci rzadkie, nieoczywiste albo nieodwracalne maja miec PELNA NAZWE i
+// jedno miejsce. Pasek na hover zostaje dla trzech najczestszych; reszta -
+// przypinanie (API bylo, przycisku nie), wejscie w obieg zgloszen, kasowanie -
+// mieszka tutaj, gdzie kazda pozycja jest zdaniem, a nie piktogramem.
+let closeMsgMenu = null;
+
+function openMessageMenu(messageId, anchor) {
+  if (closeMsgMenu) { closeMsgMenu(); return; }
+  const m = findMsgById(messageId);
+  if (!m) return;
+  const mine = m.actorId === state.actor.id;
+  const przypieta = state.convPins.some((p) => p.messageId === messageId);
+  const zgloszenie = czyZgloszenie(m);
+  const pozycje = [
+    { akcja: "pin", label: przypieta ? "Odepnij z rozmowy" : "Przypnij w rozmowie",
+      opis: przypieta ? "Zniknie z listy przypiętych." : "Trafi do „Przypięte” w szczegółach rozmowy - dla wszystkich." },
+    ...(!zgloszenie && m.kind === "text" && !m.deletedAt
+      ? [{ akcja: "zgloszenie", label: "Potraktuj jako zgłoszenie",
+        opis: "Dopiero wtedy pokażą się przyciski „naprawiłem” i „potwierdzam, że zniknęło”." }]
+      : []),
+    { akcja: "kopiuj", label: "Kopiuj treść", opis: "" },
+    ...(mine ? [{ akcja: "usun", label: "Usuń wiadomość", opis: "Nieodwracalne dla wszystkich.", danger: true }] : []),
+  ];
+  const pop = document.createElement("div");
+  pop.className = "msg-menu";
+  pop.setAttribute("role", "menu");
+  pop.innerHTML = pozycje.map((p) => `
+    <button role="menuitem" data-mact="${p.akcja}" class="${p.danger ? "danger" : ""}">
+      <span class="mm-l">${escapeHtml(p.label)}</span>
+      ${p.opis ? `<span class="mm-o">${escapeHtml(p.opis)}</span>` : ""}
+    </button>`).join("");
+  document.body.appendChild(pop);
+  const rect = anchor.getBoundingClientRect();
+  pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
+  pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+
+  function close() {
+    pop.remove();
+    document.removeEventListener("mousedown", onOutside, true);
+    document.removeEventListener("keydown", onKey, true);
+    closeMsgMenu = null;
+    if (document.contains(anchor)) anchor.focus();
+  }
+  const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  pop.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-mact]");
+    if (!b) return;
+    const akcja = b.dataset.mact;
+    close();
+    if (akcja === "pin") { togglePin(messageId, !przypieta); return; }
+    if (akcja === "zgloszenie") {
+      zgloszenia.add(messageId);
+      widok.wiadomosc(findMsgById(messageId));
+      showToast("Traktuję to jako zgłoszenie. Przy wiadomości są teraz „naprawiłem” i „potwierdzam”.");
+      return;
+    }
+    if (akcja === "kopiuj") {
+      try { await navigator.clipboard.writeText(m.body ?? ""); showToast("Skopiowane do schowka."); }
+      catch { showToast("Nie udało się skopiować.", { alert: true }); }
+      return;
+    }
+    if (akcja === "usun") {
+      if (await confirmModal({
+        title: "Usunąć tę wiadomość?",
+        body: "Treść zniknie z rozmowy u wszystkich. W jej miejscu zostanie ślad „wiadomość usunięta”.",
+        ok: "Usuń wiadomość", danger: true,
+      })) deleteMsg(messageId);
+    }
+  });
+  setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  document.addEventListener("keydown", onKey, true);
+  closeMsgMenu = close;
+  pop.querySelector("button")?.focus();
+}
+
 // ------------------------------------------------------- edycja inline
 /** @param scope kontener, z ktorego przyszedl klik. Ta sama wiadomosc bywa
  *  w dokumencie DWA razy (glowna lista + korzen watku), wiec szukanie po calym
@@ -810,7 +968,7 @@ function startInlineEdit(messageId, scope) {
       e.preventDefault();
       const v = ta.value.trim();
       if (!v || v === msg.body) { renderMessages(); return; }
-      try { await saveEditedMsg(messageId, v); } catch (err) { showToast(err.message); }
+      try { await saveEditedMsg(messageId, v); } catch (err) { showError(err); }
     }
     if (e.key === "Escape") renderMessages();
   });
@@ -835,7 +993,7 @@ function startInlineAnswer(questionId, messageId, scope) {
       const v = ta.value.trim();
       if (!v) return;
       try { await answerQuestion(questionId, v); showToast("Pytanie domknięte - dzięki!"); }
-      catch (err) { showToast(err.message); renderMessages(); }
+      catch (err) { showError(err); renderMessages(); }
     }
     if (e.key === "Escape") renderMessages();
   });
@@ -959,17 +1117,27 @@ export function renderComposer() {
   const el = document.getElementById("composer");
   if (!el) return;
   const replyMsg = state.replyTo ? findMsgById(state.replyTo) : null;
+  const c = state.conversations.find((x) => x.id === state.activeId);
+  // Pytanie ma sens tylko na kanale: w rozmowie prywatnej "otwarte pytanie"
+  // nie ma komu lezec na liscie do podjecia.
+  const kanal = !!c && (c.kind === "public" || c.kind === "private");
+  const ask = kanal && state.askMode;
   el.innerHTML = `
-    ${replyMsg ? `<div class="replying">Odpowiadasz <b>@${escapeHtml(actorHandle(replyMsg.actorId))}</b>
-      <button id="cancel-reply" aria-label="Anuluj odpowiadanie" title="Anuluj"><span aria-hidden="true">&times;</span></button></div>` : ""}
-    <div class="card" id="composer-card">
+    ${replyMsg ? `<div class="replying">Odpowiadasz w wątku <b>@${escapeHtml(actorHandle(replyMsg.actorId))}</b>
+      <button id="cancel-reply" aria-label="Anuluj odpowiadanie w wątku" title="Anuluj"><span aria-hidden="true">&times;</span></button></div>` : ""}
+    ${ask ? `<div class="asking">${iconQuestion()} To pójdzie jako <b>pytanie do kanału</b> - zostanie otwarte, dopóki ktoś nie odpowie.
+      <button id="cancel-ask" aria-label="Wróć do zwykłej wiadomości" title="Wróć do zwykłej wiadomości"><span aria-hidden="true">&times;</span></button></div>` : ""}
+    <div class="card ${ask ? "asking-card" : ""}" id="composer-card">
       <div class="previews" id="composer-previews"></div>
       <div class="row">
         <button class="attach" id="composer-attach" type="button" aria-label="Załącz pliki" title="Załącz pliki">${iconPlus()}</button>
         <input type="file" id="composer-file" multiple style="display:none" aria-label="Wybierz pliki do wysłania">
-        <label class="sr-only" for="composer-input">Twoja wiadomość</label>
-        <textarea id="composer-input" rows="1" placeholder="Twoja wiadomość..."></textarea>
-        <button class="send" id="composer-send" disabled aria-label="Wyślij wiadomość" title="Wyślij (Enter)">${iconSend()}</button>
+        ${kanal ? `<button class="attach askbtn ${ask ? "on" : ""}" id="composer-ask" type="button"
+          aria-pressed="${ask}" aria-label="Zadaj pytanie kanałowi"
+          title="Zadaj pytanie kanałowi - zostanie otwarte, dopóki ktoś nie odpowie">${iconQuestion()}</button>` : ""}
+        <label class="sr-only" for="composer-input">${ask ? "Twoje pytanie do kanału" : "Twoja wiadomość"}</label>
+        <textarea id="composer-input" rows="1" placeholder="${ask ? "O co chcesz zapytać kanał?" : "Twoja wiadomość..."}"></textarea>
+        <button class="send" id="composer-send" disabled aria-label="${ask ? "Wyślij pytanie" : "Wyślij wiadomość"}" title="Wyślij (Enter)">${iconSend()}</button>
       </div>
     </div>`;
   const ta = document.getElementById("composer-input");
@@ -978,6 +1146,16 @@ export function renderComposer() {
   const attachBtn = document.getElementById("composer-attach");
   const fileInput = document.getElementById("composer-file");
   if (cancel) cancel.addEventListener("click", () => { state.replyTo = null; renderComposer(); focusComposer(); });
+  const askBtn = document.getElementById("composer-ask");
+  if (askBtn) askBtn.addEventListener("click", () => {
+    // Pytanie i odpowiedz w watku wykluczaja sie: pytanie idzie do kanalu, a nie
+    // pod czyjas wypowiedz.
+    state.askMode = !state.askMode;
+    if (state.askMode) state.replyTo = null;
+    renderComposer(); focusComposer();
+  });
+  const cancelAsk = document.getElementById("cancel-ask");
+  if (cancelAsk) cancelAsk.addEventListener("click", () => { state.askMode = false; renderComposer(); focusComposer(); });
   const autosize = () => {
     ta.style.height = "auto";
     const maxH = window.innerHeight * 0.4;
@@ -1023,6 +1201,14 @@ export function renderComposer() {
     const v = ta.value.trim();
     if (!v && !state.pendingFiles.length) return;
     closeMentionPopover();
+    // Pytanie do kanalu idzie osobna trasa i nie niesie zalacznikow.
+    if (ask) {
+      if (!v) return;
+      ta.value = ""; autosize();
+      const ok = await askChannel(v);
+      if (!ok) { ta.value = v; autosize(); ta.focus(); }
+      return;
+    }
     const files = state.pendingFiles; state.pendingFiles = [];
     ta.value = ""; renderPreviews(); autosize();
     // Plik, ktorego nie udalo sie wyslac, WRACA do podgladow - inaczej znikalby
@@ -1040,19 +1226,43 @@ export function renderComposer() {
   autosize();
 }
 
-/** Opcje pliku pod podgladem: wrazliwy (domyslny TTL 24 h po stronie serwera),
- *  spal po odczycie, TTL. Ida jako naglowki x-sensitive / x-burn / x-ttl. */
+/** Opcje pliku pod podgladem. Ida jako naglowki x-sensitive / x-burn / x-ttl.
+ *
+ *  Byly trzema nieopisanymi piktogramami (tarcza, plomien, lista) - w tym
+ *  "spal po odczycie", czynnoscia NIEODWRACALNA, uruchamiana jednym klikiem
+ *  w obrazek. Teraz to zwiniete menu z pelnymi etykietami i zdaniem o skutku;
+ *  domyslnie zamkniete, wiec zwykle wyslanie pliku nie robi sie trudniejsze,
+ *  ale nikt nie spali zalacznika, nie przeczytawszy, co robi. */
 function fileOptsHtml(p) {
-  return `<div class="pv-opts">
-    <button class="pv-opt ${p.sensitive ? "on" : ""}" data-pvsens="${p.id}" title="Wrażliwy: domyślnie zniknie po 24 h, bez podglądu w kanale">${iconShield()}</button>
-    <button class="pv-opt ${p.burn ? "on" : ""}" data-pvburn="${p.id}" title="Spal po odczycie: znika po pierwszym pobraniu przez odbiorcę">${iconFlame()}</button>
-    <select class="pv-ttl" data-pvttl="${p.id}" title="Po jakim czasie plik ma zniknąć">
-      <option value="0" ${!p.ttlSec ? "selected" : ""}>bez limitu</option>
-      <option value="3600" ${p.ttlSec === 3600 ? "selected" : ""}>1 h</option>
-      <option value="86400" ${p.ttlSec === 86400 ? "selected" : ""}>24 h</option>
-      <option value="604800" ${p.ttlSec === 604800 ? "selected" : ""}>7 dni</option>
-    </select>
-  </div>`;
+  const wybrane = [
+    p.sensitive ? "wrażliwy" : null,
+    p.burn ? "znika po odczycie" : null,
+    p.ttlSec === 3600 ? "znika po godzinie" : p.ttlSec === 86400 ? "znika po dobie" : p.ttlSec === 604800 ? "znika po tygodniu" : null,
+  ].filter(Boolean);
+  return `<details class="pv-opts" data-pvopts="${p.id}">
+    <summary>${wybrane.length ? escapeHtml(wybrane.join(" · ")) : "Kto i jak długo może to otworzyć"}</summary>
+    <div class="pv-menu">
+      <label class="pv-check">
+        <input type="checkbox" data-pvsens="${p.id}" ${p.sensitive ? "checked" : ""}>
+        <span><b>Oznacz jako wrażliwy</b><br>
+          <span class="pv-why">Bez podglądu na liście wiadomości; domyślnie znika po dobie.</span></span>
+      </label>
+      <label class="pv-check">
+        <input type="checkbox" data-pvburn="${p.id}" ${p.burn ? "checked" : ""}>
+        <span><b>Skasuj po pierwszym pobraniu</b><br>
+          <span class="pv-why">Pierwsza osoba, która go otworzy, będzie ostatnią. Tego nie da się cofnąć - także Tobie.</span></span>
+      </label>
+      <label class="pv-field">
+        <span class="pv-why">Kiedy plik ma zniknąć sam</span>
+        <select data-pvttl="${p.id}">
+          <option value="0" ${!p.ttlSec ? "selected" : ""}>nigdy - zostaje w rozmowie</option>
+          <option value="3600" ${p.ttlSec === 3600 ? "selected" : ""}>po godzinie</option>
+          <option value="86400" ${p.ttlSec === 86400 ? "selected" : ""}>po dobie</option>
+          <option value="604800" ${p.ttlSec === 604800 ? "selected" : ""}>po tygodniu</option>
+        </select>
+      </label>
+    </div>
+  </details>`;
 }
 
 function renderPreviews() {
@@ -1072,17 +1282,30 @@ function renderPreviews() {
     odswiezPrzyciskWyslij();
     saveDraft();
   }));
-  box.querySelectorAll("[data-pvsens]").forEach((b) => b.addEventListener("click", () => {
+  // Podsumowanie w naglowku odswiezamy PUNKTOWO, zamiast przerysowywac podglady:
+  // pelny render zamykalby wlasnie otwarte menu przy kazdym kliknieciu w opcje.
+  const odswiezPodsumowanie = (id) => {
+    const p = state.pendingFiles.find((x) => x.id === id);
+    const sum = box.querySelector(`[data-pvopts="${id}"] > summary`);
+    if (!p || !sum) return;
+    const wybrane = [
+      p.sensitive ? "wrażliwy" : null,
+      p.burn ? "znika po odczycie" : null,
+      p.ttlSec === 3600 ? "znika po godzinie" : p.ttlSec === 86400 ? "znika po dobie" : p.ttlSec === 604800 ? "znika po tygodniu" : null,
+    ].filter(Boolean);
+    sum.textContent = wybrane.length ? wybrane.join(" · ") : "Kto i jak długo może to otworzyć";
+  };
+  box.querySelectorAll("[data-pvsens]").forEach((b) => b.addEventListener("change", () => {
     const p = state.pendingFiles.find((x) => x.id === b.dataset.pvsens);
-    if (p) { p.sensitive = !p.sensitive; renderPreviews(); }
+    if (p) { p.sensitive = b.checked; odswiezPodsumowanie(p.id); }
   }));
-  box.querySelectorAll("[data-pvburn]").forEach((b) => b.addEventListener("click", () => {
+  box.querySelectorAll("[data-pvburn]").forEach((b) => b.addEventListener("change", () => {
     const p = state.pendingFiles.find((x) => x.id === b.dataset.pvburn);
-    if (p) { p.burn = !p.burn; renderPreviews(); }
+    if (p) { p.burn = b.checked; odswiezPodsumowanie(p.id); }
   }));
   box.querySelectorAll("[data-pvttl]").forEach((s) => s.addEventListener("change", () => {
     const p = state.pendingFiles.find((x) => x.id === s.dataset.pvttl);
-    if (p) p.ttlSec = Number(s.value) || 0;
+    if (p) { p.ttlSec = Number(s.value) || 0; odswiezPodsumowanie(p.id); }
   }));
 }
 
@@ -1245,7 +1468,7 @@ export function closeThread() {
 // ============================================================= PYTANIA panel
 export async function openQuestionsPanel() {
   let data;
-  try { data = await api("GET", "/api/questions/open"); } catch (e) { showToast(e.message); return; }
+  try { data = await api("GET", "/api/questions/open"); } catch (e) { showError(e); return; }
   const { modal, close } = openModal(`
       <h2 id="m-title">${iconQuestion()} Otwarte pytania</h2>
       <div class="qlist">
@@ -1281,7 +1504,7 @@ export async function openNewConversationModal(initialTab) {
         <button role="tab" aria-selected="${initialTab !== "dm"}" aria-controls="tab-body"
           data-tab="channel" class="${initialTab !== "dm" ? "on" : ""}">Kanał</button>
         <button role="tab" aria-selected="${initialTab === "dm"}" aria-controls="tab-body"
-          data-tab="dm" class="${initialTab === "dm" ? "on" : ""}">Wiadomość</button>
+          data-tab="dm" class="${initialTab === "dm" ? "on" : ""}">Rozmowa prywatna</button>
       </div>
       <div id="tab-body" role="tabpanel"></div>`);
 
@@ -1294,8 +1517,9 @@ export async function openNewConversationModal(initialTab) {
     });
     if (tab === "channel") {
       body.innerHTML = `
-        <div class="field"><label for="nc-slug">Nazwa kanału</label><input id="nc-slug" placeholder="np. ogloszenia"></div>
-        <div class="field"><label for="nc-topic">Temat (opcjonalnie)</label><input id="nc-topic" placeholder="krótki opis"></div>
+        <div class="field"><label for="nc-slug">Nazwa kanału</label><input id="nc-slug" placeholder="np. ogloszenia">
+          <span class="fhint">Małe litery, cyfry i myślniki - bez spacji i polskich znaków.</span></div>
+        <div class="field"><label for="nc-topic">Temat (opcjonalnie)</label><input id="nc-topic" placeholder="po co ten kanał istnieje"></div>
         <div class="seg" style="margin-top:.2rem" role="radiogroup" aria-label="Kto może wejść">
           <button role="radio" aria-checked="true" id="nc-public" class="on">Otwarty</button>
           <button role="radio" aria-checked="false" id="nc-private">Zamknięty</button></div>
@@ -1322,7 +1546,7 @@ export async function openNewConversationModal(initialTab) {
           await loadConversationsList();
           widok.sidebar();
           openConversation(data.conversation.id);
-        } catch (e) { showToast(e.message, { alert: true }); }
+        } catch (e) { showError(e); }
       });
       body.querySelector("#nc-slug").focus();
     } else {
@@ -1330,10 +1554,10 @@ export async function openNewConversationModal(initialTab) {
       body.innerHTML = `
         <div class="field"><label for="nc-who">Do kogo</label>
           <select id="nc-who" multiple size="6" class="who-select">
-            ${others.map((a) => `<option value="${escapeHtml(a.handle)}">@${escapeHtml(a.handle)} ${a.kind === "human" ? "- człowiek" : ""}</option>`).join("")}
+            ${others.map((a) => `<option value="${escapeHtml(a.handle)}">@${escapeHtml(a.handle)} ${a.kind === "human" ? "- człowiek" : "- agent"}</option>`).join("")}
           </select>
         </div>
-        <p class="mhint">Wybierz jedną osobę (wiadomość) albo kilka (grupa).</p>
+        <p class="mhint">Jedna osoba to rozmowa prywatna, kilka - rozmowa grupowa. Agenta zaczepiasz tak samo jak człowieka.</p>
         <div class="row"><button class="btn ghost" id="nc-cancel">Anuluj</button><button class="btn" id="nc-create">Rozpocznij</button></div>`;
       body.querySelector("#nc-cancel").addEventListener("click", close);
       body.querySelector("#nc-create").addEventListener("click", async () => {
@@ -1345,7 +1569,7 @@ export async function openNewConversationModal(initialTab) {
           await loadConversationsList();
           widok.sidebar();
           openConversation(data.conversation.id);
-        } catch (e) { showToast(e.message, { alert: true }); }
+        } catch (e) { showError(e); }
       });
       body.querySelector("#nc-who").focus();
     }

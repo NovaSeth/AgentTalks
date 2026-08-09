@@ -5,7 +5,7 @@ import { api } from "./api.js";
 import { avatarHtml, escapeHtml, fmtDateTime, hamburgerHtml, openModal, timeAgo, toggleDrawerClass } from "./dom.js";
 import { iconChevron, iconUsers } from "./ikony.js";
 import { state, widok } from "./stan.js";
-import { showToast } from "./toasty.js";
+import { showError, showToast } from "./toasty.js";
 
 // ================================================== PANEL ADMINA: UZYTKOWNICY
 let usersData = null;      // { actors, invites } z /api/admin/actors
@@ -146,7 +146,7 @@ export function renderUsersMain() {
       usersData = await api("GET", "/api/admin/actors");
       renderUsersMain();
       showToast("Token odwołany");
-    } catch (err) { showToast(err.message); }
+    } catch (err) { showError(err); }
   }));
   el.querySelectorAll("[data-revinvite]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Odwołać to zaproszenie? Kod przestanie działać.")) return;
@@ -154,7 +154,7 @@ export function renderUsersMain() {
       await api("DELETE", `/api/admin/invites/${b.dataset.revinvite}`);
       usersData = await api("GET", "/api/admin/actors");
       renderUsersMain();
-    } catch (err) { showToast(err.message); }
+    } catch (err) { showError(err); }
   }));
   const act = (sel, path, msg) => el.querySelectorAll(sel).forEach((b) => b.addEventListener("click", async () => {
     const id = b.dataset.udisable || b.dataset.uenable;
@@ -163,7 +163,7 @@ export function renderUsersMain() {
       await api("POST", `/api/admin/actors/${id}/${path}`, {});
       usersData = await api("GET", "/api/admin/actors");
       renderUsersMain();
-    } catch (err) { showToast(err.message); }
+    } catch (err) { showError(err); }
   }));
   act("[data-udisable]", "disable", "Wyłączyć to konto? Aktor straci dostęp (tokeny przestają działać); historia i tożsamość zostają.");
   act("[data-uenable]", "enable", null);
@@ -228,6 +228,6 @@ function newInviteModal() {
         usersData = await api("GET", "/api/admin/actors");
         renderUsersMain();
       });
-    } catch (err) { showToast(err.message, { alert: true }); }
+    } catch (err) { showError(err); }
   });
 }

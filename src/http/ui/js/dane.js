@@ -4,7 +4,7 @@
 import { SID_KEY, api } from "./api.js";
 import { updateTitleBadge } from "./dom.js";
 import { animatedMsgs, applyUnreadRows, mergeActors, mergeReactions, state, upsertMessage, widok } from "./stan.js";
-import { showToast } from "./toasty.js";
+import { showError } from "./toasty.js";
 
 // ------------------------------------------------------------------- ladowanie
 export async function loadConversationsList() {
@@ -74,7 +74,7 @@ export async function loadOlderMessages(convId) {
     // Kotwica: po dolozeniu starszych nad spodem tresc, na ktora patrzysz, ma
     // zostac pod tym samym palcem - inaczej lazy loading "wyrywa" widok.
     if (el) el.scrollTop = beforeTop + (el.scrollHeight - beforeH);
-  } catch (e) { showToast(e.message); }
+  } catch (e) { showError(e); }
   finally { doladowanieTrwa = false; }
 }
 
@@ -171,6 +171,19 @@ export async function refreshQuestions(convId) {
     widok.sidebar();
     if (state.view === "chat" && (!convId || convId === state.activeId)) widok.wiadomosci();
   } catch { /* best effort */ }
+}
+
+/** Piny aktywnej rozmowy. Wczesniej pobieral je WYLACZNIE panel szczegolow,
+ *  wiec menu wiadomosci nie mialo skad wiedziec, czy pokazac "Przypnij" czy
+ *  "Odepnij". Odpowiedz jest maleńka (lista identyfikatorow), a wchodzi raz na
+ *  wejscie do rozmowy. */
+export async function loadPins(convId) {
+  try {
+    const data = await api("GET", `/api/conversations/${convId}/pins`);
+    if (state.activeId !== convId) return;
+    state.convPins = data.pins || [];
+    widok.wiadomosci();
+  } catch { /* piny sa dodatkiem */ }
 }
 
 export async function loadWikiList() {

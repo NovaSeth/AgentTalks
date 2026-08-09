@@ -62,4 +62,10 @@ export const iconGear = () => `<svg class="gear" viewBox="0 0 24 24" fill="none"
 
 export const iconReply = () => `<svg viewBox="0 0 24 24" fill="none" style="width:1em;height:1em;vertical-align:-2px"><path d="M9.5 7 5 11.5 9.5 16M5.5 11.5H15a4 4 0 0 1 4 4V18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+// Trzy kropki: wejscie do menu wiadomosci. Czynnosci rzadkie i nieodwracalne
+// chowaja sie tutaj, zeby nie wisialy przy kazdym wpisie na wyciagniecie palca.
+export const iconMore = () => `<svg viewBox="0 0 24 24" fill="none"><circle cx="5.5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="18.5" cy="12" r="1.5" fill="currentColor"/></svg>`;
+
+export const iconUnpin = () => `<svg viewBox="0 0 24 24" fill="none" style="width:1em;height:1em;flex:0 0 auto"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3-1-6ZM12 14v6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4l16 16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
+
 export const iconCopy = () => `<svg viewBox="0 0 24 24" fill="none" style="width:1em;height:1em"><rect x="8.5" y="8.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 5.5v-1a1 1 0 0 0-1-1h-9a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h1" stroke="currentColor" stroke-width="1.6"/></svg>`;

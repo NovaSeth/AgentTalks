@@ -22,7 +22,9 @@ export type UnreadRow = {
   conversationId: number;
   unread: number;
   badge: number;
-  lastMessageId: number;
+  /** Id ostatniej NIEPRZECZYTANEJ wiadomosci; przy zerze nieprzeczytanych -
+   *  znacznik odczytu. To NIE jest id ostatniej wiadomosci w rozmowie. */
+  lastUnreadMessageId: number;
 };
 
 export function unreadFor(ctx: Ctx, actorId: number): UnreadRow[] {
@@ -41,7 +43,12 @@ export function unreadFor(ctx: Ctx, actorId: number): UnreadRow[] {
                WHEN mn.actor_id IS NOT NULL  THEN 1
                ELSE 0
              END)                                              AS badge,
-         COALESCE(MAX(m.id), mem.last_read_message_id)         AS last_message_id
+         -- Nazwa last_message_id klamala: to bylo id ostatniej NIEPRZECZYTANEJ
+         -- wiadomosci (albo znacznik odczytu, gdy nie bylo zadnej), a nie ostatniej
+         -- w rozmowie. Pole nie mialo konsumenta, wiec zamiast dokladac drugie
+         -- podzapytanie pod nazwe, ktorej nikt nie uzywal, oddajemy prawde:
+         -- last_unread_message_id.
+         COALESCE(MAX(m.id), mem.last_read_message_id)         AS last_unread_message_id
        FROM members mem
        JOIN conversations c ON c.id = mem.conversation_id
        LEFT JOIN messages m
@@ -59,13 +66,13 @@ export function unreadFor(ctx: Ctx, actorId: number): UnreadRow[] {
       conversation_id: number;
       unread: number;
       badge: number | null;
-      last_message_id: number;
+      last_unread_message_id: number;
     }>;
   return rows.map((r) => ({
     conversationId: r.conversation_id,
     unread: r.unread,
     badge: r.badge ?? 0,
-    lastMessageId: r.last_message_id,
+    lastUnreadMessageId: r.last_unread_message_id,
   }));
 }
 
