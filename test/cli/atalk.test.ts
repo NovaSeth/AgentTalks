@@ -146,3 +146,72 @@ test("flaga logiczna nie polyka nastepnego slowa", () => {
   const b = parseArgs(["wiki", "write", "plan", "--title", "Plan"], znane);
   assert.equal(b.flags.title, "Plan");
 });
+
+/**
+ * Skill uczy `export ATALKS_TOKEN` / `ATALKS_URL` (uzywa ich we wlasnych
+ * przykladach curl), a zaraz potem pokazuje `atalk status`. Klient czytal
+ * wylacznie `AGENTTALKS_*`, wiec agent, ktory wykonal jedno i drugie, dostawal
+ * "brak tokenu" TUZ PO ustawieniu tokenu - i nie mial z czego wywnioskowac, ze
+ * chodzi o inna nazwe tej samej rzeczy.
+ *
+ * Test idzie przez OSOBNY PROCES z podmienionym HOME, i to nie jest ozdoba:
+ * sciezka konfiguracji liczy sie z homedir() raz, przy ladowaniu modulu, wiec
+ * w procesie testow nie da sie jej odciac. Pierwsza wersja tego testu wolala
+ * atalkMain() w miejscu i przechodzila TAKZE bez naprawy - bo `whoami` udawalo
+ * sie z ZAPISANEJ konfiguracji tej maszyny, a nie ze zmiennych, ktore ustawiala.
+ * Sprawdzala wiec, czy na tym komputerze jest plik z tokenem.
+ */
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as sciezka } from "node:path";
+
+const wykonaj = promisify(execFile);
+
+test("atalk przyjmuje ATALKS_* obok AGENTTALKS_*, kanoniczne wygrywa", async () => {
+  const s = await startTestServer();
+  try {
+    const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
+    createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
+    const token = mintToken(s.ctx, ala.id, "test").token;
+    const bin = fileURLToPath(new URL("../../bin/atalk.js", import.meta.url));
+    // Pusty HOME **oraz** pusty katalog roboczy: konfiguracja ma DWA zrodla poza
+    // srodowiskiem - globalny plik w HOME i `.agenttalks.json` szukany w gore od
+    // cwd (a repo taki ma). Odciecie tylko jednego zostawia drugie i test bada
+    // wtedy zawartosc dysku, nie zmienne. Zlapala to asercja kontrolna nizej.
+    const HOME = mkdtempSync(sciezka(tmpdir(), "atalk-home-"));
+
+    const uruchomOsobno = async (env: Record<string, string>) => {
+      try {
+        await wykonaj(process.execPath, [bin, "whoami"],
+          { cwd: HOME, env: { PATH: process.env.PATH ?? "", HOME, ...env } });
+        return 0;
+      } catch (e) {
+        return (e as { code?: number }).code ?? 1;
+      }
+    };
+
+    // Kontrola: bez zadnej zmiennej ma sie NIE udac. Bez tego test moglby
+    // przechodzic z powodu, ktorego nie bada.
+    assert.notEqual(await uruchomOsobno({}), 0, "bez tokenu klient nie moze dzialac");
+
+    // Same nazwy ze skilla.
+    assert.equal(
+      await uruchomOsobno({ ATALKS_URL: s.url, ATALKS_TOKEN: token }), 0,
+      "nazwy, ktorych uczy skill, nie dzialaja w kliencie",
+    );
+
+    // Obie naraz: wygrywa kanoniczna. Inaczej zachowanie zalezaloby od tego,
+    // ktora zostala w srodowisku po poprzedniej sesji.
+    assert.equal(
+      await uruchomOsobno({
+        AGENTTALKS_URL: s.url, AGENTTALKS_TOKEN: token,
+        ATALKS_URL: s.url, ATALKS_TOKEN: "atk_zly-token-ktory-ma-przegrac",
+      }), 0,
+      "AGENTTALKS_* powinno wygrac z ATALKS_*",
+    );
+  } finally {
+    await s.close();
+  }
+});

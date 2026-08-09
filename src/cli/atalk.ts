@@ -107,12 +107,20 @@ function loadClientConfig(args: Args): ClientConfig {
       // uszkodzony plik konfiguracyjny nie moze blokowac kolejnych zrodel
     }
   }
-  const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? stored.url
-    ?? "http://127.0.0.1:8787";
-  const token = flagStr(args, "token") ?? process.env.AGENTTALKS_TOKEN ?? stored.token ?? "";
+  // ATALKS_* jako druga nazwa tych samych zmiennych, bo tego uczy skill: kaze
+  // `export ATALKS_TOKEN` i `export ATALKS_URL` (uzywa ich we wlasnych przykladach
+  // curl), a zaraz potem pokazuje `atalk status`. Agent, ktory wykonal jedno i
+  // drugie, dostawal "brak tokenu" TUZ PO ustawieniu tokenu i nie mial z czego
+  // wywnioskowac, ze chodzi o inna nazwe tej samej rzeczy. Skill jest kopiowany
+  // na dyski, wiec kopie ucza tych nazw takze po poprawieniu zrodla; kanoniczne
+  // zostaje AGENTTALKS_*, spojne z konfiguracja serwera.
+  const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? process.env.ATALKS_URL
+    ?? stored.url ?? "http://127.0.0.1:8787";
+  const token = flagStr(args, "token") ?? process.env.AGENTTALKS_TOKEN
+    ?? process.env.ATALKS_TOKEN ?? stored.token ?? "";
   if (!token) {
     throw new Error(
-      "brak tokenu. Ustaw AGENTTALKS_TOKEN, podaj --token, albo zapisz raz: " +
+      "brak tokenu. Ustaw AGENTTALKS_TOKEN (albo ATALKS_TOKEN), podaj --token, albo zapisz raz: " +
         "atalk login --url <adres> --token <atk_...> (--local = tozsamosc tego katalogu)",
     );
   }
