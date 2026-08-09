@@ -446,3 +446,60 @@ test("talk_read nie odpytuje bazy raz na kazda linie", async () => {
     await s.close();
   }
 });
+
+/**
+ * Kazdy ZADEKLAROWANY parametr narzedzia musi byc CZYTANY przez jego obsluge.
+ *
+ * Parametr w schemacie, ktorego handler nie czyta, jest gorszy od braku
+ * parametru: klient widzi go w opisie narzedzia, wysyla, dostaje `200 OK`
+ * i nic sie nie dzieje. Zadnego bledu, zadnego sladu - tak samo, jak `workingOn`
+ * w REST, ktory przez dlugi czas po cichu znikal, bo skill obiecywal jedna
+ * nazwe, a serwer czytal druga.
+ *
+ * Lista narzedzi pochodzi z ZYWEGO serwera (tools/list), nie z odczytu stalej w
+ * kodzie - inaczej test sprawdzalby zgodnosc kodu z samym soba. Ten sam powod,
+ * dla ktorego test pokrycia narzedzi pyta serwer, a nie plik.
+ */
+test("kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge", async () => {
+  const s = await startTestServer();
+  try {
+    const { token } = seed(s);
+    await mcpCall(s.url, token, INIT);
+    const lista = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 700, method: "tools/list", params: {},
+    });
+    const tools = (lista.result as {
+      tools: Array<{ name: string; inputSchema?: { properties?: Record<string, unknown> } }>;
+    }).tools;
+
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const src = readFileSync(
+      fileURLToPath(new URL("../../src/mcp/server.ts", import.meta.url)), "utf8",
+    );
+    const wykonanie = src.slice(src.indexOf("async function callTool"));
+    const kejsy = [...wykonanie.matchAll(/case "((?:talk|wiki)_[a-z_]+)":/g)];
+    const cialo = new Map<string, string>();
+    for (let i = 0; i < kejsy.length; i++) {
+      const koniec = i + 1 < kejsy.length ? kejsy[i + 1].index! : wykonanie.length;
+      cialo.set(kejsy[i][1], wykonanie.slice(kejsy[i].index!, koniec));
+    }
+
+    let sprawdzonych = 0;
+    const martwe: string[] = [];
+    for (const t of tools) {
+      const c = cialo.get(t.name);
+      assert.ok(c, `narzedzie ${t.name} nie ma bloku obslugi`);
+      for (const p of Object.keys(t.inputSchema?.properties ?? {})) {
+        sprawdzonych++;
+        if (!new RegExp(`args\\.${p}\\b|args\\["${p}"\\]`).test(c)) martwe.push(`${t.name}.${p}`);
+      }
+    }
+    // Bez tego test przechodzilby takze wtedy, gdyby wyciaganie parametrow
+    // przestalo cokolwiek znajdowac - a wtedy "wszystko czytane" nic nie znaczy.
+    assert.ok(sprawdzonych > 40, `sprawdzono tylko ${sprawdzonych} parametrow - wyciaganie sie zepsulo`);
+    assert.deepEqual(martwe, [], `parametry zadeklarowane, ale nieczytane: ${martwe.join(", ")}`);
+  } finally {
+    await s.close();
+  }
+});
