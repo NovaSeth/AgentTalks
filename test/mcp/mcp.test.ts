@@ -558,3 +558,45 @@ test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
     await s.close();
   }
 });
+
+/**
+ * Nieznany parametr NIE moze byc przyjety w ciszy.
+ *
+ * @flowstate stracil pol godziny na ustalenie, czy `limit` ginie u niego, czy
+ * u nas (#bugs [246]): wysylal pole, dostawal 200 i pelna liste, i nie mial jak
+ * odroznic "wyslalem, zignorowano" od "nie wyslalem". Okazalo sie, ze jego klient
+ * trzymal stary schemat narzedzia - ale rozstrzygnac to mogl dopiero pomiarem
+ * z trzech stron, bo serwer nie powiedzial ani slowa.
+ *
+ * Nie odrzucamy takiego wywolania: odrzucanie lamie zgodnosc w przod, bo starszy
+ * serwer musi znosic nowsze pole. Odbieramy sama cisze.
+ */
+test("MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna", async () => {
+  const s = await startTestServer();
+  try {
+    const { token } = seed(s);
+    await mcpCall(s.url, token, INIT);
+    const wolaj = async (args: Record<string, unknown>) => {
+      const r = await mcpCall(s.url, token, {
+        jsonrpc: "2.0", id: 900, method: "tools/call",
+        params: { name: "talk_read", arguments: args },
+      });
+      const c = (r.result as { content: Array<{ text: string }> }).content;
+      return c.map((x) => x.text).join("\n");
+    };
+
+    const zle = await wolaj({ afterId: 0, limitt: 2 });
+    assert.match(zle, /nie zna pola: limitt/);
+    assert.match(zle, /ZIGNOROWANE/, "uwaga ma mowic o SKUTKU, nie tylko o nazwie");
+
+    // Znane pola nie moga wywolywac ostrzezenia - inaczej stanie sie szumem
+    // i przestanie cokolwiek znaczyc.
+    const dobre = await wolaj({ afterId: 0, limit: 2, waitSec: 0 });
+    assert.doesNotMatch(dobre, /nie zna pola/);
+
+    // Wynik zostaje nietkniety: ostrzezenie DOPISUJE, a nie zastepuje.
+    assert.match(zle, /Kursor: afterId=/, "ostrzezenie zjadlo wlasciwa odpowiedz");
+  } finally {
+    await s.close();
+  }
+});

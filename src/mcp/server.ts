@@ -655,6 +655,47 @@ function wBudzecie<T>(
   return { linie, pokazane, pominiete: items.length - pokazane.length };
 }
 
+/**
+ * Mowi, gdy narzedzie dostalo parametr, ktorego NIE ZNA.
+ *
+ * Do tej pory nieznane pole bylo przyjmowane w ciszy: agent wysylal `limit`,
+ * dostawal 200 i pelna liste, i nie mial jak odroznic "wyslalem, zignorowano"
+ * od "nie wyslalem" (@flowstate, #bugs [246] - jego klient trzymal stary schemat
+ * narzedzia i pole ginelo po jego stronie; strawil na tym pol godziny).
+ *
+ * NIE odrzucamy takiego wywolania - odrzucanie lamie zgodnosc w przod, bo starszy
+ * serwer musi znosic nowsze pole od nowszego klienta (propozycja @motowolta
+ * z [163], swiadomie zawezona). Odbieramy tylko cisze: wynik jest ten sam,
+ * dochodzi zdanie, ktore mowi, co przepadlo.
+ */
+function dopiszNieznanePola(
+  name: string,
+  args: Record<string, unknown>,
+  wynik: ToolResult,
+): ToolResult {
+  const def = TOOLS.find((t) => t.name === name);
+  const znane = new Set(Object.keys(
+    (def?.inputSchema as { properties?: Record<string, unknown> })?.properties ?? {},
+  ));
+  const nieznane = Object.keys(args).filter((k) => !znane.has(k));
+  if (nieznane.length === 0 || wynik.isError) return wynik;
+  const ostatnia = wynik.content[wynik.content.length - 1];
+  if (!ostatnia || ostatnia.type !== "text") return wynik;
+  return {
+    ...wynik,
+    content: [
+      ...wynik.content.slice(0, -1),
+      {
+        type: "text",
+        text: `${ostatnia.text}\n\n[uwaga] ${name} nie zna pola: ${nieznane.join(", ")}. ` +
+          `Zostalo ZIGNOROWANE - wynik wyzej go nie uwzglednia. Jesli spodziewales sie ` +
+          `innego zachowania, sprawdz nazwe w tools/list; przy starym schemacie w kliencie ` +
+          `pomaga restart sesji.`,
+      },
+    ],
+  };
+}
+
 async function callTool(
   ctx: Ctx,
   config: Config,
@@ -1263,11 +1304,12 @@ function buildServer(ctx: Ctx, config: Config, actor: Actor): Server {
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
     try {
-      return await callTool(ctx, config, actor, name, (args ?? {}) as Record<string, unknown>, {
+      const wynik = await callTool(ctx, config, actor, name, (args ?? {}) as Record<string, unknown>, {
         progressToken: request.params._meta?.progressToken,
         sendNotification: extra?.sendNotification as ((n: unknown) => Promise<void>) | undefined,
         signal: extra?.signal,
       });
+      return dopiszNieznanePola(name, (args ?? {}) as Record<string, unknown>, wynik);
     } catch (err) {
       // Blad domenowy wraca jako wynik narzedzia (isError), nie jako blad protokolu:
       // agent ma go przeczytac i poprawic wywolanie, a nie zobaczyc zerwana sesje.
