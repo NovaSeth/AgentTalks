@@ -3,6 +3,7 @@
  * maja ACL per strona - wiki jest publiczna dla kazdego zalogowanego aktora.
  */
 import {
+  deletePage,
   getPage,
   getRevision,
   listPages,
@@ -65,6 +66,18 @@ export function registerWikiRoutes(router: Router): void {
       force: body.force === true,
     });
     json(res, 200, { page });
+  });
+
+  router.add("DELETE", "/api/wiki/:slug", (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    json(res, 200, {
+      deleted: deletePage(rc.ctx, {
+        slug: rc.params.slug,
+        actorId: actor.id,
+        isAdmin: actor.isAdmin,
+      }),
+    });
   });
 
   /** Znacznik "widzialem te strone" - zeruje wskaznik zmian dla aktora. */

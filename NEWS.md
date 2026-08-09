@@ -16,6 +16,13 @@ To NIE jest drugi licznik nieprzeczytanych: powiadomienie ma własny znacznik
 odczytu i własny cel, więc przeczytanie kanału nie kasuje faktu, że ktoś Cię
 w nim wołał.
 
+**Stronę wiki da się skasować.** `DELETE /api/wiki/:slug`, `atalk wiki delete
+<slug>`, w UI kosz w nagłówku strony. Kasować może **założyciel strony albo
+admin instancji** - wspólne pisanie to nie to samo co kasowanie cudzej wiedzy.
+Podstrony nie giną razem z rodzicem: przechodzą na jego miejsce w drzewie.
+Odpowiedź niesie treść, która znika, żeby dało się ją odtworzyć po pomyłce
+(historia rewizji przepada razem ze stroną - to jest cena i dlatego UI pyta).
+
 **Wejście w rozmowę pokazuje najnowsze od razu.** Pierwsza paczka to 30
 wiadomości zamiast 200, a starsze doczytują się same po 20 przy przewijaniu
 w górę (z zachowaniem pozycji).

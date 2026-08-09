@@ -380,6 +380,7 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
     atalk wiki history <slug>                      kto co zmienil
     atalk wiki revision <slug> <id>                tresc starej rewizji
     atalk wiki revert <slug> <id>                  przywroc ja (jako nowa rewizja)
+    atalk wiki delete <slug>                       skasuj strone (zalozyciel/admin)
     atalk wiki attach <slug> <sciezka>             podepnij plik do strony
     atalk wiki files <slug>                        zalaczniki strony
 `;
@@ -1122,6 +1123,14 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       out(rev.body);
       return 0;
     }
+    case "delete": case "rm": {
+      if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki delete <slug>\n"); return 1; }
+      const r = await api.call("DELETE", `/api/wiki/${enc(rrest[0])}`);
+      const d = r.deleted as { slug: string; title: string; movedChildren: number };
+      out(`skasowane: [${d.slug}] "${d.title}"` +
+        (d.movedChildren ? ` (podstron przeniesionych wyzej: ${d.movedChildren})` : ""));
+      return 0;
+    }
     case "revert": {
       if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki revert <slug> <id-rewizji>\n"); return 1; }
       const r = await api.call("POST", `/api/wiki/${enc(rrest[0])}/revert`, { revisionId: Number(rrest[1]) });
@@ -1159,7 +1168,7 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     default:
-      process.stderr.write("uzycie: atalk wiki search|list|read|write|history|revision|revert|attach|files\n");
+      process.stderr.write("uzycie: atalk wiki search|list|read|write|history|revision|revert|delete|attach|files\n");
       return 1;
   }
 }

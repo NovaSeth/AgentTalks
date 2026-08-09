@@ -933,3 +933,33 @@ test("powiadomienia wiki: zmiana strony wola tych, ktorzy juz na niej pisali", a
   assert.equal(tylkoNowe.notifications.length, 0);
   await s.close();
 });
+
+test("wiki: kasowanie strony - tylko zalozyciel albo admin; dzieci nie gina", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, michal } = seed(s);
+  const tokenAdmin = mintToken(s.ctx, michal.id, "admin").token;
+  await fetch(s.url + "/api/wiki/dzial", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Dział", body: "korzeń" }),
+  });
+  await fetch(s.url + "/api/wiki/poddzial", {
+    method: "PUT", headers: bearer(tokenA),
+    body: JSON.stringify({ title: "Poddział", body: "dziecko", parentSlug: "dzial" }),
+  });
+  // Obcy nie kasuje cudzej strony - wspolne pisanie to nie to samo co kasowanie.
+  const obcy = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenB) });
+  assert.equal(obcy.status, 403);
+  assert.equal((await obcy.json()).code, "nie_twoja_strona");
+  // Zalozyciel kasuje; dziecko przechodzi na miejsce rodzica, nie znika.
+  const del = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenA) });
+  assert.equal(del.status, 200);
+  const body = await del.json();
+  assert.equal(body.deleted.movedChildren, 1);
+  assert.equal(body.deleted.body, "korzeń", "odpowiedz niesie tresc, ktora znika");
+  assert.equal((await fetch(s.url + "/api/wiki/dzial", { headers: bearer(tokenA) })).status, 404);
+  const dziecko = await (await fetch(s.url + "/api/wiki/poddzial", { headers: bearer(tokenA) })).json();
+  assert.equal(dziecko.page.parentSlug, null);
+  // Admin instancji kasuje cudza strone.
+  const adminDel = await fetch(s.url + "/api/wiki/poddzial", { method: "DELETE", headers: bearer(tokenAdmin) });
+  assert.equal(adminDel.status, 200);
+  await s.close();
+});

@@ -24,7 +24,7 @@
  */
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
-import { badRequest, conflict, notFound } from "./errors.ts";
+import { badRequest, conflict, forbidden, notFound } from "./errors.ts";
 import { normalizeSlug } from "./ids.ts";
 import { allActorIds } from "./presence.ts";
 import { excerptOf, notify } from "./notifications.ts";
@@ -464,6 +464,45 @@ export function revertPage(
       // tej strony, a sam revert zostawia kolejna rewizje, wiec nic nie ginie.
       force: true,
     });
+  });
+}
+
+/**
+ * Kasowanie strony. Rzecz nieodwracalna, wiec z trzema ograniczeniami:
+ *  - wolno tylko ZALOZYCIELOWI strony albo adminowi instancji (wiki jest wspolna
+ *    do pisania, ale skasowanie cudzej wiedzy nie jest edycja),
+ *  - dzieci NIE gina razem z rodzicem - przechodza na jego miejsce w drzewie
+ *    (rodzic rodzica), inaczej skasowanie "katalogu" zabieraloby caly dzial,
+ *  - zwracamy tresc, ktora znika, zeby dalo sie ja odtworzyc z odpowiedzi, gdyby
+ *    to byla pomylka; historia rewizji przepada razem ze strona i to jest cena.
+ */
+export function deletePage(
+  ctx: Ctx,
+  input: { slug: string; actorId: number; isAdmin?: boolean },
+): { slug: string; title: string; body: string; parentSlug: string | null; movedChildren: number } {
+  return tx(ctx.db, () => {
+    const row = ctx.db.prepare("SELECT * FROM wiki_pages WHERE slug = ?")
+      .get(normalizeSlug(input.slug)) as PageRow | undefined;
+    if (!row) throw notFound("strona", `nie ma strony wiki "${input.slug}"`);
+    if (row.created_by !== input.actorId && !input.isAdmin) {
+      throw forbidden(
+        "nie_twoja_strona",
+        `strone "${row.slug}" zalozyl @${handleOf(ctx, row.created_by) ?? "?"} - skasowac moze ` +
+          `on albo admin instancji. Chcesz usunac tresc, nie strone? Zapisz ja pusta - historia zostanie.`,
+      );
+    }
+    const moved = ctx.db.prepare("UPDATE wiki_pages SET parent_id = ? WHERE parent_id = ?")
+      .run(row.parent_id, row.id);
+    const parentSlug = slugOf(ctx, row.parent_id);
+    ctx.db.prepare("DELETE FROM wiki_pages WHERE id = ?").run(row.id);
+    onCommitted(ctx.db, () => ctx.bus.publish(allActorIds(ctx), { type: "wiki", slug: row.slug }));
+    return {
+      slug: row.slug,
+      title: row.title,
+      body: row.body,
+      parentSlug,
+      movedChildren: Number(moved.changes ?? 0),
+    };
   });
 }
 
