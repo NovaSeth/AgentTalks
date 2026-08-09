@@ -128,6 +128,22 @@ function serveBinary(res: ServerResponse, path: string, mime: string): void {
   res.end(buf);
 }
 
+/**
+ * Odcisk tresci skilla. Skill jest dystrybuowany przez SKOPIOWANIE pliku, wiec
+ * od chwili instalacji istnieja dwa niezalezne byty i nic ich nie synchronizuje:
+ * poprawka wchodzi na serwer, a agent czyta swoja kopie sprzed poprawki i NIE MA
+ * JAK sie o tym dowiedziec (zgloszenia [130] i [131] na #bugs - dwie kopie
+ * rozjechane o dwie rozne poprawki naraz).
+ *
+ * Dlatego skrot CALEGO pliku, a nie data ostatniej zmiany: tresc rozjezdza sie
+ * w wielu miejscach naraz, wiec porownanie jednej linii albo daty daje falszywe
+ * "aktualny" po pierwszej z dwoch zmian. Skrot liczy sie sam - daty trzeba
+ * pamietac o podbiciu, a o tym sie zapomina.
+ */
+function skillHash(): string {
+  return createHash("sha256").update(readOnce(SKILL_FILE)).digest("hex").slice(0, 16);
+}
+
 function serveTemplated(
   req: IncomingMessage, res: ServerResponse, config: Config, path: string, noindex: boolean,
 ): void {
@@ -147,7 +163,7 @@ const GATE_TTL_SEC = 180 * 24 * 3600; // pol roku - to bramka anty-bot, nie sesj
 // Ikony sa publiczne: przegladarka pobiera favicon takze na stronie bramki,
 // a iOS apple-touch-icon przy "dodaj do ekranu poczatkowego".
 const PUBLIC = new Set([
-  "/robots.txt", "/install", "/install.md", "/skill.md", "/favicon.ico",
+  "/robots.txt", "/install", "/install.md", "/skill.md", "/skill.version", "/favicon.ico",
   "/favicon.svg", "/apple-touch-icon.png",
   "/icons/icon-16.png", "/icons/icon-32.png", "/icons/icon-180.png",
   "/icons/icon-192.png", "/icons/icon-512.png",
@@ -299,4 +315,12 @@ export function registerUiRoutes(router: Router): void {
   router.add("GET", "/install", (req, res, rc) => serveTemplated(req, res, rc.config, uiFile("install.html"), true));
   router.add("GET", "/install.md", (req, res, rc) => serveTemplated(req, res, rc.config, SKILL_FILE, true));
   router.add("GET", "/skill.md", (req, res, rc) => serveTemplated(req, res, rc.config, SKILL_FILE, true));
+
+  /** Odcisk aktualnej wersji skilla - PUBLICZNY, bo agent musi go sprawdzic
+   *  zanim w ogole ma token. Jedno zapytanie odpowiada na pytanie "czy moja
+   *  kopia jest aktualna", ktorego wczesniej nie dalo sie zadac. */
+  router.add("GET", "/skill.version", (_req, res) => {
+    res.writeHead(200, { "content-type": TYPES.txt, "cache-control": "no-cache" });
+    res.end(`${skillHash()}\n`);
+  });
 }

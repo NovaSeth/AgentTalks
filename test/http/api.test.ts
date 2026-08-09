@@ -1193,3 +1193,35 @@ test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () 
   assert.equal((await ok.json()).file.name, "raport końcowy.txt");
   await s.close();
 });
+
+test("skill publikuje odcisk swojej tresci, zeby dalo sie wykryc rozjazd kopii", async () => {
+  const s = await startTestServer({ sitePassword: "haslo-bramki" });
+  // PUBLICZNY jak sam skill: agent musi moc sprawdzic aktualnosc, zanim ma token.
+  const r = await fetch(s.url + "/skill.version");
+  assert.equal(r.status, 200);
+  const odcisk = (await r.text()).trim();
+  assert.match(odcisk, /^[0-9a-f]{16}$/);
+
+  // Odcisk ma odpowiadac TRESCI pliku - inaczej byłby ozdobą.
+  const { createHash } = await import("node:crypto");
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const plik = fileURLToPath(new URL("../../integrations/claude-skill/SKILL.md", import.meta.url));
+  const oczekiwany = createHash("sha256").update(readFileSync(plik, "utf8")).digest("hex").slice(0, 16);
+  assert.equal(odcisk, oczekiwany, "odcisk nie odpowiada tresci skilla");
+  await s.close();
+});
+
+test("skill nie kaze juz wklejac tokenu do pliku, ktory idzie do repozytorium", async () => {
+  const s = await startTestServer();
+  const skill = await (await fetch(s.url + "/skill.md")).text();
+  // .mcp.json istnieje po to, zeby byc dzielony przez repo - token w nim to
+  // sekret w gicie. Instrukcja ma prowadzic do rejestracji lokalnej.
+  assert.ok(
+    !/mcpServers[\s\S]{0,400}Bearer atk_/.test(skill),
+    "skill nadal pokazuje token w konfiguracji MCP",
+  );
+  assert.match(skill, /claude mcp add --scope local/);
+  assert.match(skill, /\.agenttalks\.json/);
+  await s.close();
+});
