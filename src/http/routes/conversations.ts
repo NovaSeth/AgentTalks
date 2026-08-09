@@ -1,6 +1,7 @@
 /** Konwersacje: lista, zakladanie, czlonkostwo, znaczniki odczytu, otwarte pytania. */
 import { actorsByIds, getActor, getActorByHandle } from "../../core/actors.ts";
 import {
+  myMemberships,
   archiveConversation,
   assertCanRead,
   createChannel,
@@ -47,19 +48,6 @@ type MemberRow = {
   last_read_message_id: number;
 };
 
-function myMemberships(ctx: Ctx, actorId: number) {
-  const rows = ctx.db
-    .prepare("SELECT * FROM members WHERE actor_id = ? ORDER BY conversation_id")
-    .all(actorId) as MemberRow[];
-  return rows.map((r) => ({
-    conversationId: r.conversation_id,
-    actorId: r.actor_id,
-    role: r.role,
-    joinedAt: r.joined_at,
-    notify: r.notify,
-    lastReadMessageId: r.last_read_message_id,
-  }));
-}
 
 const convId = (rc: { params: Record<string, string> }): number => {
   const id = Number(rc.params.id);

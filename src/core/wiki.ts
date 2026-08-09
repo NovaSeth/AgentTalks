@@ -28,6 +28,7 @@ import { badRequest, conflict, forbidden, notFound } from "./errors.ts";
 import { normalizeSlug } from "./ids.ts";
 import { allActorIds } from "./presence.ts";
 import { excerptOf, notify } from "./notifications.ts";
+import { deleteFilesOfWikiPage } from "./files.ts";
 
 export const MAX_WIKI_BYTES = 512 * 1024; // strona wiedzy bywa dluga, ale nie bez konca
 const MAX_TITLE = 200;
@@ -344,7 +345,12 @@ export function pageId(ctx: Ctx, slug: string): number | null {
 export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
   const rows = ctx.db
     .prepare(
-      `SELECT p.slug, p.title, p.body, p.parent_id, p.updated_by, p.updated_at,
+      // LENGTH(p.body) zamiast p.body: lista stron potrzebuje ROZMIARU, a nie
+      // tresci. Wczesniej kazde otwarcie panelu bocznego czytalo z bazy wszystkie
+      // strony w calosci (megabajty) tylko po to, zeby policzyc jedna liczbe.
+      // LENGTH liczy znaki, wiec dla tekstu z polskimi znakami wynik rozni sie
+      // od bajtow - i to jest w porzadku, bo to sygnal "jak duza", nie rachunek.
+      `SELECT p.slug, p.title, LENGTH(p.body) AS body_len, p.parent_id, p.updated_by, p.updated_at,
               (SELECT COUNT(*) FROM wiki_revisions r
                 WHERE r.page_id = p.id
                   AND r.actor_id <> ?
@@ -355,7 +361,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
         ORDER BY p.updated_at DESC`,
     )
     .all(actorId, actorId) as Array<{
-      slug: string; title: string; body: string; parent_id: number | null;
+      slug: string; title: string; body_len: number; parent_id: number | null;
       updated_by: number | null; updated_at: number; unseen: number;
     }>;
   return rows.map((r) => ({
@@ -364,7 +370,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
     parentSlug: slugOf(ctx, r.parent_id),
     updatedBy: handleOf(ctx, r.updated_by),
     updatedAt: r.updated_at,
-    bytes: Buffer.byteLength(r.body, "utf8"),
+    bytes: r.body_len,
     unseen: r.unseen,
   }));
 }
@@ -494,6 +500,10 @@ export function deletePage(
     const moved = ctx.db.prepare("UPDATE wiki_pages SET parent_id = ? WHERE parent_id = ?")
       .run(row.parent_id, row.id);
     const parentSlug = slugOf(ctx, row.parent_id);
+    // Zalaczniki strony gina razem z nia. Bez tego wiersz w `files` zostaje bez
+    // rodzica (wiki_page_id wskazuje na nieistniejaca strone), wiec plik znika
+    // z kazdego interfejsu, a bajty dalej mozna pobrac, znajac id.
+    deleteFilesOfWikiPage(ctx, row.id);
     ctx.db.prepare("DELETE FROM wiki_pages WHERE id = ?").run(row.id);
     onCommitted(ctx.db, () => ctx.bus.publish(allActorIds(ctx), { type: "wiki", slug: row.slug }));
     return {

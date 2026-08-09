@@ -9,7 +9,7 @@
  */
 import type { Event } from "../core/events.ts";
 import { inboxAfter, updatedBefore } from "../core/messages.ts";
-import { requireAuth } from "./auth.ts";
+import { authenticate, requireAuth } from "./auth.ts";
 import { json } from "./respond.ts";
 import { tooMany } from "../core/errors.ts";
 import type { Req, Res, RouteCtx } from "./router.ts";
@@ -32,11 +32,37 @@ const MAX_BUFFERED_BYTES = 1024 * 1024;
 
 export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   const { actor } = requireAuth(rc);
+  // HEAD na trasie GET nie moze otwierac strumienia: klient nie odbiera ciala,
+  // wiec polaczenie wisialoby do timeoutu, trzymajac slot z limitu. Monitoring
+  // sondujacy HEAD-em ma dostac potwierdzenie i rozlaczenie.
+  if (req.method === "HEAD") {
+    res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8" });
+    res.end();
+    return;
+  }
   if (rc.ctx.bus.streamCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
     throw tooMany("za_duzo_strumieni",
       `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych strumieni - zamknij ktorys`);
   }
   const releaseStream = rc.ctx.bus.openStream(actor.id);
+
+  // Sprzatanie rejestrujemy OD RAZU po zajeciu slotu, a nie na koncu funkcji.
+  // Powod jest konkretny: dosylka zaleglosci nizej ma dwa wyjscia przez `return`
+  // (gdy gniazdo padnie w trakcie), a kazde z nich omijalo rejestracje `cleanup`
+  // - slot zostawal zajety do restartu procesu i po osmiu takich zerwaniach
+  // aktor dostawal 429 na wlasny strumien, bez zadnego sposobu odzyskania go.
+  let unsubscribe: (() => void) | null = null;
+  let ping: ReturnType<typeof setInterval> | null = null;
+  let posprzatane = false;
+  const cleanup = () => {
+    if (posprzatane) return;
+    posprzatane = true;
+    if (ping) clearInterval(ping);
+    if (unsubscribe) unsubscribe();
+    releaseStream();
+  };
+  res.on("close", cleanup);
+  res.on("error", cleanup);
 
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
@@ -77,7 +103,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
       // Backpressure moglo zerwac polaczenie w trakcie dosylki - nie ma sensu
       // synchronicznie doczytywac calego backlogu dla martwego gniazda (node:sqlite
       // jest jednowatkowe, wiec blokowaloby to event loop wszystkim pozostalym).
-      if (res.destroyed || res.writableEnded) return;
+      if (res.destroyed || res.writableEnded) { cleanup(); return; }
       const batch = inboxAfter(rc.ctx, actor.id, cursor, RESUME_PAGE, { includeOwn: true });
       for (const message of batch) {
         send({ type: "message", conversationId: message.conversationId, message }, message.id);
@@ -90,7 +116,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
     let editCursor = 0;
     const since = rc.ctx.now() - RESUME_EDIT_WINDOW_SEC;
     for (;;) {
-      if (res.destroyed || res.writableEnded) return;
+      if (res.destroyed || res.writableEnded) { cleanup(); return; }
       const changed = updatedBefore(rc.ctx, actor.id, lastSeen, since, editCursor);
       for (const message of changed) {
         send({ type: "message_updated", conversationId: message.conversationId, message });
@@ -101,24 +127,32 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   }
   res.write(": polaczono\n\n");
 
-  const unsubscribe = rc.ctx.bus.subscribe(actor.id, (event) => {
+  unsubscribe = rc.ctx.bus.subscribe(actor.id, (event) => {
     send(event, event.type === "message" ? event.message.id : undefined);
   });
 
   // Komentarz co 20 s. Bez niego proxy z timeoutem bezczynnosci zrywa polaczenie,
   // a klient nie wie, czy to cisza w kanale, czy awaria.
-  const ping = setInterval(() => {
-    if (!res.writableEnded && !res.destroyed) res.write(": ping\n\n");
+  //
+  // Ten sam takt SPRAWDZA PONOWNIE TOZSAMOSC. Bez tego uwierzytelnienie dzialo
+  // sie dokladnie raz - przy nawiazaniu polaczenia - wiec odwolanie tokenu albo
+  // wylaczenie konta nie mialo jak dosiegnac strumienia, ktory juz stoi: kolejne
+  // zadania HTTP dostawaly 401, a otwarty strumien dalej dostarczal kazda nowa
+  // wiadomosc ze wszystkich rozmow, az do restartu serwera. Odwolanie tokenu
+  // jest JEDYNA reakcja na wyciek, jaka ten produkt oferuje - musi domykac tez
+  // to, co juz plynie.
+  ping = setInterval(() => {
+    if (res.writableEnded || res.destroyed) return;
+    if (!authenticate(rc.ctx, rc.config, req)) {
+      // Bez ciala i bez zdarzenia: klient ma zobaczyc zerwanie i probowac
+      // wznowic, a wznowienie przejdzie przez pelne uwierzytelnienie i dostanie 401.
+      cleanup();
+      res.destroy();
+      return;
+    }
+    res.write(": ping\n\n");
   }, PING_MS);
   if (typeof ping.unref === "function") ping.unref();
-
-  const cleanup = () => {
-    clearInterval(ping);
-    unsubscribe();
-    releaseStream();
-  };
-  res.on("close", cleanup);
-  res.on("error", cleanup);
 }
 
 /**
@@ -139,6 +173,15 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
     return Promise.resolve();
   }
 
+  // Long-poll trzyma po stronie serwera to samo, co SSE (subskrypcje, timer,
+  // gniazdo), tylko krocej - wiec obowiazuje go ten sam limit. Bez niego klient
+  // w petli omijal limit strumieni, przechodzac na long-poll.
+  if (rc.ctx.bus.streamCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
+    throw tooMany("za_duzo_strumieni",
+      `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych oczekiwan - poczekaj na ich koniec`);
+  }
+  const releaseStream = rc.ctx.bus.openStream(actor.id);
+
   return new Promise<void>((resolve) => {
     let done = false;
     const finish = () => {
@@ -146,6 +189,7 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
       done = true;
       clearTimeout(timer);
       unsubscribe();
+      releaseStream();
       res.off("close", onClose);
       json(res, 200, { messages: inboxAfter(rc.ctx, actor.id, after) });
       resolve();
@@ -155,6 +199,7 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
       done = true;
       clearTimeout(timer);
       unsubscribe();
+      releaseStream();
       resolve();
     };
 

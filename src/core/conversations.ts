@@ -22,6 +22,8 @@ export type ConvKind = "public" | "private" | "dm" | "group";
 export type Notify = "all" | "mentions" | "none";
 export type Role = "admin" | "member";
 
+export type Rozmowca = { handle: string; displayName: string; kind: string };
+
 export type Conversation = {
   id: number;
   kind: ConvKind;
@@ -30,6 +32,9 @@ export type Conversation = {
   createdBy: number | null;
   createdAt: number;
   archivedAt: number | null;
+  /** Uczestnicy rozmowy prywatnej POZA pytajacym - tylko dla dm/group.
+   *  Dzieki temu lista rozmow ma nazwy i twarze od razu po zalogowaniu. */
+  others?: Rozmowca[];
 };
 
 export type Member = {
@@ -145,24 +150,35 @@ export function ensureDirect(ctx: Ctx, actorIds: readonly number[]): Conversatio
       .run(ids.length === 2 ? "dm" : "group", key, ctx.now());
     const row = ctx.db.prepare("SELECT * FROM conversations WHERE member_key = ?")
       .get(key) as ConvRow;
-    for (const actorId of ids) join(ctx, row.id, actorId);
-    // Rozmowa prywatna ma dochodzic w calosci, nie tylko przy wzmiance.
-    ctx.db.prepare("UPDATE members SET notify = 'all' WHERE conversation_id = ?").run(row.id);
+    // Rozmowa prywatna ma dochodzic w calosci, nie tylko przy wzmiance - ale
+    // tylko dla NOWO dodanych. Kto wczesniej wyciszyl te rozmowe, ma zostac
+    // wyciszony (patrz komentarz w join).
+    for (const actorId of ids) join(ctx, row.id, actorId, "member", "all");
     return toConv(row);
   });
 }
 
-export function join(ctx: Ctx, convId: number, actorId: number, role: Role = "member"): Member {
+export function join(
+  ctx: Ctx,
+  convId: number,
+  actorId: number,
+  role: Role = "member",
+  notify: Notify = "mentions",
+): Member {
   const existing = getMember(ctx, convId, actorId);
   if (existing) return existing;
   if (!getConversation(ctx, convId)) throw notFound("konwersacja", `nie ma konwersacji ${convId}`);
   // OR IGNORE: dwa procesy dolaczajace ten sam duet w tym samym momencie nie moga
   // konczyc sie surowym bledem klucza glownego u przegranego.
+  //
+  // `notify` ustawiamy TUTAJ, przy wstawianiu, a nie zbiorczym UPDATE-em po
+  // petli: zbiorczy UPDATE nadpisywal ustawienie WSZYSTKICH czlonkow, wiec
+  // wyciszona rozmowa odciszala sie sama, gdy ktokolwiek do niej wrocil.
   ctx.db
     .prepare(
-      "INSERT OR IGNORE INTO members(conversation_id, actor_id, role, joined_at) VALUES(?,?,?,?)",
+      "INSERT OR IGNORE INTO members(conversation_id, actor_id, role, joined_at, notify) VALUES(?,?,?,?,?)",
     )
-    .run(convId, actorId, role, ctx.now());
+    .run(convId, actorId, role, ctx.now(), notify);
   return getMember(ctx, convId, actorId)!;
 }
 
@@ -233,7 +249,52 @@ export function listForActor(ctx: Ctx, actorId: number): Conversation[] {
         ORDER BY (c.kind = 'public') DESC, c.slug IS NULL, c.slug, c.id`,
     )
     .all(actorId) as ConvRow[];
-  return rows.map(toConv);
+
+  // Rozmowy prywatne dostaja UCZESTNIKOW od razu. Bez tego klient zna tylko id
+  // i po zalogowaniu pokazuje trzy identyczne wiersze "Wiadomosc" bez twarzy -
+  // nazwa rozmowy pojawiala sie dopiero, gdy sie ja otworzylo i przyszly
+  // wiadomosci. W komunikatorze lista rozmow JEST nawigacja, wiec musi byc
+  // czytelna od pierwszej klatki (Messenger: twarze i imiona, nie tresc).
+  const rozmowcy = ctx.db.prepare(
+    `SELECT m.conversation_id AS cid, a.handle, a.display_name, a.kind
+       FROM members m JOIN actors a ON a.id = m.actor_id
+      WHERE m.actor_id <> ? AND m.conversation_id IN (
+        SELECT conversation_id FROM members WHERE actor_id = ?
+      )`,
+  ).all(actorId, actorId) as Array<{ cid: number; handle: string; display_name: string; kind: string }>;
+  const wgRozmowy = new Map<number, Array<{ handle: string; displayName: string; kind: string }>>();
+  for (const r of rozmowcy) {
+    const lista = wgRozmowy.get(r.cid) ?? [];
+    lista.push({ handle: r.handle, displayName: r.display_name, kind: r.kind });
+    wgRozmowy.set(r.cid, lista);
+  }
+  return rows.map((r) => {
+    const conv = toConv(r);
+    if (r.kind === "dm" || r.kind === "group") {
+      return { ...conv, others: wgRozmowy.get(r.id) ?? [] };
+    }
+    return conv;
+  });
+}
+
+/** Czlonkostwa aktora: rola, ustawienie powiadomien, znacznik odczytu.
+ *  Potrzebne i przy /api/me, i przy /api/conversations - wiec mieszka w rdzeniu,
+ *  a nie w jednej z tras. */
+export function myMemberships(ctx: Ctx, actorId: number): Member[] {
+  const rows = ctx.db
+    .prepare("SELECT * FROM members WHERE actor_id = ? ORDER BY conversation_id")
+    .all(actorId) as Array<{
+      conversation_id: number; actor_id: number; role: Role;
+      joined_at: number; notify: Notify; last_read_message_id: number;
+    }>;
+  return rows.map((r) => ({
+    conversationId: r.conversation_id,
+    actorId: r.actor_id,
+    role: r.role,
+    joinedAt: r.joined_at,
+    notify: r.notify,
+    lastReadMessageId: r.last_read_message_id,
+  }));
 }
 
 export function setNotify(ctx: Ctx, convId: number, actorId: number, notify: Notify): void {

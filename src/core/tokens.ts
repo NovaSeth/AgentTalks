@@ -133,8 +133,17 @@ export function verifyToken(ctx: Ctx, token: string): Actor | null {
   return actor;
 }
 
-export function revokeToken(ctx: Ctx, tokenId: number): void {
-  ctx.db.prepare("UPDATE tokens SET revoked_at = ? WHERE id = ?").run(ctx.now(), tokenId);
+/**
+ * Odwolanie tokenu. Zwraca, czy COS SIE ZMIENILO - i to nie jest kosmetyka:
+ * odwolywanie tokenu robi sie w chwili, gdy podejrzewa sie wyciek, a "ok"
+ * w odpowiedzi na literowke w numerze wyglada dokladnie tak samo jak "ok" na
+ * realne odwolanie. Operator przestaje wtedy szukac, majac wyciek nadal aktywny.
+ */
+export function revokeToken(ctx: Ctx, tokenId: number): boolean {
+  const r = ctx.db
+    .prepare("UPDATE tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+    .run(ctx.now(), tokenId);
+  return Number(r.changes ?? 0) > 0;
 }
 
 export function listTokens(ctx: Ctx, actorId: number): TokenInfo[] {

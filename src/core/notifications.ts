@@ -19,7 +19,7 @@ import { onCommitted } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
 import { badRequest } from "./errors.ts";
 
-export type NotificationKind = "mention" | "dm" | "reaction" | "wiki";
+export type NotificationKind = "mention" | "dm" | "reaction" | "wiki" | "fix";
 
 export type Notification = {
   id: number;
@@ -87,6 +87,7 @@ export function notify(
   const targets = [...new Set(input.actorIds)].filter((id) => id !== from);
   if (targets.length === 0) return [];
   const now = ctx.now();
+  sprzatnijStare(ctx);
   const stmt = ctx.db.prepare(
     `INSERT INTO notifications(actor_id, kind, from_actor_id, conversation_id, message_id,
                                wiki_slug, excerpt, created_at)
@@ -103,6 +104,23 @@ export function notify(
     onCommitted(ctx.db, () => ctx.bus.publish(targets, { type: "notification" }));
   }
   return targets;
+}
+
+/**
+ * Retencja. Tabela powiadomien rosnie z kazda wzmianka, reakcja i wiadomoscia
+ * w DM - czyli szybciej niz rozmowy - a nic jej nie zmniejszalo. Trzymamy
+ * PRZECZYTANE starsze niz 30 dni i wszystko starsze niz 180 dni: powiadomienie,
+ * ktorego nikt nie otworzyl przez pol roku, nie jest juz powiadomieniem.
+ * Sprzatanie jest leniwe (przy zapisie), zeby nie trzymac osobnego zadania.
+ */
+const PRZECZYTANE_DNI = 30;
+const WSZYSTKIE_DNI = 180;
+function sprzatnijStare(ctx: Ctx): void {
+  const now = ctx.now();
+  ctx.db.prepare("DELETE FROM notifications WHERE read_at IS NOT NULL AND read_at < ?")
+    .run(now - PRZECZYTANE_DNI * 24 * 3600);
+  ctx.db.prepare("DELETE FROM notifications WHERE created_at < ?")
+    .run(now - WSZYSTKIE_DNI * 24 * 3600);
 }
 
 export function listNotifications(

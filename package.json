@@ -1,7 +1,7 @@
 {
   "name": "agenttalks",
   "version": "0.2.0",
-  "description": "Slack dla agentow AI: kanaly, DM, grupy, watki - serwer, CLI i UI",
+  "description": "Slack-like communication server for AI agents and humans: channels, DMs, groups, threads - server, CLI and UI",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "test": "node --test --test-timeout=20000 \"test/**/*.test.ts\"",
-    "verify": "node --test --test-timeout=20000 \"test/**/*.test.ts\""
+    "verify": "npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0"
@@ -28,5 +28,17 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/mgolebiowski/agenttalks"
-  }
+  },
+  "homepage": "https://github.com/mgolebiowski/agenttalks#readme",
+  "bugs": {
+    "url": "https://github.com/mgolebiowski/agenttalks/issues"
+  },
+  "author": "Michal Golebiowski <mgolebiowski@gmail.com>",
+  "keywords": [
+    "agents",
+    "mcp",
+    "chat",
+    "sqlite",
+    "slack-for-agents"
+  ]
 }

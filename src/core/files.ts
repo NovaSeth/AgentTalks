@@ -222,12 +222,56 @@ export function listFiles(ctx: Ctx, q: { conversationId: number; actorId: number
   return rows.map(toInfo);
 }
 
-/** Sprzatanie wygaslych. Wolane leniwie przy listowaniu i okresowo z serwera. */
+/**
+ * Kasowanie zalacznikow skasowanej wiadomosci. Bez tego "skasuj" znaczyloby
+ * "przestan pokazywac w liscie": wiersz wiadomosci traci tresc, ale bajty leza
+ * dalej na dysku i sa pobieralne przez GET /api/files/:id, bo ta trasa pyta
+ * o plik, a nie o wiadomosc, przy ktorej wisi.
+ */
+export function deleteFilesOfMessage(ctx: Ctx, messageId: number): number {
+  const rows = ctx.db
+    .prepare("SELECT * FROM files WHERE message_id = ? AND deleted_at IS NULL")
+    .all(messageId) as FileRow[];
+  for (const row of rows) deleteFileRow(ctx, row);
+  return rows.length;
+}
+
+/** To samo dla strony wiki: skasowanie strony nie moze zostawiac jej zalacznikow
+ *  jako osieroconych bajtow, ktorych nikt juz nie zobaczy w zadnym interfejsie,
+ *  a ktore dalej mozna pobrac, znajac id. */
+export function deleteFilesOfWikiPage(ctx: Ctx, wikiPageId: number): number {
+  const rows = ctx.db
+    .prepare("SELECT * FROM files WHERE wiki_page_id = ? AND deleted_at IS NULL")
+    .all(wikiPageId) as FileRow[];
+  for (const row of rows) deleteFileRow(ctx, row);
+  return rows.length;
+}
+
+/**
+ * Sprzatanie wygaslych. Wolane leniwie przy listowaniu i okresowo z serwera.
+ *
+ * Drugi przebieg (bajty-sieroty) istnieje, bo `deleteFileRow` moze nie usunac
+ * pliku z dysku - i wtedy komentarz "kolejny sweep sprobuje jeszcze raz" musi
+ * byc prawda, a nie pociecha. Bez tego przebiegu nikt by nie sprobowal.
+ */
 export function sweepExpired(ctx: Ctx): number {
   const rows = ctx.db
     .prepare("SELECT * FROM files WHERE deleted_at IS NULL AND expires_at IS NOT NULL AND expires_at <= ?")
     .all(ctx.now()) as FileRow[];
   for (const row of rows) deleteFileRow(ctx, row);
+
+  // Sieroty: wiersz oznaczony jako skasowany, a plik nadal na dysku.
+  const sieroty = ctx.db
+    .prepare("SELECT * FROM files WHERE deleted_at IS NOT NULL LIMIT 200")
+    .all() as FileRow[];
+  for (const row of sieroty) {
+    if (!existsSync(row.path)) continue;
+    try {
+      rmSync(row.path, { force: true });
+    } catch {
+      // Nastepny przebieg sprobuje ponownie - teraz to zdanie jest prawdziwe.
+    }
+  }
   return rows.length;
 }
 
@@ -276,7 +320,8 @@ function deleteFileRow(ctx: Ctx, row: FileRow): void {
     rmSync(row.path, { force: true });
   } catch {
     // Wpis jest juz oznaczony jako skasowany, wiec bajty-sieroty nie beda
-    // nikomu serwowane; kolejny sweep sprobuje jeszcze raz nic nie psujac.
+    // nikomu serwowane; kolejny przebieg sweepExpired sprobuje ponownie
+    // (przebieg "sieroty" - patrz tam).
   }
 }
 

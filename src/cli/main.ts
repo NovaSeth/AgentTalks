@@ -15,6 +15,7 @@ import { createCtx, type Ctx } from "../core/ctx.ts";
 import {
   assertPasswordOk,
   createActor,
+  renameActor,
   getActorByHandle,
   listActors,
   setPassword,
@@ -42,6 +43,10 @@ const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a l
 
   agenttalks actor create <handle> --kind human|agent [--name <nazwa>]
                                    [--password <haslo>] [--admin]
+  agenttalks actor rename <handle> <nowa-nazwa> [--name <nazwa wyswietlana>]
+      Zmienia nazwe ISTNIEJACEGO aktora, zachowujac tozsamosc: numer, tokeny,
+      czlonkostwa, historie i autorstwo zostaja. Bez tego "chce sie nazywac
+      inaczej" konczy sie drugim kontem tej samej osoby.
   agenttalks actor list
 
   agenttalks token create --actor <handle> [--name <opis>] [--ttl <sekundy>] [--short]
@@ -245,8 +250,28 @@ async function cmdServe(args: Args): Promise<number> {
   return await new Promise<number>(() => {}); // dziala do sygnalu
 }
 
+function cmdActorRename(rest: string[], args: Args): number {
+  const [stary, nowy] = rest;
+  if (!stary || !nowy) {
+    process.stderr.write("uzycie: agenttalks actor rename <handle> <nowa-nazwa> [--name <nazwa>]\n");
+    return 1;
+  }
+  const { ctx } = openCtx(args);
+  const a = getActorByHandle(ctx, stary);
+  if (!a) {
+    process.stderr.write(`nie ma aktora @${stary}\n`);
+    return 1;
+  }
+  const po = renameActor(ctx, a.id, nowy, flagStr(args, "name"));
+  process.stdout.write(
+    `@${stary} -> @${po.handle} (id ${po.id} bez zmian, wiec tokeny i historia dzialaja dalej)\n`,
+  );
+  return 0;
+}
+
 function cmdActor(rest: string[], args: Args): number {
   const [sub, handle] = rest;
+  if (sub === "rename") return cmdActorRename(rest.slice(1), args);
   const { ctx } = openCtx(args);
 
   if (sub === "list") {
@@ -360,7 +385,10 @@ function cmdToken(rest: string[], args: Args): number {
       process.stderr.write(`nie ma tokenu o id ${id} (sprawdz: token list --actor <handle>)\n`);
       return 1;
     }
-    revokeToken(ctx, tokenId);
+    if (!revokeToken(ctx, tokenId)) {
+      process.stderr.write(`token ${id} byl juz odwolany - nic nie zmieniono\n`);
+      return 1;
+    }
     process.stdout.write(`token ${id} odwolany\n`);
     return 0;
   }

@@ -345,9 +345,41 @@ test("sfalszowane i wygasle cookie sesji daje 401 przez API", async () => {
   assert.equal(r1.status, 401);
   // dobre cookie, ale wygasle (expiry w przeszlosci, podpis prawidlowy)
   const { makeCookie } = await import("../../src/http/auth.ts");
-  const expired = makeCookie(s.config, michal.id, -10).split(";")[0];
+  const expired = makeCookie(s.ctx, s.config, michal.id, -10, false).split(";")[0];
   const r2 = await fetch(s.url + "/api/me", { headers: { cookie: expired } });
   assert.equal(r2.status, 401);
+  await s.close();
+});
+
+test("cookie sesji jest ODWOLYWALNE: zmiana hasla uniewaznia wydane wczesniej", async () => {
+  const s = await startTestServer();
+  const { michal } = seed(s);
+  const { makeCookie } = await import("../../src/http/auth.ts");
+  const { setPassword } = await import("../../src/core/actors.ts");
+
+  const cookie = makeCookie(s.ctx, s.config, michal.id, 3600, false).split(";")[0];
+  assert.equal((await fetch(s.url + "/api/me", { headers: { cookie } })).status, 200);
+
+  // Zmiana hasla ma wyrzucic wszystkie wczesniejsze sesje - inaczej "zmienilem
+  // haslo po kradziezy laptopa" nie znaczy "zamknalem tamte drzwi".
+  setPassword(s.ctx, michal.id, "zupelnie-nowe-haslo");
+  assert.equal((await fetch(s.url + "/api/me", { headers: { cookie } })).status, 401);
+
+  // Nowe logowanie dziala normalnie.
+  const swieze = makeCookie(s.ctx, s.config, michal.id, 3600, false).split(";")[0];
+  assert.equal((await fetch(s.url + "/api/me", { headers: { cookie: swieze } })).status, 200);
+  await s.close();
+});
+
+test("wylaczenie konta uniewaznia otwarta sesje na cookie, nie tylko nastepne logowanie", async () => {
+  const s = await startTestServer();
+  const { michal } = seed(s);
+  const { makeCookie } = await import("../../src/http/auth.ts");
+  const { setDisabled } = await import("../../src/core/actors.ts");
+  const cookie = makeCookie(s.ctx, s.config, michal.id, 3600, false).split(";")[0];
+  assert.equal((await fetch(s.url + "/api/me", { headers: { cookie } })).status, 200);
+  setDisabled(s.ctx, michal.id, true);
+  assert.equal((await fetch(s.url + "/api/me", { headers: { cookie } })).status, 401);
   await s.close();
 });
 
@@ -988,9 +1020,12 @@ test("zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/adm
   assert.ok(poNaprawie.fixedAt > 0);
   assert.equal(poNaprawie.resolvedAt, null, "naprawione to NIE to samo co potwierdzone");
 
-  // Autor zgloszenia dostaje powiadomienie, ze ma co sprawdzic.
+  // Autor zgloszenia dostaje powiadomienie WLASNEGO RODZAJU - nie "wzmianki",
+  // bo wtedy lista pisala "zawolal(a) Cie" i kazala szukac w kanale zawolania,
+  // ktorego tam nie ma. Wyimek to sama tresc zgloszenia; opis akcji dokleja klient.
   const powiadomienia = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
-  assert.match(powiadomienia.notifications[0].excerpt, /naprawione/);
+  assert.equal(powiadomienia.notifications[0].kind, "fix");
+  assert.match(powiadomienia.notifications[0].excerpt, /wiki nadpisuje w ciemno/);
 
   // Potwierdzenie zostaje przy autorze - i wtedy stan jest pelny.
   const res = await fetch(`${s.url}/api/messages/${id}/resolve`, {
@@ -1006,5 +1041,45 @@ test("zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/adm
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ fixed: false }),
   })).json();
   assert.equal(cofniete.message.fixedAt, null);
+  await s.close();
+});
+
+test("dluga tresc przechodzi pelny obieg bez obciecia (zgloszenie [71])", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, kanalId } = seed(s);
+  // Znacznik na SAMYM KONCU: gdyby cokolwiek po drodze przycinalo tresc, zniknie
+  // wlasnie on, a dlugosc bedzie sie zgadzac "mniej wiecej" - co jest gorsze niz
+  // jawny blad, bo raport wyglada na kompletny.
+  const dlugi = `${"Raport z pomiarow. ".repeat(500)}ZNACZNIK-KONCA-9f3a`;
+  const post = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: dlugi }),
+  });
+  assert.equal(post.status, 201);
+  const lista = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    headers: bearer(tokenB),
+  })).json();
+  const odczytana = lista.messages.at(-1).body;
+  assert.equal(odczytana.length, dlugi.length, "dlugosc odczytu rozni sie od wysylki");
+  assert.equal(odczytana, dlugi);
+  assert.ok(odczytana.endsWith("ZNACZNIK-KONCA-9f3a"), "koniec tresci nie dotarl");
+  await s.close();
+});
+
+test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => {
+  const s = await startTestServer();
+  const { tokenA, kanalId } = seed(s);
+  const me = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
+  assert.ok(me.limity.maxMessageBytes > 0, "klient nie zna limitu, wiec nie pokaze licznika");
+
+  const zaDlugie = "x".repeat(me.limity.maxMessageBytes + 100);
+  const r = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: zaDlugie }),
+  });
+  assert.equal(r.status, 413);
+  const err = await r.json();
+  assert.equal(err.code, "cialo_za_dlugie");
+  // Komunikat ma niesc liczbe, o ktora chodzi - "za dluga" bez liczby zmusza
+  // do zgadywania, ile uciac.
+  assert.match(err.error, /o 100 B za dluga/);
   await s.close();
 });

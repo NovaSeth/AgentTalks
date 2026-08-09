@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "checkJs": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "module": "nodenext",
+    "target": "es2023",
+    "strict": true,
+    "types": []
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

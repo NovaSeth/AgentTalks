@@ -9,7 +9,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Ctx } from "../core/ctx.ts";
 import type { Config } from "../config.ts";
 import type { Actor } from "../core/actors.ts";
-import { getActor } from "../core/actors.ts";
+import { getActor, sessionEpoch } from "../core/actors.ts";
 import { tokenTrouble, verifyToken } from "../core/tokens.ts";
 import { forbidden, unauthorized } from "../core/errors.ts";
 import type { Req, RouteCtx } from "./router.ts";
@@ -23,12 +23,26 @@ function sign(secret: string, payload: string): string {
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-/** Wartosc cookie: "<actorId>.<wygasa>.<hmac>". Bez stanu po stronie serwera, bo
- *  sesja czlowieka nie potrzebuje niczego wiecej, a tabela sesji HTTP to kolejna
- *  rzecz do sprzatania. */
-export function makeCookie(config: Config, actorId: number, ttlSec: number): string {
+/**
+ * Wartosc cookie: "<actorId>.<wygasa>.<epoka>.<hmac>". Nadal bez tabeli sesji po
+ * stronie serwera, ale JUZ ODWOLYWALNE: `epoka` to licznik z wiersza aktora,
+ * podbijany przy zmianie hasla i przy wylaczeniu konta, wiec stare ciasteczka
+ * przestaja pasowac do podpisu. Bez tego "zmienilem haslo" nie znaczylo
+ * "wyrzucilem tamta sesje".
+ *
+ * `secure` przychodzi z zewnatrz, bo tylko wywolujacy wie, czy zadanie przyszlo
+ * po HTTPS: sama flaga trustProxy nie wystarcza, a cookie sesji bez atrybutu
+ * Secure moze wyciec przez pierwsze zadanie po http.
+ */
+export function makeCookie(
+  ctx: Ctx,
+  config: Config,
+  actorId: number,
+  ttlSec: number,
+  secure: boolean,
+): string {
   const expiry = Math.floor(Date.now() / 1000) + ttlSec;
-  const payload = `${actorId}.${expiry}`;
+  const payload = `${actorId}.${expiry}.${sessionEpoch(ctx, actorId)}`;
   const value = `${payload}.${sign(config.secret, payload)}`;
   const attrs = [
     `${COOKIE_NAME}=${value}`,
@@ -37,8 +51,16 @@ export function makeCookie(config: Config, actorId: number, ttlSec: number): str
     "SameSite=Lax",
     `Max-Age=${Math.max(ttlSec, 0)}`,
   ];
-  if (config.trustProxy) attrs.push("Secure");
+  if (secure || config.trustProxy) attrs.push("Secure");
   return attrs.join("; ");
+}
+
+/** Czy to zadanie przyszlo po HTTPS. Za proxy prawde niesie X-Forwarded-Proto;
+ *  bezposrednio - obecnosc gniazda TLS. */
+export function requestIsSecure(req: Req): boolean {
+  const proto = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0].trim();
+  if (proto) return proto === "https";
+  return !!(req.socket as { encrypted?: boolean }).encrypted;
 }
 
 export function clearCookie(): string {
@@ -57,15 +79,19 @@ function parseCookies(header: string | undefined): Record<string, string> {
 
 function actorFromCookie(ctx: Ctx, config: Config, raw: string | undefined): Actor | null {
   if (!raw) return null;
-  const [idPart, expiryPart, mac] = raw.split(".");
-  if (!idPart || !expiryPart || !mac) return null;
-  const expected = sign(config.secret, `${idPart}.${expiryPart}`);
+  const [idPart, expiryPart, epochPart, mac] = raw.split(".");
+  if (!idPart || !expiryPart || !epochPart || !mac) return null;
+  const expected = sign(config.secret, `${idPart}.${expiryPart}.${epochPart}`);
   const a = Buffer.from(mac, "utf8");
   const b = Buffer.from(expected, "utf8");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   if (Number(expiryPart) <= Math.floor(Date.now() / 1000)) return null;
   const actor = getActor(ctx, Number(idPart));
-  return actor && !actor.disabledAt ? actor : null;
+  if (!actor || actor.disabledAt) return null;
+  // Epoka z podpisu musi zgadzac sie z biezaca: rozjazd znaczy, ze aktor
+  // zmienil haslo albo zostal wylaczony po wydaniu tego ciasteczka.
+  if (Number(epochPart) !== sessionEpoch(ctx, actor.id)) return null;
+  return actor;
 }
 
 export function authenticate(ctx: Ctx, config: Config, req: Req): Auth | null {

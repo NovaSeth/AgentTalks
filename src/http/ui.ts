@@ -57,19 +57,52 @@ function baseUrlFrom(req: IncomingMessage, config: Config): string {
   return `${proto}://${host}`;
 }
 
-/** Stempel tresci UI: krotki hash app.js + app.css. Liczony raz na proces, bo
- *  pliki nie zmieniaja sie w locie - zmiana znaczy nowy obraz i nowy proces. */
+// Moduly interfejsu. Przegladarka sama zaciaga zaleznosci przez `import`, wiec
+// bundler jest niepotrzebny - ale trasa serwujaca musi miec BIALA LISTE nazw.
+// Sklejanie sciezki z wejscia uzytkownika, nawet z normalizacja, predzej czy
+// pozniej daje path traversal; lista nazw nie daje go nigdy.
+const UI_MODULES = [
+  "app.js", "dom.js", "ikony.js", "markdown.js", "api.js", "stan.js", "toasty.js",
+  "dane.js", "akcje.js", "zdarzenia-sse.js", "widok-login.js", "widok-sidebar.js",
+  "widok-czat.js", "widok-wiki.js", "widok-powiadomienia.js", "widok-admin.js", "szukaj.js",
+];
+const UI_MODULE_SET = new Set(UI_MODULES);
+
+/** Stempel tresci UI: krotki hash CSS i WSZYSTKICH modulow. Liczony raz na
+ *  proces, bo pliki nie zmieniaja sie w locie - zmiana znaczy nowy obraz. */
 let stampCache: string | null = null;
 export function assetStamp(): string {
   if (stampCache) return stampCache;
   const h = createHash("sha256");
-  for (const name of ["app.js", "app.css"]) {
+  try {
+    h.update(readFileSync(uiFile("app.css")));
+  } catch { /* brak pliku = stempel z tego, co jest */ }
+  for (const name of UI_MODULES) {
     try {
-      h.update(readFileSync(uiFile(name)));
-    } catch { /* brak pliku = stempel z tego, co jest */ }
+      h.update(readFileSync(uiFile(`js/${name}`)));
+    } catch { /* jw. */ }
   }
   stampCache = h.digest("hex").slice(0, 8);
   return stampCache;
+}
+
+// Stempel doklejamy TAKZE do adresow w importach: swiezy app.js z ?v=X musi
+// zaciagnac swieze ./stan.js?v=X, a nie stara kopie spod goluteńkiego adresu -
+// inaczej przegladarka miesza nowy modul ze starym i awaria wyglada losowo.
+const moduleCache = new Map<string, string>();
+function serveModule(res: ServerResponse, name: string): void {
+  let body = moduleCache.get(name);
+  if (body === undefined) {
+    body = readOnce(uiFile(`js/${name}`))
+      .replace(/from "\.\/([\w.-]+\.js)"/g, (_m, dep) => `from "./${dep}?v=${assetStamp()}"`);
+    moduleCache.set(name, body);
+  }
+  res.writeHead(200, {
+    "content-type": TYPES.js,
+    "cache-control": "no-cache",
+    "x-robots-tag": "noindex, nofollow",
+  });
+  res.end(body);
 }
 
 function serveStatic(res: ServerResponse, path: string, opts?: { noindex?: boolean }): void {
@@ -220,7 +253,7 @@ export function registerUiRoutes(router: Router): void {
   const shell = (_req: IncomingMessage, res: ServerResponse) => {
     const html = readOnce(uiFile("index.html"))
       .replace('href="/app.css"', `href="/app.css?v=${assetStamp()}"`)
-      .replace('src="/app.js"', `src="/app.js?v=${assetStamp()}"`);
+      .replace('src="/js/app.js"', `src="/js/app.js?v=${assetStamp()}"`);
     res.writeHead(200, {
       "content-type": TYPES.html,
       "x-robots-tag": "noindex, nofollow",
@@ -237,7 +270,14 @@ export function registerUiRoutes(router: Router): void {
     json(res, 200, { stamp: assetStamp() });
   });
   router.add("GET", "/app.css", (_req, res) => serveStatic(res, uiFile("app.css")));
-  router.add("GET", "/app.js", (_req, res) => serveStatic(res, uiFile("app.js")));
+  router.add("GET", "/js/:plik", (_req, res, rc) => {
+    const name = rc.params.plik ?? "";
+    if (!UI_MODULE_SET.has(name)) {
+      json(res, 404, { error: "nie ma takiego pliku", code: "brak_pliku" });
+      return;
+    }
+    serveModule(res, name);
+  });
 
   // Znak AgentTalks: jeden wektor + PNG dla miejsc, ktore SVG nie wezma
   // (apple-touch-icon, stare przegladarki, manifest).

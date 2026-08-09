@@ -93,7 +93,18 @@ export function registerSession(
       labelOrNull: input.label ?? null,
       kindOrNull: input.kind ?? null,
     });
+  sprzatnijMartweSesje(ctx);
   ctx.bus.publish(allActorIds(ctx), { type: "presence" });
+}
+
+/** Sprzatanie martwych sesji. Tabela `sessions` rosla bez konca (kazde
+ *  uruchomienie CLI zostawialo wiersz), a `presence()` czyta ja W CALOSCI przy
+ *  kazdym odczycie - wiec koszt listy obecnych rosl z historia uruchomien, a nie
+ *  z liczba obecnych. Zamiast osobnego zadania: sprzatamy leniwie, przy zapisie. */
+const MARTWA_SESJA_SEK = 7 * 24 * 3600;
+function sprzatnijMartweSesje(ctx: Ctx): void {
+  ctx.db.prepare("DELETE FROM sessions WHERE COALESCE(ended_at, last_seen_at) < ?")
+    .run(ctx.now() - MARTWA_SESJA_SEK);
 }
 
 export function heartbeat(ctx: Ctx, sessionId: string): void {

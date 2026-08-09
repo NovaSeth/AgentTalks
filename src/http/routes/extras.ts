@@ -22,7 +22,7 @@ import {
 } from "../../core/notifications.ts";
 import { badRequest, notFound } from "../../core/errors.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
-import { int, json, readJson, readRaw, str } from "../respond.ts";
+import { int, intDodatni, json, readJson, readRaw, str } from "../respond.ts";
 import type { Router } from "../router.ts";
 
 // Typy MIME, ktore przegladarka umie WYKONAC w origin aplikacji (skrypt, HTML,
@@ -31,6 +31,20 @@ import type { Router } from "../router.ts";
 // sprowadzamy je do inertnego octet-stream; nazwa pliku zostaje.
 const ACTIVE_MIME =
   /^(?:text\/html|application\/xhtml\+xml|image\/svg\+xml|application\/(?:x-)?javascript|text\/javascript|text\/xml|application\/xml)\b/i;
+
+/** Nazwa pliku z naglowka. `decodeURIComponent` rzuca URIError na zlym
+ *  %-kodowaniu (np. "raport%zz.txt"), a nieobsluzony URIError to 500 - czyli
+ *  serwer melduje wlasna awarie tam, gdzie to klient przyslal smiec. */
+function dekodujNazwe(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw badRequest(
+      "zla_nazwa",
+      "naglowek X-File-Name ma nieprawidlowe kodowanie procentowe (uzyj encodeURIComponent)",
+    );
+  }
+}
 
 export function registerExtraRoutes(router: Router): void {
   // --- centrum powiadomien -------------------------------------------------
@@ -67,15 +81,29 @@ export function registerExtraRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     json(res, 200, {
       messages: mentionsOf(rc.ctx, actor.id, {
-        afterId: int(rc.query.get("after") ?? undefined),
-        limit: int(rc.query.get("limit") ?? undefined),
+        afterId: intDodatni(rc.query.get("after") ?? undefined),
+        limit: intDodatni(rc.query.get("limit") ?? undefined),
       }),
     });
   });
 
   router.add("GET", "/api/digest", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
-    json(res, 200, { digest: digestFor(rc.ctx, actor.id) });
+    const digest = digestFor(rc.ctx, actor.id);
+    // ?summary=1 zwraca sam licznik. Panel boczny odpytuje o digest co 30 s
+    // tylko po to, zeby pokazac JEDNA LICZBE - a pelna odpowiedz to dziesiatki
+    // kilobajtow tresci wiadomosci. Pelny digest pobiera sie dopiero przy
+    // otwarciu podsumowania.
+    const samoPodsumowanie = ["1", "true", "yes"].includes(
+      String(rc.query.get("summary") ?? "").toLowerCase(),
+    );
+    if (samoPodsumowanie) {
+      json(res, 200, {
+        digest: digest ? { count: digest.count, sinceId: digest.sinceId } : null,
+      });
+      return;
+    }
+    json(res, 200, { digest });
   });
 
   // --- piny ----------------------------------------------------------------
@@ -146,7 +174,7 @@ export function registerExtraRoutes(router: Router): void {
     const result = storeFile(rc.ctx, rc.config.filesDir, {
       actorId: actor.id,
       conversationId: Number(rc.params.id),
-      name: decodeURIComponent(nameHeader),
+      name: dekodujNazwe(nameHeader),
       data,
       mime: str(req.headers["content-type"]) ?? "application/octet-stream",
       maxBytes: rc.config.maxFileBytes,

@@ -93,6 +93,10 @@ export function openQuestions(
          FROM questions qu
          JOIN conversations c ON c.id = qu.conversation_id
         WHERE qu.closed_at IS NULL
+          -- Kanal zarchiwizowany nie przyjmuje juz wiadomosci, wiec na pytanie
+          -- w nim NIE DA SIE odpowiedziec. Zostawianie go na liscie "do podjecia"
+          -- to licznik, ktorego nie da sie wyzerowac inaczej niz ignorowaniem.
+          AND c.archived_at IS NULL
           AND (? IS NULL OR qu.conversation_id = ?)
           AND (c.kind = 'public'
                OR EXISTS (SELECT 1 FROM members m

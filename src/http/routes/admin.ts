@@ -9,7 +9,7 @@
  * z konsoli serwera (agenttalks actor create ... --admin); instalacja domyslna
  * nie ma ZADNEGO konta z haslem, wiec publiczny setup niczego nie wystawia.
  */
-import { getActor, listActors, setDisabled } from "../../core/actors.ts";
+import { getActor, listActors, renameActor, setDisabled } from "../../core/actors.ts";
 import { createInvite, listInvites, revokeInvite } from "../../core/invites.ts";
 import { listTokens, revokeToken } from "../../core/tokens.ts";
 import { actorLiveness } from "../../core/presence.ts";
@@ -32,11 +32,18 @@ export function registerAdminRoutes(router: Router): void {
   router.add("GET", "/api/admin/actors", (_req, res, rc) => {
     requireHumanAdmin(rc);
     const now = Math.floor(Date.now() / 1000);
+    // JEDNO zapytanie zgrupowane zamiast pelnego skanu tabeli wiadomosci na
+    // KAZDEGO aktora: przy 20 kontach panel robil 20 skanow calej historii.
+    // Indeks messages(actor_id) doszedl w migracji 13.
+    const statystyki = new Map<number, { n: number; last: number | null }>();
+    for (const r of rc.ctx.db.prepare(
+      "SELECT actor_id, COUNT(*) AS n, MAX(ts) AS last FROM messages WHERE deleted_at IS NULL GROUP BY actor_id",
+    ).all() as Array<{ actor_id: number; n: number; last: number | null }>) {
+      statystyki.set(r.actor_id, { n: r.n, last: r.last });
+    }
     const actors = listActors(rc.ctx).map((a) => {
       const live = actorLiveness(rc.ctx, a.id);
-      const msg = rc.ctx.db.prepare(
-        "SELECT COUNT(*) AS n, MAX(ts) AS last FROM messages WHERE actor_id = ? AND deleted_at IS NULL",
-      ).get(a.id) as { n: number; last: number | null };
+      const msg = statystyki.get(a.id) ?? { n: 0, last: null };
       const lastSeen = Math.max(live.lastSeenAt ?? 0, msg.last ?? 0) || null;
       return {
         ...a,
@@ -78,8 +85,24 @@ export function registerAdminRoutes(router: Router): void {
   router.add("DELETE", "/api/admin/tokens/:id", (req, res, rc) => {
     requireHumanAdmin(rc);
     assertCsrf(rc, req);
-    revokeToken(rc.ctx, Number(rc.params.id));
+    if (!revokeToken(rc.ctx, Number(rc.params.id))) {
+      throw notFound("token", `nie ma aktywnego tokenu o id ${rc.params.id} (moze juz odwolany?)`);
+    }
     json(res, 200, { ok: true });
+  });
+
+  /** Zmiana nazwy aktora z zachowaniem tozsamosci. Bez tej trasy jedyna droga
+   *  do "chce sie nazywac inaczej" jest nowe zaproszenie - czyli drugie konto
+   *  tej samej osoby, z rozjechana historia. */
+  router.add("PATCH", "/api/admin/actors/:id", async (req, res, rc) => {
+    requireHumanAdmin(rc);
+    assertCsrf(rc, req);
+    const body = await readJson(req, 1024);
+    const handle = str(body.handle);
+    if (!handle) throw badRequest("brak_nazwy", "podaj nowa nazwe w polu handle");
+    json(res, 200, {
+      actor: renameActor(rc.ctx, Number(rc.params.id), handle, str(body.displayName)),
+    });
   });
 
   router.add("POST", "/api/admin/actors/:id/disable", (req, res, rc) => {

@@ -30,6 +30,9 @@ import {
   ensureDirect,
   getBySlug,
   getConversation,
+  isMember,
+  join,
+  listForActor,
   members,
   type Conversation,
 } from "../core/conversations.ts";
@@ -46,6 +49,7 @@ import { markRead, unreadFor } from "../core/unread.ts";
 import { digestFor } from "../core/digest.ts";
 import { mentionsOf } from "../core/mentions.ts";
 import { acquire, listLeases, release } from "../core/leases.ts";
+import { getFileInfo } from "../core/files.ts";
 import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
 import { firstConnectNews } from "../core/news.ts";
 import { getPage, listPages, markPageSeen, pageHistory, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
@@ -98,6 +102,13 @@ export const TOOLS: ToolDef[] = [
         body: { type: "string", description: "Tresc wiadomosci." },
         threadId: { type: "number", description: "Opcjonalnie: id wiadomosci, na ktora odpowiadasz (watek)." },
         sessionId: { type: "string", description: "Opcjonalnie: id Twojej sesji." },
+        clientMsgId: {
+          type: "string",
+          description:
+            "Opcjonalnie: Twoje wlasne id tego wywolania. Przy PONOWIENIU (retry po zerwanym " +
+            "polaczeniu albo timeoucie) podaj TO SAMO id - serwer nie zdubluje wiadomosci, tylko " +
+            "odda te, ktora juz powstala.",
+        },
       },
       ["to", "body"],
     ),
@@ -128,6 +139,22 @@ export const TOOLS: ToolDef[] = [
     name: "talk_who",
     description: "Kto jest w kanale: sesje, stan (pisze/pracuje/aktywna/cisza), co robia.",
     inputSchema: S({}),
+  },
+  {
+    name: "talk_channels",
+    description:
+      "Lista WIDOCZNYCH konwersacji: publiczne kanaly (nawet te, do ktorych jeszcze nie " +
+      "dolaczyles) plus Twoje DM-y/grupy, z liczba nieprzeczytanych przy kazdej. Uzyj, zeby " +
+      "sie zorientowac, gdzie w ogole mozna pisac - zanim zgadniesz nazwe kanalu na sluch.",
+    inputSchema: S({}),
+  },
+  {
+    name: "talk_join",
+    description:
+      "Dolacz do kanalu, ktory widzisz (patrz talk_channels), ale nie jestes jeszcze jego " +
+      "czlonkiem. Kanal publiczny dolacza Cie i tak przy pierwszej wiadomosci - to narzedzie " +
+      "jest do dolaczenia BEZ pisania, np. zeby zaczac dostawac jego nieprzeczytane.",
+    inputSchema: S({ conversation: { type: "string", description: CONV_DESC } }, ["conversation"]),
   },
   {
     name: "talk_ask",
@@ -180,6 +207,14 @@ export const TOOLS: ToolDef[] = [
     inputSchema: S({ messageId: { type: "number" } }, ["messageId"]),
   },
   {
+    name: "talk_file_get",
+    description:
+      "Metadane pliku (nazwa, rozmiar, kto wyslal, czy wrazliwy) po id z talk_log/talk_search. " +
+      "Zwraca WYLACZNIE metadane, nie bajty - tresc binarna idzie przez REST: " +
+      "GET /api/files/<id> z tym samym tokenem bearer.",
+    inputSchema: S({ fileId: { type: "string" } }, ["fileId"]),
+  },
+  {
     name: "talk_digest",
     description: "Co sie dzialo pod Twoja nieobecnosc: kto, gdzie, wzmianki, otwarte pytania.",
     inputSchema: S({}),
@@ -217,13 +252,21 @@ export const TOOLS: ToolDef[] = [
     name: "talk_register",
     description:
       "Zarejestruj/odswiez swoja sesje w obecnosci. kind='ephemeral' dla wcielen jednorazowych. " +
-      "doing = nad czym pracujesz (widoczne dla innych).",
+      "doing = nad czym pracujesz (widoczne dla innych). Samo wywolanie NIE zapala 'pracuje' - " +
+      "to osobny sygnal (busy=true), ktory ma isc WYLACZNIE zaraz po realnym uzyciu narzedzia.",
     inputSchema: S(
       {
         sessionId: { type: "string" },
         label: { type: "string", description: "Czytelna etykieta sesji, np. 'vps' albo 'deploy-motowolt'." },
         kind: { type: "string", enum: ["durable", "ephemeral"] },
         doing: { type: "string" },
+        busy: {
+          type: "boolean",
+          description:
+            "Zapal kuleczke 'pracuje'. Wolaj WYLACZNIE zaraz po realnym uzyciu narzedzia " +
+            "(np. z hooka PostToolUse) - nigdy z samego pollowania/rejestracji, bo inaczej " +
+            "otwarta, bezczynna sesja udawalaby prace.",
+        },
       },
       ["sessionId"],
     ),
@@ -399,7 +442,15 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   out.push("", "=== OTWARTE PYTANIA ===");
   if (open.length === 0) out.push("  (nic)");
   for (const q of open) out.push(`  [q${q.id}] ${fmtMsg(ctx, q.message)}`);
-  const last = inboxAfter(ctx, actor.id, Math.max(0, lastMessageId(ctx) - 200)).slice(-8);
+  // Okno, z ktorego NAPRAWDE czytamy (nizej pokazujemy tylko ostatnie 8 z niego).
+  // Kursor do talk_read MUSI wskazywac poczatek TEGO okna, nie globalny MAX(id) -
+  // inaczej agent, ktory zobaczyl tylko 8 z np. 40 nieprzeczytanych, dostaje
+  // kursor przeskakujacy pozostale 32 BEZPOWROTNIE (audyt #1: talk_read(afterId)
+  // nigdy nie cofa sie ponizej podanego id). windowStart moze cofnac talk_read do
+  // paru juz pokazanych wiadomosci - to bezpieczna strona bledu, w odroznieniu od
+  // utraty danych.
+  const windowStart = Math.max(0, lastMessageId(ctx) - 200);
+  const last = inboxAfter(ctx, actor.id, windowStart).slice(-8);
   out.push("", "=== OSTATNIE WIADOMOSCI DO CIEBIE ===");
   if (last.length === 0) out.push("  (nic nowego)");
   for (const m of last) out.push(`  ${fmtMsg(ctx, m)}`);
@@ -407,7 +458,7 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   if (wn > 0) {
     out.push("", `=== WIKI ===`, `  ${wn} stron wiedzy - zanim zapytasz, sprawdz: wiki_search`);
   }
-  out.push("", `Kursor do talk_read: afterId=${lastMessageId(ctx)}`);
+  out.push("", `Kursor do talk_read: afterId=${windowStart}`);
   return out.join("\n");
 }
 
@@ -426,6 +477,9 @@ async function callTool(
   extra: {
     progressToken?: string | number;
     sendNotification?: (n: unknown) => Promise<void>;
+    /** Anulowanie ze strony klienta MCP (notifications/cancelled albo zerwane
+     *  polaczenie HTTP) - patrz waitForInbox, audyt #11. */
+    signal?: AbortSignal;
   },
 ): Promise<ToolResult> {
   const num = (v: unknown): number | undefined =>
@@ -460,6 +514,11 @@ async function callTool(
         body: strv(args.body) ?? "",
         threadId: num(args.threadId) ?? null,
         sessionId: strv(args.sessionId) ?? null,
+        // Idempotencja: retry z tym samym clientMsgId oddaje istniejaca wiadomosc
+        // zamiast dublowac ja (postMessage ma pelna dedup po dedup_key) - MCP jest
+        // dokladnie tym interfejsem, gdzie klient ponawia po zerwanym strumieniu
+        // (audyt #9).
+        clientMsgId: strv(args.clientMsgId) ?? null,
         maxBytes: config.maxMessageBytes,
       });
       let deliveryNote = "";
@@ -507,7 +566,13 @@ async function callTool(
         limit: num(args.limit) ?? 20,
         before: num(args.beforeId),
       });
-      markRead(ctx, actor.id, conv.id);
+      // Oznacz przeczytane TYLKO do faktycznie pokazanej wiadomosci. markRead bez
+      // messageId siega po domyslny znacznik (patrz unread.ts) - przy stronicowaniu
+      // wstecz (beforeId) to zerowaloby licznik nieprzeczytanych mimo pokazania
+      // wylacznie starej strony historii (audyt #2/#10). Bez beforeId ostatnia
+      // pokazana wiadomosc i tak jest najnowsza w rozmowie, wiec zachowanie sie
+      // nie zmienia w typowym przypadku.
+      if (messages.length) markRead(ctx, actor.id, conv.id, messages[messages.length - 1].id);
       if (messages.length === 0) return text(`Pusto w ${convName(ctx, conv.id)}.`);
       return text(messages.map((m) => fmtMsg(ctx, m)).join("\n"));
     }
@@ -524,6 +589,32 @@ async function callTool(
         return `[${state}] @${p.handle}${kindTag} (${p.label}) ostatnio ${age} min temu` +
           (p.doing ? ` - robi: ${p.doing}` : "");
       }).join("\n"));
+    }
+
+    case "talk_channels": {
+      // Parytet z REST (GET /api/conversations, atalk channels): bez tego agent
+      // na MCP nie mial jak odkryc kanalow, do ktorych jeszcze nie dolaczyl
+      // (audyt #5). listForActor pokazuje wszystkie publiczne plus wlasne DM/grupy.
+      const convs = listForActor(ctx, actor.id);
+      if (convs.length === 0) return text("Brak widocznych konwersacji.");
+      const unread = new Map(unreadFor(ctx, actor.id).map((r) => [r.conversationId, r.unread]));
+      const lines = convs.map((c) => {
+        const flags = [
+          isMember(ctx, c.id, actor.id) ? null : "NIE jestes czlonkiem - talk_join",
+          (unread.get(c.id) ?? 0) > 0 ? `${unread.get(c.id)} nieprzeczytanych` : null,
+        ].filter(Boolean).join(", ");
+        return `  ${convName(ctx, c.id)}${c.topic ? `  - ${c.topic}` : ""}${flags ? `  (${flags})` : ""}`;
+      });
+      return text(lines.join("\n"));
+    }
+
+    case "talk_join": {
+      // Odpowiednik POST /api/conversations/:id/join. resolveConversation juz
+      // pilnuje dostepu (assertCanRead) - kanal prywatny bez wczesniejszego
+      // czlonkostwa i tak odrzuci sie tym samym bledem, co gdziekolwiek indziej.
+      const conv = resolveConversation(ctx, actor, strv(args.conversation) ?? "");
+      join(ctx, conv.id, actor.id);
+      return text(`dolaczono do ${convName(ctx, conv.id)}`);
     }
 
     case "talk_ask": {
@@ -575,12 +666,31 @@ async function callTool(
       const root = num(args.messageId) ?? 0;
       const first = ctx.db.prepare("SELECT conversation_id, thread_id FROM messages WHERE id = ?")
         .get(root) as { conversation_id: number; thread_id: number | null } | undefined;
-      // Nieistniejaca wiadomosc i wiadomosc z kanalu bez dostepu daja ten sam blad
-      // ("brak dostepu" z assertCanRead) - id sa globalne, wiec rozne odpowiedzi
-      // zdradzalyby istnienie tresci w cudzych kanalach.
-      resolveConversation(ctx, actor, String(first ? first.conversation_id : -1));
+      // Nieistniejaca wiadomosc i wiadomosc z kanalu bez dostepu MAJA dac ten sam
+      // blad. Poprzednia wersja probowala to osiagnac wolajac resolveConversation
+      // z "-1", ale galaz numeryczna tam lapie /^\d+$/, ktore NIE dopasowuje minusa -
+      // "-1" spadal wiec do galezi @handle i dawal MYLACY blad "nie ma aktora -1"
+      // (audyt #7). assertCanRead(-1) daje ten sam "brak_dostepu" co dla cudzego
+      // kanalu prywatnego, bo konwersacja -1 nigdy nie istnieje.
+      assertCanRead(ctx, first ? first.conversation_id : -1, actor.id);
       const messages = listThread(ctx, first!.thread_id ?? root);
       return text(messages.map((m) => fmtMsg(ctx, m)).join("\n"));
+    }
+
+    case "talk_file_get": {
+      // Zwracamy metadane, nie bajty: MCP text-content nie jest miejscem na
+      // binaria, a REST juz ma trase do pobierania (audyt #5 - "jasny komunikat,
+      // ze binaria ida przez REST" jako dopuszczalna alternatywa dla pelnego
+      // przesylu tresci przez MCP).
+      const fileId = strv(args.fileId) ?? "";
+      const info = getFileInfo(ctx, fileId, actor.id);
+      if (!info) throw notFound("plik", `nie ma pliku ${fileId} (albo brak dostepu, albo wygasl)`);
+      return text(
+        `[${info.id}] ${info.name}  ${info.size} B  ${info.mime}\n` +
+          `wyslany: ${fmtTs(info.createdAt)}` +
+          `${info.sensitive ? "  [wrazliwy]" : ""}${info.burn ? "  [znika po pobraniu]" : ""}\n` +
+          `Bajty przez REST: GET /api/files/${info.id}  (naglowek: Authorization: Bearer <Twoj token>)`,
+      );
     }
 
     case "talk_digest": {
@@ -652,7 +762,12 @@ async function callTool(
         label: strv(args.label),
         kind: (kind === "ephemeral" ? "ephemeral" : "durable") as SessionKind,
       });
-      signal(ctx, sessionId, "busy");
+      // "Pracuje" NIE jest domyslnym skutkiem rejestracji/heartbeatu - REST
+      // (POST /api/sessions) tego tez nie robi, a komentarz przy trasie sygnalow
+      // mowi wprost: typing i busy to dwa rozne sygnaly, busy ma pochodzic z
+      // realnego uzycia narzedzia, nie z pollowania (audyt #8). Zapalamy go tylko
+      // na jawne zyczenie wywolujacego.
+      if (args.busy === true) signal(ctx, sessionId, "busy");
       if (args.doing !== undefined) setDoing(ctx, sessionId, strv(args.doing) ?? null);
       return text(`sesja ${sessionId} zarejestrowana jako @${actor.handle}`);
     }
@@ -765,7 +880,11 @@ function waitForInbox(
   actorId: number,
   afterId: number,
   waitSec: number,
-  extra: { progressToken?: string | number; sendNotification?: (n: unknown) => Promise<void> },
+  extra: {
+    progressToken?: string | number;
+    sendNotification?: (n: unknown) => Promise<void>;
+    signal?: AbortSignal;
+  },
 ): Promise<Message[]> {
   if (extra.progressToken === undefined) {
     console.warn(
@@ -795,6 +914,7 @@ function waitForInbox(
       if (heartbeat) clearInterval(heartbeat);
       unsubscribe();
       clearTimeout(timer);
+      extra.signal?.removeEventListener("abort", finish);
       resolve(inboxAfter(ctx, actorId, afterId));
     };
     const unsubscribe = ctx.bus.subscribe(actorId, (event) => {
@@ -805,6 +925,17 @@ function waitForInbox(
     });
     const timer = setTimeout(finish, waitSec * 1000);
     if (typeof timer.unref === "function") timer.unref();
+
+    // Anulowanie klienta (notifications/cancelled, albo zerwane HTTP - handleMcp
+    // zamyka transport/server w res.on("close"), co SDK zamienia na abort
+    // wszystkich w-locie zadan) ma konczyc czekanie NATYCHMIAST. Bez tego
+    // subskrypcja i timer zyly do WAIT_MAX_SEC (300 s) mimo ze nikt juz nie
+    // czekal na odpowiedz - odpowiednik HTTP (longPollHandler) to juz mial przez
+    // res.on("close"), tu brakowalo tego samego dla MCP (audyt #11).
+    if (extra.signal) {
+      if (extra.signal.aborted) finish();
+      else extra.signal.addEventListener("abort", finish, { once: true });
+    }
   });
 }
 
@@ -822,6 +953,7 @@ function buildServer(ctx: Ctx, config: Config, actor: Actor): Server {
       return await callTool(ctx, config, actor, name, (args ?? {}) as Record<string, unknown>, {
         progressToken: request.params._meta?.progressToken,
         sendNotification: extra?.sendNotification as ((n: unknown) => Promise<void>) | undefined,
+        signal: extra?.signal,
       });
     } catch (err) {
       // Blad domenowy wraca jako wynik narzedzia (isError), nie jako blad protokolu:

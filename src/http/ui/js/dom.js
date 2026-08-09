@@ -1,0 +1,215 @@
+/**
+ * Helpery DOM: ucieczka HTML, awatary, formaty czasu, okno modalne, szuflada.
+ */
+import { iconMenu } from "./ikony.js";
+import { state } from "./stan.js";
+
+export const $app = document.getElementById("app");
+
+// Wersja zaladowanego UI - czytana z adresu WLASNEGO modulu (?v=...), wiec mowi
+// o pliku, ktory faktycznie sie wykonuje, a nie o tym, co serwer ma na dysku.
+// W module nie ma document.currentScript (jest null), za to jest import.meta.url.
+export const UI_STAMP = (() => {
+  const m = import.meta.url.match(/[?&]v=([a-f0-9]+)/);
+  return m ? m[1] : "";
+})();
+
+// ---------------------------------------------------------------- pomocnicze
+export const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+));
+
+// Preferencja "mniej ruchu" czytana raz: samo CSS nie wylaczy scrollTo({behavior})
+// ani scrollIntoView, bo one nie sa animacja CSS tylko wywolaniem API.
+const RUCH_OGRANICZONY = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+export const zachowanieScrolla = (smooth) => (smooth && !RUCH_OGRANICZONY.matches ? "smooth" : "auto");
+
+/** Jedyny region "na zywo" w aplikacji (#live). Oglaszamy NOWOSC, a nie cala
+ *  przerysowana galaz - dlatego tekst skladamy recznie, zamiast opakowywac
+ *  aria-live wokol kontenera, ktory przy kazdym renderze wymienia sie w calosci. */
+export function announce(text) {
+  const el = document.getElementById("live");
+  if (el) el.textContent = String(text ?? "");
+}
+
+/** Licznik nieprzeczytanych w tytule karty. To jedyny (obok powiadomien systemowych)
+ *  sygnal, ktory dziala, gdy karta jest w tle - a tam jest przez wiekszosc czasu. */
+export function updateTitleBadge() {
+  const suma = Object.values(state.unread).reduce((n, v) => n + (v || 0), 0) + (state.notifUnread || 0);
+  document.title = suma > 0 ? `(${suma > 99 ? "99+" : suma}) AgentTalks` : "AgentTalks";
+}
+
+const PALETTE = ["#3b5ce0", "#ff6b3d", "#1fae7a", "#a45ee5", "#e0466b", "#0ea5c4", "#c98a1f", "#5c6bc0"];
+
+function colorFor(handle) {
+  let h = 0;
+  for (let i = 0; i < handle.length; i++) h = (h * 31 + handle.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
+
+function initials(nameOrHandle) {
+  const s = String(nameOrHandle ?? "?").replace(/^@/, "");
+  const parts = s.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return s.slice(0, 2).toUpperCase();
+}
+
+export function avatarHtml(handle, size) {
+  const c = colorFor(handle || "?");
+  // Male awatary: proporcjonalnie mniejsze inicjaly i lzejszy krój (klasa sm).
+  const style = size ? `width:${size}px;height:${size}px;font-size:${Math.max(7, Math.round(size * 0.36))}px` : "";
+  const cls = size && size <= 28 ? "av sm" : "av";
+  return `<div class="${cls}" style="background:${c};${style}">${escapeHtml(initials(handle))}</div>`;
+}
+
+export function fmtTime(ts) {
+  return new Date(ts * 1000).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+}
+
+export function fmtDateTime(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString("pl-PL", { day: "numeric", month: "short" }) + ", " +
+    d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+}
+
+export function dayKey(ts) {
+  return new Date(ts * 1000).toISOString().slice(0, 10);
+}
+
+export function dayLabel(ts) {
+  const d = new Date(ts * 1000);
+  const today = new Date();
+  const y = new Date(); y.setDate(today.getDate() - 1);
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  if (sameDay(d, today)) return "Dzisiaj";
+  if (sameDay(d, y)) return "Wczoraj";
+  return d.toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined });
+}
+
+export function timeAgo(ts) {
+  if (!ts) return "dawno temu";
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+  if (s < 90) return "przed chwila";
+  if (s < 3600) return `${Math.floor(s / 60)} min temu`;
+  if (s < 86400) return `${Math.floor(s / 3600)} godz. temu`;
+  return `${Math.floor(s / 86400)} dni temu`;
+}
+
+export function formatBytes(n) {
+  if (!Number.isFinite(n)) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export const IMG_RE = /\.(png|jpe?g|gif|webp|avif)$/i;
+
+// ------------------------------------------------------------------- modale
+// JEDNA implementacja okna modalnego dla calego UI. Powod: okno bez pulapki
+// fokusu wyglada jak modal, ale nim nie jest - Tab wychodzi na strone pod
+// spodem, Escape nie dziala, a po zamknieciu fokus laduje na <body>, czyli
+// uzytkownik klawiatury zaczyna nawigacje od poczatku dokumentu.
+const FOKUSOWALNE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+/** @param html tresc modala; naglowek powinien miec id="m-title" (aria-labelledby). */
+export function openModal(html, opts = {}) {
+  const wrocDo = document.activeElement;
+  const ov = document.createElement("div");
+  ov.className = `overlay ${opts.overlayClass ?? ""}`.trim();
+  ov.innerHTML = `<div class="modal ${opts.modalClass ?? ""}" role="dialog" aria-modal="true"
+    aria-labelledby="m-title" ${opts.style ? `style="${opts.style}"` : ""}>${html}</div>`;
+  document.body.appendChild(ov);
+
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); return; }
+    if (e.key !== "Tab") return;
+    const f = [...ov.querySelectorAll(FOKUSOWALNE)].filter((el) => el.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+  function close() {
+    document.removeEventListener("keydown", onKey, true);
+    ov.remove();
+    // Fokus wraca tam, skad przyszedl - inaczej po zamknieciu okna czytnik
+    // ekranu zaczyna od poczatku strony, a nie od przycisku, ktory je otworzyl.
+    if (wrocDo && document.contains(wrocDo)) wrocDo.focus();
+  }
+  document.addEventListener("keydown", onKey, true);
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  const modal = ov.querySelector(".modal");
+  // Fokus na pierwszym polu, a gdy okno jest samym komunikatem - na oknie.
+  const firstField = modal.querySelector('input:not([type="hidden"]),textarea,select,button');
+  if (firstField) firstField.focus();
+  else { modal.tabIndex = -1; modal.focus(); }
+  return { overlay: ov, modal, close };
+}
+
+export function toggleDrawerClass() {
+  const shell = document.getElementById("shell");
+  if (shell) shell.classList.toggle("drawer", state.drawerOpen);
+  const sb = document.getElementById("sidebar");
+  const mobile = window.matchMedia("(max-width:760px)").matches;
+  // Transform wypycha szuflade poza ekran, ale NIE usuwa jej z kolejnosci Tab
+  // ani z drzewa dostepnosci: bez `inert` uzytkownik klawiatury wpadal
+  // w niewidoczna liste kanalow i nie mial jak z niej wyjsc.
+  if (sb) sb.inert = mobile && !state.drawerOpen;
+  const menu = document.getElementById("btn-menu");
+  if (menu) menu.setAttribute("aria-expanded", String(!!state.drawerOpen));
+  if (mobile && state.drawerOpen && sb) sb.querySelector("button")?.focus();
+}
+
+/** Ile zostalo dzierzawie - tekst odswiezany razem z sidebar (poll 30 s). */
+export function leaseCountdown(expiresAt) {
+  const s = Math.max(0, expiresAt - Math.floor(Date.now() / 1000));
+  if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
+  if (s >= 60) return `${Math.floor(s / 60)} min`;
+  return `${s} s`;
+}
+
+// ------------------------------------------------------- czesci wspolne widokow
+// Hamburger jest w czterech widokach i wszedzie steruje ta sama szuflada -
+// wiec i nazwa dostepna, i aria-expanded maja byc w jednym miejscu.
+export const hamburgerHtml = () => `<button class="iconbtn hamburger" id="btn-menu" aria-label="Lista rozmów"
+  aria-expanded="${state.drawerOpen}" aria-controls="sidebar" title="Lista rozmów">${iconMenu()}</button>`;
+
+export function emptyStateHtml(iconHtml, title, sub) {
+  return `<div class="empty"><div class="big">${iconHtml}</div><h2>${escapeHtml(title)}</h2><p>${escapeHtml(sub)}</p></div>`;
+}
+
+export function skeletonHtml() {
+  return Array.from({ length: 5 }).map(() => `
+    <div class="skeleton"><div class="sk-line w40"></div><div class="sk-line w80"></div></div>`).join("");
+}
+
+// ------------------------------------------------- pozycja czytania na liscie
+export function isScrolledToBottom() {
+  const el = document.getElementById("messages");
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+}
+
+export function scrollToBottom(smooth) {
+  const el = document.getElementById("messages");
+  if (!el) return;
+  // Preferencja "mniej ruchu" musi byc uszanowana takze tutaj: scrollTo nie jest
+  // animacja CSS, wiec zadna regula @media by go nie zatrzymala.
+  el.scrollTo({ top: el.scrollHeight, behavior: zachowanieScrolla(smooth) });
+}
+
+/** Pill "nowe ponizej": widoczny, gdy nie jestes na dole; klik przewija do
+ *  najnowszej. Licznik rosnie od wiadomosci, ktore przyszly poza polem widzenia. */
+export function updateJumpPill() {
+  const pill = document.getElementById("jump-newest");
+  if (!pill) return;
+  const atBottom = isScrolledToBottom();
+  if (atBottom) { state.newBelow = 0; pill.classList.remove("show"); return; }
+  pill.classList.add("show");
+  const label = pill.querySelector(".jn-label");
+  if (label) label.textContent = state.newBelow > 0
+    ? `${state.newBelow} ${state.newBelow === 1 ? "nowa wiadomość" : "nowe wiadomości"}`
+    : "Najnowsze";
+  pill.classList.toggle("hascount", state.newBelow > 0);
+}

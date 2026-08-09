@@ -76,19 +76,13 @@ export function setWake(
 function assertPublicHost(hostname: string, allowLoopback: boolean): void {
   const h = hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (allowLoopback && (h === "127.0.0.1" || h === "::1" || h === "localhost")) return;
-  const blocked =
-    h === "localhost" ||
-    h === "0.0.0.0" ||
-    h === "::1" ||
-    h === "::" ||
-    /^127\./.test(h) ||
-    /^10\./.test(h) ||
-    /^192\.168\./.test(h) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
-    /^169\.254\./.test(h) ||
-    /^fe80:/.test(h) ||
-    /^f[cd][0-9a-f]{2}:/.test(h);
-  if (blocked) {
+  // Nazwa nie-IP przechodzi TUTAJ i jest sprawdzana dopiero przy strzale
+  // (guardedLookup pina zwalidowany adres, wiec nie ma okna na rebinding).
+  // Adres podany LITERALEM musi zostac rozstrzygniety tu, bo dla literalu
+  // node:net w ogole nie wola `lookup` - to byla ta dziura: guardedLookup nigdy
+  // nie widzial `http://127.0.0.1/`, a lista wzorcow ponizej byla wtedy jedyna
+  // obrona i miala inne reguly niz isBlockedIp. Teraz reguly sa jedne.
+  if (h === "localhost" || isBlockedIp(h, allowLoopback)) {
     throw new Error(
       `wake_target ${hostname} wskazuje adres lokalny/prywatny - serwer nie bedzie ` +
         `w niego strzelal. Uzyj adresu publicznego mostu.`,
@@ -233,23 +227,42 @@ export function registerWake(
  * wiec broni takze przed DNS rebinding (nazwa publiczna przy rejestracji,
  * prywatna przy strzale). Eksportowane do testu.
  */
+/**
+ * Normalizacja adresu przed decyzja. Parser URL zwraca adresy IPv4-mapped IPv6
+ * w postaci SZESNASTKOWEJ (`new URL("http://[::ffff:169.254.169.254]/")` daje
+ * hostname `[::ffff:a9fe:a9fe]`), wiec wzorzec dopasowujacy tylko zapis kropkowy
+ * przepuszczal endpoint metadanych chmury. Sprowadzamy oba zapisy do IPv4 -
+ * inaczej "ten sam adres" ma dwie reprezentacje i tylko jedna jest sprawdzana.
+ */
+function doIpv4(ip: string): string {
+  const s = ip.replace(/^\[|\]$/g, "").toLowerCase();
+  const kropkowy = s.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (kropkowy) return kropkowy[1];
+  const hex = s.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const a = parseInt(hex[1], 16), b = parseInt(hex[2], 16);
+    return `${(a >> 8) & 0xff}.${a & 0xff}.${(b >> 8) & 0xff}.${b & 0xff}`;
+  }
+  return s;
+}
+
+/** Czy adres jest prywatny/lokalny. JEDNO miejsce z regulami - i przy rejestracji
+ *  webhooka, i przy strzale. Dwie listy regul w dwoch miejscach juz raz sie
+ *  rozjechaly (100.64/10 i 0.0.0.0/8 byly tylko w jednej z nich). */
 export function isBlockedIp(ip: string, allowLoopback = false): boolean {
-  const s = ip.toLowerCase();
-  const mapped = s.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (mapped) return isBlockedIp(mapped[1], allowLoopback);
+  const s = doIpv4(ip);
   const loopback = /^127\./.test(s) || s === "::1";
   if (loopback) return !allowLoopback;
   return (
-    s === "0.0.0.0" ||
     s === "::" ||
-    /^0\./.test(s) ||
+    /^0\./.test(s) ||                              // 0.0.0.0/8, w tym 0.0.0.1
     /^10\./.test(s) ||
     /^192\.168\./.test(s) ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(s) ||
     /^169\.254\./.test(s) ||                       // link-local, w tym 169.254.169.254 (metadata)
     /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(s) || // 100.64/10 CGNAT
     /^fe80:/.test(s) ||                            // IPv6 link-local
-    /^f[cd][0-9a-f]{2}:/.test(s)                    // IPv6 ULA
+    /^f[cd][0-9a-f]{2}:/.test(s)                   // IPv6 ULA
   );
 }
 

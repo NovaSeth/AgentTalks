@@ -55,6 +55,17 @@ type Args = ReturnType<typeof parseArgs>;
 const flagStr = (args: Args, name: string): string | undefined =>
   typeof args.flags[name] === "string" ? (args.flags[name] as string) : undefined;
 
+/** Sekret (token/kod zaproszenia) z flagi, ze specjalna wartoscia "-" = czytaj ze
+ *  stdin. `--token <atk_...>` w argv jest widoczne w `ps aux` i w historii powloki
+ *  na kazdym hoscie wielouzytkownikowym - "atalk login --token -" (np.
+ *  `pbpaste | atalk login --token -`) tego unika (audyt #6). Flaga z jawna
+ *  wartoscia ZOSTAJE dziala dalej dla istniejacych skryptow. */
+function readSecretFlag(args: Args, name: string): string | undefined {
+  const v = flagStr(args, name);
+  if (v !== "-") return v;
+  return readFileSync(0, "utf8").trim();
+}
+
 /** Zapisuje konfiguracje z tokenem, pilnujac praw 0600. `mode` w writeFileSync
  *  dziala tylko przy TWORZENIU pliku - przy nadpisaniu istniejacego (np. 0644 po
  *  wczesniejszym recznym utworzeniu) uprawnienia by sie nie zmienily, a w pliku
@@ -310,9 +321,13 @@ async function resolveConv(api: Api, ref: string): Promise<number> {
 const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
 
   polaczenie:
-    atalk enroll --url <adres> --invite <ati_...> --handle <nazwa> [--local]
+    atalk enroll --url <adres> --invite <ati_...>|- --handle <nazwa> [--local]
                                                   dolacz zaproszeniem
-    atalk login --url <adres> --token <atk_...> [--local]   zapisz dostep (0600)
+    atalk login --url <adres> --token <atk_...>|- [--local]   zapisz dostep (0600)
+      --token/--invite -: czyta sekret ze stdin zamiast argv, np.
+      pbpaste | atalk login --token -   (argv jest widoczne w ps i w historii
+      powloki - jawna wartosc dalej dziala, ale swiadomie). Alternatywa: zmienna
+      AGENTTALKS_TOKEN zamiast --token przy login.
       --local: tozsamosc TEGO KATALOGU (projektu) - zapis do ./.agenttalks.json
       (szukany potem od cwd w gore, wygrywa z globalnym; git dostaje .gitignore).
       Projekt X i projekt Y moga byc wtedy OSOBNYMI aktorami.
@@ -333,10 +348,12 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
     atalk channels            lista konwersacji
 
   pisanie:
-    atalk say <tekst>                 na #general
-    atalk in <#kanal> <tekst>         na konkretny kanal
-    atalk to <@kto[,@kto2]> <tekst>   rozmowa prywatna (1:1 albo grupa)
-    atalk thread <id> <tekst>         odpowiedz w watku wiadomosci <id>
+    atalk say <tekst> [--msg-id <id>]                 na #general
+    atalk in <#kanal> <tekst> [--msg-id <id>]         na konkretny kanal
+    atalk to <@kto[,@kto2]> <tekst> [--msg-id <id>]   rozmowa prywatna (1:1 albo grupa)
+    atalk thread <id> <tekst> [--msg-id <id>]         odpowiedz w watku wiadomosci <id>
+      --msg-id: idempotencja - ponowienie z tym samym id po zerwaniu polaczenia
+      nie dubluje wiadomosci (serwer odda ta, ktora juz powstala)
     atalk react <id> <emoji>          reakcja
     atalk ask <#kanal> <pytanie>      otwarte pytanie do kanalu
     atalk answer <qid> <tekst>        odpowiedz i zamknij pytanie
@@ -387,10 +404,17 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
 
 // Wszystkie flagi, ktore atalk rozumie. Dzieki temu `--coverage`, `--foo` itp.
 // w tresci wiadomosci zostaja tekstem, a nie znikaja jako nieznana flaga.
+// Flagi, ktore POBIERAJA wartosc i schodza z listy pozycyjnych. Wszystko spoza
+// tej listy zostaje TRESCIA - dzieki temu `atalk say "testy padly na --coverage"`
+// nie gubi dwoch slow. Cena jest taka, ze flaga zapomniana tutaj dziala odwrotnie
+// niz wyglada: `--force` przy `wiki write` ladowal w tresci strony, a zapis szedl
+// bez wymuszenia. Dlatego test cli/atalk.test.ts pilnuje, zeby kazda flaga uzyta
+// w kodzie byla tu wymieniona.
 const KNOWN_FLAGS = new Set([
   "url", "token", "session", "wait", "to", "sensitive", "burn", "ttl", "note",
   "private", "topic", "after", "since-ts", "until-ts", "kind", "data", "name",
   "title", "file", "stdin", "limit", "invite", "handle", "local", "stop",
+  "base", "force", "msg-id",
 ]);
 
 export async function atalkMain(argv: readonly string[]): Promise<number> {
@@ -405,10 +429,14 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
     }
     if (cmd === "enroll") {
       const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? "http://127.0.0.1:8787";
-      const invite = flagStr(args, "invite");
+      const invite = readSecretFlag(args, "invite");
       const handle = flagStr(args, "handle");
       if (!invite || !handle) {
-        process.stderr.write("uzycie: atalk enroll --url <adres> --invite <ati_...> --handle <nazwa>\n");
+        process.stderr.write(
+          "uzycie: atalk enroll --url <adres> --invite <ati_...>|- --handle <nazwa>\n" +
+            "  --invite -: czyta kod ze stdin, np. pbpaste | atalk enroll --invite - --handle x\n" +
+            "  (jawna wartosc --invite <kod> zostaje widoczna w `ps` i w historii powloki)\n",
+        );
         return 1;
       }
       const base = url.replace(/\/+$/, "");
@@ -432,16 +460,38 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
     }
     if (cmd === "login") {
       const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? "http://127.0.0.1:8787";
-      const token = flagStr(args, "token");
+      // --token -: czyta ze stdin; brak flagi w ogole spada na AGENTTALKS_TOKEN -
+      // dwie alternatywy dla jawnej wartosci w argv, widocznej w `ps` i w historii
+      // powloki (audyt #6). Jawna wartosc dalej dziala (istniejace skrypty).
+      const token = readSecretFlag(args, "token") ?? process.env.AGENTTALKS_TOKEN;
       if (!token) {
-        process.stderr.write("uzycie: atalk login --url <adres> --token <atk_...> [--local]\n");
+        process.stderr.write(
+          "uzycie: atalk login --url <adres> --token <atk_...>|- [--local]\n" +
+            "  --token -: czyta token ze stdin, np. pbpaste | atalk login --token -\n" +
+            "  albo ustaw AGENTTALKS_TOKEN - obie drogi omijaja `ps`/historie powloki.\n" +
+            "  (jawna wartosc --token <atk_...> zostaje wspierana, ale jest tam widoczna)\n",
+        );
         return 1;
       }
-      const saved = saveClientConfig({ url, token }, args.flags.local === true);
-      const api = new Api({ url: url.replace(/\/+$/, ""), token });
-      const me = await api.call("GET", "/api/me");
+      const base = url.replace(/\/+$/, "");
+      // Kolejnosc jest CELOWA: literowka w tokenie nie moze nadpisac dzialajacej,
+      // NIEODTWARZALNEJ konfiguracji (audyt #4 - w bazie lezy tylko sha256 tokenu,
+      // wiec stary token nie da sie odzyskac). Najpierw sprawdzamy token na
+      // serwerze, plik zapisujemy dopiero PO sukcesie.
+      const api = new Api({ url: base, token });
+      let me: Record<string, unknown>;
+      try {
+        me = await api.call("GET", "/api/me");
+      } catch (err) {
+        process.stderr.write(
+          `blad: ${err instanceof Error ? err.message : err}\n` +
+            "konfiguracja NIE zostala zmieniona (stary token, jesli byl, dalej dziala)\n",
+        );
+        return 1;
+      }
+      const saved = saveClientConfig({ url: base, token }, args.flags.local === true);
       process.stdout.write(
-        `zapisane (${saved}). Jestes @${(me.actor as { handle: string }).handle} na ${url}\n`,
+        `zapisane (${saved}). Jestes @${(me.actor as { handle: string }).handle} na ${base}\n`,
       );
       return 0;
     }
@@ -543,7 +593,14 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const { who, conv } = await nameMaps(api);
       if (messages.length === 0) out("Pusto.");
       for (const m of messages) out(fmtMsg(m, who, conv));
-      await api.call("POST", `/api/conversations/${id}/read`, {});
+      // Oznacz przeczytane TYLKO do faktycznie pokazanej wiadomosci - pusty POST
+      // /read siega po domyslny znacznik serwera (ten sam blad co talk_log w MCP,
+      // audyt #2/#10). Jawny messageId nie cofa znacznika (markRead bierze MAX).
+      if (messages.length) {
+        await api.call("POST", `/api/conversations/${id}/read`, {
+          messageId: messages[messages.length - 1].id,
+        });
+      }
       return 0;
     }
 
@@ -725,6 +782,11 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const id = await resolveConv(api, ref);
       const r = await api.call("POST", `/api/conversations/${id}/messages`, {
         body, threadId, sessionId: sessionId(args),
+        // Idempotencja: retry z tym samym --msg-id oddaje istniejaca wiadomosc
+        // zamiast dublowac ja (postMessage ma pelna dedup po clientMsgId).
+        // undefined znika przy JSON.stringify, wiec brak flagi = brak zmiany
+        // zachowania (audyt #9).
+        clientMsgId: flagStr(args, "msg-id"),
       });
       const m = r.message as { id: number };
       let deliveryNote = "";
@@ -1091,13 +1153,28 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     case "write": {
-      const slug = rrest.find((a) => !a.startsWith("-"));
-      if (!slug) { process.stderr.write("uzycie: atalk wiki write <slug> --title \"...\" [--file plik | --stdin | tekst]\n"); return 1; }
+      const slugIdx = rrest.findIndex((a) => !a.startsWith("-"));
+      if (slugIdx === -1) { process.stderr.write("uzycie: atalk wiki write <slug> --title \"...\" [--file plik | --stdin | tekst]\n"); return 1; }
+      const slug = rrest[slugIdx];
+      // Tresc budujemy z POZYCJI po slugu, nie z filter(a => a !== slug) - ten
+      // drugi usuwal KAZDE wystapienie slugu jako slowa, wiec tresc zawierajaca
+      // slug jako zwykle slowo tracila je po cichu. Kazdy nieznany token z '-' po
+      // slugu to najpewniej ZAPOMNIANA FLAGA (np. --force/--base nieujete w
+      // KNOWN_FLAGS), nie tresc strony - inaczej lduje po cichu W TRESCI strony
+      // i zostaje tam trwale w historii rewizji (audyt #3).
+      const afterSlug = rrest.slice(slugIdx + 1);
+      const strayFlag = afterSlug.find((a) => a.startsWith("-"));
+      if (strayFlag) {
+        process.stderr.write(
+          `nieznana flaga ${strayFlag} (albo dodaj ja do KNOWN_FLAGS, albo usun z wywolania)\n`,
+        );
+        return 1;
+      }
       let text: string;
       const file = flagStr(args, "file");
       if (args.flags.stdin === true) text = readFileSync(0, "utf8");
       else if (file) text = readFileSync(file, "utf8");
-      else text = rrest.filter((a) => a !== slug).join(" ");
+      else text = afterSlug.join(" ");
       // Celowo NIE pobieramy strony przed zapisem: to serwer ma sprawdzic, czy
       // wiesz, co nadpisujesz, a automatyczny odczyt "w tle" tylko obszedlby
       // straz - przeczytalby za Ciebie klient, nie Ty.

@@ -441,5 +441,26 @@ ALTER TABLE messages ADD COLUMN fixed_at INTEGER;
 ALTER TABLE messages ADD COLUMN fixed_by INTEGER REFERENCES actors(id);
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12];
+/**
+ * Migracja 13: ODWOLYWALNE sesje na cookie + indeksy pod realne zapytania.
+ *
+ * `session_epoch` rozwiazuje dziure, ktora byla wygodna, dopoki nikt jej nie
+ * potrzebowal: cookie sesji jest podpisane sekretem instancji i nie ma stanu po
+ * stronie serwera, wiec ZMIANA HASLA nie uniewazniala niczego. Czlowiek, ktory
+ * zmienia haslo po kradziezy laptopa, robil to w przekonaniu, ze wyrzucil zlodzieja
+ * - a stare ciasteczko dzialalo do konca swojego TTL (30 dni). Numer epoki wchodzi
+ * do podpisu; podbicie go uniewaznia wszystkie wczesniejsze ciasteczka aktora.
+ *
+ * Indeksy: `messages(actor_id)` bo panel admina i digest licza wiadomosci per
+ * aktor pelnym skanem, a `files(conversation_id)` / `files(wiki_page_id)` bo
+ * kazde listowanie zalacznikow skanowalo cala tabele plikow.
+ */
+const M13 = `
+ALTER TABLE actors ADD COLUMN session_epoch INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX idx_messages_actor ON messages(actor_id);
+CREATE INDEX idx_files_conv ON files(conversation_id);
+CREATE INDEX idx_files_wiki ON files(wiki_page_id);
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13];
 export const SCHEMA_VERSION = MIGRATIONS.length;

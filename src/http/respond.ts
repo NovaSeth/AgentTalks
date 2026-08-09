@@ -74,3 +74,14 @@ export const int = (v: unknown): number | undefined => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : undefined;
 };
+
+/**
+ * Liczba NIEUJEMNA z parametru zapytania. Osobno od `int`, bo w SQL `LIMIT -1`
+ * znaczy "bez ograniczenia": `?limit=-1` przechodzilo przez walidacje i zwracalo
+ * cala historie. Wartosc ujemna traktujemy jak brak parametru, a nie jak zero,
+ * zeby literowka nie zwracala pustej listy udajacej "nic nie ma".
+ */
+export const intDodatni = (v: unknown): number | undefined => {
+  const n = int(v);
+  return n === undefined || n < 0 ? undefined : n;
+};

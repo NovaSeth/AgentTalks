@@ -1,7 +1,13 @@
 /* AgentTalks - interfejs webowy. Waniliowy CSS, zero zaleznosci. */
 :root{
+  /* --faint jest kolorem TEKSTU w kilkunastu miejscach i wszedzie w malym
+     rozmiarze (.72-.85rem), a #9aa2b5 na bieli dawal 2,56:1 przy progu 4,5:1.
+     Roznice miedzy "wazne" a "poboczne" budujemy rozmiarem i waga, nie
+     jasnoscia - stad --faint rowny --muted, ktory kontrast przechodzi.
+     --faint-line zostaje jasny, bo dotyczy KRESEK, nie tekstu. */
   --bg:#f7f7f9; --surface:#ffffff; --surface-2:#f0f1f4; --sidebar:#f4f2ef;
-  --ink:#1b2030; --muted:#6b7488; --faint:#9aa2b5;
+  --ink:#1b2030; --muted:#6b7488; --faint:#6b7488; --faint-line:#9aa2b5;
+  --amber:#8a5d00; --amber-soft:#c98a1f;
   --accent:#3b5ce0; --accent-ink:#2a45c0; --accent-soft:#e9edfd; --on-accent:#fff;
   --green:#1fae7a; --coral:#ff6b3d; --coral-soft:#ffe7de;
   --line:#e7e6e2; --line-2:#dedcd6;
@@ -16,7 +22,8 @@
 }
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
   --bg:#0d0f16; --surface:#161925; --surface-2:#1e2230; --sidebar:#12141d;
-  --ink:#eceef5; --muted:#98a1b6; --faint:#69718a;
+  --ink:#eceef5; --muted:#98a1b6; --faint:#98a1b6; --faint-line:#69718a;
+  --amber:#e0a83a; --amber-soft:#c98a1f;
   --accent:#7f97ff; --accent-ink:#a7b6ff; --accent-soft:#222a46; --on-accent:#0d0f16;
   --green:#3fd39a; --coral:#ff8259; --coral-soft:#3a2318;
   --line:#262a38; --line-2:#313648;
@@ -25,7 +32,8 @@
 }}
 :root[data-theme="dark"]{
   --bg:#0d0f16; --surface:#161925; --surface-2:#1e2230; --sidebar:#12141d;
-  --ink:#eceef5; --muted:#98a1b6; --faint:#69718a;
+  --ink:#eceef5; --muted:#98a1b6; --faint:#98a1b6; --faint-line:#69718a;
+  --amber:#e0a83a; --amber-soft:#c98a1f;
   --accent:#7f97ff; --accent-ink:#a7b6ff; --accent-soft:#222a46; --on-accent:#0d0f16;
   --green:#3fd39a; --coral:#ff8259; --coral-soft:#3a2318;
   --line:#262a38; --line-2:#313648;
@@ -44,7 +52,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 ::selection{background:var(--accent-soft)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:99px;border:3px solid transparent;background-clip:padding-box}
-::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+::-webkit-scrollbar-thumb:hover{background:var(--faint-line)}
 
 /* ---------- LOGIN ---------- */
 .login{height:100%;display:grid;place-items:center;padding:1.5rem;
@@ -161,13 +169,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 /* Nowe bez wzmianki (kanal): licznik stonowany. Koral zostaje dla DM i wzmianek. */
 .conv .badge.soft{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
 .conv.active .badge.soft{background:var(--on-accent);color:var(--accent);border-color:transparent}
-.conv .ppresence{width:.5rem;height:.5rem;border-radius:50%;background:var(--faint);flex:0 0 auto}
+.conv .ppresence{width:.5rem;height:.5rem;border-radius:50%;background:var(--faint-line);flex:0 0 auto}
 .conv .ppresence.on{background:var(--green)}
-/* Chevron galezi wiki: obrocony = rozwinieta, klik tylko zwija/rozwija. */
-.conv .twist{display:grid;place-items:center;border-radius:6px;transition:transform .15s,background .15s;transform:rotate(90deg)}
-.conv .twist.closed{transform:rotate(0deg)}
-.conv .twist:hover{background:var(--surface-2);color:var(--ink)}
-.conv.active .twist:hover{background:rgba(255,255,255,.2)}
+/* Chevron galezi wiki jest osobnym przyciskiem OBOK wiersza (patrz .twist na
+   koncu pliku) - obrocony znaczy "rozwinieta". */
 
 /* ---------- MAIN ---------- */
 .main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--surface);position:relative}
@@ -226,9 +231,14 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   background:var(--coral);color:#fff;font-weight:800;flex:0 0 auto}
 .msg.deleted .text{color:var(--faint);font-style:italic}
 .msg .edited{font-size:.7rem;color:var(--faint)}
-.msg .actions{position:absolute;top:-.7rem;right:1.2rem;display:none;gap:.15rem;background:var(--surface);
-  border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);padding:.15rem}
-.msg:hover .actions{display:flex}
+/* Pasek akcji ukrywamy WIZUALNIE, nie przez display:none - display usuwa przyciski
+   z kolejnosci Tab i z drzewa dostepnosci, a to jedyna droga do zalozenia watku,
+   edycji, usuniecia i domkniecia zgloszenia (WCAG 2.1.1). */
+.msg .actions{position:absolute;top:-.7rem;right:1.2rem;display:flex;gap:.15rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);padding:.15rem;
+  opacity:0;pointer-events:none;transition:opacity .12s}
+.msg:hover .actions,.msg:focus-within .actions,.msg.touch-actions .actions{opacity:1;pointer-events:auto}
+.msg .actions button:focus-visible{opacity:1}
 .msg .actions button{width:1.8rem;height:1.8rem;border-radius:6px;display:grid;place-items:center;font-size:1rem}
 .msg .actions button:hover{background:var(--surface-2)}
 .msg .actions button.on{color:var(--green)}
@@ -429,7 +439,20 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 @keyframes slidein{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 @keyframes shimmer{to{background-position:-200% 0}}
 @keyframes shake{10%,90%{transform:translateX(-1px)}30%,70%{transform:translateX(3px)}50%{transform:translateX(-4px)}}
-@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;scroll-behavior:auto}}
+/* "Mniej ruchu" musi wygrywac z KAZDA regula: samo `*` bez !important przegrywalo
+   ze zwyklym `.messages{scroll-behavior:smooth}` (klasa ma wyzsza specyficznosc),
+   a przejscia i animacje bez konca (spin, pulsowanie, kuleczki) chodzily dalej,
+   bo regula ruszala wylacznie czasu trwania animacji. */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important}
+}
+
+/* Tekst tylko dla czytnikow ekranu - etykiety pol, ktore wizualnie opisuje
+   placeholder albo kontekst. */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 
 /* ============ MOBILE ADAPTACYJNIE (nie skurczony desktop) ============
    Wzorzec jak natywna apka: JEDEN ekran naraz. Domyslnie widzisz rozmowe na
@@ -442,10 +465,17 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   .rail{padding:.5rem 0}
   .rail-btn{width:2.2rem;height:2.2rem}
   .sidebar{left:2.9rem}
-  /* Lista = pelnoekranowy panel wjezdzajacy z lewej. */
+  /* Lista = pelnoekranowy panel wjezdzajacy z lewej. Zamknieta znika TAKZE
+     semantycznie (visibility + inert z JS): sam transform wypycha ja za ekran,
+     ale zostawia w kolejnosci Tab i w drzewie dostepnosci. */
   .sidebar{position:fixed;top:0;right:0;bottom:0;left:2.9rem;width:auto;z-index:15;
-    transform:translateX(-102%);transition:transform .26s cubic-bezier(.2,.8,.3,1)}
-  .shell.drawer .sidebar{transform:none}
+    transform:translateX(-102%);visibility:hidden;
+    transition:transform .26s cubic-bezier(.2,.8,.3,1),visibility 0s .26s}
+  .shell.drawer .sidebar{transform:none;visibility:visible;
+    transition:transform .26s cubic-bezier(.2,.8,.3,1)}
+  /* Dotyk nie zna hoveru: pasek akcji odslania dlugie przytrzymanie (klasa
+     .touch-actions), a cele dotykowe rosna do 2.2rem. */
+  .msg .actions button{width:2.2rem;height:2.2rem}
   .shell.drawer .scrim{display:block;position:fixed;inset:0;background:rgba(10,12,20,.4);z-index:12;animation:fade .2s}
   /* Wieksze cele dotykowe na liscie. */
   .sb-head{padding:0 1rem}
@@ -598,7 +628,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
 /* ---------- status doreczenia (DM) ---------- */
 .delivery{margin-top:.25rem;font-size:.72rem;color:var(--faint);animation:enter .3s both}
-.delivery .ok{color:var(--green)} .delivery .warn{color:#c98a1f} .delivery .off{color:var(--faint)}
+.delivery .ok{color:var(--green)} .delivery .warn{color:var(--amber)} .delivery .off{color:var(--muted)}
 
 /* ---------- obrazy inline + lightbox ---------- */
 .msg-img-wrap{display:block;margin-top:.2rem;border-radius:14px;overflow:hidden;max-width:320px;
@@ -632,7 +662,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .copybtn{position:absolute;top:.45rem;right:.45rem;width:1.9rem;height:1.9rem;border-radius:8px;
   display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--muted);
   opacity:0;transition:opacity .12s,color .15s,border-color .15s}
-.mdpre:hover .copybtn{opacity:1}
+.mdpre:hover .copybtn,.mdpre:focus-within .copybtn{opacity:1}
+/* Przycisk kopiowania daje sie sfokusowac, wiec przy fokusie MUSI byc widoczny -
+   inaczej uzytkownik klawiatury stoi na czyms, czego nie widzi. */
+.copybtn:focus-visible{opacity:1}
 .copybtn:hover{color:var(--accent);border-color:var(--accent)}
 .copybtn.copied{color:var(--green);border-color:var(--green);opacity:1;animation:pop .25s}
 .mdempty{color:var(--faint);font-style:italic}
@@ -698,8 +731,8 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .wh-tag{font-size:.62rem;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.04em}
 .wh-when{font-size:.74rem;color:var(--faint)}
 .wh-note{font-size:.78rem;color:var(--muted);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rev-banner{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;background:color-mix(in srgb,#c98a1f 12%,transparent);
-  border:1px solid color-mix(in srgb,#c98a1f 35%,transparent);color:var(--ink);
+.rev-banner{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;background:color-mix(in srgb,var(--amber-soft) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--amber-soft) 35%,transparent);color:var(--ink);
   border-radius:12px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.88rem;animation:viewin .25s both}
 .rb-actions{margin-left:auto;display:flex;gap:.4rem}
 .rb-actions button{border:1px solid var(--line-2);border-radius:8px;padding:.3rem .7rem;font-weight:650;
@@ -763,10 +796,57 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 /* "Naprawione" jest stanem POSREDNIM i ma tak wygladac: bursztyn, nie zielen.
    Zielony check nalezy do potwierdzenia przez zglaszajacego - gdyby oba stany
    wygladaly tak samo, "ktos twierdzi, ze zrobil" czytaloby sie jak "sprawdzone". */
-.qbadge.fixed{background:color-mix(in srgb,var(--amber,#c98a1f) 15%,transparent);
-  color:var(--amber,#c98a1f);border:1px solid color-mix(in srgb,var(--amber,#c98a1f) 35%,transparent)}
-.msg .actions [data-fix].on{color:var(--amber,#c98a1f)}
+.qbadge.fixed{background:color-mix(in srgb,var(--amber-soft) 15%,transparent);
+  color:var(--amber);border:1px solid color-mix(in srgb,var(--amber-soft) 35%,transparent)}
+.msg .actions [data-fix].on{color:var(--amber)}
 
-.sb-foot{padding:.35rem .9rem .6rem;font-size:.72rem;color:var(--muted);opacity:.7;
-  letter-spacing:.02em;font-variant-numeric:tabular-nums}
-.sb-foot.stale{color:var(--accent);opacity:1;font-weight:600}
+.sb-foot{padding:.35rem .9rem .6rem;font-size:.72rem;color:var(--muted);
+  letter-spacing:.02em;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;gap:.15rem}
+.sb-foot .stale{color:var(--accent);font-weight:600}
+/* Stan strumienia zdarzen. Cicha smierc live-update jest gorsza od widocznego
+   bledu - wiec gdy strumien padnie, ma to byc widac. */
+.sb-net{color:var(--coral);font-weight:700}
+.sb-net::before{content:"";display:inline-block;width:.45rem;height:.45rem;border-radius:50%;
+  background:var(--coral);margin-right:.35rem;vertical-align:.05rem}
+
+/* ---------- kreska "nowe wiadomosci" ---------- */
+/* Ten sam ksztalt co separator dnia, ale w kolorze wolania: to jedyne miejsce,
+   ktore mowi "tu skonczyles czytac", i ma sie dac znalezc jednym spojrzeniem. */
+.newline{display:flex;align-items:center;gap:.8rem;margin:.8rem 1.2rem .3rem;color:var(--coral);
+  font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.newline::after{content:"";height:1px;background:var(--coral);flex:1;opacity:.55}
+
+/* ---------- wiadomosc w locie / nieudana ---------- */
+.msg.sending{opacity:.55}
+.msg.sending .time{font-style:italic}
+.msg.failed{background:color-mix(in srgb,var(--coral) 7%,transparent)}
+.msg.failed .time{color:var(--coral);font-weight:700}
+.failbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:.35rem;font-size:.8rem}
+.failbar .failwhy{color:var(--coral)}
+.failbar button{border:1px solid var(--line);border-radius:8px;padding:.2rem .6rem;
+  font-size:.8rem;font-weight:650;color:var(--ink);background:var(--surface)}
+.failbar button:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- drzewo wiki: chevron obok wiersza, nie w srodku ---------- */
+.conv-row{display:flex;align-items:center;gap:.1rem}
+.conv-row .conv{flex:1;min-width:0}
+.conv-row > .pre{color:var(--muted);flex:0 0 auto;width:1.6rem;text-align:center}
+/* Cel dotykowy 1.6rem (>=24 px) - chevron nie lezy juz wewnatrz innego celu. */
+.twist{width:1.6rem;height:1.6rem;flex:0 0 auto;display:grid;place-items:center;border-radius:7px;
+  color:var(--muted);transition:transform .15s,background .15s;transform:rotate(90deg)}
+.twist.closed{transform:rotate(0deg)}
+.twist:hover{background:var(--surface-2);color:var(--ink)}
+
+/* ---------- strefa zrzutu plikow ---------- */
+.main.dropping::after{content:"Upuść, żeby załączyć";position:absolute;inset:.5rem;z-index:6;
+  border:2px dashed var(--accent);border-radius:18px;background:color-mix(in srgb,var(--accent) 10%,transparent);
+  display:grid;place-items:center;font-weight:700;color:var(--accent-ink);pointer-events:none}
+
+/* Etykieta grupy pol, ktora nie opisuje pojedynczego <input> (radiogroup). */
+.field .flabel{font-size:.78rem;font-weight:700;color:var(--muted);letter-spacing:.02em}
+/* Pill "nowe ponizej" z licznikiem - szerszy, bo niesie tekst, nie samo slowo. */
+.jump-newest.hascount{padding-left:1.1rem;padding-right:1.1rem}
+.we-where{margin-right:-.2rem}
+.we-parent{background:var(--surface-2);border:1.5px solid transparent;border-radius:10px;
+  padding:.5rem .6rem;font-size:.88rem;color:var(--ink);max-width:14rem}
+.we-parent:focus{outline:none;border-color:var(--accent)}

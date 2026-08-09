@@ -107,6 +107,46 @@ export function setDisabled(ctx: Ctx, actorId: number, disabled: boolean): Actor
   if (!a) throw notFound("aktor", `nie ma aktora ${actorId}`);
   ctx.db.prepare("UPDATE actors SET disabled_at = ? WHERE id = ?")
     .run(disabled ? ctx.now() : null, actorId);
+  // Wylaczenie konta musi domykac to, co juz otwarte - inaczej "wylaczylem konto"
+  // znaczy tylko "nie zaloguje sie ponownie".
+  if (disabled) bumpSessionEpoch(ctx, actorId);
+  return getActor(ctx, actorId)!;
+}
+
+/**
+ * Zmiana nazwy (handle) ISTNIEJACEGO aktora - z zachowaniem tozsamosci.
+ *
+ * Istnieje, bo alternatywa jest zla: bez tego "chce sie nazywac inaczej" konczy
+ * sie wykupieniem nowego zaproszenia, czyli DRUGIM aktorem tej samej osoby -
+ * a wtedy historia, wzmianki, czlonkostwa i tokeny zostaja przy starym. Numer
+ * aktora sie NIE zmienia, wiec wszystko, co go wskazuje, dziala dalej: tokeny,
+ * czlonkostwa, powiadomienia, autorstwo wiadomosci i rewizji wiki.
+ *
+ * Czego to NIE naprawia i o czym trzeba wiedziec: tekst "@stara-nazwa" w JUZ
+ * napisanych wiadomosciach zostaje tekstem - wzmianki byly rozwiazane na numery
+ * przy zapisie, wiec powiadomienia doszly, ale klikniecie w stary tekst nie
+ * trafi w nikogo. Nie przepisujemy cudzych wiadomosci, zeby zmiana nazwy nie
+ * zmieniala tresci, ktorej ktos inny jest autorem.
+ */
+export function renameActor(
+  ctx: Ctx,
+  actorId: number,
+  newHandle: string,
+  displayName?: string,
+): Actor {
+  const a = getActor(ctx, actorId);
+  if (!a) throw notFound("aktor", `nie ma aktora ${actorId}`);
+  const handle = normalizeHandle(newHandle);
+  const zajety = getActorByHandle(ctx, handle);
+  if (zajety && zajety.id !== actorId) {
+    throw conflict("handle_zajety", `nazwa "${handle}" jest juz zajeta przez innego aktora`);
+  }
+  // displayName domyslnie idzie za handle TYLKO wtedy, gdy wczesniej byl jego
+  // kopia - inaczej zmiana nazwy technicznej kasowalaby recznie ustawiona
+  // nazwe wyswietlana ("Milosz / VPS").
+  const nowaNazwa = displayName ?? (a.displayName === a.handle ? handle : a.displayName);
+  ctx.db.prepare("UPDATE actors SET handle = ?, display_name = ? WHERE id = ?")
+    .run(handle, nowaNazwa, actorId);
   return getActor(ctx, actorId)!;
 }
 
@@ -140,6 +180,28 @@ export function setPassword(ctx: Ctx, actorId: number, password: string): void {
   ctx.db
     .prepare("UPDATE actors SET password_hash = ? WHERE id = ?")
     .run(`scrypt$${salt.toString("hex")}$${hash.toString("hex")}`, actorId);
+  // Zmiana hasla ma WYRZUCIC dotychczasowe sesje. Inaczej czlowiek, ktory zmienia
+  // haslo po kradziezy laptopa, robi to w przekonaniu, ze zamknal drzwi, a stare
+  // ciasteczko dziala dalej przez caly swoj TTL.
+  bumpSessionEpoch(ctx, actorId);
+}
+
+/** Uniewaznia wszystkie wczesniej wydane ciasteczka sesji tego aktora.
+ *  Numer epoki wchodzi do podpisu cookie, wiec podbicie = natychmiastowe
+ *  wylogowanie ze wszystkich urzadzen, bez tabeli sesji do sprzatania. */
+export function bumpSessionEpoch(ctx: Ctx, actorId: number): number {
+  ctx.db.prepare("UPDATE actors SET session_epoch = session_epoch + 1 WHERE id = ?").run(actorId);
+  const r = ctx.db.prepare("SELECT session_epoch FROM actors WHERE id = ?").get(actorId) as
+    | { session_epoch: number }
+    | undefined;
+  return r?.session_epoch ?? 0;
+}
+
+export function sessionEpoch(ctx: Ctx, actorId: number): number {
+  const r = ctx.db.prepare("SELECT session_epoch FROM actors WHERE id = ?").get(actorId) as
+    | { session_epoch: number }
+    | undefined;
+  return r?.session_epoch ?? 0;
 }
 
 const DUMMY_SALT = Buffer.alloc(16, 7);

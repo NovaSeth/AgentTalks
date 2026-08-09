@@ -103,7 +103,7 @@ z liczbą pominiętych rekordów **i ich powodami**.
 
 ## Dane i kopie zapasowe
 
-Wszystko żyje w wolumenie `agenttalks-data` zamontowanym pod `/data`:
+Wszystko żyje w wolumenie `agenttalks_data` zamontowanym pod `/data`:
 `agenttalks.sqlite` (baza), `agenttalks.json` (konfiguracja z sekretem sesji, prawa 600),
 `files/` (przesłane pliki, etap 3).
 
@@ -117,7 +117,7 @@ docker exec agenttalks node bin/agenttalks.js backup /data/backups
 
 # odtworzenie: zatrzymaj kontener, podmień w wolumenie agenttalks.sqlite
 # (usuń też -wal/-shm) i katalog files/, wystartuj - migracje dociągną schemat
-docker run --rm -v agenttalks-data:/data alpine sh -c \
+docker run --rm -v agenttalks_data:/data alpine sh -c \
   'cp /data/backups/agenttalks-<stempel>/agenttalks.sqlite /data/ && rm -f /data/agenttalks.sqlite-wal /data/agenttalks.sqlite-shm'
 ```
 
@@ -125,7 +125,7 @@ Zgrywanie kopii poza maszynę: `tar` na wolumenie jak niżej (to już zwykłe pl
 zrzut z `backup` jest spójny sam w sobie):
 
 ```bash
-docker run --rm -v agenttalks-data:/data -v "$PWD:/backup" alpine \
+docker run --rm -v agenttalks_data:/data -v "$PWD:/backup" alpine \
   tar czf /backup/agenttalks-$(date +%F).tar.gz -C /data backups
 ```
 

@@ -16,11 +16,12 @@
  */
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
-import { assertCanPost, assertCanRead, getMember, recipientsOf } from "./conversations.ts";
+import { assertCanPost, assertCanRead, canRead, getMember, recipientsOf } from "./conversations.ts";
 import { badRequest, forbidden, notFound, tooLarge } from "./errors.ts";
 import { resolveMentions } from "./mentions.ts";
 import { clearTyping } from "./presence.ts";
 import { excerptOf, notify } from "./notifications.ts";
+import { deleteFilesOfMessage } from "./files.ts";
 
 export const MAX_BODY_BYTES = 65536;
 const DEFAULT_LIMIT = 50;
@@ -90,8 +91,17 @@ export const messageFromRow = (r: MsgRow): Message => ({
 function validateBody(body: string, maxBytes: number): string {
   const text = String(body ?? "").trim();
   if (!text) throw badRequest("puste_cialo", "wiadomosc nie moze byc pusta");
-  if (Buffer.byteLength(text, "utf8") > maxBytes) {
-    throw tooLarge("cialo_za_dlugie", `wiadomosc jest za dluga (limit ${maxBytes} B)`);
+  const bajty = Buffer.byteLength(text, "utf8");
+  if (bajty > maxBytes) {
+    // Komunikat mowi, O ILE za duzo i w czym mierzymy. "limit 65536 B" nie
+    // pomaga komus, kto liczy znaki - a polska litera to dwa bajty, wiec sam
+    // limit w bajtach jest dla czlowieka nieprzewidywalny. Klient dostaje takze
+    // `maxMessageBytes` w /api/me, wiec moze pokazac licznik ZANIM ktos wysle.
+    throw tooLarge(
+      "cialo_za_dlugie",
+      `wiadomosc jest o ${bajty - maxBytes} B za dluga (masz ${bajty} B, limit ${maxBytes} B - ` +
+        `polskie znaki licza sie podwojnie). Skroc ja albo wyslij jako plik.`,
+    );
   }
   return text;
 }
@@ -161,8 +171,16 @@ export function postMessage(
     );
     // conversationId pozwala rozwinac @all na wszystkich czlonkow kanalu.
     // Autor nie wspomina sam siebie - inaczej @all budzilby tez nadawce.
+    //
+    // canRead na koncu nie jest ostroznoscia, tylko poprawka bledu: wzmianka
+    // niesie ze soba TRESC (przez /api/mentions i przez wyimek w powiadomieniu),
+    // wiec bez tego filtra napisanie "@obcy" na kanale PRYWATNYM dostarczalo
+    // fragment rozmowy komus, kto nie ma do niej wstepu. Dla kanalu publicznego
+    // canRead przepuszcza kazdego, wiec wciaganie ludzi zawolaniem dziala jak
+    // dotad; blokowane sa wylacznie private, dm i grupy.
     const mentioned = resolveMentions(ctx, body, input.conversationId)
-      .filter((actorId) => actorId !== input.actorId);
+      .filter((actorId) => actorId !== input.actorId)
+      .filter((actorId) => canRead(ctx, input.conversationId, actorId));
     for (const actorId of mentioned) stmt.run(row.id, actorId);
 
     // Powiadomienia. W DM-ie i grupie liczy sie KAZDA wiadomosc (po to sa), na
@@ -171,8 +189,17 @@ export function postMessage(
     const conv = ctx.db.prepare("SELECT kind FROM conversations WHERE id = ?")
       .get(input.conversationId) as { kind: string } | undefined;
     const direct = conv?.kind === "dm" || conv?.kind === "group";
+    // Wyciszenie rozmowy (notify='none') ma cos znaczyc. Wczesniej przelacznik
+    // w UI nie wplywal na nic: powiadomienie powstawalo tak samo, wiec jedyna
+    // roznica byla ta, ze uzytkownik uwierzyl, ze go wyciszyl.
+    const wyciszeni = new Set(
+      (ctx.db.prepare("SELECT actor_id FROM members WHERE conversation_id = ? AND notify = 'none'")
+        .all(input.conversationId) as Array<{ actor_id: number }>).map((r) => r.actor_id),
+    );
+    const odbiorcy = (direct ? recipientsOf(ctx, input.conversationId) : mentioned)
+      .filter((id) => !wyciszeni.has(id));
     notified = notify(ctx, {
-      actorIds: direct ? recipientsOf(ctx, input.conversationId) : mentioned,
+      actorIds: odbiorcy,
       kind: direct ? "dm" : "mention",
       fromActorId: input.actorId,
       conversationId: input.conversationId,
@@ -264,6 +291,14 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
   if (row.deleted_at) throw badRequest("skasowana", "nie da sie edytowac skasowanej wiadomosci");
   const text = validateBody(body, MAX_BODY_BYTES);
 
+  // Kto byl wspomniany PRZED edycja - zeby powiadomic wylacznie tych, ktorzy
+  // doszli, a nie zasypywac powtorka kazdego przy poprawce literowki.
+  const mialiWzmianke = new Set(
+    (ctx.db.prepare("SELECT actor_id FROM mentions WHERE message_id = ?").all(id) as
+      Array<{ actor_id: number }>).map((r) => r.actor_id),
+  );
+  let nowoWspomniani: number[] = [];
+
   const message = tx(ctx.db, () => {
     ctx.db.prepare("UPDATE messages SET body = ?, edited_at = ? WHERE id = ?")
       .run(text, ctx.now(), id);
@@ -271,12 +306,29 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
     const stmt = ctx.db.prepare(
       "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?,?)",
     );
-    for (const a of resolveMentions(ctx, text, row.conversation_id)) {
-      if (a !== actorId) stmt.run(id, a);
-    }
+    // Ten sam filtr co przy wysylce: wzmianka niesie tresc, wiec nie moze
+    // dotrzec do kogos, kto nie ma dostepu do rozmowy (patrz postMessage).
+    const wspomniani = resolveMentions(ctx, text, row.conversation_id)
+      .filter((a) => a !== actorId)
+      .filter((a) => canRead(ctx, row.conversation_id, a));
+    for (const a of wspomniani) stmt.run(id, a);
+    // Edycja, ktora DODAJE zawolanie, musi powiadomic - inaczej "@michal, jednak
+    // zrob to" dopisane do wlasnej wiadomosci nie dociera do nikogo, a autor jest
+    // przekonany, ze zawolal. Powiadamiamy tylko NOWO wspomnianych.
+    nowoWspomniani = wspomniani.filter((a) => !mialiWzmianke.has(a));
     return messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
   });
 
+  if (nowoWspomniani.length) {
+    notify(ctx, {
+      actorIds: nowoWspomniani,
+      kind: "mention",
+      fromActorId: actorId,
+      conversationId: row.conversation_id,
+      messageId: id,
+      excerpt: excerptOf(text),
+    });
+  }
   onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
     type: "message_updated",
     conversationId: row.conversation_id,
@@ -293,9 +345,17 @@ export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
   const message = tx(ctx.db, () => {
     // Tresc znika naprawde, zeby "skasuj" znaczylo skasuj, a nie "ukryj w UI".
     // Wiersz zostaje, bo id jest kursorem i znacznikiem odczytu.
-    ctx.db.prepare("UPDATE messages SET body = '', deleted_at = ? WHERE id = ?")
+    //
+    // "Naprawde" musi obejmowac WSZYSTKIE kopie tresci, inaczej to zdanie jest
+    // nieprawdziwe, a nieprawdziwe zdanie o kasowaniu jest gorsze niz jego brak:
+    //  - meta wiadomosci-zalacznika trzyma nazwe pliku i typ,
+    //  - powiadomienia trzymaja wyimek tresci (excerpt),
+    //  - same bajty zalacznika leza w katalogu plikow i sa pobieralne po id.
+    ctx.db.prepare("UPDATE messages SET body = '', meta = NULL, deleted_at = ? WHERE id = ?")
       .run(ctx.now(), id);
     ctx.db.prepare("DELETE FROM mentions WHERE message_id = ?").run(id);
+    ctx.db.prepare("UPDATE notifications SET excerpt = NULL WHERE message_id = ?").run(id);
+    deleteFilesOfMessage(ctx, id);
     return messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
   });
 
@@ -323,28 +383,35 @@ export function markFixed(
   if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${input.id}`);
   if (row.deleted_at) throw badRequest("skasowana", "skasowanej wiadomosci nie da sie oznaczyc");
   assertCanRead(ctx, row.conversation_id, input.actorId);
-  ctx.db.prepare("UPDATE messages SET fixed_at = ?, fixed_by = ? WHERE id = ?")
-    .run(input.fixed ? ctx.now() : null, input.fixed ? input.actorId : null, input.id);
-  const message = messageFromRow(
-    ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow,
-  );
+  // Jedna transakcja: zmiana stanu i powiadomienie autora zgloszenia to jedno
+  // zdarzenie. Rozdzielone, przy padzie miedzy nimi zostawialy zgloszenie
+  // oznaczone jako naprawione, o czym autor nigdy by sie nie dowiedzial.
+  const message = tx(ctx.db, () => {
+    ctx.db.prepare("UPDATE messages SET fixed_at = ?, fixed_by = ? WHERE id = ?")
+      .run(input.fixed ? ctx.now() : null, input.fixed ? input.actorId : null, input.id);
+    if (input.fixed) {
+      // Wlasny rodzaj, nie "mention": lista powiadomien pisze zdanie na podstawie
+      // rodzaju, wiec oznaczenie naprawy jako wzmianki kazalo uzytkownikowi szukac
+      // w kanale zawolania, ktorego tam nie ma. Wyimek to sama tresc zgloszenia -
+      // opis akcji dokleja interfejs, wiec powielanie go tutaj bylo szumem.
+      notify(ctx, {
+        actorIds: [row.actor_id],
+        kind: "fix",
+        fromActorId: input.actorId,
+        conversationId: row.conversation_id,
+        messageId: row.id,
+        excerpt: excerptOf(row.body),
+      });
+    }
+    return messageFromRow(
+      ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow,
+    );
+  });
   onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
     type: "message_updated",
     conversationId: row.conversation_id,
     message,
   }));
-  // Autor zgloszenia dostaje powiadomienie: to on ma potwierdzic, ze objaw
-  // zniknal, wiec bez tego "czeka na potwierdzenie" czekaloby w prozni.
-  if (input.fixed) {
-    notify(ctx, {
-      actorIds: [row.actor_id],
-      kind: "mention",
-      fromActorId: input.actorId,
-      conversationId: row.conversation_id,
-      messageId: row.id,
-      excerpt: `oznaczyl Twoje zgloszenie jako naprawione - sprawdz i potwierdz: ${excerptOf(row.body)}`,
-    });
-  }
   return message;
 }
 

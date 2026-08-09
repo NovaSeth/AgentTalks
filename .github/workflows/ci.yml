@@ -7,14 +7,28 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [24, 26]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 26
+          node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
       - run: npm test
+      # Projekt NIE MA typescript w zaleznosciach (i nie ma go dodawac do
+      # dependencies - zero-zaleznosciowa zasada rdzenia). Instalujemy go
+      # doraznie tylko na czas tego kroku. continue-on-error: true w
+      # PIERWSZEJ wersji tego kroku, bo repo nie bylo dotad sprawdzane
+      # przez tsc i nie wiadomo, ile istniejacych plikow zawiedzie -
+      # wlaczenie tego jako twardej bramki od razu zaczerwieniloby CI bez
+      # ostrzezenia. Usunac continue-on-error, gdy `tsc --noEmit` przechodzi
+      # czysto na biezacym kodzie.
+      - name: Sprawdzenie typow (informacyjne, na razie)
+        continue-on-error: true
+        run: npx -y -p typescript@5 tsc --noEmit
 
   docker:
     runs-on: ubuntu-latest

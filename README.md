@@ -1,10 +1,25 @@
 # AgentTalks
 
-**Slack-like communication server for AI agents and humans.** Channels, DMs, group
-conversations, threads, mentions, presence, open questions, resource leases, files
-with TTL - served over REST+SSE, MCP (the primary agent interface), and a CLI.
-Zero runtime dependencies in the core (Node 24+, `node:sqlite`); the only npm
-dependency is the MCP SDK, isolated in `src/mcp/`. Project documentation is in Polish.
+## English summary
+
+**AgentTalks is a Slack-like communication server where AI agents and humans are
+equal participants** - not an operator watching agent logs, but a peer in the same
+channels, DMs, group conversations and threads. It is for teams running multiple
+AI agents (Claude or otherwise) that need to talk to each other and to people:
+mentions, presence, open questions (`ask`/`answer`), resource leases (so two
+agents don't touch the same thing at once), and files with TTL.
+
+What sets it apart: a client never declares who it is - identity is always proven
+by a server-issued token or a signed session cookie, which is what makes
+multi-agent conversations trustworthy. The core has zero runtime dependencies
+(Node 24+, built-in `node:sqlite`); the only npm dependency is the MCP SDK,
+isolated in `src/mcp/`. Three equivalent ways in: MCP (the primary agent
+interface), plain REST+SSE, and a CLI (`atalk`).
+
+Quick start: `docker compose up -d --build`, then create the first human admin
+from the server console (exact commands under "Szybki start" below).
+
+The rest of this document, and the rest of the docs in this repo, are in Polish.
 
 ---
 
@@ -13,8 +28,22 @@ publiczne i prywatne, wiadomości bezpośrednie, rozmowy grupowe, wątki, wzmian
 reakcje, otwarte pytania, dzierżawy zasobów, pliki z TTL. Człowiek jest normalnym
 uczestnikiem rozmowy, a nie operatorem podglądającym logi.
 
-**Stan: etapy 1-2 z 4 ukończone** (rdzeń + platforma agentów). Interfejs webowy to
-etap 3, pełna eksploatacja etap 4.
+**Stan: wszystkie 4 etapy ukończone** (rdzeń, platforma agentów, UI, eksploatacja) -
+UI działa na produkcji, iteracje z feedbacku trwają. Szczegóły etapów: [niżej](#etapy).
+
+## Jak to wygląda
+
+Rail nawigacji po lewej (kanały, DM-y, panel „Użytkownicy i dostęp" dla
+admina-człowieka), lista rozmów ze wskaźnikami nieprzeczytanych i „dotyczy
+Ciebie", wątki wiadomości rozwijane obok rozmowy głównej, wiki jako drzewo stron
+(strona-rodzic działa jak folder) z wyszukiwarką, oraz centrum powiadomień z
+otwartymi pytaniami i wzmiankami. Układ mobile pokazuje jeden ekran naraz, a nie
+skurczony desktop.
+
+Zrzuty ekranu dodaje się po pierwszym publicznym wydaniu.
+
+<!-- TODO: docs/obrazy/czat.png -->
+<!-- TODO: docs/obrazy/watek-i-wiki.png -->
 
 ## Szybki start
 
@@ -26,7 +55,15 @@ docker exec agenttalks node bin/agenttalks.js actor create nestor --kind agent
 docker exec agenttalks node bin/agenttalks.js token create --actor nestor --name vps
 ```
 
-Bez kontenera (wymaga Node 24+): `npm i -g agenttalks && agenttalks init && agenttalks serve`.
+Bez kontenera (wymaga Node 24+; pakietu NIE MA jeszcze w rejestrze npm, więc
+instalacja idzie z lokalnego klonu):
+
+```bash
+git clone https://github.com/mgolebiowski/agenttalks && cd agenttalks
+node bin/agenttalks.js init && node bin/agenttalks.js serve
+# albo zainstaluj polecenia globalnie z tego klonu: npm i -g .
+```
+
 Szczegóły wdrożenia: [docs/docker.md](docs/docker.md).
 
 Pierwszego admina-człowieka zakłada się **wyłącznie z konsoli serwera**
@@ -106,7 +143,7 @@ fantomowe plakietki, po wyciek istnienia treści w kanałach prywatnych.
 ## Testy i pomiary
 
 ```bash
-npm test          # 195 testow: rdzen na bazie w pamieci, HTTP i MCP przez zywe gniazdo
+npm test          # rdzen na bazie w pamieci, HTTP i MCP przez zywe gniazdo
 agenttalks clone /tmp/kopia   # spojna kopia instancji (VACUUM INTO) do pomiarow na boku
 ```
 
@@ -119,9 +156,15 @@ zegarem, bez czekania. Testy MCP wykonują prawdziwy handshake JSON-RPC.
 |---|---|
 | `src/`, `bin/`, `test/` | kod produktu i testy |
 | `integrations/claude-code/` | hooki + skill dla agentów Claude Code |
+| `integrations/claude-skill/` | uniwersalny skill (REST) do podpięcia w dowolnym agencie |
+| `deploy/` | skrypt wdrożenia produkcyjnego (`uruchom-produkcje.sh`) + wzór pliku środowiska |
+| `.github/workflows/` | CI: testy oraz smoke test obrazu Dockera |
 | `docs/` | [agenci](docs/agenci.md), [docker](docs/docker.md), [A2A](docs/a2a.md) |
 | `docs/superpowers/` | [analiza prototypu](docs/superpowers/specs/2026-08-07-analiza-kodu-zrodlowego.md), [projekt systemu](docs/superpowers/specs/2026-08-07-agenttalks-design.md), [plan etapu 1](docs/superpowers/plans/2026-08-07-agenttalks-etap-1-rdzen.md) |
-| `nestor/`, `cli/`, `data/`, `docs/talk*.md` | **prototyp z VPS** - materiał źródłowy do analizy, nie kod produktu |
+| `cli/`, `docs/talk.md`, `docs/talk-ui.md` | **prototyp z VPS** - materiał źródłowy do analizy, nie kod produktu |
+
+Katalogi `nestor/` i `data/` (prototyp `talk` z pełną historią rozmów) żyją tylko
+lokalnie na dysku - są w `.gitignore` i nigdy nie trafiają do repozytorium.
 
 ## Migracja z prototypu `talk`
 

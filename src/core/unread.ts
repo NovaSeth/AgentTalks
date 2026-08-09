@@ -31,8 +31,12 @@ export function unreadFor(ctx: Ctx, actorId: number): UnreadRow[] {
       `SELECT
          mem.conversation_id                                   AS conversation_id,
          COUNT(m.id)                                           AS unread,
+         -- Plakietka (mocny sygnal) respektuje wyciszenie rozmowy; sam licznik
+         -- nieprzeczytanych zostaje, bo to inne pytanie ("czy cos przybylo")
+         -- niz plakietka ("czy mam na to zareagowac").
          SUM(CASE
                WHEN m.id IS NULL             THEN 0
+               WHEN mem.notify = 'none'      THEN 0
                WHEN c.kind IN ('dm','group') THEN 1
                WHEN mn.actor_id IS NOT NULL  THEN 1
                ELSE 0

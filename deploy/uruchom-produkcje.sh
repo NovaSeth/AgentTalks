@@ -101,9 +101,13 @@ kod=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/")
 echo "bramka zamknieta (oczekiwane 401 albo 200 przy wylaczonej bramce): $kod"
 haslo_host=$(z_env AGENTTALKS_SECRETS_DIR)/site-password
 if [[ -r $haslo_host ]]; then
-  wpuszcza=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-    "http://127.0.0.1:${PORT}/api/site-gate" -H 'content-type: application/json' \
-    --data "$(printf '{"password":"%s"}' "$(cat "$haslo_host")")")
+  # Haslo idzie do curl-a przez STDIN (--data @-), NIE jako argument w linii
+  # polecen. Argumenty procesu (w tym `curl ... --data "haslo-w-tekscie"`) sa
+  # widoczne w `ps aux` / `/proc/<pid>/cmdline` dla kazdego na maszynie przez
+  # caly czas trwania zadania - STDIN nie zostawia takiego sladu.
+  wpuszcza=$(printf '{"password":"%s"}' "$(cat "$haslo_host")" | curl -s -o /dev/null \
+    -w '%{http_code}' -X POST "http://127.0.0.1:${PORT}/api/site-gate" \
+    -H 'content-type: application/json' --data @-)
   echo "bramka wpuszcza wlasciwe haslo (oczekiwane 200): $wpuszcza"
   [[ $wpuszcza == 200 ]] || { echo "STOP: bramka nie wpuszcza wlasciwego hasla." >&2; exit 1; }
   [[ $kod == 401 ]] || { echo "STOP: bramka wlaczona, a strona odpowiada $kod." >&2; exit 1; }

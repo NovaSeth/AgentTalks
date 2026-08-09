@@ -1,14 +1,15 @@
 /** Logowanie ludzi i "kim jestem". Agenci nie loguja sie - maja token. */
 import { createActor, listActors, verifyPassword } from "../../core/actors.ts";
-import { listForActor } from "../../core/conversations.ts";
+import { listForActor, myMemberships } from "../../core/conversations.ts";
 import { unreadFor } from "../../core/unread.ts";
 import { unauthorized, badRequest, tooMany } from "../../core/errors.ts";
-import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requireAdmin, requireAuth }
+import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requestIsSecure, requireAdmin, requireAuth }
   from "../auth.ts";
 import { json, readJson, str } from "../respond.ts";
 import { firstConnectGuidelines, guidelinesText } from "../../core/guidelines.ts";
 import { firstConnectNews } from "../../core/news.ts";
 import { unreadNotificationCount } from "../../core/notifications.ts";
+import { MAX_WIKI_BYTES } from "../../core/wiki.ts";
 import { redeemInvite } from "../../core/invites.ts";
 import { getActor, getActorByHandle } from "../../core/actors.ts";
 import {
@@ -19,12 +20,19 @@ import {
   verifyAssertion,
 } from "../../core/webauthn.ts";
 import type { IncomingMessage } from "node:http";
+import { createHmac } from "node:crypto";
 import type { Config } from "../../config.ts";
 import type { Router } from "../router.ts";
 
-/** rpId (domena) i dozwolone originy dla WebAuthn. Produkcja bierze je
- *  z AGENTTALKS_BASE_URL; bez niego (dev) - z naglowka Host, z oboma
- *  schematami, bo lokalnie chodzi sie po http. */
+/**
+ * rpId (domena) i dozwolone originy dla WebAuthn.
+ *
+ * Produkcja bierze je z AGENTTALKS_BASE_URL. Bez niego zrodlem jest naglowek
+ * Host, ktory podaje KLIENT - a rpId decyduje o tym, dla jakiej domeny klucz
+ * zostanie zapisany i przyjety. Dlatego droga "z Hosta" jest dozwolona TYLKO
+ * lokalnie (dev): na wystawionej instancji brak baseUrl konczy sie jasnym
+ * bledem konfiguracji zamiast cicha zgoda na cudza domene.
+ */
 function webauthnParams(req: IncomingMessage, config: Config): { rpId: string; origins: string[] } {
   if (config.baseUrl) {
     const u = new URL(config.baseUrl);
@@ -32,7 +40,27 @@ function webauthnParams(req: IncomingMessage, config: Config): { rpId: string; o
   }
   const host = String(req.headers.host ?? "localhost");
   const hostname = host.replace(/:\d+$/, "");
+  const lokalnie = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  if (!lokalnie) {
+    throw badRequest(
+      "brak_base_url",
+      "logowanie kluczem (passkey) wymaga ustawionego AGENTTALKS_BASE_URL - bez niego " +
+        "domena klucza pochodzilaby z naglowka podanego przez klienta",
+    );
+  }
   return { rpId: hostname, origins: [`http://${host}`, `https://${host}`] };
+}
+
+/**
+ * Atrapy dla nieznanego konta. Endpoint opcji logowania odpowiadal pusta lista
+ * dla nieistniejacego handle i niepusta dla istniejacego - czyli byl wyrocznia
+ * "czy takie konto tu jest", mimo komentarza, ktory twierdzil, ze nia nie jest.
+ * Deterministyczne atrapy (te same dla tego samego handle) sprawiaja, ze ksztalt
+ * odpowiedzi nie zdradza niczego, a powtorne pytanie nie ujawnia losowosci.
+ */
+function atrapaCredentials(secret: string, handle: string): string[] {
+  const mac = createHmac("sha256", secret).update(`webauthn-atrapa:${handle.toLowerCase()}`).digest();
+  return [mac.toString("base64url")];
 }
 
 // Rate limit logowania: scrypt jest drogi CELOWO (hasla), wiec bez limitu
@@ -43,7 +71,16 @@ const LOGIN_WINDOW_SEC = 900;
 const LOGIN_MAX_ATTEMPTS = 10;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
+/** Mapy limiterow rosna wraz z liczba roznych adresow zrodlowych i nic ich nie
+ *  zmniejsza - przy skanie z tysiecy IP to wyciek pamieci procesu. Sprzatamy
+ *  wygasle okna przy okazji, bez osobnego timera. */
+function sprzatniecieOkien(mapa: Map<string, { count: number; resetAt: number }>, now: number): void {
+  if (mapa.size < 1000) return;
+  for (const [k, v] of mapa) if (v.resetAt <= now) mapa.delete(k);
+}
+
 function checkLoginLimit(key: string, now: number): void {
+  sprzatniecieOkien(loginAttempts, now);
   const entry = loginAttempts.get(key);
   if (!entry || entry.resetAt <= now) {
     loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_SEC });
@@ -56,8 +93,17 @@ function checkLoginLimit(key: string, now: number): void {
   }
 }
 
+/** Udane logowanie kasuje licznik prob. Limit ma powstrzymywac ZGADYWANIE, a nie
+ *  karac czlowieka, ktory sie zalogowal: bez tego dziesiec normalnych wejsc
+ *  (albo pare wejsc passkeyem, ktore kosztuja po dwie proby) blokowalo konto
+ *  wlascicielowi na 15 minut. */
+function zwolnijLimitLogowania(key: string): void {
+  loginAttempts.delete(key);
+}
+
 const enrollAttempts = new Map<string, { count: number; resetAt: number }>();
 function checkEnrollLimit(key: string, now: number): void {
+  sprzatniecieOkien(enrollAttempts, now);
   const e = enrollAttempts.get(key);
   if (!e || e.resetAt <= now) { enrollAttempts.set(key, { count: 1, resetAt: now + 3600 }); return; }
   e.count += 1;
@@ -112,7 +158,8 @@ export function registerAuthRoutes(router: Router): void {
     // Jeden komunikat dla zlego handle i zlego hasla: inaczej odpowiedz serwera
     // jest wyrocznia "czy taki uzytkownik istnieje".
     if (!actor) throw unauthorized("zle_dane", "nieprawidlowy uzytkownik lub haslo");
-    const cookie = makeCookie(rc.config, actor.id, rc.config.sessionTtlSec);
+    zwolnijLimitLogowania(clientKey(req, rc.config.trustProxy));
+    const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
     res.setHeader("set-cookie", cookie);
     json(res, 200, {
       actor,
@@ -178,10 +225,15 @@ export function registerAuthRoutes(router: Router): void {
     let allowCredentials: string[] = [];
     if (handle) {
       const actor = getActorByHandle(rc.ctx, handle);
-      // Nieistniejacy handle dostaje pusta liste, nie blad - endpoint nie moze
-      // byc wyrocznia "czy taki uzytkownik istnieje".
       if (actor && actor.kind === "human") {
         allowCredentials = listCredentials(rc.ctx, actor.id).map((c) => c.id);
+      }
+      // Konto nieistniejace ALBO bez klucza dostaje atrape zamiast pustej listy:
+      // pusta lista rozniła sie od niepustej i tym samym odpowiadala na pytanie
+      // "czy taki uzytkownik istnieje". Przegladarka i tak nie znajdzie tego
+      // klucza, wiec uzytkownik widzi normalna odmowe.
+      if (allowCredentials.length === 0) {
+        allowCredentials = atrapaCredentials(rc.config.secret, handle);
       }
     }
     json(res, 200, { challenge: issueChallenge("login", null), rpId, allowCredentials });
@@ -201,7 +253,7 @@ export function registerAuthRoutes(router: Router): void {
     });
     const actor = getActor(rc.ctx, actorId);
     if (!actor || actor.disabledAt) throw unauthorized("konto_wylaczone", "to konto jest wylaczone");
-    const cookie = makeCookie(rc.config, actor.id, rc.config.sessionTtlSec);
+    const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
     res.setHeader("set-cookie", cookie);
     json(res, 200, {
       actor,
@@ -218,6 +270,10 @@ export function registerAuthRoutes(router: Router): void {
     json(res, 200, {
       actor,
       conversations: listForActor(rc.ctx, actor.id),
+      // Czlonkostwa razem z lista rozmow: klient potrzebuje obu, zeby cokolwiek
+      // narysowac, wiec osobne zapytanie o to samo bylo podwojnym liczeniem
+      // przy kazdym starcie interfejsu.
+      memberships: myMemberships(rc.ctx, actor.id),
       unread: unreadFor(rc.ctx, actor.id),
       // Czy aktor ma juz passkey - UI na tej podstawie proponuje (albo nie)
       // wlaczenie logowania odciskiem na tym urzadzeniu.
@@ -225,6 +281,14 @@ export function registerAuthRoutes(router: Router): void {
       // Licznik centrum powiadomien - zeby jedno wywolanie /api/me dalo tez
       // odpowiedz "czy cos mnie wolalo", bez drugiego zapytania.
       notifications: { unread: unreadNotificationCount(rc.ctx, actor.id) },
+      // Limity instancji podane WPROST: klient, ktory ich nie zna, moze tylko
+      // wyslac i zobaczyc blad - a dla czlowieka piszacego dlugi raport to jest
+      // najgorszy moment na dowiedzenie sie o limicie.
+      limity: {
+        maxMessageBytes: rc.config.maxMessageBytes,
+        maxFileBytes: rc.config.maxFileBytes,
+        maxWikiBytes: MAX_WIKI_BYTES,
+      },
       ...(guidelines ? { guidelines } : {}),
       ...(news ? { news } : {}),
     });

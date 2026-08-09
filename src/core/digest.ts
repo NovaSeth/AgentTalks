@@ -6,9 +6,12 @@
  * wprost, ze parytet CLI/UI nie obejmowal trzeciego klienta (agenta po HTTP);
  * ten modul, wystawiony przez REST i MCP, zamyka te luke.
  *
- * Kotwica: ostatnia przeczytana wiadomosc (max z last_read_message_id).
- * Gdy aktor nigdy nic nie oznaczyl, bierzemy jego ostatnia wlasna wiadomosc -
- * "od kiedy ostatnio bylem aktywny", nie "od poczatku swiata".
+ * Kotwica jest PER ROZMOWA: kazda liczy sie od wlasnego znacznika odczytu
+ * (`members.last_read_message_id`). Jedna wspolna kotwica - maksimum ze
+ * wszystkich znacznikow - powodowala, ze przeczytanie jednego gadatliwego
+ * kanalu chowalo nieprzeczytane wiadomosci prywatne: digest odpowiadal "nic Cie
+ * nie ominelo", gdy czekaly trzy DM-y. To jest ta sama semantyka, ktora ma juz
+ * licznik nieprzeczytanych, wiec oba mechanizmy mowia teraz to samo.
  */
 import type { Ctx } from "./ctx.ts";
 import { messageFromRow, type Message, type MsgRow } from "./messages.ts";
@@ -26,17 +29,18 @@ export type Digest = {
 };
 
 export function digestFor(ctx: Ctx, actorId: number): Digest | null {
-  const anchorRow = ctx.db
-    .prepare(
-      `SELECT MAX(x) AS anchor FROM (
-         SELECT MAX(last_read_message_id) AS x FROM members WHERE actor_id = :me
-         UNION ALL
-         SELECT MAX(id) FROM messages WHERE actor_id = :me
-       )`,
-    )
-    .get({ me: actorId }) as { anchor: number | null };
-  const sinceId = anchorRow.anchor ?? 0;
-
+  // Kotwica JEST PER ROZMOWA, nie globalna. Wczesniej brano MAX ze wszystkich
+  // znacznikow odczytu, wiec przeczytanie jednego gadatliwego kanalu przesuwalo
+  // kotwice ponad wszystko inne i chowalo nieprzeczytane DM-y: digest mowil
+  // "nic Cie nie ominelo", gdy czekaly trzy wiadomosci prywatne. Fallbackiem dla
+  // rozmowy bez znacznika jest 0 (czyli "wszystko jest nowe"), bo brak znacznika
+  // znaczy, ze aktor nie widzial jeszcze niczego w tej rozmowie.
+  // Zachowane w odpowiedzi dla zgodnosci klientow: najstarszy znacznik odczytu,
+  // czyli "od kiedy najdalej siega ten digest". Nie sluzy juz do liczenia.
+  const najstarszy = ctx.db
+    .prepare("SELECT COALESCE(MIN(last_read_message_id), 0) AS x FROM members WHERE actor_id = ?")
+    .get(actorId) as { x: number };
+  const sinceId = najstarszy.x;
   const rows = ctx.db
     .prepare(
       `SELECT a.handle AS who,
@@ -46,10 +50,10 @@ export function digestFor(ctx: Ctx, actorId: number): Digest | null {
          JOIN members mem ON mem.conversation_id = m.conversation_id AND mem.actor_id = :me
          JOIN conversations c ON c.id = m.conversation_id
          JOIN actors a ON a.id = m.actor_id
-        WHERE m.id > :since AND m.actor_id <> :me AND m.deleted_at IS NULL
+        WHERE m.id > mem.last_read_message_id AND m.actor_id <> :me AND m.deleted_at IS NULL
         GROUP BY a.handle, conv`,
     )
-    .all({ me: actorId, since: sinceId }) as Array<{ who: string; conv: string; n: number }>;
+    .all({ me: actorId }) as Array<{ who: string; conv: string; n: number }>;
 
   if (rows.length === 0) return null;
 
@@ -66,10 +70,10 @@ export function digestFor(ctx: Ctx, actorId: number): Digest | null {
     .prepare(
       `SELECT m.id FROM messages m
          JOIN members mem ON mem.conversation_id = m.conversation_id AND mem.actor_id = ?
-        WHERE m.id > ? AND m.actor_id <> ? AND m.deleted_at IS NULL
+        WHERE m.id > mem.last_read_message_id AND m.actor_id <> ? AND m.deleted_at IS NULL
         ORDER BY m.id DESC LIMIT 1`,
     )
-    .get(actorId, sinceId, actorId) as { id: number } | undefined;
+    .get(actorId, actorId) as { id: number } | undefined;
 
   return {
     sinceId,

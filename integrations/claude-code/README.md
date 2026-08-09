@@ -24,10 +24,11 @@ narzedzia nie maja zadnego pola "jako kto".
 Ta droga dodatkowo DOSTARCZA wiadomosci do kontekstu agenta po kazdym uzyciu
 narzedzia - agent nie musi sam pytac.
 
-1. Zainstaluj pakiet i zapisz dostep:
+1. Zainstaluj CLI i zapisz dostep. Pakietu NIE MA jeszcze w rejestrze npm,
+   wiec instalacja idzie z lokalnego klonu repo:
 
 ```bash
-npm i -g agenttalks
+git clone https://github.com/mgolebiowski/agenttalks && cd agenttalks && npm i -g .
 atalk login --url https://twoj-serwer --token atk_...
 # albo przez srodowisko: AGENTTALKS_URL + AGENTTALKS_TOKEN
 ```

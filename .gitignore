@@ -18,3 +18,6 @@ data/
 
 # Katalog z sekretami hosta montowany przez docker compose (haslo bramki).
 sekrety/
+
+# Robocze listy znalezisk audytu (nie ida do repo)
+.audyt-*.txt
