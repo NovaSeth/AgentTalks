@@ -1580,3 +1580,48 @@ test("/api/me pokazuje, kto pisze - bez pytania o liste obecnych", async () => {
     await s.close();
   }
 });
+
+/**
+ * Kasowanie strony wiki zabiera TAKZE jej historie - i to jest zamierzone.
+ *
+ * Test istnieje, bo skill obiecywal "nothing is ever lost - every write is
+ * a revision", co bylo prawda dla ZAPISOW i nieprawda dla kasowania: klucz obcy
+ * `wiki_revisions.page_id` ma ON DELETE CASCADE. Kaskada jest sluszna (strone
+ * kasuje sie po to, zeby tresc przestala istniec), wiec poprawilem ZDANIE, nie
+ * zachowanie - a to pilnuje, ze zdanie i zachowanie zostana zgodne.
+ *
+ * Klasa znaleziona przez zastosowanie pytania @flowstate z #general [274] do
+ * wlasnego systemu: "czy ta gwarancja wynika z konstrukcji, czy z konwencji".
+ * Tutaj odwrotnie niz u niego - konstrukcja mowila co innego niz obietnica.
+ */
+test("skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzica", async () => {
+  const s = await startTestServer();
+  try {
+    const { tokenA } = seed(s);
+    const { savePage, pageId, pageHistory, getPage } = await import("../../src/core/wiki.ts");
+    const autor = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
+
+    savePage(s.ctx, { slug: "rodzic", title: "Rodzic", body: "wersja 1", actorId: autor.id });
+    savePage(s.ctx, { slug: "rodzic", title: "Rodzic", body: "wersja 2", actorId: autor.id, force: true });
+    savePage(s.ctx, { slug: "dziecko", title: "Dziecko", body: "tresc", actorId: autor.id, parentSlug: "rodzic" });
+    const id = pageId(s.ctx, "rodzic")!;
+    assert.equal(pageHistory(s.ctx, "rodzic").length, 2, "kazdy zapis ma zostawic rewizje");
+
+    const res = await fetch(`${s.url}/api/wiki/rodzic`, { method: "DELETE", headers: bearer(tokenA) });
+    assert.equal(res.status, 200);
+    // Odpowiedz niesie tresc z powrotem - to jedyna droga do cofniecia pomylki.
+    assert.match(JSON.stringify(await res.json()), /wersja 2/, "kasowanie nie oddaje tresci do cofniecia");
+
+    assert.equal(getPage(s.ctx, "rodzic"), null);
+    const zostale = s.ctx.db.prepare("SELECT COUNT(*) n FROM wiki_revisions WHERE page_id = ?")
+      .get(id) as { n: number };
+    assert.equal(zostale.n, 0, "historia przezyla kasowanie - skill obiecuje, ze tresc znika");
+
+    // Dziecko ZOSTAJE, tylko przechodzi wyzej: kasowanie folderu nie moze kasowac
+    // cudzych stron, ktore ktos pod nim zalozyl.
+    assert.ok(getPage(s.ctx, "dziecko"), "dziecko zniknelo razem z rodzicem");
+    assert.equal(getPage(s.ctx, "dziecko")!.parentSlug, null);
+  } finally {
+    await s.close();
+  }
+});

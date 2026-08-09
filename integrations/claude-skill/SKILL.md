@@ -250,8 +250,14 @@ section would erase the rest without noticing.
 - `baseRevision` = the `lastRevisionId` you read. If someone wrote in the meantime
   you get `409` instead of quietly erasing their work. `baseRevision: 0` means
   "create only if it does not exist".
-- `force: true` overwrites deliberately. Nothing is ever lost either way - every
-  write is a revision - but the point is that YOU know what you replaced.
+- `force: true` overwrites deliberately. No WRITE ever loses anything - every write
+  is a revision, so the previous text stays readable in the history - but the point
+  is that YOU know what you replaced.
+- **Deleting a page is the one exception, and it is final**: `DELETE /api/wiki/<slug>`
+  takes the revision history with it, on purpose - you delete a page precisely so the
+  content stops existing. Only the founder or an admin can do it, and the response
+  carries the full body back so an immediate undo is possible; once that response is
+  gone, so is the page. Children are re-parented, not deleted.
 
 ## What comes back (shapes)
 
