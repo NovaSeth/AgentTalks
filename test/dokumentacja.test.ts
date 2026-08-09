@@ -263,3 +263,66 @@ test("kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem", async () =
     await s.close();
   }
 });
+
+/**
+ * Kazdy import miedzy modulami UI musi wskazywac na istniejacy eksport.
+ *
+ * Moduly ES nie sa laskawe: import nazwy, ktorej modul nie eksportuje, wywala
+ * CALY graf przy ladowaniu - uzytkownik dostaje pusta strone, a nie zepsuty
+ * kawalek. Ta warstwa nie ma zadnych testow przegladarkowych, wiec jedyna
+ * kontrola bylo otwarcie strony recznie. Dzis zmienilem importy w czterech
+ * modulach i sprawdzilem to dopiero na koncu, przegladarka.
+ *
+ * Test robi to samo, tylko przy kazdym przebiegu i bez przegladarki.
+ */
+test("moduly UI: kazdy import ma odpowiadajacy eksport", () => {
+  const dir = fileURLToPath(new URL("../src/http/ui/js/", import.meta.url));
+  const pliki = readdirSync(dir).filter((f) => f.endsWith(".js"));
+
+  const eksporty = new Map<string, Set<string>>();
+  for (const f of pliki) {
+    const src = readFileSync(dir + f, "utf8");
+    const n = new Set<string>();
+    for (const m of src.matchAll(/^export\s+(?:async\s+)?function\s+([\w$]+)/gm)) n.add(m[1]);
+    for (const m of src.matchAll(/^export\s+class\s+([\w$]+)/gm)) n.add(m[1]);
+    // `export const A = 1, B = 2` deklaruje WIELE nazw jednym slowem kluczowym.
+    // Branie tylko pierwszej dawalo trzy falszywe alarmy przy pierwszym przebiegu
+    // (i czwarty, bo `$` jest legalnym znakiem w nazwie, a nie bylo go we wzorcu).
+    for (const m of src.matchAll(/^export\s+(?:const|let|var)\s+(.+)$/gm)) {
+      for (const czesc of m[1].split(/,(?![^(]*\))/)) {
+        const r = czesc.match(/^\s*([\w$]+)\s*=/);
+        if (r) n.add(r[1]);
+      }
+    }
+    for (const m of src.matchAll(/^export\s*\{([^}]*)\}/gm)) {
+      for (const x of m[1].split(",")) {
+        const nazwa = x.trim().split(" as ").pop()?.trim();
+        if (nazwa) n.add(nazwa);
+      }
+    }
+    eksporty.set(f, n);
+  }
+
+  const bledy: string[] = [];
+  let sprawdzonych = 0;
+  for (const f of pliki) {
+    const src = readFileSync(dir + f, "utf8");
+    for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*"\.\/([\w.-]+)"/gs)) {
+      const cel = m[2];
+      if (!eksporty.has(cel)) { bledy.push(`${f} -> nie ma modulu ${cel}`); continue; }
+      for (const x of m[1].split(",")) {
+        const nazwa = x.trim().split(" as ")[0].trim();
+        if (!nazwa) continue;
+        sprawdzonych++;
+        if (!eksporty.get(cel)!.has(nazwa)) {
+          bledy.push(`${f} importuje "${nazwa}" z ${cel}, ktory tego nie eksportuje`);
+        }
+      }
+    }
+  }
+
+  // Bez tego progu zepsute wyciaganie meldowaloby "wszystko dobrze" - i wlasnie
+  // tak zachowala sie pierwsza wersja tego sprawdzenia.
+  assert.ok(sprawdzonych > 250, `sprawdzono tylko ${sprawdzonych} powiazan - wyciaganie sie zepsulo`);
+  assert.deepEqual(bledy, [], `zepsute importy - strona nie wstanie w ogole:\n  ${bledy.join("\n  ")}`);
+});
