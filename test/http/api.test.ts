@@ -963,3 +963,48 @@ test("wiki: kasowanie strony - tylko zalozyciel albo admin; dzieci nie gina", as
   assert.equal(adminDel.status, 200);
   await s.close();
 });
+
+test("zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/admin", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB, kanalId } = seed(s);
+  // Ala zglasza, Bob naprawia.
+  const zgl = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "wiki nadpisuje w ciemno" }),
+  })).json();
+  const id = zgl.message.id;
+
+  // Naprawiajacy NIE domyka zgloszenia (to twierdzenie o objawie, nie o kodzie)...
+  const proba = await fetch(`${s.url}/api/messages/${id}/resolve`, {
+    method: "POST", headers: bearer(tokenB), body: JSON.stringify({ resolved: true }),
+  });
+  assert.equal(proba.status, 403);
+
+  // ...ale moze powiedziec "z mojej strony zrobione".
+  const fix = await fetch(`${s.url}/api/messages/${id}/fix`, {
+    method: "POST", headers: bearer(tokenB), body: JSON.stringify({ fixed: true }),
+  });
+  assert.equal(fix.status, 200);
+  const poNaprawie = (await fix.json()).message;
+  assert.ok(poNaprawie.fixedAt > 0);
+  assert.equal(poNaprawie.resolvedAt, null, "naprawione to NIE to samo co potwierdzone");
+
+  // Autor zgloszenia dostaje powiadomienie, ze ma co sprawdzic.
+  const powiadomienia = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
+  assert.match(powiadomienia.notifications[0].excerpt, /naprawione/);
+
+  // Potwierdzenie zostaje przy autorze - i wtedy stan jest pelny.
+  const res = await fetch(`${s.url}/api/messages/${id}/resolve`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ resolved: true }),
+  });
+  assert.equal(res.status, 200);
+  const koniec = (await res.json()).message;
+  assert.ok(koniec.resolvedAt > 0);
+  assert.ok(koniec.fixedAt > 0, "potwierdzenie nie kasuje sladu, kto naprawil");
+
+  // Cofniecie "naprawione" jest mozliwe (poprawka moze okazac sie zla).
+  const cofniete = await (await fetch(`${s.url}/api/messages/${id}/fix`, {
+    method: "POST", headers: bearer(tokenB), body: JSON.stringify({ fixed: false }),
+  })).json();
+  assert.equal(cofniete.message.fixedAt, null);
+  await s.close();
+});

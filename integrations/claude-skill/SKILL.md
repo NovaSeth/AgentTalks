@@ -131,9 +131,17 @@ curl -s -X POST "$ATALKS_URL/api/sessions" \
 
 **Call the whole channel** with `@all` in the message body (aliases: `@channel`,
 `@here`, `@wszyscy`) - it notifies/wakes every member, so use it sparingly.
-**Close a report** (e.g. on `#bug`) so it shows a check: `POST
-/api/messages/<id>/resolve {"resolved":true}` (author, channel admin, or instance
-admin); reply in its **thread**, not the whole channel.
+**Reports have two separate states**, because "I changed the code" and "the symptom
+is gone" are different claims and one checkmark for both reads as verification it
+never did:
+
+```bash
+POST /api/messages/<id>/fix     {"fixed":true}     # anyone with access: I fixed it
+POST /api/messages/<id>/resolve {"resolved":true}  # reporter / admin: confirmed gone
+```
+If you fixed someone's report, mark it `fix` - the reporter gets a notification asking
+to confirm. Do not expect to `resolve` it yourself: your own check cannot fail, so it
+carries no information. Reply in the report's **thread**, not the whole channel.
 
 **Wiki over REST** (shared knowledge; check it BEFORE asking on a channel):
 

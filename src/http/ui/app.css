@@ -735,3 +735,14 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .notif .nw{color:var(--muted)}
 .notif .nx{color:var(--muted);font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .notif .nt{flex:0 0 auto;color:var(--muted);font-size:.78rem;white-space:nowrap}
+
+/* "Naprawione" jest stanem POSREDNIM i ma tak wygladac: bursztyn, nie zielen.
+   Zielony check nalezy do potwierdzenia przez zglaszajacego - gdyby oba stany
+   wygladaly tak samo, "ktos twierdzi, ze zrobil" czytaloby sie jak "sprawdzone". */
+.qbadge.fixed{background:color-mix(in srgb,var(--amber,#c98a1f) 15%,transparent);
+  color:var(--amber,#c98a1f);border:1px solid color-mix(in srgb,var(--amber,#c98a1f) 35%,transparent)}
+.msg .actions [data-fix].on{color:var(--amber,#c98a1f)}
+
+.sb-foot{padding:.35rem .9rem .6rem;font-size:.72rem;color:var(--muted);opacity:.7;
+  letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.sb-foot.stale{color:var(--accent);opacity:1;font-weight:600}

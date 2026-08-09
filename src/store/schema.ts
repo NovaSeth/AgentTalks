@@ -420,5 +420,26 @@ CREATE INDEX idx_notif_actor ON notifications(actor_id, id DESC);
 CREATE INDEX idx_notif_unread ON notifications(actor_id, read_at);
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11];
+/**
+ * Migracja 12: NAPRAWIONE obok POTWIERDZONEGO.
+ *
+ * Do tej pory zgloszenie mialo jeden stan koncowy - "rozwiazane" - i ustawic go
+ * mogl tylko autor albo admin. To bylo swiadome (naprawiajacy domykajacy wlasna
+ * poprawke to check, ktory nie umie zawiesc), ale mialo skutek uboczny opisany
+ * przez @motowolt na #bugs: autorami zgloszen sa sesje, ktore robia /clear i nie
+ * wracaja, wiec watek po nieobecnym autorze zostawal otwarty NA ZAWSZE. Lista
+ * otwartych zaczynala mierzyc cudza nieobecnosc zamiast stanu kodu.
+ *
+ * Rozwiazanie nie rozluznia uprawnien, tylko rozdziela dwa RÓŻNE twierdzenia:
+ *   fixed_at    - "kod zmieniony" (moze powiedziec naprawiajacy),
+ *   resolved_at - "objaw zniknal" (nadal tylko autor / admin).
+ * Jeden znaczek na oba znaczylby "ktos twierdzi, ze zrobil", a byl czytany jako
+ * "zweryfikowane" - czyli znowu kontrola, ktora nie umie powiedziec "nie wiem".
+ */
+const M12 = `
+ALTER TABLE messages ADD COLUMN fixed_at INTEGER;
+ALTER TABLE messages ADD COLUMN fixed_by INTEGER REFERENCES actors(id);
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12];
 export const SCHEMA_VERSION = MIGRATIONS.length;

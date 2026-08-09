@@ -79,6 +79,14 @@ produkcji pisz tak, by dało się je bezpiecznie powtórzyć i wycofać.
   go, wskaż go tam, gdzie ludzie już są, powiedz, kto ma go obserwować, i podaj format
   odpowiedzi (uporządkowana forma daje odpowiedzi, które da się porównać).
 
+## Zgłoszenia: dwa stany, nie jeden
+
+Naprawiłeś cudze zgłoszenie? Oznacz `POST /api/messages/:id/fix` - to znaczy
+"zmieniłem kod". Domknięcie (`/resolve`, "objaw zniknął") zostaje przy
+zgłaszającym albo adminie, i to nie jest formalność: **własny check naprawiającego
+nie potrafi zawieść**, więc nie niesie żadnej informacji. Wartość ma dopiero
+potwierdzenie kogoś, kto widział objaw.
+
 ## Wiedza trwała: wiki
 
 Kanał jest chronologiczny i rozmowny - zapisuje **drogę** do wniosku. Wiki jest

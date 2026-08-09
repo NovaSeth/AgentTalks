@@ -41,6 +41,10 @@ export type Message = {
   deletedAt: number | null;
   resolvedAt: number | null;
   resolvedBy: number | null;   // actorId; UI mapuje na handle
+  /** "Kod zmieniony" - twierdzenie NAPRAWIAJACEGO. Slabsze niz resolvedAt
+   *  ("objaw zniknal"), ktore moze postawic tylko autor zgloszenia albo admin. */
+  fixedAt: number | null;
+  fixedBy: number | null;
   meta: Record<string, unknown> | null;
 };
 
@@ -56,6 +60,8 @@ export type MsgRow = {
   edited_at: number | null;
   deleted_at: number | null;
   resolved_at: number | null;
+  fixed_at?: number | null;
+  fixed_by?: number | null;
   resolved_by: number | null;
   meta: string | null;
 };
@@ -76,6 +82,8 @@ export const messageFromRow = (r: MsgRow): Message => ({
   deletedAt: r.deleted_at,
   resolvedAt: r.resolved_at ?? null,
   resolvedBy: r.resolved_by ?? null,
+  fixedAt: r.fixed_at ?? null,
+  fixedBy: r.fixed_by ?? null,
   meta: r.meta ? (JSON.parse(r.meta) as Record<string, unknown>) : null,
 });
 
@@ -296,6 +304,47 @@ export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
     conversationId: row.conversation_id,
     message,
   }));
+  return message;
+}
+
+/**
+ * "NAPRAWIONE": twierdzenie naprawiajacego, ze zmienil kod. Moze je postawic
+ * kazdy, kto ma dostep do rozmowy - bo to nie jest domkniecie sprawy, tylko
+ * informacja "z mojej strony zrobione, sprawdzcie". Domkniecie
+ * (`resolveMessage`) zostaje przy autorze zgloszenia i adminie, i to jest cala
+ * roznica: naprawiajacy i tak WIE, ze naprawil, wiec jego wlasny check nie
+ * niesie nowej informacji. Wartosc ma dopiero potwierdzenie kogos innego.
+ */
+export function markFixed(
+  ctx: Ctx,
+  input: { id: number; actorId: number; fixed: boolean },
+): Message {
+  const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow | undefined;
+  if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${input.id}`);
+  if (row.deleted_at) throw badRequest("skasowana", "skasowanej wiadomosci nie da sie oznaczyc");
+  assertCanRead(ctx, row.conversation_id, input.actorId);
+  ctx.db.prepare("UPDATE messages SET fixed_at = ?, fixed_by = ? WHERE id = ?")
+    .run(input.fixed ? ctx.now() : null, input.fixed ? input.actorId : null, input.id);
+  const message = messageFromRow(
+    ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow,
+  );
+  onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, row.conversation_id), {
+    type: "message_updated",
+    conversationId: row.conversation_id,
+    message,
+  }));
+  // Autor zgloszenia dostaje powiadomienie: to on ma potwierdzic, ze objaw
+  // zniknal, wiec bez tego "czeka na potwierdzenie" czekaloby w prozni.
+  if (input.fixed) {
+    notify(ctx, {
+      actorIds: [row.actor_id],
+      kind: "mention",
+      fromActorId: input.actorId,
+      conversationId: row.conversation_id,
+      messageId: row.id,
+      excerpt: `oznaczyl Twoje zgloszenie jako naprawione - sprawdz i potwierdz: ${excerptOf(row.body)}`,
+    });
+  }
   return message;
 }
 

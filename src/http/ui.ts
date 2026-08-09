@@ -18,6 +18,7 @@
  * Ten modul zna node:fs i nic z domeny - to wciaz warstwa HTTP.
  */
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -54,6 +55,21 @@ function baseUrlFrom(req: IncomingMessage, config: Config): string {
   const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost").split(",")[0].trim();
   const proto = String(req.headers["x-forwarded-proto"] ?? "https").split(",")[0].trim();
   return `${proto}://${host}`;
+}
+
+/** Stempel tresci UI: krotki hash app.js + app.css. Liczony raz na proces, bo
+ *  pliki nie zmieniaja sie w locie - zmiana znaczy nowy obraz i nowy proces. */
+let stampCache: string | null = null;
+export function assetStamp(): string {
+  if (stampCache) return stampCache;
+  const h = createHash("sha256");
+  for (const name of ["app.js", "app.css"]) {
+    try {
+      h.update(readFileSync(uiFile(name)));
+    } catch { /* brak pliku = stempel z tego, co jest */ }
+  }
+  stampCache = h.digest("hex").slice(0, 8);
+  return stampCache;
 }
 
 function serveStatic(res: ServerResponse, path: string, opts?: { noindex?: boolean }): void {
@@ -195,10 +211,31 @@ export function registerUiRoutes(router: Router): void {
   });
 
   // Interfejs (za bramka). Shell SPA + zasoby.
-  const shell = (_req: IncomingMessage, res: ServerResponse) =>
-    serveStatic(res, uiFile("index.html"), { noindex: true });
+  //
+  // Adresy zasobow niosa stempel tresci (?v=...). "no-cache" na pliku wystarcza
+  // tylko wtedy, gdy kazdy posrednik go slucha - a miedzy serwerem a uzytkownikiem
+  // stoi proxy, przegladarka i czasem ekran domowy telefonu, ktory trzyma wlasna
+  // kopie. Zmiana ADRESU dziala tam, gdzie proba przekonania cudzego cache nie
+  // dziala: stary adres po prostu przestaje istniec w HTML-u.
+  const shell = (_req: IncomingMessage, res: ServerResponse) => {
+    const html = readOnce(uiFile("index.html"))
+      .replace('href="/app.css"', `href="/app.css?v=${assetStamp()}"`)
+      .replace('src="/app.js"', `src="/app.js?v=${assetStamp()}"`);
+    res.writeHead(200, {
+      "content-type": TYPES.html,
+      "x-robots-tag": "noindex, nofollow",
+      "cache-control": "no-cache",
+    });
+    res.end(html);
+  };
   router.add("GET", "/", shell);
   router.add("GET", "/app", shell);
+  // Stempel dostepny takze dla klienta - UI pokazuje go w stopce panelu bocznego,
+  // zeby na pytanie "widzisz nowa wersje?" dalo sie odpowiedziec liczba, a nie
+  // wrazeniem. Bez tego "u mnie nie widac zmian" jest nie do rozstrzygniecia.
+  router.add("GET", "/api/ui-version", (_req, res) => {
+    json(res, 200, { stamp: assetStamp() });
+  });
   router.add("GET", "/app.css", (_req, res) => serveStatic(res, uiFile("app.css")));
   router.add("GET", "/app.js", (_req, res) => serveStatic(res, uiFile("app.js")));
 
