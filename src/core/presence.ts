@@ -64,6 +64,10 @@ export function registerSession(
   const exists = ctx.db.prepare("SELECT id FROM actors WHERE id = ?").get(input.actorId);
   if (!exists) throw notFound("aktor", `nie ma aktora ${input.actorId}`);
   const now = ctx.now();
+  // Stan PRZED zapisem - do rozstrzygniecia, czy ktokolwiek zobaczy roznice.
+  const przed = ctx.db
+    .prepare("SELECT label, kind, ended_at FROM sessions WHERE id = ?")
+    .get(input.sessionId) as { label: string; kind: string; ended_at: number | null } | undefined;
   // COALESCE(excluded, sessions): pola PODANE nadpisuja, POMINIETE zostaja.
   // `atalk ping`/`busy`/`typing` wolaja to samo POST /api/sessions z samym
   // sessionId - bez tego heartbeat kasowal etykiete ustawiona przez `atalk me`
@@ -94,7 +98,21 @@ export function registerSession(
       kindOrNull: input.kind ?? null,
     });
   sprzatnijMartweSesje(ctx);
-  ctx.bus.publish(allActorIds(ctx), { type: "presence" });
+
+  // Rozgloszenie TYLKO przy realnej zmianie. Interfejs bije heartbeat co 30 s
+  // tym samym wywolaniem, wiec bezwarunkowa publikacja oznaczala, ze przy N
+  // otwartych sesjach kazda z nich co 30 s budzila wszystkie pozostale: ruch
+  // rosnie z kwadratem liczby uczestnikow, a tresc zdarzenia jest za kazdym
+  // razem ta sama ("cos w obecnosci"). Samo odswiezenie znacznika czasu nie
+  // zmienia niczego, co ktokolwiek widzi - przez pierwsze 60 s od ostatniego
+  // kontaktu sesja i tak jest "online".
+  const nowaSesja = przed === undefined;
+  const wrocila = przed?.ended_at != null;
+  const zmienionaEtykieta = input.label !== undefined && input.label !== przed?.label;
+  const zmienionyRodzaj = input.kind !== undefined && input.kind !== przed?.kind;
+  if (nowaSesja || wrocila || zmienionaEtykieta || zmienionyRodzaj) {
+    ctx.bus.publish(allActorIds(ctx), { type: "presence" });
+  }
 }
 
 /** Sprzatanie martwych sesji. Tabela `sessions` rosla bez konca (kazde

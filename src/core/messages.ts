@@ -485,7 +485,11 @@ export function updatedBefore(
       `SELECT m.* FROM messages m
          JOIN members mem ON mem.conversation_id = m.conversation_id AND mem.actor_id = ?
         WHERE m.id > ? AND m.id <= ?
-          AND (COALESCE(m.edited_at, 0) >= ? OR COALESCE(m.deleted_at, 0) >= ?)
+          -- Bez COALESCE: NULL >= x daje NULL (czyli falsz), wiec wynik jest ten
+          -- sam, ale warunek da sie oprzec o indeks czesciowy z migracji 14.
+          -- Roznica jest tylko przy sinceTs = 0, gdzie stara wersja uznawala
+          -- KAZDA wiadomosc za zmieniona - co i tak bylo bledne.
+          AND (m.edited_at >= ? OR m.deleted_at >= ?)
         ORDER BY m.id LIMIT 500`,
     )
     .all(actorId, afterCursor, beforeId, sinceTs, sinceTs) as MsgRow[];

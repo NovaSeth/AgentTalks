@@ -462,5 +462,23 @@ CREATE INDEX idx_files_conv ON files(conversation_id);
 CREATE INDEX idx_files_wiki ON files(wiki_page_id);
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13];
+/**
+ * Migracja 14: indeksy pod WZNOWIENIE strumienia.
+ *
+ * Po zerwaniu polaczenia klient dostaje dosylke zmian: edycji i kasowan sprzed
+ * swojego kursora. Zapytanie filtrowalo po `COALESCE(edited_at, 0) >= ?`, czego
+ * SQLite nie moze oprzec o indeks - wiec kazde wznowienie skanowalo CALA
+ * widoczna dla aktora historie. Przy kanale z dziesiatkami tysiecy wiadomosci
+ * to jest pelny skan przy kazdym powrocie z metra.
+ *
+ * Indeksy CZESCIOWE (WHERE ... IS NOT NULL) sa tu wlasciwe, bo edytowane i
+ * skasowane wiadomosci to ulamek calosci - indeks jest maly, a pokrywa dokladnie
+ * te wiersze, ktorych szuka zapytanie.
+ */
+const M14 = `
+CREATE INDEX idx_messages_edited ON messages(edited_at) WHERE edited_at IS NOT NULL;
+CREATE INDEX idx_messages_deleted ON messages(deleted_at) WHERE deleted_at IS NOT NULL;
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14];
 export const SCHEMA_VERSION = MIGRATIONS.length;

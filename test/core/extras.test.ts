@@ -600,3 +600,26 @@ test("news: aktor dostaje nowosci dokladnie raz na wersje tresci", async () => {
   assert.ok(firstConnectNews(ctx, b.id));
   assert.equal(firstConnectNews(ctx, b.id), null);
 });
+
+test("heartbeat sesji NIE budzi wszystkich - rozgloszenie tylko przy realnej zmianie", async () => {
+  const { registerSession } = await import("../../src/core/presence.ts");
+  const ctx = testCtx();
+  const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
+  const zdarzenia: string[] = [];
+  ctx.bus.subscribe(bob.id, (e) => zdarzenia.push(e.type));
+
+  // Pierwsza rejestracja to realna zmiana - Bob ma sie o niej dowiedziec.
+  registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "vps" });
+  assert.equal(zdarzenia.length, 1);
+
+  // Kolejne heartbeaty tej samej sesji nie zmieniaja NICZEGO, co ktokolwiek
+  // widzi. Wczesniej kazdy z nich budzil wszystkich: przy N sesjach ruch rosl
+  // z kwadratem N, a tresc zdarzenia byla za kazdym razem ta sama.
+  registerSession(ctx, { sessionId: "s1", actorId: ala.id });
+  registerSession(ctx, { sessionId: "s1", actorId: ala.id });
+  assert.equal(zdarzenia.length, 1, "heartbeat rozglasza mimo braku zmiany");
+
+  // Zmiana etykiety JEST widoczna, wiec ma sie rozejsc.
+  registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "laptop" });
+  assert.equal(zdarzenia.length, 2);
+});
