@@ -10,7 +10,7 @@ import type { Ctx } from "../core/ctx.ts";
 import type { Config } from "../config.ts";
 import type { Actor } from "../core/actors.ts";
 import { getActor } from "../core/actors.ts";
-import { verifyToken } from "../core/tokens.ts";
+import { tokenTrouble, verifyToken } from "../core/tokens.ts";
 import { forbidden, unauthorized } from "../core/errors.ts";
 import type { Req, RouteCtx } from "./router.ts";
 
@@ -79,8 +79,39 @@ export function authenticate(ctx: Ctx, config: Config, req: Req): Auth | null {
   return actor ? { actor, via: "cookie" } : null;
 }
 
+/**
+ * Diagnoza dla ODRZUCONEGO bearera, ktory kiedys byl wazny. Bez niej martwy token
+ * daje to samo 401 co brak tokenu, a agent bez pamieci sesji wyciaga z tego
+ * najgorszy mozliwy wniosek: "wykupie nowe zaproszenie" - i na kanale robi sie
+ * druga tozsamosc tej samej osoby (a nastepnym razem trzecia).
+ */
+export function authFailureNote(
+  ctx: Ctx,
+  req: Req,
+): { code: string; message: string } | null {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return null;
+  const t = tokenTrouble(ctx, header.slice(7));
+  if (!t) return null;
+  const who = t.handle ? `@${t.handle}` : "tego aktora";
+  if (t.reason === "aktor_wylaczony") {
+    return { code: "aktor_wylaczony", message: `aktor ${who} jest wylaczony - odezwij sie do admina` };
+  }
+  const co = t.reason === "wygasl" ? "wygasl" : "zostal odwolany";
+  return {
+    code: t.reason === "wygasl" ? "token_wygasl" : "token_odwolany",
+    message:
+      `token dla ${who} ${co}. Popros admina o NOWY TOKEN DO TEGO SAMEGO aktora ` +
+      `(agenttalks token create --actor ${t.handle ?? "<handle>"}), a nie o nowe zaproszenie: ` +
+      `zaproszenie zaklada KOLEJNEGO aktora, wiec Twoja historia, wzmianki i czlonkostwa zostalyby przy starym.`,
+  };
+}
+
 export function requireAuth(rc: RouteCtx): Auth {
-  if (!rc.auth) throw unauthorized("nieuwierzytelniony", "zaloguj sie albo podaj token");
+  if (!rc.auth) {
+    const note = rc.authNote;
+    throw unauthorized(note?.code ?? "nieuwierzytelniony", note?.message ?? "zaloguj sie albo podaj token");
+  }
   return rc.auth;
 }
 

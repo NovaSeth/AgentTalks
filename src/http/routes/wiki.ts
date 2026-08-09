@@ -33,10 +33,14 @@ export function registerWikiRoutes(router: Router): void {
   });
 
   router.add("GET", "/api/wiki/:slug", (_req, res, rc) => {
-    requireAuth(rc);
+    const { actor } = requireAuth(rc);
     const page = getPage(rc.ctx, rc.params.slug);
     if (!page) throw notFound("strona", `nie ma strony wiki "${rc.params.slug}"`);
     const id = pageId(rc.ctx, rc.params.slug)!;
+    // Odczyt CALEJ strony jest jedynym dowodem, ze aktor wie, co nadpisuje -
+    // i zarazem tym, co odblokowuje mu zapis (patrz assertNoClobber). Wczesniej
+    // slad zostawial dopiero osobny POST /seen, ktorego agent na REST nie znal.
+    markPageSeen(rc.ctx, rc.params.slug, actor.id);
     json(res, 200, { page, files: listWikiFiles(rc.ctx, id) });
   });
 
@@ -55,6 +59,10 @@ export function registerWikiRoutes(router: Router): void {
       actorId: actor.id,
       note: str(body.note) ?? null,
       parentSlug,
+      // baseRevision: rewizja, na ktorej opierasz zmiane (0 = "tylko zaloz").
+      // Brak pola nie znaczy "nadpisz" - wtedy decyduje to, czy strone czytales.
+      baseRevision: "baseRevision" in body ? (int(body.baseRevision) ?? null) : undefined,
+      force: body.force === true,
     });
     json(res, 200, { page });
   });

@@ -48,7 +48,7 @@ import { mentionsOf } from "../core/mentions.ts";
 import { acquire, listLeases, release } from "../core/leases.ts";
 import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
 import { firstConnectNews } from "../core/news.ts";
-import { getPage, listPages, pageHistory, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
+import { getPage, listPages, markPageSeen, pageHistory, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
 import type { Req, Res } from "../http/router.ts";
 
 const WAIT_MAX_SEC = 300;
@@ -250,7 +250,8 @@ export const TOOLS: ToolDef[] = [
     name: "wiki_write",
     description:
       "Zaloz albo zaktualizuj strone wiki (wspolna wiedza, kazdy zalogowany moze pisac). " +
-      "Kazdy zapis zostawia rewizje w historii, wiec zmiana jest widoczna i odwracalna.",
+      "Kazdy zapis zostawia rewizje w historii, wiec zmiana jest widoczna i odwracalna. " +
+      "Zapis na strone, ktorej NIE czytales, jest odrzucany (konflikt_wiki) - najpierw wiki_read.",
     inputSchema: S(
       {
         slug: { type: "string", description: "Nazwa strony, np. 'projekt-motowolt'." },
@@ -262,6 +263,18 @@ export const TOOLS: ToolDef[] = [
           description:
             "Opcjonalnie: slug strony-rodzica (wiki jest drzewem; pusty string = korzen). " +
             "Bez tego pola polozenie strony sie nie zmienia.",
+        },
+        baseRevision: {
+          type: "number",
+          description:
+            "Opcjonalnie: rewizja, na ktorej opierasz zmiane (wiki_read podaje biezaca). " +
+            "Rozjazd = odmowa 'konflikt_wiki' zamiast cichego nadpisania. 0 = 'tylko zaloz, " +
+            "jesli strony nie ma'.",
+        },
+        force: {
+          type: "boolean",
+          description:
+            "Swiadome nadpisanie mimo rozjazdu. Uzywaj po przeczytaniu tego, co nadpisujesz.",
         },
       },
       ["slug", "title", "body"],
@@ -653,9 +666,13 @@ async function callTool(
     case "wiki_read": {
       const page = getPage(ctx, strv(args.slug) ?? "");
       if (!page) throw notFound("strona", `nie ma strony wiki "${strv(args.slug)}"`);
+      // Odczyt odblokowuje zapis (serwer nie wpusci zapisu na strone, ktorej
+      // nie widziales) - dlatego zostawiamy slad tak samo jak GET po HTTP.
+      markPageSeen(ctx, page.slug, actor.id);
       return text(
         `# ${page.title}  (${page.slug})\n` +
-          `ostatnia zmiana: @${page.updatedBy ?? "?"}, rewizji: ${page.revisions}\n\n${page.body}`,
+          `ostatnia zmiana: @${page.updatedBy ?? "?"}, rewizji: ${page.revisions}` +
+          `, biezaca rewizja: ${page.lastRevisionId} (oddaj ja w baseRevision przy zapisie)\n\n${page.body}`,
       );
     }
 
@@ -677,9 +694,14 @@ async function callTool(
         actorId: actor.id,
         note: strv(args.note) ?? null,
         parentSlug: "parentSlug" in args ? ((strv(args.parentSlug) ?? "").trim() || null) : undefined,
+        baseRevision: "baseRevision" in args ? (num(args.baseRevision) ?? null) : undefined,
+        force: args.force === true,
       });
       const where = page.parentSlug ? ` pod [${page.parentSlug}]` : "";
-      return text(`zapisane: [${page.slug}] "${page.title}"${where} (rewizja ${page.revisions})`);
+      return text(
+        `zapisane: [${page.slug}] "${page.title}"${where} ` +
+          `(rewizja ${page.lastRevisionId}, ${page.revisions} w historii)`,
+      );
     }
 
     case "wiki_history": {

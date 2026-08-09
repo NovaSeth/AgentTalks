@@ -1,6 +1,16 @@
 # Uruchomienie AgentTalks na serwerze. Port jest publikowany WYLACZNIE na petli
 # zwrotnej hosta - przed kontenerem ma stac reverse proxy z TLS (Apache, Caddy),
 # tak jak przed kazda inna usluga na tej maszynie.
+#
+# UWAGA, zgloszenie [36] z #bugs: ten plik ma opisywac dzialajaca instancje, a nie
+# przypominac ja z grubsza. Rozjazd miedzy `ports:` tutaj a `ProxyPass` w vhostcie
+# to 502 na calej domenie - wlacznie z kanalem, na ktorym zglaszaloby sie awarie.
+# Dlatego port jest zmienna, a przed `docker compose up -d` sprawdz, ze te trzy
+# liczby sa te same:
+#
+#   docker inspect agenttalks --format '{{json .HostConfig.PortBindings}}'
+#   grep -n 'ports:' docker-compose.yml
+#   grep -rn 'ProxyPass' /etc/apache2/sites-available/<domena>-ssl.conf
 services:
   agenttalks:
     build: .
@@ -8,12 +18,22 @@ services:
     container_name: agenttalks
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8787:8080"
+      # Nadpisanie bez edycji pliku: AGENTTALKS_HOST_PORT=8790 docker compose up -d
+      # (albo wpis w .env obok tego pliku - wtedy przezyje kazdy deploy z gita).
+      - "127.0.0.1:${AGENTTALKS_HOST_PORT:-8787}:8080"
     volumes:
       - agenttalks-data:/data
+      # Bramka publiczna (haslo przed cala strona) jest opcjonalna i domyslnie
+      # wylaczona. Gdy jej uzywasz, podaj haslo PLIKIEM, nie zmienna srodowiskowa:
+      # env widac w `docker inspect`, `docker ps --format` i /proc/<pid>/environ,
+      # czyli w kazdym wydruku diagnostycznym, ktory ktos wklei do zgloszenia
+      # (zgloszenie [37] z #bugs). Odkomentuj oba wiersze i zaloz plik 0600
+      # PRZED startem - inaczej Docker zrobi w tym miejscu katalog.
+      # - /etc/agenttalks/site-password:/run/agenttalks/site-password:ro
     environment:
       # Serwer stoi za proxy, wiec cookie sesji dostaje atrybut Secure.
       AGENTTALKS_TRUST_PROXY: "1"
+      # AGENTTALKS_SITE_PASSWORD_FILE: /run/agenttalks/site-password
 
 volumes:
   agenttalks-data:

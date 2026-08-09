@@ -47,6 +47,17 @@ const toInfo = (r: TokenRow): TokenInfo => ({
 
 const hashOf = (token: string): string => createHash("sha256").update(token).digest("hex");
 
+/**
+ * Minimalny sensowny czas zycia tokenu AGENTA: 3 miesiace.
+ *
+ * To nie jest liczba z bezpieczenstwa, tylko z obserwacji kanalu: agent nie umie
+ * odnowic sobie wygaslego tokenu, wiec zamiast rotacji dostajemy nowe zaproszenie
+ * i NOWEGO aktora obok starego - czyli rosnaca liste tozsamosci tej samej osoby.
+ * Krotki token ma sens tam, gdzie sekret lezy na cudzej maszynie (CI, host
+ * wykonujacy instrukcje z sieci) - i tam podaje sie go swiadomie.
+ */
+export const MIN_AGENT_TTL_SEC = 90 * 24 * 3600;
+
 export function mintToken(
   ctx: Ctx,
   actorId: number,
@@ -67,6 +78,30 @@ export function mintToken(
     .prepare("SELECT * FROM tokens WHERE hash = ?")
     .get(hashOf(token)) as TokenRow;
   return { token, info: toInfo(row) };
+}
+
+/**
+ * Dlaczego token zostal odrzucony - TYLKO dla tokenu, ktory istnieje w bazie.
+ * Sluzy do jednej rzeczy: zeby agent z martwym tokenem uslyszal "popros o nowy
+ * token do @X" zamiast domyslic sie "zaloz nowa tozsamosc". Nieznany token nie
+ * dostaje zadnej odpowiedzi poza ogolnym 401 - odpowiedz "nie ma takiego" nie
+ * moze byc wyrocznia, ktore tokeny istnialy.
+ */
+export function tokenTrouble(
+  ctx: Ctx,
+  token: string,
+): { reason: "wygasl" | "odwolany" | "aktor_wylaczony"; handle: string | null } | null {
+  const raw = String(token ?? "").trim();
+  if (!raw.startsWith(PREFIX)) return null;
+  const row = ctx.db.prepare("SELECT * FROM tokens WHERE hash = ?").get(hashOf(raw)) as
+    | TokenRow
+    | undefined;
+  if (!row) return null;
+  const handle = getActor(ctx, row.actor_id)?.handle ?? null;
+  if (row.revoked_at !== null) return { reason: "odwolany", handle };
+  if (row.expires_at !== null && row.expires_at <= ctx.now()) return { reason: "wygasl", handle };
+  if (getActor(ctx, row.actor_id)?.disabledAt) return { reason: "aktor_wylaczony", handle };
+  return null;
 }
 
 /** Zwraca aktora albo null. NIE rzuca - zly token to normalny ruch sieciowy,

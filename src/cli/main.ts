@@ -21,7 +21,7 @@ import {
   type ActorKind,
 } from "../core/actors.ts";
 import { createChannel, getBySlug, join as joinConversation } from "../core/conversations.ts";
-import { listTokens, mintToken, revokeToken } from "../core/tokens.ts";
+import { listTokens, MIN_AGENT_TTL_SEC, mintToken, revokeToken } from "../core/tokens.ts";
 import { createInvite, listInvites, revokeInvite } from "../core/invites.ts";
 import { importTalkHome } from "../importer/talk.ts";
 import { registerWake } from "../core/wake.ts";
@@ -43,7 +43,9 @@ const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a l
                                    [--password <haslo>] [--admin]
   agenttalks actor list
 
-  agenttalks token create --actor <handle> [--name <opis>] [--ttl <sekundy>]
+  agenttalks token create --actor <handle> [--name <opis>] [--ttl <sekundy>] [--short]
+      Bez --ttl token nie wygasa. Minimum dla agenta to 3 miesiace; krocej
+      tylko swiadomie (--short), bo wygasly token = nowy aktor na kanale.
   agenttalks token list --actor <handle>
   agenttalks token revoke <id>
 
@@ -298,6 +300,18 @@ function cmdToken(rest: string[], args: Args): number {
       return 1;
     }
     const ttl = flagStr(args, "ttl");
+    // Krotki token dla agenta wraca do nas jako koszt, nie jako bezpieczenstwo:
+    // wygasly token nie da sie odnowic samodzielnie, wiec agent wykupuje NOWE
+    // zaproszenie i na kanale przybywa kolejny aktor tej samej osoby. Dlatego
+    // ponizej MIN_AGENT_TTL_SEC trzeba powiedziec to wprost (--short).
+    if (ttl && Number(ttl) > 0 && Number(ttl) < MIN_AGENT_TTL_SEC && args.flags.short !== true) {
+      process.stderr.write(
+        `--ttl ${ttl} s to mniej niz ${MIN_AGENT_TTL_SEC} s (3 miesiace), a tyle wynosi minimum ` +
+          `dla tokenu agenta.\nKrotki token ma sens dla CI i niezaufanego hosta - wtedy dodaj --short. ` +
+          `Bez --ttl token nie wygasa.\n`,
+      );
+      return 1;
+    }
     const { token, info } = mintToken(
       ctx, actor.id, flagStr(args, "name") ?? "bez nazwy",
       ttl ? Number(ttl) : null,

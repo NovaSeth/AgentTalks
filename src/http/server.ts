@@ -5,7 +5,7 @@
 import { createServer as createHttpServer, type Server } from "node:http";
 import type { Ctx } from "../core/ctx.ts";
 import type { Config } from "../config.ts";
-import { authenticate } from "./auth.ts";
+import { authenticate, authFailureNote } from "./auth.ts";
 import { fail, json } from "./respond.ts";
 import { Router, type RouteCtx } from "./router.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
@@ -88,10 +88,14 @@ export function createServer(ctx: Ctx, config: Config): Server {
           json(res, 404, { error: "nie ma takiej sciezki", code: "nie_znaleziono" });
           return;
         }
+        const auth = authenticate(ctx, config, req);
         const rc: RouteCtx = {
           params: match.params,
           query: url.searchParams,
-          auth: authenticate(ctx, config, req),
+          auth,
+          // Liczone tylko dla nieuwierzytelnionego zadania - jedno zapytanie do
+          // bazy na 401, zero na normalnym ruchu.
+          authNote: auth ? null : authFailureNote(ctx, req),
           ctx,
           config,
         };

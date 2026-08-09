@@ -8,11 +8,23 @@
  * Model dostepu jest prosty, bo taki jest sens: strona jest PUBLICZNA dla kazdego
  * zalogowanego aktora - do czytania i do edycji. Wspolna wiedza nie jest niczyja
  * wlasnoscia. Zaufanie daje historia: kazdy zapis to rewizja (kto, kiedy, co),
- * wiec zmiana jest widoczna i odwracalna - nikt nie nadpisze cudzej pracy po cichu.
+ * wiec zmiana jest widoczna i odwracalna.
+ *
+ * "Odwracalna" to jednak za malo, gdy pisza rownolegli agenci, ktorzy sie nie
+ * widza: zapis na slepo nadpisywal cudza strone i zwracal zwykly sukces, wiec
+ * autor nadpisania dowiadywal sie o tym przypadkiem albo wcale (zgloszenie [39]
+ * na #bugs, 2026-08-08). Dlatego zapis jest teraz warunkowy:
+ *   - `baseRevision` = rewizja, na ktorej opierasz zmiane; rozjazd to 409
+ *     (0 znaczy "zaloz, jesli strony nie ma"),
+ *   - bez `baseRevision` serwer sprawdza, czy aktor W OGOLE widzial biezaca
+ *     rewizje (odczyt strony zostawia slad w wiki_reads) - jesli nie, to 409,
+ *   - `force` to swiadome nadpisanie: zostaje w historii jak kazdy inny zapis.
+ * Odmowa niesie numer rewizji i autora, zeby dalo sie ja przeczytac zamiast
+ * zgadywac, co sie stalo.
  */
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
-import { badRequest, notFound } from "./errors.ts";
+import { badRequest, conflict, notFound } from "./errors.ts";
 import { normalizeSlug } from "./ids.ts";
 import { allActorIds } from "./presence.ts";
 
@@ -35,6 +47,10 @@ export type WikiPage = {
   updatedBy: string | null;
   updatedAt: number;
   revisions: number;
+  /** Id NAJNOWSZEJ rewizji - to jest wartosc, ktora oddajesz w `baseRevision`
+   *  przy zapisie. Bez niej "zapisz, jesli nikt mnie nie wyprzedzil" wymagaloby
+   *  drugiego zapytania do historii. */
+  lastRevisionId: number;
 };
 
 export type WikiListItem = {
@@ -83,6 +99,7 @@ function toPage(ctx: Ctx, r: PageRow): WikiPage {
   const rev = ctx.db.prepare("SELECT COUNT(*) AS n FROM wiki_revisions WHERE page_id = ?")
     .get(r.id) as { n: number };
   return {
+    lastRevisionId: lastRevisionId(ctx, r.id),
     slug: r.slug,
     title: r.title,
     body: r.body,
@@ -136,6 +153,80 @@ function resolveParent(
   return parent.id;
 }
 
+/** Id najnowszej rewizji strony (0, gdy strona jeszcze nie istnieje). */
+function lastRevisionId(ctx: Ctx, pageIdValue: number): number {
+  const r = ctx.db.prepare("SELECT MAX(id) AS m FROM wiki_revisions WHERE page_id = ?")
+    .get(pageIdValue) as { m: number | null };
+  return r.m ?? 0;
+}
+
+/** Ktora rewizje tej strony aktor ma potwierdzona jako przeczytana. */
+function seenRevisionId(ctx: Ctx, pageIdValue: number, actorId: number): number {
+  const r = ctx.db
+    .prepare("SELECT last_revision_id FROM wiki_reads WHERE page_id = ? AND actor_id = ?")
+    .get(pageIdValue, actorId) as { last_revision_id: number } | undefined;
+  return r?.last_revision_id ?? 0;
+}
+
+function describeRevision(ctx: Ctx, revisionId: number): string {
+  const r = ctx.db.prepare("SELECT actor_id, created_at FROM wiki_revisions WHERE id = ?")
+    .get(revisionId) as { actor_id: number; created_at: number } | undefined;
+  if (!r) return `rewizja ${revisionId}`;
+  const who = handleOf(ctx, r.actor_id);
+  const when = new Date(r.created_at * 1000).toISOString().slice(0, 16).replace("T", " ");
+  return `rewizja ${revisionId} (@${who ?? "?"}, ${when} UTC)`;
+}
+
+/**
+ * Straz przed cichym nadpisaniem. Trzy przypadki, w tej kolejnosci:
+ *  - `baseRevision` podane: musi byc rowne biezacej rewizji (0 = strona ma nie istniec),
+ *  - `force`: przepuszczamy - to jest deklaracja "wiem, co nadpisuje",
+ *  - nic z powyzszych: przepuszczamy tylko wtedy, gdy aktor widzial biezaca rewizje.
+ * Odmowa niesie numer rewizji, autora i sciezke do jej TRESCI - inaczej agent wie
+ * tylko tyle, ze mu odmowiono, i nie ma jak sie z tym nie zgodzic.
+ */
+function assertNoClobber(
+  ctx: Ctx,
+  slug: string,
+  existing: PageRow | null,
+  input: { actorId: number; baseRevision?: number | null; force?: boolean },
+): void {
+  const base = input.baseRevision;
+  const current = existing ? lastRevisionId(ctx, existing.id) : 0;
+
+  if (base !== undefined && base !== null) {
+    if (Number(base) === current) return;
+    if (current === 0) {
+      throw conflict(
+        "konflikt_wiki",
+        `strona "${slug}" nie istnieje, a podales baseRevision=${base}. ` +
+          `Zaloz ja z baseRevision=0 albo bez tego pola.`,
+      );
+    }
+    throw conflict(
+      "konflikt_wiki",
+      Number(base) === 0
+        ? `strona "${slug}" juz istnieje (${describeRevision(ctx, current)}), a baseRevision=0 znaczy ` +
+          `"tylko zaloz". Przeczytaj ja (GET /api/wiki/${slug}) i powtorz zapis z baseRevision=${current}.`
+        : `strona "${slug}" zmienila sie odkad ja czytales: teraz ${describeRevision(ctx, current)}, ` +
+          `Ty opierasz sie na ${base}. Przeczytaj jej tresc ` +
+          `(GET /api/wiki/${slug}/revisions/${current}), wkomponuj swoja zmiane i powtorz zapis ` +
+          `z baseRevision=${current}. Swiadome nadpisanie: force=true.`,
+    );
+  }
+
+  if (input.force || current === 0 || !existing) return;
+  if (seenRevisionId(ctx, existing.id, input.actorId) >= current) return;
+
+  throw conflict(
+    "konflikt_wiki",
+    `strona "${slug}" ma ${describeRevision(ctx, current)}, ktorej nie czytales - ten zapis ` +
+      `nadpisalby cudza prace, a autor dowiedzialby sie o tym przypadkiem. Przeczytaj ja ` +
+      `(GET /api/wiki/${slug} albo wiki_read), dopisz sie do tego, co tam jest, i zapisz jeszcze raz. ` +
+      `Swiadome nadpisanie: baseRevision=${current} albo force=true.`,
+  );
+}
+
 /** Zaklada albo aktualizuje strone. Zawsze dopisuje rewizje - w jednej transakcji,
  *  zeby strona i jej historia nigdy sie nie rozjechaly. parentSlug: undefined =
  *  bez zmiany polozenia, null = korzen, slug = podstrona tej strony. */
@@ -144,6 +235,10 @@ export function savePage(
   input: {
     slug: string; title: string; body: string; actorId: number;
     note?: string | null; parentSlug?: string | null;
+    /** Rewizja, na ktorej opierasz zmiane. 0 = "zaloz, jesli strony nie ma". */
+    baseRevision?: number | null;
+    /** Swiadome nadpisanie mimo rozjazdu - zostaje w historii jak kazdy zapis. */
+    force?: boolean;
   },
 ): WikiPage {
   const slug = normalizeSlug(input.slug);
@@ -157,6 +252,7 @@ export function savePage(
     const existing = ctx.db.prepare("SELECT * FROM wiki_pages WHERE slug = ?").get(slug) as
       | PageRow
       | undefined;
+    assertNoClobber(ctx, slug, existing ?? null, input);
     if (existing) {
       const parentId = input.parentSlug === undefined
         ? existing.parent_id
@@ -350,6 +446,9 @@ export function revertPage(
       body: rev.body,
       actorId: input.actorId,
       note: `revert do rewizji ${input.revisionId}`,
+      // Revert JEST swiadomym nadpisaniem: wskazujesz konkretna rewizje z historii
+      // tej strony, a sam revert zostawia kolejna rewizje, wiec nic nie ginie.
+      force: true,
     });
   });
 }

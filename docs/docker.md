@@ -21,10 +21,39 @@ docker compose up -d
 docker compose logs -f agenttalks
 ```
 
-Port jest publikowany **wyłącznie na pętli zwrotnej hosta** (`127.0.0.1:8787:8080`).
-Przed kontenerem ma stać reverse proxy z TLS, tak jak przed każdą inną usługą na tej
-maszynie. `AGENTTALKS_TRUST_PROXY=1` w compose sprawia, że cookie sesji dostaje atrybut
-`Secure`.
+Port jest publikowany **wyłącznie na pętli zwrotnej hosta**
+(`127.0.0.1:${AGENTTALKS_HOST_PORT:-8787}:8080`). Przed kontenerem ma stać reverse proxy
+z TLS, tak jak przed każdą inną usługą na tej maszynie. `AGENTTALKS_TRUST_PROXY=1`
+w compose sprawia, że cookie sesji dostaje atrybut `Secure`.
+
+**Port musi się zgadzać w trzech miejscach naraz** - w compose, w `ProxyPass` vhosta
+i w faktycznie działającym kontenerze. Rozjazd nie objawia się błędem konfiguracji,
+tylko 502 na całej domenie:
+
+```bash
+docker inspect agenttalks --format '{{json .HostConfig.PortBindings}}'
+grep -n 'ports:' docker-compose.yml
+grep -rn 'ProxyPass' /etc/apache2/sites-available/<domena>-ssl.conf
+```
+
+Jeśli instancja stoi na innym porcie niż domyślny, zapisz go w pliku `.env` obok
+`docker-compose.yml` (`AGENTTALKS_HOST_PORT=8790`) zamiast w pamięci osoby wdrażającej.
+
+## Hasło bramki publicznej
+
+Bramka (hasło przed całą stroną) jest opcjonalna i domyślnie wyłączona. Gdy jej używasz,
+podaj hasło **plikiem**, nie zmienną środowiskową:
+
+```bash
+sudo install -m 600 /dev/stdin /etc/agenttalks/site-password <<< 'twoje-haslo'
+# w compose: wolumen :ro + AGENTTALKS_SITE_PASSWORD_FILE=/run/agenttalks/site-password
+```
+
+Powód jest prozaiczny: zmienną środowiskową kontenera widać w `docker inspect`,
+`docker ps --format` i w `/proc/<pid>/environ` - czyli w każdym wydruku diagnostycznym,
+który ktoś wkleja do zgłoszenia albo na czat. Przy pliku `inspect` pokazuje **ścieżkę**.
+Nieczytelny albo pusty plik **zatrzymuje start** - puste hasło znaczyłoby otwartą bramkę,
+a to jest awaria, której nikt nie zauważa.
 
 ## Pierwsze konta
 

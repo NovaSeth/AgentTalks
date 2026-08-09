@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertBindAllowed, defaultDataDir, inContainer, initData, loadConfig }
@@ -151,4 +151,32 @@ test("parseArgs bez listy nadal parsuje znane flagi", () => {
   const a = parseArgs(["claim", "deploy", "--ttl", "300"]);
   assert.deepEqual(a.positional, ["claim", "deploy"]);
   assert.equal(a.flags.ttl, "300");
+});
+
+test("haslo bramki z pliku: wartosc z pliku wygrywa, pusty/brakujacy plik nie wpuszcza cicho", () => {
+  const dir = tmpDir();
+  initData(dir);
+  const pwPath = join(dir, "site-password");
+  writeFileSync(pwPath, "tajne-haslo-bramki\n", { mode: 0o600 });
+  const prev = process.env.AGENTTALKS_SITE_PASSWORD_FILE;
+  const prevEnv = process.env.AGENTTALKS_SITE_PASSWORD;
+  try {
+    process.env.AGENTTALKS_SITE_PASSWORD_FILE = pwPath;
+    // Konczacy znak nowej linii nalezy do zapisu pliku, nie do hasla.
+    assert.equal(loadConfig(dir).sitePassword, "tajne-haslo-bramki");
+    // Plik ma pierwszenstwo przed env - to jest sciezka, ktora chcemy promowac.
+    process.env.AGENTTALKS_SITE_PASSWORD = "z-env";
+    assert.equal(loadConfig(dir).sitePassword, "tajne-haslo-bramki");
+    // Pusty plik to nie "brak hasla" tylko OTWARTA bramka - wiec odmowa startu.
+    writeFileSync(pwPath, "", { mode: 0o600 });
+    assert.throws(() => loadConfig(dir), /pusty/);
+    // Brakujacy plik tak samo: cicha pustka bylaby awaria, ktorej nikt nie widzi.
+    process.env.AGENTTALKS_SITE_PASSWORD_FILE = join(dir, "nie-ma-takiego");
+    assert.throws(() => loadConfig(dir), /nie da sie odczytac/);
+  } finally {
+    if (prev === undefined) delete process.env.AGENTTALKS_SITE_PASSWORD_FILE;
+    else process.env.AGENTTALKS_SITE_PASSWORD_FILE = prev;
+    if (prevEnv === undefined) delete process.env.AGENTTALKS_SITE_PASSWORD;
+    else process.env.AGENTTALKS_SITE_PASSWORD = prevEnv;
+  }
 });

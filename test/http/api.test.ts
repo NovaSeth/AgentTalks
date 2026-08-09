@@ -617,18 +617,93 @@ test("wiki przez API: zapis, odczyt, szukanie, historia, revert", async () => {
   await s.close();
 });
 
-test("wiki: strona jest wspolna - inny aktor tez ja edytuje", async () => {
+test("wiki: strona jest wspolna - inny aktor tez ja edytuje (po przeczytaniu)", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB } = seed(s);
   await fetch(s.url + "/api/wiki/wspolna", {
     method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "W", body: "od ali" }),
   });
+  // Bob najpierw czyta (GET oznacza "widzialem"), potem pisze - i to przechodzi.
+  await fetch(s.url + "/api/wiki/wspolna", { headers: bearer(tokenB) });
   const r = await fetch(s.url + "/api/wiki/wspolna", {
     method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "W", body: "od boba" }),
   });
   assert.equal(r.status, 200);
   const read = await (await fetch(s.url + "/api/wiki/wspolna", { headers: bearer(tokenB) })).json();
   assert.equal(read.page.body, "od boba");
+  await s.close();
+});
+
+test("wiki: slepy zapis na cudza strone -> 409 z numerem rewizji, po przeczytaniu -> 200", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB } = seed(s);
+  await fetch(s.url + "/api/wiki/korzen", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Ala ma strone", body: "tresc ali" }),
+  });
+  // Bob nigdy tej strony nie widzial - PUT nadpisalby cudza prace po cichu.
+  const blind = await fetch(s.url + "/api/wiki/korzen", {
+    method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "Bob ma strone", body: "tresc boba" }),
+  });
+  assert.equal(blind.status, 409);
+  const err = await blind.json();
+  assert.equal(err.code, "konflikt_wiki");
+  // Blad ma prowadzic do tresci, ktora by zginela: numer rewizji i autor.
+  const page = await (await fetch(s.url + "/api/wiki/korzen", { headers: bearer(tokenB) })).json();
+  assert.ok(page.page.lastRevisionId > 0);
+  assert.match(err.error, new RegExp(String(page.page.lastRevisionId)));
+  assert.match(err.error, /ala/);
+  // Tresc ali stoi nietknieta.
+  assert.equal(page.page.body, "tresc ali");
+  // Po przeczytaniu (GET wyzej) ten sam zapis przechodzi.
+  const after = await fetch(s.url + "/api/wiki/korzen", {
+    method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "Bob ma strone", body: "tresc boba" }),
+  });
+  assert.equal(after.status, 200);
+  await s.close();
+});
+
+test("wiki: baseRevision - zgodny przechodzi, rozjechany daje 409, 0 = tylko zaloz", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB } = seed(s);
+  await fetch(s.url + "/api/wiki/plan", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Plan", body: "v1" }),
+  });
+  const p1 = await (await fetch(s.url + "/api/wiki/plan", { headers: bearer(tokenA) })).json();
+  const rev1 = p1.page.lastRevisionId;
+  // Zapis oparty na rewizji, ktora widzielismy - przechodzi.
+  const ok = await fetch(s.url + "/api/wiki/plan", {
+    method: "PUT", headers: bearer(tokenA),
+    body: JSON.stringify({ title: "Plan", body: "v2", baseRevision: rev1 }),
+  });
+  assert.equal(ok.status, 200);
+  // Bob czyta (jest "na biezaco"), Ala pisze, Bob zapisuje na starej podstawie.
+  const p2 = await (await fetch(s.url + "/api/wiki/plan", { headers: bearer(tokenB) })).json();
+  await fetch(s.url + "/api/wiki/plan", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Plan", body: "v3" }),
+  });
+  const stale = await fetch(s.url + "/api/wiki/plan", {
+    method: "PUT", headers: bearer(tokenB),
+    body: JSON.stringify({ title: "Plan", body: "moje", baseRevision: p2.page.lastRevisionId }),
+  });
+  assert.equal(stale.status, 409);
+  // force = swiadome nadpisanie, przechodzi mimo rozjazdu
+  const forced = await fetch(s.url + "/api/wiki/plan", {
+    method: "PUT", headers: bearer(tokenB),
+    body: JSON.stringify({ title: "Plan", body: "moje", force: true }),
+  });
+  assert.equal(forced.status, 200);
+  // baseRevision=0 znaczy "zaloz, jesli nie ma" - na istniejacej stronie 409
+  const createOnly = await fetch(s.url + "/api/wiki/plan", {
+    method: "PUT", headers: bearer(tokenA),
+    body: JSON.stringify({ title: "Plan", body: "x", baseRevision: 0 }),
+  });
+  assert.equal(createOnly.status, 409);
+  // ...a na nowym slugu przechodzi
+  const fresh = await fetch(s.url + "/api/wiki/zupelnie-nowa", {
+    method: "PUT", headers: bearer(tokenA),
+    body: JSON.stringify({ title: "Nowa", body: "x", baseRevision: 0 }),
+  });
+  assert.equal(fresh.status, 200);
   await s.close();
 });
 

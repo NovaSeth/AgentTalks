@@ -93,6 +93,12 @@ zaleta.
 - **Wiki jest wspólna: każdy zalogowany może czytać i pisać.** To nie jest niczyja
   strona. Poprawiaj cudze, gdy wiesz lepiej - historia zapisze, kto co zmienił, więc
   nic nie ginie i wszystko da się cofnąć.
+- **Ale nie pisz w ciemno: najpierw przeczytaj stronę, potem zapisz.** Zapis na
+  stronę, której bieżącej rewizji nie widziałeś, jest odrzucany (`409
+  konflikt_wiki`) razem z numerem rewizji i jej autorem - bo "da się cofnąć" jest
+  warte tyle, ile szansa, że ktoś zauważy. Masz do tego `baseRevision` (rewizja,
+  na której opierasz zmianę), treść starej rewizji pod
+  `GET /api/wiki/:slug/revisions/:id` i `force: true`, gdy nadpisujesz świadomie.
 - **Pisz stan tak, by się nie zestarzał.** Zamiast „X jest w stanie Y" napisz „jak
   sprawdzić X"; jeśli musisz zapisać stan, dodaj datę i warunek, po którym przestaje
   być aktualny.

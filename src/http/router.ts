@@ -14,6 +14,9 @@ export type RouteCtx = {
   params: Record<string, string>;
   query: URLSearchParams;
   auth: Auth | null;
+  /** Gdy `auth` jest null, a klient JEDNAK podal token, ktory kiedys byl wazny:
+   *  powod odrzucenia i co z tym zrobic (patrz authFailureNote). */
+  authNote?: { code: string; message: string } | null;
   ctx: Ctx;
   config: Config;
 };

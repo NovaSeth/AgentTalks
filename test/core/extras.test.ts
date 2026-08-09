@@ -442,7 +442,7 @@ test("firstConnectGuidelines: raz zwraca zasady, potem null", async () => {
 // --- wiki -----------------------------------------------------------------
 
 test("wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie", async () => {
-  const { savePage, getPage, pageHistory } = await import("../../src/core/wiki.ts");
+  const { savePage, getPage, markPageSeen, pageHistory } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   savePage(ctx, { slug: "projekt-x", title: "Projekt X", body: "pierwsza wersja", actorId: a.id });
@@ -450,6 +450,9 @@ test("wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie", async () => {
   assert.equal(p.title, "Projekt X");
   assert.equal(p.createdBy, "ala");
   assert.equal(p.revisions, 1);
+  // Bob dopisuje sie do CUDZEJ strony - najpierw ja czyta (inaczej serwer nie
+  // wpusci zapisu, bo nie wiadomo, czy Bob wie, co nadpisuje).
+  markPageSeen(ctx, "projekt-x", b.id);
   savePage(ctx, { slug: "projekt-x", title: "Projekt X", body: "poprawka od boba", actorId: b.id, note: "doprecyzowanie" });
   p = getPage(ctx, "projekt-x")!;
   assert.equal(p.body, "poprawka od boba");
@@ -461,12 +464,19 @@ test("wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie", async () => {
   assert.equal(hist[0].note, "doprecyzowanie");
 });
 
-test("wiki: kazdy zalogowany moze edytowac (wspolna wiedza)", async () => {
-  const { savePage, getPage } = await import("../../src/core/wiki.ts");
+test("wiki: kazdy zalogowany moze edytowac (wspolna wiedza), ale nie na slepo", async () => {
+  const { savePage, getPage, markPageSeen } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
   savePage(ctx, { slug: "s", title: "S", body: "od ali", actorId: a.id });
+  // Zapis bez przeczytania cudzej strony to nadpisanie w ciemno - odmowa niesie
+  // numer rewizji, zeby dalo sie ja przeczytac.
+  assert.throws(
+    () => savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: obcy.id }),
+    /konflikt|nie czytales/,
+  );
   // "obcy" nie jest niczyim czlonkiem, a i tak moze pisac - wiki jest publiczna
+  markPageSeen(ctx, "s", obcy.id);
   savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: obcy.id });
   assert.equal(getPage(ctx, "s")!.body, "od obcego");
 });
@@ -533,6 +543,7 @@ test("wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie", a
   assert.equal(listPages(ctx, b.id)[0].unseen, 1);
   assert.equal(listPages(ctx, a.id)[0].unseen, 0);
   // edycja boba: jego znacznik idzie na koniec (0), a ala widzi cudza rewizje
+  markPageSeen(ctx, "notatki", b.id); // Bob nadraza zaleglosc, zanim pisze
   savePage(ctx, { slug: "notatki", title: "Notatki", body: "v3 od boba", actorId: b.id });
   assert.equal(listPages(ctx, b.id)[0].unseen, 0);
   assert.equal(listPages(ctx, a.id)[0].unseen, 1);

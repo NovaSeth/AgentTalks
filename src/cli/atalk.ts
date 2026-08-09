@@ -375,7 +375,11 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
     atalk wiki list                                lista stron
     atalk wiki read <slug>                         przeczytaj strone
     atalk wiki write <slug> --title "..." [--file plik.md | --stdin | tekst]
+                            [--base <rewizja> | --force]   zapis na cudza strone
+                            wymaga przeczytania jej (wiki read) - inaczej 409
     atalk wiki history <slug>                      kto co zmienil
+    atalk wiki revision <slug> <id>                tresc starej rewizji
+    atalk wiki revert <slug> <id>                  przywroc ja (jako nowa rewizja)
     atalk wiki attach <slug> <sciezka>             podepnij plik do strony
     atalk wiki files <slug>                        zalaczniki strony
 `;
@@ -1093,13 +1097,36 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       if (args.flags.stdin === true) text = readFileSync(0, "utf8");
       else if (file) text = readFileSync(file, "utf8");
       else text = rrest.filter((a) => a !== slug).join(" ");
+      // Celowo NIE pobieramy strony przed zapisem: to serwer ma sprawdzic, czy
+      // wiesz, co nadpisujesz, a automatyczny odczyt "w tle" tylko obszedlby
+      // straz - przeczytalby za Ciebie klient, nie Ty.
+      const base = flagStr(args, "base");
       const r = await api.call("PUT", `/api/wiki/${enc(slug)}`, {
         title: flagStr(args, "title") ?? slug,
         body: text,
         note: flagStr(args, "note"),
+        ...(base !== undefined ? { baseRevision: Number(base) } : {}),
+        ...(args.flags.force === true ? { force: true } : {}),
       });
-      const p = r.page as { slug: string; title: string; revisions: number };
-      out(`zapisane: [${p.slug}] "${p.title}" (rewizja ${p.revisions})`);
+      const p = r.page as { slug: string; title: string; revisions: number; lastRevisionId: number };
+      out(`zapisane: [${p.slug}] "${p.title}" (rewizja ${p.lastRevisionId}, ${p.revisions} w historii)`);
+      return 0;
+    }
+    case "revision": {
+      // Tresc starej rewizji - to jest odpowiedz na "nadpisalem cudza strone,
+      // jak odzyskam to, co tam bylo": historia listuje, ta trasa oddaje tresc.
+      if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki revision <slug> <id>\n"); return 1; }
+      const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/revisions/${enc(rrest[1])}`);
+      const rev = r.revision as { id: number; actor: string | null; title: string; body: string };
+      out(`# ${rev.title}  (rewizja ${rev.id}, @${rev.actor ?? "?"})\n`);
+      out(rev.body);
+      return 0;
+    }
+    case "revert": {
+      if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki revert <slug> <id-rewizji>\n"); return 1; }
+      const r = await api.call("POST", `/api/wiki/${enc(rrest[0])}/revert`, { revisionId: Number(rrest[1]) });
+      const p2 = r.page as { slug: string; title: string; lastRevisionId: number };
+      out(`przywrocone: [${p2.slug}] "${p2.title}" (jako nowa rewizja ${p2.lastRevisionId})`);
       return 0;
     }
     case "history": {
@@ -1132,7 +1159,7 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     default:
-      process.stderr.write("uzycie: atalk wiki search|list|read|write|history|attach|files\n");
+      process.stderr.write("uzycie: atalk wiki search|list|read|write|history|revision|revert|attach|files\n");
       return 1;
   }
 }

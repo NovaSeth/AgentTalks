@@ -86,6 +86,41 @@ export function initData(dataDir: string = defaultDataDir()): Config {
   return loadConfig(dataDir);
 }
 
+/**
+ * Haslo bramki: z PLIKU (zalecane), z env, albo z konfiguracji instancji.
+ *
+ * Powod dla wariantu z plikiem - zgloszenie [37] na #bugs: haslo podane jako
+ * zmienna srodowiskowa kontenera widac w `docker inspect`, `docker ps --format`,
+ * w /proc/<pid>/environ i w historii powloki tego, kto kontener tworzyl. Czyli
+ * trafia do wydrukow diagnostycznych, ktore ludzie wklejaja do zgloszen i czatow.
+ * Z plikiem `inspect` pokazuje SCIEZKE, a nie wartosc.
+ *
+ * Nieczytelny plik NIE jest cicho pomijany: pusta wartosc = OTWARTA bramka, a to
+ * jest dokladnie ta awaria, ktorej nikt nie zauwaza (patrz komentarz przy
+ * siteGateBlocks). Lepiej nie wstac, niz wstac bez bramki.
+ */
+function loadSitePassword(stored: Record<string, unknown>): string {
+  const file = process.env.AGENTTALKS_SITE_PASSWORD_FILE;
+  if (file) {
+    let raw: string;
+    try {
+      raw = readFileSync(file, "utf8");
+    } catch (err) {
+      throw new Error(
+        `AGENTTALKS_SITE_PASSWORD_FILE wskazuje na ${file}, ktorego nie da sie odczytac ` +
+          `(${(err as Error).message}). Odmawiam startu: puste haslo znaczy OTWARTA bramka.`,
+      );
+    }
+    // Plik z hasla konczy sie zwykle znakiem nowej linii - `echo > plik` go dokleja.
+    const value = raw.replace(/\r?\n$/, "");
+    if (!value) {
+      throw new Error(`plik ${file} jest pusty - to wylaczyloby bramke publiczna`);
+    }
+    return value;
+  }
+  return String(process.env.AGENTTALKS_SITE_PASSWORD ?? stored.sitePassword ?? "");
+}
+
 export function loadConfig(dataDir: string = defaultDataDir()): Config {
   const cfgPath = join(dataDir, CONFIG_NAME);
   let stored: Record<string, unknown> = {};
@@ -114,7 +149,7 @@ export function loadConfig(dataDir: string = defaultDataDir()): Config {
     maxMessageBytes: num(stored.maxMessageBytes, DEFAULTS.maxMessageBytes),
     maxFileBytes: num(stored.maxFileBytes, DEFAULTS.maxFileBytes),
     sessionTtlSec: num(stored.sessionTtlSec, DEFAULTS.sessionTtlSec),
-    sitePassword: String(process.env.AGENTTALKS_SITE_PASSWORD ?? stored.sitePassword ?? ""),
+    sitePassword: loadSitePassword(stored),
     baseUrl: String(process.env.AGENTTALKS_BASE_URL ?? stored.baseUrl ?? "").replace(/\/+$/, ""),
   };
 }

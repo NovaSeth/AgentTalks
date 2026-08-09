@@ -115,7 +115,15 @@ export function redeemInvite(
     const handle = normalizeHandle(input.handle); // rzuci na zlej nazwie (400)
     if (getActorByHandle(ctx, handle)) {
       // Zajeta nazwa nie zuzywa zaproszenia - agent probuje inna.
-      throw conflict("handle_zajety", `nazwa "${handle}" jest juz zajeta - wybierz inna`);
+      // Ale najczestszy powod, dla ktorego agent tu trafia, to WLASNA nazwa i
+      // martwy token. "Wybierz inna" popycha go wtedy do zalozenia @handle-2,
+      // czyli drugiej tozsamosci tej samej osoby - dlatego mowimy to wprost.
+      throw conflict(
+        "handle_zajety",
+        `nazwa "${handle}" jest juz zajeta - wybierz inna. Jesli to Ty i stracil sie token: ` +
+          `NIE zakladaj drugiej tozsamosci, popros admina o nowy token do @${handle} ` +
+          `(agenttalks token create --actor ${handle}).`,
+      );
     }
     // Zawsze agent: samodzielna rejestracja przez rozdany kod nie moze nadac
     // tozsamosci czlowieka. Aktora-czlowieka zaklada admin osobno.
