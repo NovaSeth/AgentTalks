@@ -4,7 +4,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { onCommitted, openDb, schemaVersion, tx } from "../../src/store/db.ts";
-import { SCHEMA_VERSION } from "../../src/store/schema.ts";
+import { MIGRATIONS, SCHEMA_VERSION } from "../../src/store/schema.ts";
+import { DatabaseSync } from "node:sqlite";
 
 test("openDb tworzy schemat i ustawia wersje", () => {
   const db = openDb(":memory:");
@@ -99,16 +100,54 @@ test("tx wycofuje wszystko przy bledzie w srodku", () => {
   assert.equal(n.n, 0);
 });
 
-test("migracja wielokrokowa: baza z user_version=1 dostaje kolumny z M2", () => {
+test("migracja wielokrokowa: stara baza dochodzi do biezacej wersji, z danymi", () => {
+  // Poprzednia wersja tego testu tylko OTWIERALA swieza baze i sprawdzala, ze
+  // ma kolumny - czyli testowala instalacje od zera pod nazwa "migracja", i nie
+  // mogla zawiesc przy zepsutej migracji. Tutaj naprawde zaczynamy od schematu
+  // sprzed lat: pierwsza migracja, dane w srodku, a potem pelny przebieg do
+  // biezacej wersji. Dane MUSZA przezyc - to jest jedyne, co migracja obiecuje.
   const path = join(mkdtempSync(join(tmpdir(), "at-mig-")), "test.sqlite");
-  // Symuluj baze sprzed M2: otworz, cofnij user_version do 1, usun kolumny M2? -
-  // prosciej: otworz swiezo (dojdzie do 2), sprawdz ze kolumny sa.
+
+  // 1. Baza w stanie po M1 i tylko po M1.
+  const stara = new DatabaseSync(path);
+  stara.exec("PRAGMA foreign_keys = ON");
+  stara.exec(MIGRATIONS[0]);
+  stara.exec("PRAGMA user_version = 1");
+  stara.prepare("INSERT INTO actors(kind, handle, display_name, created_at) VALUES(?,?,?,?)")
+    .run("agent", "stary-agent", "stary-agent", 1000);
+  stara.close();
+
+  // 2. Otwarcie przez openDb ma dociagnac WSZYSTKIE pozostale migracje.
   const db = openDb(path);
-  assert.equal(schemaVersion(db), SCHEMA_VERSION);
-  const cols = (db.prepare("PRAGMA table_info(messages)").all() as Array<{ name: string }>)
-    .map((c) => c.name);
-  assert.ok(cols.includes("dedup_key"), "M2 nie dodalo dedup_key");
-  const tcols = (db.prepare("PRAGMA table_info(tokens)").all() as Array<{ name: string }>)
-    .map((c) => c.name);
-  assert.ok(tcols.includes("expires_at"), "M2 nie dodalo tokens.expires_at");
+  assert.equal(schemaVersion(db), SCHEMA_VERSION, "migracja nie doszla do biezacej wersji");
+
+  // 3. Dane sprzed migracji zyja.
+  const kto = db.prepare("SELECT handle FROM actors WHERE handle = ?").get("stary-agent") as
+    | { handle: string }
+    | undefined;
+  assert.equal(kto?.handle, "stary-agent", "migracja zgubila dane sprzed niej");
+
+  // 4. Kolumny i tabele z pozniejszych migracji faktycznie sa.
+  const kolumny = (tabela: string) =>
+    (db.prepare(`PRAGMA table_info(${tabela})`).all() as Array<{ name: string }>).map((c) => c.name);
+  assert.ok(kolumny("messages").includes("dedup_key"), "brak dedup_key (M2)");
+  assert.ok(kolumny("tokens").includes("expires_at"), "brak tokens.expires_at (M2)");
+  assert.ok(kolumny("messages").includes("fixed_at"), "brak messages.fixed_at (M12)");
+  assert.ok(kolumny("actors").includes("session_epoch"), "brak actors.session_epoch (M13)");
+  const tabele = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as
+    Array<{ name: string }>).map((t) => t.name);
+  assert.ok(tabele.includes("notifications"), "brak tabeli notifications (M11)");
+  assert.ok(tabele.includes("wiki_pages"), "brak tabeli wiki_pages (M4)");
+});
+
+test("migracja jest idempotentna: drugie otwarcie nie robi nic i nie psuje danych", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "at-mig2-")), "test.sqlite");
+  const a = openDb(path);
+  a.prepare("INSERT INTO actors(kind, handle, display_name, created_at) VALUES(?,?,?,?)")
+    .run("agent", "ktos", "ktos", 1000);
+  a.close();
+  const b = openDb(path);
+  assert.equal(schemaVersion(b), SCHEMA_VERSION);
+  const n = b.prepare("SELECT COUNT(*) AS n FROM actors").get() as { n: number };
+  assert.equal(n.n, 1, "ponowne otwarcie zmienilo dane");
 });

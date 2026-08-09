@@ -136,3 +136,76 @@ test("talk_claim i talk_release przechodza pelny cykl dzierzawy", async () => {
     /UNLOCKED/);
   await s.close();
 });
+
+test("KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad protokolu", async () => {
+  const s = await startTestServer();
+  const { ala, bob, kanal, token } = seed(s);
+  const wiadomosc = postMessage(s.ctx, {
+    conversationId: kanal.id, actorId: ala.id, body: "material do testow narzedzi",
+  });
+
+  // Lista narzedzi jest zrodlem prawdy - test nie ma wlasnej kopii, wiec nowe
+  // narzedzie automatycznie wchodzi do pokrycia. Wczesniej test sprawdzal same
+  // NAZWY na liscie (asercja na stalej tablicy), a realnie wywolywal cztery
+  // z dwudziestu kilku - czyli wiekszosc "glownego interfejsu agentow" nie miala
+  // ani jednego przebiegu.
+  const lista = await mcpCall(s.url, token, {
+    jsonrpc: "2.0", id: 100, method: "tools/list", params: {},
+  });
+  const narzedzia = (lista.result as { tools: Array<{ name: string }> }).tools.map((t) => t.name);
+  assert.ok(narzedzia.length >= 15, `spodziewalem sie kompletu narzedzi, jest ${narzedzia.length}`);
+
+  // Argumenty minimalne, ktore maja sens dla kazdego narzedzia. Narzedzia
+  // wymagajace stanu spoza tego testu (wake, pliki) dostaja argumenty, przy
+  // ktorych odpowiedz "nie ma czegos takiego" jest POPRAWNA - sprawdzamy, ze
+  // narzedzie odpowiada po ludzku, a nie wywala sie bledem protokolu.
+  const argumenty: Record<string, Record<string, unknown>> = {
+    talk_status: {},
+    talk_send: { to: "#general", body: "z testu pokrycia" },
+    talk_read: { wait: 0 },
+    talk_log: { conversation: "#general", limit: 5 },
+    talk_thread: { messageId: wiadomosc.id },
+    talk_ask: { conversation: "#general", body: "pytanie z testu" },
+    talk_answer: { questionId: 1, body: "odpowiedz z testu" },
+    talk_search: { q: "material" },
+    talk_digest: {},
+    talk_claim: { resource: "deploy", ttlSec: 60 },
+    talk_release: { resource: "deploy" },
+    talk_react: { messageId: wiadomosc.id, emoji: "👍" },
+    talk_register: { sessionId: "test-sesja" },
+    talk_typing: { to: "#general" },
+    talk_channels: {},
+    talk_join: { conversation: "#general" },
+    talk_who: {},
+    talk_wake: {},
+    talk_file_get: { fileId: "nie-ma-takiego" },
+    wiki_search: { q: "cokolwiek" },
+    wiki_read: { slug: "nie-ma-takiej" },
+    wiki_list: {},
+    wiki_write: { slug: "strona-z-testu", title: "Strona", body: "tresc" },
+    wiki_history: { slug: "strona-z-testu" },
+    talk_whoami: {},
+    talk_guidelines: {},
+    talk_open: { conversation: "#general" },
+    talk_mentions: {},
+    talk_seen: { conversation: "#general" },
+    talk_leases: {},
+  };
+
+  const bezPokrycia: string[] = [];
+  for (const nazwa of narzedzia) {
+    const args = argumenty[nazwa];
+    if (args === undefined) { bezPokrycia.push(nazwa); continue; }
+    const r = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 200, method: "tools/call", params: { name: nazwa, arguments: args },
+    });
+    // Blad DOMENOWY ("nie ma takiej strony") jest w porzadku - to odpowiedz.
+    // Blad PROTOKOLU (r.error) znaczy, ze narzedzie w ogole nie dziala.
+    assert.equal(r.error, undefined, `narzedzie ${nazwa} zwrocilo blad protokolu`);
+    const tresc = (r.result as { content?: Array<{ text: string }> }).content;
+    assert.ok(Array.isArray(tresc) && tresc.length > 0, `narzedzie ${nazwa} nie zwrocilo tresci`);
+  }
+  assert.deepEqual(bezPokrycia, [], `narzedzia bez wywolania w tescie: ${bezPokrycia.join(", ")}`);
+  assert.ok(bob);
+  await s.close();
+});

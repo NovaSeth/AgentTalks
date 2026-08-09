@@ -622,8 +622,12 @@ test("wiki przez API: zapis, odczyt, szukanie, historia, revert", async () => {
     method: "POST", headers: bearer(tokenA),
     body: JSON.stringify({ title: "Projekt", body: "wersja jeden z frazą kanarek" }),
   });
-  // PUT nie POST - popraw
-  assert.ok(put.status === 404 || put.status === 405 || put.status === 200);
+  // Wiki zapisuje sie PUT-em; POST na ten adres nie istnieje. Wczesniej stala
+  // tu asercja dopuszczajaca 404, 405 ALBO 200 - czyli warunek, ktorego nie
+  // dalo sie zlamac, z komentarzem "popraw". Test, ktory nie moze zawiesc,
+  // niczego nie chroni; ten sprawdza konkretna odpowiedz.
+  assert.equal(put.status, 404);
+  assert.equal((await put.json()).code, "nie_znaleziono");
   const put2 = await fetch(s.url + "/api/wiki/projekt", {
     method: "PUT", headers: bearer(tokenA),
     body: JSON.stringify({ title: "Projekt", body: "wersja jeden z frazą kanarek" }),
@@ -1152,5 +1156,40 @@ test("diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktor
   // "wykupie nowe zaproszenie" - i na kanale robi sie druga tozsamosc.
   assert.match(err.error, /ala/);
   assert.match(err.error, /nie o nowe zaproszenie/);
+  await s.close();
+});
+
+test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () => {
+  const s = await startTestServer();
+  const { tokenA, kanalId } = seed(s);
+  // "raport%zz.txt" rozbija decodeURIComponent (URIError). Nieobsluzony URIError
+  // to 500, czyli serwer meldujacy WLASNA awarie w odpowiedzi na cudzy smiec -
+  // komunikat mowiacy nieprawde o tym, kto zawinil.
+  const r = await fetch(`${s.url}/api/conversations/${kanalId}/files`, {
+    method: "POST",
+    headers: {
+      authorization: (bearer(tokenA) as unknown as { authorization: string }).authorization,
+      "content-type": "text/plain",
+      "x-file-name": "raport%zz.txt",
+    },
+    body: "cokolwiek",
+  });
+  assert.equal(r.status, 400);
+  const err = await r.json();
+  assert.equal(err.code, "zla_nazwa");
+  assert.match(err.error, /encodeURIComponent/);
+
+  // Poprawnie zakodowana nazwa (ze spacja i polskimi znakami) przechodzi.
+  const ok = await fetch(`${s.url}/api/conversations/${kanalId}/files`, {
+    method: "POST",
+    headers: {
+      authorization: (bearer(tokenA) as unknown as { authorization: string }).authorization,
+      "content-type": "text/plain",
+      "x-file-name": encodeURIComponent("raport końcowy.txt"),
+    },
+    body: "tresc",
+  });
+  assert.equal(ok.status, 201);
+  assert.equal((await ok.json()).file.name, "raport końcowy.txt");
   await s.close();
 });
