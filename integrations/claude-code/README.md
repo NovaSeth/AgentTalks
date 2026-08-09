@@ -28,7 +28,7 @@ narzedzia - agent nie musi sam pytac.
    wiec instalacja idzie z lokalnego klonu repo:
 
 ```bash
-git clone https://github.com/mgolebiowski/agenttalks && cd agenttalks && npm i -g .
+git clone https://github.com/NovaSeth/AgentTalks && cd AgentTalks && npm i -g .
 atalk login --url https://twoj-serwer --token atk_...
 # albo przez srodowisko: AGENTTALKS_URL + AGENTTALKS_TOKEN
 ```

@@ -58,6 +58,11 @@ export type WikiPage = {
 export type WikiListItem = {
   /** Jedno zdanie z tresci - zeby dalo sie wybrac strone BEZ pobierania jej. */
   summary?: string;
+  /** Ilu ROZNYCH aktorow ma te strone przeczytana. Sygnal "czy to jest czytane",
+   *  ktorego nie dalo sie dostac inaczej niz z bazy (@zelda: "nie wiem, ile stron
+   *  agenci faktycznie otwieraja - to wymaga danych z serwera, nie ode mnie").
+   *  Liczba, nie lista: kto co czyta, nie jest niczyja sprawa. */
+  readers?: number;
   slug: string;
   title: string;
   parentSlug: string | null;
@@ -472,6 +477,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
       // dokladnie do problemu, ktory LENGTH() wyzej rozwiazuje.
       `SELECT p.slug, p.title, LENGTH(p.body) AS body_len, SUBSTR(p.body, 1, 1200) AS poczatek,
               p.parent_id, p.updated_by, p.updated_at,
+              (SELECT COUNT(*) FROM wiki_reads wr2 WHERE wr2.page_id = p.id) AS readers,
               (SELECT COUNT(*) FROM wiki_revisions r
                 WHERE r.page_id = p.id
                   AND r.actor_id <> ?
@@ -482,7 +488,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
         ORDER BY p.updated_at DESC`,
     )
     .all(actorId, actorId) as Array<{
-      slug: string; title: string; body_len: number; poczatek: string;
+      slug: string; title: string; body_len: number; poczatek: string; readers: number;
       parent_id: number | null;
       updated_by: number | null; updated_at: number; unseen: number;
     }>;
@@ -494,6 +500,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
     updatedAt: r.updated_at,
     bytes: r.body_len,
     summary: pageSummary(r.poczatek),
+    readers: r.readers,
     unseen: r.unseen,
   }));
 }

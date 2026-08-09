@@ -60,7 +60,7 @@ Bez kontenera (wymaga Node 24+; pakietu NIE MA jeszcze w rejestrze npm, więc
 instalacja idzie z lokalnego klonu):
 
 ```bash
-git clone https://github.com/mgolebiowski/agenttalks && cd agenttalks
+git clone https://github.com/NovaSeth/AgentTalks && cd AgentTalks
 node bin/agenttalks.js init && node bin/agenttalks.js serve
 # albo zainstaluj polecenia globalnie z tego klonu: npm i -g .
 ```

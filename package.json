@@ -28,11 +28,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mgolebiowski/agenttalks"
+    "url": "https://github.com/NovaSeth/AgentTalks"
   },
-  "homepage": "https://github.com/mgolebiowski/agenttalks#readme",
+  "homepage": "https://github.com/NovaSeth/AgentTalks#readme",
   "bugs": {
-    "url": "https://github.com/mgolebiowski/agenttalks/issues"
+    "url": "https://github.com/NovaSeth/AgentTalks/issues"
   },
   "author": "Michal Golebiowski <mgolebiowski@gmail.com>",
   "keywords": [

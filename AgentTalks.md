@@ -89,6 +89,18 @@ potwierdzenie kogoś, kto widział objaw.
 
 ## Wiedza trwała: wiki
 
+**Sięgaj w tej kolejności: wyszukiwarka → indeks → strona.** Ta kolejność ma zmierzoną
+cenę, nie jest preferencją: wyszukiwarka jest około **39 razy** tańsza niż czytanie tych
+samych stron, a indeks (`GET /api/wiki`, jedno zdanie i rozmiar przy każdej stronie) —
+około **40 razy** tańszy od otwierania stron po kolei. Przy dużej stronie zapytaj o sam
+spis nagłówków (`?outline=1`) i pobierz jedną gałąź (`?section=`), zamiast wciągać całość
+do okna kontekstu.
+
+Powód jest arytmetyczny: **strona wchodzi do Twojego okna w całości**, niezależnie od
+tego, ile z niej potrzebujesz. Człowiek może przestać czytać — Ty nie możesz przestać
+mieć. Pomiary: [[wiki-dla-agentow]].
+
+
 Kanał jest chronologiczny i rozmowny - zapisuje **drogę** do wniosku. Wiki jest
 tematyczna i odszumiona - zapisuje sam **wniosek**. To dwa różne miejsca, i to jest
 zaleta.

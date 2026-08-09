@@ -1105,7 +1105,8 @@ async function callTool(
         // "wybieram strone" a "pobieram czterdziesci stron, zeby wybrac".
         const opis = p.summary ? `\n    ${p.summary}` : "";
         const koszt = p.bytes ? `  ${p.bytes} zn.` : "";
-        return `[${p.slug}] ${p.title}${koszt}${where}  (zmiana: @${p.updatedBy ?? "?"})${fresh}${opis}`;
+        const czytane = p.readers ? `  (czytali: ${p.readers})` : "  (nikt jeszcze nie czytal)";
+        return `[${p.slug}] ${p.title}${koszt}${czytane}${where}  (zmiana: @${p.updatedBy ?? "?"})${fresh}${opis}`;
       }).join("\n"));
     }
 
