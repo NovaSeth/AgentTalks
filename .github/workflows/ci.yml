@@ -18,17 +18,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      # Projekt NIE MA typescript w zaleznosciach (i nie ma go dodawac do
-      # dependencies - zero-zaleznosciowa zasada rdzenia). Instalujemy go
-      # doraznie tylko na czas tego kroku. continue-on-error: true w
-      # PIERWSZEJ wersji tego kroku, bo repo nie bylo dotad sprawdzane
-      # przez tsc i nie wiadomo, ile istniejacych plikow zawiedzie -
-      # wlaczenie tego jako twardej bramki od razu zaczerwieniloby CI bez
-      # ostrzezenia. Usunac continue-on-error, gdy `tsc --noEmit` przechodzi
-      # czysto na biezacym kodzie.
-      - name: Sprawdzenie typow (informacyjne, na razie)
-        continue-on-error: true
-        run: npx -y -p typescript@5 tsc --noEmit
+      # Twarda bramka, nie informacja. Wczesniej ten krok mial
+      # continue-on-error: true, bo repo nie bylo dotad sprawdzane przez tsc i
+      # nie wiadomo bylo, ile plikow zawiedzie. Odpowiedz brzmiala: 7 - z czego
+      # dwa byly prawdziwymi dziurami (rodzaj zdarzenia "notification" spoza
+      # unii Event; wyszukiwarka gubiaca resolvedAt/fixedAt, wiec domkniete
+      # zgloszenie wygladalo na otwarte). Reszta to szum z braku @types/node,
+      # ktory maskowal tamte dwa. Odkad przechodzi czysto, ma byc bramka -
+      # inaczej jest ozdoba, ktora nikt nie czyta.
+      - name: Sprawdzenie typow
+        run: npm run typecheck
 
   docker:
     runs-on: ubuntu-latest

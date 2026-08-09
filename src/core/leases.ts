@@ -49,9 +49,11 @@ function clampTtl(ttl: number | undefined): number {
 }
 
 function rowToLease(ctx: Ctx, r: Record<string, unknown>): Lease {
-  const actor = ctx.db.prepare("SELECT handle FROM actors WHERE id = ?").get(r.actor_id) as
-    | { handle: string }
-    | undefined;
+  // r.actor_id jest `unknown` (wiersz to Record<string, unknown>), a sterownik
+  // przyjmuje tylko wartosci SQL - rzutowanie na number jest tu jawnym miejscem,
+  // w ktorym mowimy, czym ta kolumna jest.
+  const actor = ctx.db.prepare("SELECT handle FROM actors WHERE id = ?")
+    .get(r.actor_id as number) as { handle: string } | undefined;
   return {
     resource: r.resource as string,
     actorId: r.actor_id as number,

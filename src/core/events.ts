@@ -16,7 +16,12 @@ export type Event =
   | { type: "read"; conversationId: number; actorId: number; messageId: number }
   | { type: "presence" }
   | { type: "wiki"; slug: string }
-  | { type: "conversation"; conversationId: number };
+  | { type: "conversation"; conversationId: number }
+  // Powiadomienie do JEDNEJ osoby - centrum powiadomien odswieza sie po nim.
+  // Brakowalo go w unii, mimo ze rdzen je publikowal: typ klamal, a kazdy
+  // wyczerpujacy switch po rodzajach zdarzen cicho je pomijal (zlapane przez
+  // tsc dopiero po wlaczeniu typow Node w tsconfig).
+  | { type: "notification" };
 
 type Listener = (e: Event) => void;
 

@@ -32,6 +32,11 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     maxMessageBytes: 65536,
     maxFileBytes: 1024 * 1024,
     sessionTtlSec: 3600,
+    // Pola opcjonalne w Config sa STRINGAMI (pusty = wylaczone), wiec domyslne
+    // musza byc jawnie puste - inaczej `...overrides` typu Partial<Config>
+    // wstrzykuje `undefined` tam, gdzie typ obiecuje string.
+    sitePassword: "",
+    baseUrl: "",
     ...overrides,
   };
 }

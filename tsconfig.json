@@ -6,7 +6,12 @@
     "module": "nodenext",
     "target": "es2023",
     "strict": true,
-    "types": []
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts"
+  ]
 }

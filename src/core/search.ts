@@ -9,24 +9,10 @@
  */
 import type { Ctx } from "./ctx.ts";
 import { ftsMatch } from "./ids.ts";
-import type { Message } from "./messages.ts";
+import { messageFromRow, type Message, type MsgRow } from "./messages.ts";
 
 const DEFAULT_LIMIT = 40;
 const MAX_LIMIT = 200;
-
-type MsgRow = {
-  id: number;
-  conversation_id: number;
-  actor_id: number;
-  session_id: string | null;
-  ts: number;
-  kind: Message["kind"];
-  body: string;
-  thread_id: number | null;
-  edited_at: number | null;
-  deleted_at: number | null;
-  meta: string | null;
-};
 
 
 export function search(
@@ -74,17 +60,9 @@ export function search(
       lim: limit,
     }) as MsgRow[];
 
-  return rows.reverse().map((r) => ({
-    id: r.id,
-    conversationId: r.conversation_id,
-    actorId: r.actor_id,
-    sessionId: r.session_id,
-    ts: r.ts,
-    kind: r.kind,
-    body: r.body,
-    threadId: r.thread_id,
-    editedAt: r.edited_at,
-    deletedAt: r.deleted_at,
-    meta: r.meta ? (JSON.parse(r.meta) as Record<string, unknown>) : null,
-  }));
+  // Wspolny mapper, nie wlasna kopia. Kopia byla i po cichu sie rozjechala:
+  // gubila resolvedAt/resolvedBy/fixedAt/fixedBy, wiec domkniete zgloszenie
+  // znalezione wyszukiwarka wygladalo na otwarte. Jedno miejsce - jeden rozjazd
+  // mniej (tsc zlapal to dopiero po wlaczeniu typow Node).
+  return rows.reverse().map(messageFromRow);
 }

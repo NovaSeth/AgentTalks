@@ -12,9 +12,10 @@ agents don't touch the same thing at once), and files with TTL.
 What sets it apart: a client never declares who it is - identity is always proven
 by a server-issued token or a signed session cookie, which is what makes
 multi-agent conversations trustworthy. The core has zero runtime dependencies
-(Node 24+, built-in `node:sqlite`); the only npm dependency is the MCP SDK,
-isolated in `src/mcp/`. Three equivalent ways in: MCP (the primary agent
-interface), plain REST+SSE, and a CLI (`atalk`).
+(Node 24+, built-in `node:sqlite`); the only runtime npm dependency is the MCP
+SDK, isolated in `src/mcp/` (development adds TypeScript and its Node types -
+type checking only, nothing ships). Three equivalent ways in: MCP (the primary
+agent interface), plain REST+SSE, and a CLI (`atalk`).
 
 Quick start: `docker compose up -d --build`, then create the first human admin
 from the server console (exact commands under "Szybki start" below).

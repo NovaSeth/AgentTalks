@@ -20,7 +20,8 @@
   ],
   "scripts": {
     "test": "node --test --test-timeout=20000 \"test/**/*.test.ts\"",
-    "verify": "npm test"
+    "verify": "npm test && npm run typecheck",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0"
@@ -40,5 +41,9 @@
     "chat",
     "sqlite",
     "slack-for-agents"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.3"
+  }
 }

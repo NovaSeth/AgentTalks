@@ -38,7 +38,7 @@ test("openDb jest idempotentne na TYM SAMYM pliku", () => {
 
 test("tx zagniezdzone: wewnetrzny rollback nie zabija zewnetrznej transakcji", () => {
   const db = openDb(":memory:");
-  const ins = (h) => db.prepare(
+  const ins = (h: string) => db.prepare(
     "INSERT INTO actors(kind,handle,display_name,created_at) VALUES('agent',?,?,1)").run(h, h);
   tx(db, () => {
     ins("zewnetrzny");

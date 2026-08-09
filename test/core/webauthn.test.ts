@@ -81,7 +81,6 @@ function register(ctx: ReturnType<typeof testCtx>, actorId: number, auth: Return
     rpId: RP_ID,
     expectedOrigins: [ORIGIN],
     actorId,
-    challengeFromClient: challenge,
     clientDataJSON: b64u.enc(clientData("webauthn.create", challenge)),
     attestationObject: b64u.enc(att),
   });
