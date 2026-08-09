@@ -56,6 +56,10 @@ import { getPage, listPages, markPageSeen, pageHistory, savePage, searchWiki, wi
 import type { Req, Res } from "../http/router.ts";
 
 const WAIT_MAX_SEC = 300;
+
+/** Ile wiadomosci oddaje talk_read bez jawnego `limit`. Tyle samo co REST
+ *  (`GET /api/conversations/:id/messages`), zeby oba klienty mowily to samo. */
+const DOMYSLNY_ODCINEK = 50;
 const PROGRESS_INTERVAL_MS = 20_000;
 
 // ---- opisy narzedzi -------------------------------------------------------
@@ -117,9 +121,12 @@ export const TOOLS: ToolDef[] = [
     name: "talk_read",
     description:
       "Nowe wiadomosci dla Ciebie (ze wszystkich Twoich konwersacji). Podaj afterId z poprzedniego " +
-      "wywolania jako kursor. waitSec > 0 czeka na pierwsza nowa wiadomosc (long-poll, max 300 s).",
+      "wywolania jako kursor. waitSec > 0 czeka na pierwsza nowa wiadomosc (long-poll, max 300 s). " +
+      "Oddaje odcinek (domyslnie 50) i konczy kursorem - przy zaleglosciach wolaj w petli, " +
+      "az napisze, ze nic nie zostalo.",
     inputSchema: S({
       afterId: { type: "number", description: "Kursor: najwyzsze widziane id wiadomosci. Domyslnie 0." },
+      limit: { type: "number", description: "Ile wiadomosci naraz (1-200, domyslnie 50)." },
       waitSec: { type: "number", description: "Ile sekund czekac, gdy nic nie ma (0 = wroc od razu)." },
     }),
   },
@@ -468,6 +475,58 @@ type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: bo
 
 const text = (t: string): ToolResult => ({ content: [{ type: "text", text: t }] });
 
+/**
+ * Budzet wyjscia jednego wywolania narzedzia.
+ *
+ * Klient MCP odrzuca zbyt duzy wynik w CALOSCI - agent nie dostaje nawet pierwszej
+ * wiadomosci. Zgloszenie [149] @motowolta: `talk_read {afterId: 0}` na kanale z 133
+ * wiadomosciami zwrocilo 132 355 znakow, harness odrzucil, obejscie kosztowalo cztery
+ * odczyty pliku. Sama liczba wiadomosci tego nie pilnuje, bo o odrzuceniu decyduje
+ * ROZMIAR: przy limicie tresci 65536 B dwie wiadomosci wystarcza, zeby przekroczyc
+ * kazdy rozsadny prog. Dlatego tniemy po znakach.
+ *
+ * 40 000 znakow to okolo 10 tys. tokenow - miesci sie w limicie kazdego znanego mi
+ * klienta i zostawia zapas na reszte kontekstu.
+ */
+const BUDZET_ZNAKOW = 40_000;
+
+/**
+ * Tnie liste do budzetu NA GRANICY ELEMENTU i mowi, ile zostalo.
+ *
+ * `od: "konca"` dla historii (talk_log): gdy nie miesci sie wszystko, wartosciowe
+ * sa NAJNOWSZE wpisy. Dla odczytu kursorem ("poczatku") odwrotnie - trzymamy
+ * najstarsze, bo kursor idzie do przodu i reszta dojdzie nastepnym wywolaniem.
+ *
+ * Element dluzszy niz caly budzet zostaje przyciety, ale NIE znika: pusty wynik
+ * z sama informacja o obcieciu jest gorszy niz przycieta tresc ze wskazowka, gdzie
+ * jest calosc.
+ */
+function wBudzecie<T>(
+  items: T[],
+  fmt: (x: T) => string,
+  od: "poczatku" | "konca" = "poczatku",
+): { linie: string[]; pokazane: T[]; pominiete: number } {
+  const kolejnosc = od === "konca" ? [...items].reverse() : items;
+  const linie: string[] = [];
+  const pokazane: T[] = [];
+  let uzyte = 0;
+  for (const it of kolejnosc) {
+    let l = fmt(it);
+    if (l.length > BUDZET_ZNAKOW) {
+      l = l.slice(0, BUDZET_ZNAKOW) + "\n    [...tresc przycieta - calosc przez REST]";
+    }
+    if (pokazane.length > 0 && uzyte + l.length > BUDZET_ZNAKOW) break;
+    linie.push(l);
+    pokazane.push(it);
+    uzyte += l.length + 1;
+  }
+  if (od === "konca") {
+    linie.reverse();
+    pokazane.reverse();
+  }
+  return { linie, pokazane, pominiete: items.length - pokazane.length };
+}
+
 async function callTool(
   ctx: Ctx,
   config: Config,
@@ -546,17 +605,25 @@ async function callTool(
 
     case "talk_read": {
       const after = num(args.afterId) ?? 0;
+      const limit = Math.min(Math.max(num(args.limit) ?? DOMYSLNY_ODCINEK, 1), 200);
       const waitSec = Math.min(Math.max(num(args.waitSec) ?? 0, 0), WAIT_MAX_SEC);
-      let messages = inboxAfter(ctx, actor.id, after);
+      let messages = inboxAfter(ctx, actor.id, after, limit);
       if (messages.length === 0 && waitSec > 0) {
         messages = await waitForInbox(ctx, actor.id, after, waitSec, extra);
       }
       if (messages.length === 0) {
         return text(`Brak nowych wiadomosci. Kursor: afterId=${after}`);
       }
-      const lines = messages.map((m) => fmtMsg(ctx, m));
-      const cursor = messages[messages.length - 1].id;
-      return text(`${messages.length} nowych:\n${lines.join("\n")}\n\nKursor: afterId=${cursor}`);
+      // Kursor wskazuje ostatnia POKAZANA wiadomosc, nie ostatnia pobrana - inaczej
+      // obciecie budzetem przeskakiwaloby wiadomosci bezpowrotnie (ten sam blad,
+      // ktory audyt #1 zlapal przy globalnym MAX(id)).
+      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m));
+      const cursor = okno.pokazane[okno.pokazane.length - 1].id;
+      const zostalo = okno.pominiete > 0 || messages.length === limit;
+      return text(
+        `${okno.pokazane.length} nowych:\n${okno.linie.join("\n")}\n\nKursor: afterId=${cursor}` +
+          (zostalo ? `\nTo nie wszystko - powtorz talk_read z afterId=${cursor}.` : ""),
+      );
     }
 
     case "talk_log": {
@@ -574,7 +641,17 @@ async function callTool(
       // nie zmienia w typowym przypadku.
       if (messages.length) markRead(ctx, actor.id, conv.id, messages[messages.length - 1].id);
       if (messages.length === 0) return text(`Pusto w ${convName(ctx, conv.id)}.`);
-      return text(messages.map((m) => fmtMsg(ctx, m)).join("\n"));
+      // "od konca": to historia, wiec gdy nie miesci sie wszystko, cenniejsze sa
+      // najnowsze wpisy. Doczytanie starszych ma juz kursor - beforeId.
+      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m), "konca");
+      const glowa = okno.pokazane[0];
+      return text(
+        okno.linie.join("\n") +
+          (okno.pominiete > 0
+            ? `\n\n(${okno.pominiete} starszych pominieto, zeby zmiescic sie w limicie - ` +
+              `doczytaj: talk_log {conversation, beforeId: ${glowa.id}})`
+            : ""),
+      );
     }
 
     case "talk_who": {
@@ -638,7 +715,11 @@ async function callTool(
       const conv = ref ? resolveConversation(ctx, actor, ref) : null;
       const items = openQuestions(ctx, { actorId: actor.id, conversationId: conv?.id });
       if (items.length === 0) return text("Brak otwartych pytan.");
-      return text(items.map((q) => `[q${q.id}] ${fmtMsg(ctx, q.message)}`).join("\n"));
+      const okno = wBudzecie(items, (q) => `[q${q.id}] ${fmtMsg(ctx, q.message)}`);
+      return text(
+        okno.linie.join("\n") +
+          (okno.pominiete > 0 ? `\n\n(${okno.pominiete} dalszych pytan pominieto)` : ""),
+      );
     }
 
     case "talk_react": {
@@ -659,7 +740,14 @@ async function callTool(
         limit: num(args.limit),
       });
       if (hits.length === 0) return text("Brak trafien.");
-      return text(hits.map((m) => fmtMsg(ctx, m)).join("\n"));
+      const okno = wBudzecie(hits, (m) => fmtMsg(ctx, m));
+      return text(
+        okno.linie.join("\n") +
+          (okno.pominiete > 0
+            ? `\n\n(${okno.pominiete} dalszych trafien pominieto - zaweź zapytanie ` +
+              `albo podaj limit/sinceTs)`
+            : ""),
+      );
     }
 
     case "talk_thread": {
@@ -674,7 +762,11 @@ async function callTool(
       // kanalu prywatnego, bo konwersacja -1 nigdy nie istnieje.
       assertCanRead(ctx, first ? first.conversation_id : -1, actor.id);
       const messages = listThread(ctx, first!.thread_id ?? root);
-      return text(messages.map((m) => fmtMsg(ctx, m)).join("\n"));
+      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m), "konca");
+      return text(
+        okno.linie.join("\n") +
+          (okno.pominiete > 0 ? `\n\n(${okno.pominiete} wczesniejszych w watku pominieto)` : ""),
+      );
     }
 
     case "talk_file_get": {
@@ -715,7 +807,14 @@ async function callTool(
     case "talk_mentions": {
       const ms = mentionsOf(ctx, actor.id, { afterId: num(args.afterId) });
       if (ms.length === 0) return text("Brak wzmianek.");
-      return text(ms.map((m) => fmtMsg(ctx, m)).join("\n"));
+      const okno = wBudzecie(ms, (m) => fmtMsg(ctx, m), "konca");
+      return text(
+        okno.linie.join("\n") +
+          (okno.pominiete > 0
+            ? `\n\n(${okno.pominiete} starszych wzmianek pominieto - podaj afterId, ` +
+              `zeby przejsc po nich od poczatku)`
+            : ""),
+      );
     }
 
     case "talk_seen": {
@@ -783,11 +882,29 @@ async function callTool(
       if (!page) throw notFound("strona", `nie ma strony wiki "${strv(args.slug)}"`);
       // Odczyt odblokowuje zapis (serwer nie wpusci zapisu na strone, ktorej
       // nie widziales) - dlatego zostawiamy slad tak samo jak GET po HTTP.
-      markPageSeen(ctx, page.slug, actor.id);
-      return text(
+      // Strona wiki nie ma limitu dlugosci tresci (celowo - to magazyn wiedzy),
+      // wiec to jest drugie miejsce po talk_read, gdzie jedno wywolanie potrafi
+      // przekroczyc limit wyjscia klienta. Tniemy po LINIACH, bo strona jest
+      // dokumentem: brak akapitu czyta sie lepiej niz urwane zdanie.
+      const linie = page.body.split("\n");
+      const okno = wBudzecie(linie, (l) => l);
+      // Znacznik odczytu TYLKO przy calej stronie. Odczyt odblokowuje zapis, a zapis
+      // podmienia CALA tresc - agent, ktory zobaczyl 3/4 strony i odeslal "to co
+      // przeczytalem plus moj akapit", skasowalby reszte i nie dowiedzialby sie o tym.
+      // Lepiej nie wpuscic go do zapisu i powiedziec, ktoredy przeczytac calosc.
+      if (okno.pominiete === 0) markPageSeen(ctx, page.slug, actor.id);
+      const naglowek =
         `# ${page.title}  (${page.slug})\n` +
-          `ostatnia zmiana: @${page.updatedBy ?? "?"}, rewizji: ${page.revisions}` +
-          `, biezaca rewizja: ${page.lastRevisionId} (oddaj ja w baseRevision przy zapisie)\n\n${page.body}`,
+        `ostatnia zmiana: @${page.updatedBy ?? "?"}, rewizji: ${page.revisions}` +
+        `, biezaca rewizja: ${page.lastRevisionId} (oddaj ja w baseRevision przy zapisie)\n\n`;
+      return text(
+        naglowek + okno.linie.join("\n") +
+          (okno.pominiete > 0
+            ? `\n\n[...przycieto: ${okno.pominiete} z ${linie.length} linii nie zmiescilo sie ` +
+              `w limicie wyjscia narzedzia. NIE zapisuj tej strony na podstawie tego, co widzisz - ` +
+              `nadpisalbys brakujaca czesc. Calosc: GET /api/wiki/${page.slug} (ten odczyt tez ` +
+              `odblokowuje zapis).]`
+            : ""),
       );
     }
 

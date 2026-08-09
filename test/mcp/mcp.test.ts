@@ -10,6 +10,7 @@ import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
 import { createChannel, join } from "../../src/core/conversations.ts";
 import { postMessage } from "../../src/core/messages.ts";
+import { savePage } from "../../src/core/wiki.ts";
 
 type Rpc = { jsonrpc: "2.0"; id?: number; method: string; params?: unknown };
 
@@ -208,4 +209,98 @@ test("KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad 
   assert.deepEqual(bezPokrycia, [], `narzedzia bez wywolania w tescie: ${bezPokrycia.join(", ")}`);
   assert.ok(bob);
   await s.close();
+});
+
+/**
+ * Zgloszenie [149] @motowolta: `talk_read {afterId: 0}` na kanale z 133 wiadomosciami
+ * zwrocil 132 355 znakow w jednym bloku i klient ODRZUCIL calosc - agent nie dostal
+ * nawet pierwszej wiadomosci. Pilnujemy obu konców naraz, bo kazdy z osobna zawodzi:
+ *
+ *   - odcinek (`limit`) nie wystarczy, bo o odrzuceniu decyduje ROZMIAR, a jedna
+ *     wiadomosc miewa 65 kB;
+ *   - budzet znakow nie wystarczy, bo bez kursora wskazujacego OSTATNIA POKAZANA
+ *     wiadomosc obciecie po cichu przeskakuje reszte.
+ */
+test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomosci", async () => {
+  const s = await startTestServer();
+  const { ala, kanal, token } = seed(s);
+  // 60 wiadomosci po ~2 kB: razem ~120 kB, czyli powyzej budzetu 40 000 znakow.
+  const duza = "x".repeat(2000);
+  for (let i = 0; i < 60; i++) {
+    postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: `${i} ${duza}` });
+  }
+  await mcpCall(s.url, token, INIT);
+
+  const wynik = async (args: Record<string, unknown>) => {
+    const r = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 300, method: "tools/call", params: { name: "talk_read", arguments: args },
+    });
+    return (r.result as { content: Array<{ text: string }> }).content[0].text;
+  };
+
+  const pierwszy = await wynik({ afterId: 0 });
+  assert.ok(pierwszy.length < 60_000, `wynik ma ${pierwszy.length} znakow - budzet nie zadzialal`);
+  assert.match(pierwszy, /To nie wszystko - powtorz talk_read z afterId=(\d+)\./);
+  const kursor = Number(pierwszy.match(/afterId=(\d+)\./)![1]);
+
+  // Kursor MUSI wskazywac wiadomosc, ktora agent naprawde zobaczyl. Gdyby wskazywal
+  // ostatnia POBRANA, wszystko miedzy obcieciem a nim zniknieloby bezpowrotnie.
+  const ostatniaPokazana = Number(pierwszy.match(/\[(\d+)\][^[]*$/s)![1]);
+  assert.equal(kursor, ostatniaPokazana);
+
+  // Petla po kursorze dochodzi do konca i nie gubi ani jednej wiadomosci.
+  const widziane = new Set<number>();
+  let cursor = 0;
+  for (let obrot = 0; obrot < 20; obrot++) {
+    const t = await wynik({ afterId: cursor });
+    if (t.startsWith("Brak nowych")) break;
+    for (const m of t.matchAll(/^\[(\d+)\] /gm)) widziane.add(Number(m[1]));
+    cursor = Number(t.match(/Kursor: afterId=(\d+)/)![1]);
+    if (!t.includes("To nie wszystko")) break;
+  }
+  assert.equal(widziane.size, 60, `petla po kursorze zobaczyla ${widziane.size} z 60 wiadomosci`);
+
+  // Jawny `limit` tnie odcinek - to jest to pole, ktorego brakowalo w MCP.
+  const maly = await wynik({ afterId: 0, limit: 3 });
+  assert.match(maly, /^3 nowych:/);
+  await s.close();
+});
+
+/**
+ * Odczyt strony wiki odblokowuje jej zapis, a zapis podmienia CALA tresc. Gdyby
+ * przyciety odczyt tez odblokowywal, agent odsylajacy "to, co przeczytalem, plus
+ * moj akapit" skasowalby brakujaca czesc i nikt by sie nie dowiedzial.
+ */
+test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
+  const s = await startTestServer();
+  try {
+    const { ala, token } = seed(s);
+    const dlugaTresc = Array.from({ length: 3000 }, (_, i) => `linia ${i} ${"y".repeat(40)}`)
+      .join("\n");
+    savePage(s.ctx, { slug: "wielka", title: "Wielka", body: dlugaTresc, actorId: ala.id });
+
+    await mcpCall(s.url, token, INIT);
+    const r = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 301, method: "tools/call",
+      params: { name: "wiki_read", arguments: { slug: "wielka" } },
+    });
+    const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
+    assert.ok(t.length < 60_000, `wiki_read oddal ${t.length} znakow`);
+    assert.match(t, /przycieto/);
+    assert.match(t, /NIE zapisuj/);
+
+    // Bob widzial tylko kawalek, wiec zapis ma odbic sie o ochrone przed nadpisaniem.
+    const zapis = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 302, method: "tools/call",
+      params: {
+        name: "wiki_write",
+        arguments: { slug: "wielka", title: "Wielka", body: "moj akapit" },
+      },
+    });
+    const tz = zapis.result as { content: Array<{ text: string }>; isError?: boolean };
+    assert.ok(tz.isError, "przyciety odczyt wpuscil do zapisu - to cicha kasacja tresci");
+    assert.match(tz.content[0].text, /konflikt_wiki|nie czytales/);
+  } finally {
+    await s.close();
+  }
 });
