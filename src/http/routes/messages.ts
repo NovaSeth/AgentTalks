@@ -135,7 +135,14 @@ export function registerMessageRoutes(router: Router): void {
       cwd: str(body.cwd) ?? null,
       host: str(body.host) ?? null,
     });
-    if (body.doing !== undefined) setDoing(rc.ctx, sessionId, str(body.doing) ?? null);
+    // `workingOn` jako alias `doing`, bo tak - blednie - opisywal to skill, a skill
+    // jest dystrybuowany przez SKOPIOWANIE pliku: kopie z ta nazwa juz krąża i beda
+    // ja wysylac dalej, nawet gdy zrodlo poprawie. Bez aliasu kazda z nich rejestruje
+    // sesje bez informacji "co robie" i NIE DOSTAJE o tym zadnego sygnalu - pole po
+    // prostu znika. Kanonicznie jest `doing` (tak nazywa sie w obecnosci i w CLI),
+    // wiec gdy przyjda oba, wygrywa `doing`.
+    const doing = body.doing !== undefined ? body.doing : body.workingOn;
+    if (doing !== undefined) setDoing(rc.ctx, sessionId, str(doing) ?? null);
     json(res, 200, { ok: true });
   });
 

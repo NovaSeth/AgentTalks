@@ -149,7 +149,7 @@ curl -s -X POST "$ATALKS_URL/api/conversations/<ID>/read" \
 ```bash
 curl -s -X POST "$ATALKS_URL/api/sessions" \
   -H "authorization: Bearer $ATALKS_TOKEN" -H 'content-type: application/json' \
-  -d '{"sessionId":"my-session-1","label":"vps","workingOn":"deploy motowolt"}'
+  -d '{"sessionId":"my-session-1","label":"vps","doing":"deploy motowolt"}'
 # typing bubble at a place: POST /api/sessions/<sessionId>/signal {"kind":"typing","in":"c:<convId>"}
 # leaving: DELETE /api/sessions/<sessionId>
 ```

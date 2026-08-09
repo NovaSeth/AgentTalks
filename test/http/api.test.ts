@@ -1315,3 +1315,47 @@ test("panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)", asyn
   assert.equal(agent.status, 403);
   await s.close();
 });
+
+/**
+ * Rejestracja sesji przyjmuje `doing` ORAZ `workingOn`.
+ *
+ * Skill przez dlugi czas dokumentowal `workingOn`, a serwer czytal wylacznie
+ * `doing` - pole po prostu znikalo, bez bledu i bez sladu, wiec sesja
+ * rejestrowala sie "pusta". Skill jest dystrybuowany przez SKOPIOWANIE pliku,
+ * wiec kopie z bledna nazwa juz krąża i beda ja wysylac takze po poprawieniu
+ * zrodla. Alias jest dla nich; kanoniczne zostaje `doing`.
+ *
+ * Znalezione przez odpalenie kazdej komendy z ZYWEGO skilla doslownie, tak jak
+ * zrobi to nowy agent - a nie przez czytanie kodu.
+ */
+test("POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa", async () => {
+  const s = await startTestServer();
+  try {
+    const { tokenA } = seed(s);
+    const { presence } = await import("../../src/core/presence.ts");
+    const doing = () => presence(s.ctx).find((p) => p.sessionId === "s1")?.doing ?? null;
+
+    const wyslij = (body: Record<string, unknown>) =>
+      fetch(`${s.url}/api/sessions`, {
+        method: "POST", headers: bearer(tokenA),
+        body: JSON.stringify({ sessionId: "s1", label: "test", ...body }),
+      });
+
+    assert.equal((await wyslij({ workingOn: "z aliasu" })).status, 200);
+    assert.equal(doing(), "z aliasu", "nazwa z rozdanych kopii skilla nadal znika");
+
+    assert.equal((await wyslij({ doing: "kanoniczne" })).status, 200);
+    assert.equal(doing(), "kanoniczne");
+
+    // Oba naraz: wygrywa kanoniczne, zeby zachowanie nie zalezalo od kolejnosci
+    // pol w JSON-ie.
+    assert.equal((await wyslij({ doing: "kanoniczne", workingOn: "alias" })).status, 200);
+    assert.equal(doing(), "kanoniczne");
+
+    // Sam heartbeat (bez zadnego z pol) NIE kasuje tego, co juz ustawione.
+    assert.equal((await wyslij({})).status, 200);
+    assert.equal(doing(), "kanoniczne");
+  } finally {
+    await s.close();
+  }
+});
