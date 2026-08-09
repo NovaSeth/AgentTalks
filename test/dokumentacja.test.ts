@@ -19,6 +19,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { startTestServer } from "./http-helpers.ts";
+import { bearer } from "./http-helpers.ts";
+import { createActor } from "../src/core/actors.ts";
+import { mintToken } from "../src/core/tokens.ts";
+import { createChannel } from "../src/core/conversations.ts";
+import { postMessage } from "../src/core/messages.ts";
+import { savePage } from "../src/core/wiki.ts";
 
 const plik = (wzgledna: string) =>
   readFileSync(fileURLToPath(new URL(wzgledna, import.meta.url)), "utf8");
@@ -194,4 +201,65 @@ test("UI nie sklada atrybutow zdarzen z danych", () => {
     "atrybut zdarzenia sklejany z danych - escapeHtml tam nie chroni, uzyj data-* " +
       `i addEventListener: ${zle.join("; ")}`,
   );
+});
+
+/**
+ * Ksztalty odpowiedzi w skillu musza zgadzac sie z ZYWYM serwerem.
+ *
+ * Trzy potkniecia jednej nocy - `hits` zamiast `results`, `doing` zamiast
+ * `workingOn`, `section.body` zamiast `page.body` - nie byly trzema literowkami,
+ * tylko jednym brakiem: skill mowil, DOKAD wyslac, i milczal o tym, CO wroci
+ * (@zelda, #bugs [194]). Sekcja "What comes back" to zamyka.
+ *
+ * Sama sekcja bylaby jednak zwykla proza, czyli nastepna rzecza do rozjechania
+ * sie z kodem - a to dokladnie ta klasa, ktora naprawiamy. Dlatego ten test
+ * wola KAZDA udokumentowana trase na prawdziwym serwerze i porownuje klucze
+ * najwyzszego poziomu z tym, co obiecuje dokument.
+ */
+test("kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem", async () => {
+  const skill = plik("../integrations/claude-skill/SKILL.md");
+  const blok = skill.match(/## What comes back[\s\S]*?```\n([\s\S]*?)```/);
+  assert.ok(blok, "nie ma bloku z ksztaltami odpowiedzi");
+
+  const obietnice = [...blok[1].matchAll(/^GET\s+(\S+)\s*->\s*\{([^}]*)\}/gm)]
+    .map((m) => ({ sciezka: m[1], klucze: m[2].split(",").map((k) => k.trim()).filter(Boolean) }));
+  assert.ok(obietnice.length >= 12, `udokumentowano tylko ${obietnice.length} tras`);
+
+  const s = await startTestServer();
+  try {
+    const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
+    createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
+    const token = mintToken(s.ctx, ala.id, "t").token;
+    postMessage(s.ctx, { conversationId: 1, actorId: ala.id, body: "deploy poszedl" });
+    savePage(s.ctx, {
+      slug: "strona", title: "Strona", actorId: ala.id,
+      body: "Zdanie opisujace strone.\n\n# Rozdzial\ntresc rozdzialu",
+    });
+
+    const rozjazdy: string[] = [];
+    for (const o of obietnice) {
+      // Placeholdery zamieniamy na to, co naprawde istnieje w tej bazie.
+      const url = o.sciezka
+        .replace("<ID>", "1").replace("<slug>", "strona").replace("<h>", "Rozdzial")
+        .replace("?q=", "?q=deploy");
+      const res = await fetch(s.url + url, { headers: bearer(token) });
+      if (res.status !== 200) { rozjazdy.push(`${o.sciezka}: HTTP ${res.status}`); continue; }
+      const realne = Object.keys(await res.json()).sort();
+      // Klucz z "?" bywa nieobecny (np. `news` przychodzi tylko raz), wiec nie
+      // wymagamy go - ale klucz opisany BEZ "?" musi byc, a klucz oddany przez
+      // serwer i nieopisany jest bledem dokumentacji tak samo jak brakujacy.
+      const opcjonalne = new Set(o.klucze.filter((k) => k.endsWith("?")).map((k) => k.slice(0, -1)));
+      const wymagane = o.klucze.filter((k) => !k.endsWith("?")).sort();
+      const brakuje = wymagane.filter((k) => !realne.includes(k));
+      const nadmiar = realne.filter((k) => !wymagane.includes(k) && !opcjonalne.has(k));
+      if (brakuje.length || nadmiar.length) {
+        rozjazdy.push(
+          `${o.sciezka}: brakuje w odpowiedzi [${brakuje}], nieopisane w skillu [${nadmiar}]`,
+        );
+      }
+    }
+    assert.deepEqual(rozjazdy, [], `ksztalty rozjechaly sie z serwerem:\n  ${rozjazdy.join("\n  ")}`);
+  } finally {
+    await s.close();
+  }
 });

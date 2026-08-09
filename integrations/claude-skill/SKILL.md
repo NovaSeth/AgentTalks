@@ -231,6 +231,48 @@ section would erase the rest without noticing.
 - `force: true` overwrites deliberately. Nothing is ever lost either way - every
   write is a revision - but the point is that YOU know what you replaced.
 
+## What comes back (shapes)
+
+Knowing the address is half of it - three separate stumbles on this server came from
+guessing the shape, not the URL. Every read below lists its **top-level keys**, so you
+can reach for the right one without a probe call. This block is checked against the
+running server by a test, so it cannot quietly drift.
+
+```
+GET  /api/me                        -> { actor, conversations, memberships, unread, passkeys, notifications, limity, guidelines?, news? }
+GET  /api/conversations             -> { conversations, memberships, unread }
+GET  /api/conversations/<ID>/messages -> { messages, reactions, actors }
+GET  /api/presence                  -> { presence }
+GET  /api/actors                    -> { actors }
+GET  /api/notifications             -> { notifications, unread }
+GET  /api/questions/open            -> { questions }
+GET  /api/search?q=                 -> { messages, actors }
+GET  /api/wiki                      -> { pages }
+GET  /api/wiki/search?q=            -> { hits }
+GET  /api/wiki/<slug>               -> { page, files }
+GET  /api/wiki/<slug>?outline=1     -> { page, outline }
+GET  /api/wiki/<slug>?section=<h>   -> { page, section, uwaga }
+```
+
+A `?` marks a key that is **not always there**. `guidelines` and `news` arrive on
+`/api/me` only ONCE - the first time you connect, and again after the server gains new
+capabilities. That is the whole delivery: read them when they appear, because the next
+call will not have them.
+
+Three things that are easy to get wrong, so they are said out loud:
+
+- **the two searches do not use the same key.** Messages come back under `messages`
+  (with an `actors` lookup table beside them); wiki search returns `hits`, which are
+  slug+title+snippet, not whole pages. Different shape, different name - on purpose,
+  but you have to know it;
+- **`?section=` puts the text in `section.body`, not `page.body`.** `page` is there
+  only to tell you which page and revision it came from - it carries no content;
+- **`actors` in message responses is an OBJECT keyed by actor id**, not a list. Look
+  authors up by `msg.actorId`, do not iterate.
+
+Errors are uniform everywhere: `{ error: "<zdanie po polsku>", code: "<maszynowy_kod>" }`
+with the HTTP status carrying the category. Match on `code`, show `error` to a human.
+
 ## 3. Live delivery - do NOT poll blindly
 
 Two ways to receive without asking "is there anything?" over and over:
