@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { bearer, startTestServer, type TestServer } from "../http-helpers.ts";
 import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
-import { createChannel, join } from "../../src/core/conversations.ts";
+import { createChannel, ensureDirect, join } from "../../src/core/conversations.ts";
 import { postMessage } from "../../src/core/messages.ts";
 import { savePage } from "../../src/core/wiki.ts";
 
@@ -245,8 +245,10 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
 
   // Kursor MUSI wskazywac wiadomosc, ktora agent naprawde zobaczyl. Gdyby wskazywal
   // ostatnia POBRANA, wszystko miedzy obcieciem a nim zniknieloby bezpowrotnie.
-  const ostatniaPokazana = Number(pierwszy.match(/\[(\d+)\][^[]*$/s)![1]);
-  assert.equal(kursor, ostatniaPokazana);
+  // Wynik jest grupowany po rozmowach, wiec "ostatnia pokazana" to najwyzsze
+  // pokazane id, a nie ostatnia linia.
+  const idWyniku = (t: string) => [...t.matchAll(/^[>\s]*\[(\d+)\] /gm)].map((m) => Number(m[1]));
+  assert.equal(kursor, Math.max(...idWyniku(pierwszy)));
 
   // Petla po kursorze dochodzi do konca i nie gubi ani jednej wiadomosci.
   const widziane = new Set<number>();
@@ -254,7 +256,7 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
   for (let obrot = 0; obrot < 20; obrot++) {
     const t = await wynik({ afterId: cursor });
     if (t.startsWith("Brak nowych")) break;
-    for (const m of t.matchAll(/^\[(\d+)\] /gm)) widziane.add(Number(m[1]));
+    for (const id of idWyniku(t)) widziane.add(id);
     cursor = Number(t.match(/Kursor: afterId=(\d+)/)![1]);
     if (!t.includes("To nie wszystko")) break;
   }
@@ -262,7 +264,7 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
 
   // Jawny `limit` tnie odcinek - to jest to pole, ktorego brakowalo w MCP.
   const maly = await wynik({ afterId: 0, limit: 3 });
-  assert.match(maly, /^3 nowych:/);
+  assert.match(maly, /^3 nowych w \d+ rozmow/);
   await s.close();
 });
 
@@ -300,6 +302,51 @@ test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
     const tz = zapis.result as { content: Array<{ text: string }>; isError?: boolean };
     assert.ok(tz.isError, "przyciety odczyt wpuscil do zapisu - to cicha kasacja tresci");
     assert.match(tz.content[0].text, /konflikt_wiki|nie czytales/);
+  } finally {
+    await s.close();
+  }
+});
+
+/**
+ * Prosba @michal z [143]: "znajdzcie sposob, zeby ogarniac wiele rozmow".
+ * Plaska lista chronologiczna mowi, CO sie stalo; agent po przerwie potrzebuje
+ * wiedziec, GDZIE ma odpisac. Test pilnuje, ze kolejnosc blokow niesie te
+ * odpowiedz: rozmowa osobista przed kanalem ze wzmianka, ten przed reszta.
+ */
+test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", async () => {
+  const s = await startTestServer();
+  try {
+    const { ala, bob, kanal, token } = seed(s);
+    const cichy = createChannel(s.ctx, { slug: "cichy", kind: "public", createdBy: ala.id });
+    join(s.ctx, cichy.id, bob.id);
+    const dm = ensureDirect(s.ctx, [ala.id, bob.id]);
+
+    // Kolejnosc wysylki jest ODWROTNA do oczekiwanej kolejnosci w wyniku, zeby
+    // test nie przeszedl przypadkiem na samej chronologii.
+    postMessage(s.ctx, { conversationId: cichy.id, actorId: ala.id, body: "nikogo nie wolam" });
+    postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: "@bob zerknij prosze" });
+    postMessage(s.ctx, { conversationId: dm.id, actorId: ala.id, body: "na priv" });
+
+    await mcpCall(s.url, token, INIT);
+    const r = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 400, method: "tools/call",
+      params: { name: "talk_read", arguments: { afterId: 0 } },
+    });
+    const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
+
+    assert.match(t, /^3 nowych w 3 rozmowach:/);
+    const kolejnosc = [...t.matchAll(/^=== (.+?) \((\d+) nowych(.*?)\) ===$/gm)];
+    assert.equal(kolejnosc.length, 3);
+    assert.match(kolejnosc[0][1], /^\[dm:/, "rozmowa osobista ma byc pierwsza");
+    assert.equal(kolejnosc[1][1], "#general");
+    assert.match(kolejnosc[1][3], /1 do Ciebie/, "kanal ze wzmianka ma to mowic w naglowku");
+    assert.equal(kolejnosc[2][1], "#cichy");
+    assert.equal(kolejnosc[2][3], "", "kanal bez wzmianki nie udaje pilnego");
+
+    // Wzmianka jest oznaczona w linii, zeby dalo sie ja znalezc wzrokiem.
+    assert.match(t, /^> \[\d+\].*zerknij prosze$/m);
+    // Nazwa rozmowy jest w naglowku bloku, wiec nie powtarza sie w kazdej linii.
+    assert.equal((t.match(/#general/g) ?? []).length, 1);
   } finally {
     await s.close();
   }

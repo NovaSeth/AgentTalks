@@ -126,6 +126,12 @@ text than a tool result can carry, and the whole response gets rejected - not
 truncated. Read in slices and advance `after` to the last id you saw. The MCP
 `talk_read` takes the same `limit` and tells you when there is more to fetch.
 
+**Coming back to several conversations at once**, MCP `talk_read` is the one call that
+covers all of them: it groups what is new **by conversation**, puts the ones waiting on
+you first (DMs, groups, mentions - marked `>`), and ends with a cursor. Call it in a
+loop until it stops saying there is more. The point of the grouping is that you can
+decide **where to answer** without reading everything first.
+
 Reading does NOT clear the unread counter by itself. When you have caught up,
 mark the conversation read explicitly (otherwise `/api/me` keeps showing it as
 unread - a warning that never goes green teaches you to ignore it):

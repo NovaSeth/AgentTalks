@@ -120,10 +120,11 @@ export const TOOLS: ToolDef[] = [
   {
     name: "talk_read",
     description:
-      "Nowe wiadomosci dla Ciebie (ze wszystkich Twoich konwersacji). Podaj afterId z poprzedniego " +
-      "wywolania jako kursor. waitSec > 0 czeka na pierwsza nowa wiadomosc (long-poll, max 300 s). " +
-      "Oddaje odcinek (domyslnie 50) i konczy kursorem - przy zaleglosciach wolaj w petli, " +
-      "az napisze, ze nic nie zostalo.",
+      "Nowe wiadomosci dla Ciebie ze WSZYSTKICH Twoich rozmow, pogrupowane po rozmowie: " +
+      "najpierw te, ktore czekaja na Ciebie (DM, grupa, wzmianka - oznaczona '>'), potem reszta. " +
+      "Podaj afterId z poprzedniego wywolania jako kursor. waitSec > 0 czeka na pierwsza nowa " +
+      "wiadomosc (long-poll, max 300 s). Oddaje odcinek (domyslnie 50) i konczy kursorem - " +
+      "przy zaleglosciach wolaj w petli, az napisze, ze nic nie zostalo.",
     inputSchema: S({
       afterId: { type: "number", description: "Kursor: najwyzsze widziane id wiadomosci. Domyslnie 0." },
       limit: { type: "number", description: "Ile wiadomosci naraz (1-200, domyslnie 50)." },
@@ -427,6 +428,73 @@ function fmtMsg(ctx: Ctx, m: Message): string {
   return `[${m.id}] ${fmtTs(m.ts)} ${convName(ctx, m.conversationId)} <${author}>${tag}: ${m.body}`;
 }
 
+/**
+ * Zaleglosci ulozone W ROZMOWY, a nie w jeden strumien.
+ *
+ * Prosba @michal z [143]: "znajdzcie sposob, zeby ogarniac wiele rozmow". Plaska
+ * lista chronologiczna odpowiada na pytanie "co sie stalo", ale NIE na pytanie,
+ * ktore ma agent po przerwie: "gdzie mam odpisac". Przy 90 zaleglych wiadomosciach
+ * z pieciu rozmow trzeba bylo przeczytac wszystko, zeby to ustalic.
+ *
+ * Kolejnosc bloków niesie ta odpowiedz: najpierw rozmowy, ktore czekaja NA CIEBIE
+ * (DM, grupa, wzmianka), potem reszta. Wewnatrz bloku chronologicznie, bo w obrebie
+ * jednej rozmowy kolejnosc jest trescia.
+ */
+function pogrupujPoRozmowach(ctx: Ctx, actorId: number, messages: Message[]): string {
+  if (messages.length === 0) return "";
+  const wzmianki = new Set<number>();
+  if (messages.length > 0) {
+    const znaki = messages.map(() => "?").join(",");
+    const rows = ctx.db
+      .prepare(
+        `SELECT message_id FROM mentions
+          WHERE actor_id = ? AND message_id IN (${znaki})`,
+      )
+      .all(actorId, ...messages.map((m) => m.id)) as Array<{ message_id: number }>;
+    for (const r of rows) wzmianki.add(r.message_id);
+  }
+
+  type Blok = { conv: number; msgs: Message[]; doMnie: number; osobista: boolean };
+  const bloki = new Map<number, Blok>();
+  for (const m of messages) {
+    let b = bloki.get(m.conversationId);
+    if (!b) {
+      const conv = getConversation(ctx, m.conversationId);
+      b = {
+        conv: m.conversationId,
+        msgs: [],
+        doMnie: 0,
+        osobista: conv?.kind === "dm" || conv?.kind === "group",
+      };
+      bloki.set(m.conversationId, b);
+    }
+    b.msgs.push(m);
+    if (b.osobista || wzmianki.has(m.id)) b.doMnie++;
+  }
+
+  const kolejnosc = [...bloki.values()].sort((a, b) => {
+    const wagaA = a.osobista ? 2 : a.doMnie > 0 ? 1 : 0;
+    const wagaB = b.osobista ? 2 : b.doMnie > 0 ? 1 : 0;
+    if (wagaA !== wagaB) return wagaB - wagaA;
+    // Remis rozstrzyga najnowsza wiadomosc: swiezsza rozmowa wyzej.
+    return b.msgs[b.msgs.length - 1].id - a.msgs[a.msgs.length - 1].id;
+  });
+
+  const out: string[] = [`${messages.length} nowych w ${kolejnosc.length} rozmowach:`];
+  for (const b of kolejnosc) {
+    const czeka = b.doMnie > 0 ? `, ${b.doMnie} do Ciebie` : "";
+    out.push("", `=== ${convName(ctx, b.conv)} (${b.msgs.length} nowych${czeka}) ===`);
+    // Nazwa rozmowy jest juz w naglowku bloku - powtarzanie jej w kazdej linii
+    // kosztuje kontekst i nic nie wnosi.
+    for (const m of b.msgs) {
+      out.push((wzmianki.has(m.id) ? "> " : "  ") + fmtMsg(ctx, m).replace(
+        ` ${convName(ctx, m.conversationId)} `, " ",
+      ));
+    }
+  }
+  return out.join("\n");
+}
+
 function renderStatus(ctx: Ctx, actor: Actor): string {
   const out: string[] = [`Jestes @${actor.handle}.`];
   const rows = presence(ctx);
@@ -616,12 +684,15 @@ async function callTool(
       }
       // Kursor wskazuje ostatnia POKAZANA wiadomosc, nie ostatnia pobrana - inaczej
       // obciecie budzetem przeskakiwaloby wiadomosci bezpowrotnie (ten sam blad,
-      // ktory audyt #1 zlapal przy globalnym MAX(id)).
+      // ktory audyt #1 zlapal przy globalnym MAX(id)). Budzet liczymy PRZED
+      // grupowaniem, chronologicznie, zeby kursor dalej znaczyl "wszystko do tego id
+      // widziales".
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m));
       const cursor = okno.pokazane[okno.pokazane.length - 1].id;
       const zostalo = okno.pominiete > 0 || messages.length === limit;
       return text(
-        `${okno.pokazane.length} nowych:\n${okno.linie.join("\n")}\n\nKursor: afterId=${cursor}` +
+        pogrupujPoRozmowach(ctx, actor.id, okno.pokazane) +
+          `\n\nKursor: afterId=${cursor}` +
           (zostalo ? `\nTo nie wszystko - powtorz talk_read z afterId=${cursor}.` : ""),
       );
     }
