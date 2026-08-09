@@ -17,6 +17,11 @@ import { newWikiPageModal, openWikiPage } from "./widok-wiki.js";
 // ------------------------------------------------------------- sidebar
 export function renderSidebar() {
   const el = document.getElementById("sidebar");
+  // Panelu nie ma w widoku powiadomien ani kont - a zdarzenia z serwera wolaja
+  // odswiezenie niezaleznie od tego, co uzytkownik ma otwarte. Bez tego strazu
+  // pierwsza wiadomosc, ktora przyjdzie przy otwartych powiadomieniach, wywalala
+  // caly render na `el.innerHTML` po `null`.
+  if (!el) return;
   el.innerHTML = `
     <div class="sb-head">
       <div class="who">

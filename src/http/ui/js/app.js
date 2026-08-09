@@ -42,8 +42,14 @@ function renderShell() {
   // gadamy"), uzytkownicy ("kto ma dostep"). Plakietka przy dzwonku jest jedynym
   // licznikiem, ktory widac bez wchodzenia gdziekolwiek.
   const adminHuman = state.actor?.isAdmin && state.actor?.kind === "human";
+  // Panel boczny nalezy do ROZMOW, nie do calej aplikacji: trzyma kanaly, DM-y
+  // i drzewo wiki. W powiadomieniach i w kontach nie ma czego z niego wybrac -
+  // stal tam tylko dlatego, ze powloka renderowala go bezwarunkowo, i zabieral
+  // trzecia szerokosci ekranu na liste, ktora do niczego w tym widoku nie
+  // prowadzi (zgloszenie @michal).
+  const zPanelem = state.view === "chat" || state.view === "wiki";
   $app.innerHTML = `
-    <div class="shell with-rail ${state.drawerOpen ? "drawer" : ""}" id="shell">
+    <div class="shell with-rail ${zPanelem ? "" : "bez-panelu"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
       <div class="scrim" id="scrim"></div>
       <nav class="rail" id="rail" aria-label="Główna nawigacja">
         <button class="rail-btn ${state.view === "notifications" ? "on" : ""}" id="rail-notif"
@@ -61,7 +67,7 @@ function renderShell() {
           ${state.view === "users" ? `aria-current="page"` : ""}
           aria-label="Konta i dostęp" title="Konta i dostęp">${iconUsers()}</button>` : ""}
       </nav>
-      <aside class="sidebar" id="sidebar" aria-label="Kanały, wiadomości i wiki"></aside>
+      ${zPanelem ? `<aside class="sidebar" id="sidebar" aria-label="Kanały, wiadomości i wiki"></aside>` : ""}
       <main class="main" id="main"></main>
     </div>`;
   document.getElementById("scrim").addEventListener("click", () => { state.drawerOpen = false; toggleDrawerClass(); });
@@ -86,7 +92,7 @@ function renderShell() {
   });
   const ru = document.getElementById("rail-users");
   if (ru) ru.addEventListener("click", openUsersView);
-  renderSidebar();
+  if (zPanelem) renderSidebar();
   renderMain();
 }
 

@@ -86,6 +86,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
    uzytkownicy). Wraca po feedbacku: to sa TRZY MIEJSCA, a nie trzy skroty do tego
    samego, wiec maja byc widoczne bez wchodzenia w zadne z nich. */
 .shell.with-rail{grid-template-columns:3.4rem var(--sbw) 1fr}
+/* Widoki bez panelu bocznego (powiadomienia, konta) - dwie kolumny zamiast
+   trzech, zeby tresc zajela zwolnione miejsce zamiast zostawiac dziure. */
+.shell.with-rail.bez-panelu{grid-template-columns:3.4rem 1fr}
 .rail{background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;
   align-items:center;gap:.4rem;padding:.7rem 0;z-index:20}
 .rail-btn{position:relative;width:2.5rem;height:2.5rem;border-radius:11px;display:grid;place-items:center;
