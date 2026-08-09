@@ -51,6 +51,17 @@ export async function startTestServer(overrides: Partial<Config> = {}): Promise<
   const config = testConfig(overrides);
   const server = createServer(ctx, config);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  // unref: gniazdo nasluchujace NIE trzyma petli zdarzen przy zyciu.
+  //
+  // Bez tego test, ktory upadnie przed swoim `close()` (czyli KAZDY nieudany test
+  // z asercja w srodku), zostawia zywy serwer i proces nigdy nie konczy pracy.
+  // Runner nie wypisuje wtedy ani jednej linii - porazka wyglada jak zawieszenie,
+  // a nie jak porazka, wiec szuka sie nieskonczonej petli zamiast przeczytac
+  // asercje. Kosztowalo mnie to dwa razy w jedna noc.
+  //
+  // Testy i tak czekaja na swoje odpowiedzi, wiec brak uchwytu na petli niczego
+  // nie skraca; zmienia sie tylko to, ze po ostatnim tescie proces MOZE wyjsc.
+  server.unref();
   const { port } = server.address() as AddressInfo;
   return {
     url: `http://127.0.0.1:${port}`,

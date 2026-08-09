@@ -492,6 +492,38 @@ test("upload pliku przez API, pobranie przez czlonka, odmowa dla obcego", async 
   await s.close();
 });
 
+/**
+ * Nazwa pliku przyjezdza naglowkiem, wiec MUSI byc %-kodowana (naglowki HTTP nie
+ * niosa polskich znakow). Zle kodowanie to nie jest przypadek egzotyczny: robi je
+ * kazdy klient, ktory sklei naglowek recznie zamiast przez encodeURIComponent -
+ * a "raport 50%.txt" wystarczy, zeby decodeURIComponent rzucil wyjatkiem.
+ * Bez tego testu 400 z czytelnym komunikatem mogloby cicho stac sie 500.
+ */
+test("X-File-Name ze zlym %-kodowaniem daje 400 z instrukcja, nie 500", async () => {
+  const s = await startTestServer();
+  try {
+  const { tokenA, dmId } = seed(s);
+  const wyslij = (nazwa: string) => fetch(`${s.url}/api/conversations/${dmId}/files`, {
+    method: "POST",
+    headers: { authorization: (bearer(tokenA) as any).authorization,
+      "content-type": "text/plain", "x-file-name": nazwa },
+    body: "tresc",
+  });
+
+  const zle = await wyslij("raport 50%.txt");
+  assert.equal(zle.status, 400, "urwane %-kodowanie ma dac blad zadania, nie awarie serwera");
+  const blad = await zle.json();
+  assert.equal(blad.code, "zla_nazwa");
+  assert.match(blad.error, /encodeURIComponent/, "komunikat ma mowic, CO zrobic");
+
+  // Poprawnie zakodowana ta sama nazwa przechodzi i wraca w oryginalnej postaci -
+  // czyli odrzucenie dotyczy kodowania, a nie samego znaku procent.
+  const dobre = await wyslij(encodeURIComponent("raport 50%.txt"));
+  assert.equal(dobre.status, 201);
+  assert.equal((await dobre.json()).file.name, "raport 50%.txt");
+  } finally { await s.close(); }
+});
+
 test("plik z aktywnym MIME (text/html) jest serwowany inertnie (anty stored-XSS)", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);

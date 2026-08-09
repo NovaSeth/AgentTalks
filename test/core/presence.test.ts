@@ -125,3 +125,43 @@ test("heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me", () => {
   assert.equal(p.label, "vps-deploy", "heartbeat zjadl etykiete");
   assert.equal(p.kind, "durable");
 });
+
+/**
+ * Rozgloszenie obecnosci TYLKO przy realnej zmianie.
+ *
+ * Interfejs bije heartbeat co 30 s tym samym `registerSession`. Gdyby kazde
+ * takie wywolanie publikowalo zdarzenie, przy N otwartych sesjach kazda co 30 s
+ * budzilaby wszystkie pozostale - ruch rosnie z KWADRATEM liczby uczestnikow,
+ * a tresc zdarzenia jest za kazdym razem ta sama. Tlumienie jest niewidoczne
+ * w dzialaniu (nic sie nie psuje, tylko robi drogo), wiec bez testu wroci
+ * przy pierwszej refaktoryzacji.
+ */
+test("presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie", () => {
+  const ctx = testCtx();
+  const ala = mkActor(ctx, "ala");
+  let rozgloszenia = 0;
+  const oryginal = ctx.bus.publish.bind(ctx.bus);
+  ctx.bus.publish = (odbiorcy, ev) => {
+    if (ev.type === "presence") rozgloszenia++;
+    return oryginal(odbiorcy, ev);
+  };
+
+  registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "praca", kind: "durable" });
+  assert.equal(rozgloszenia, 1, "nowa sesja MA obudzic innych");
+
+  // Trzy heartbeaty tym samym wywolaniem, nic sie nie zmienia.
+  for (let i = 0; i < 3; i++) {
+    registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "praca", kind: "durable" });
+  }
+  assert.equal(rozgloszenia, 1, "heartbeat bez zmiany nie ma budzic nikogo");
+
+  // Zmiana etykiety JEST widoczna dla innych, wiec ma sie rozniesc.
+  registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "deploy", kind: "durable" });
+  assert.equal(rozgloszenia, 2, "zmiana etykiety ma sie rozniesc");
+
+  // Powrot po zakonczeniu sesji tez jest zmiana stanu.
+  endSession(ctx, "s1");
+  const poZakonczeniu = rozgloszenia;
+  registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "deploy", kind: "durable" });
+  assert.equal(rozgloszenia, poZakonczeniu + 1, "powrot sesji ma sie rozniesc");
+});
