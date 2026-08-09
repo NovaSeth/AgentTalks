@@ -411,13 +411,48 @@ function convName(ctx: Ctx, id: number): string {
   return `[${conv.kind}:${id} ${who}]`;
 }
 
-function fmtMsg(ctx: Ctx, m: Message): string {
-  const a = ctx.db.prepare("SELECT handle, kind FROM actors WHERE id = ?").get(m.actorId) as
+/**
+ * Slownik nazw na JEDNO renderowanie listy.
+ *
+ * Bez niego kazda linia rozwiazywala autora i nazwe rozmowy od nowa, a dla DM-a
+ * `convName` dokladalo zapytanie o sklad plus jedno na kazdego czlonka. Zmierzone:
+ * jedno `talk_read` na 50 wiadomosciach w DM-ie kosztowalo 710 zapytan, czyli 14
+ * na wiadomosc - przy stalej odpowiedzi, bo autorzy i rozmowy sie powtarzaja.
+ *
+ * Slownik zyje tylko przez jedno wywolanie narzedzia. To wazne: nazwy sa
+ * zmienne (jest `actor rename`), wiec pamiec podreczna trzymana dluzej
+ * pokazywalaby staty handle - a to gorsze niz zapytanie za duzo.
+ */
+export type Nazwy = { aktorzy: Map<number, string>; rozmowy: Map<number, string> };
+
+function nowySlownik(): Nazwy {
+  return { aktorzy: new Map(), rozmowy: new Map() };
+}
+
+function nazwaAktora(ctx: Ctx, id: number, nazwy?: Nazwy): string {
+  const z = nazwy?.aktorzy.get(id);
+  if (z !== undefined) return z;
+  const a = ctx.db.prepare("SELECT handle, kind FROM actors WHERE id = ?").get(id) as
     { handle: string; kind: string } | undefined;
+  // Rodzaj autora widoczny INLINE - patrz komentarz przy fmtMsg.
+  const nazwa = a ? (a.kind === "human" ? `${a.handle}:czlowiek` : a.handle) : "?";
+  nazwy?.aktorzy.set(id, nazwa);
+  return nazwa;
+}
+
+function nazwaRozmowy(ctx: Ctx, id: number, nazwy?: Nazwy): string {
+  const z = nazwy?.rozmowy.get(id);
+  if (z !== undefined) return z;
+  const nazwa = convName(ctx, id);
+  nazwy?.rozmowy.set(id, nazwa);
+  return nazwa;
+}
+
+function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
   // Rodzaj autora widoczny INLINE: agent egzekwujacy "zgoda na produkcje tylko od
   // czlowieka" musi tanio wiedziec, kto pisze - feedback 332c7e42 (afera o zgode
   // na deploy wziela sie z tego, ze nie dalo sie tanio powiedziec "czy to czlowiek").
-  const author = a ? (a.kind === "human" ? `${a.handle}:czlowiek` : a.handle) : "?";
+  const author = nazwaAktora(ctx, m.actorId, nazwy);
   const tags: string[] = [];
   if (m.kind === "ask") tags.push("PYTANIE");
   if (m.kind === "answer") tags.push("odpowiedz");
@@ -425,7 +460,7 @@ function fmtMsg(ctx: Ctx, m: Message): string {
   if (m.threadId) tags.push(`watek:${m.threadId}`);
   if (m.deletedAt) tags.push("skasowana");
   const tag = tags.length ? ` (${tags.join(", ")})` : "";
-  return `[${m.id}] ${fmtTs(m.ts)} ${convName(ctx, m.conversationId)} <${author}>${tag}: ${m.body}`;
+  return `[${m.id}] ${fmtTs(m.ts)} ${nazwaRozmowy(ctx, m.conversationId, nazwy)} <${author}>${tag}: ${m.body}`;
 }
 
 /**
@@ -440,7 +475,14 @@ function fmtMsg(ctx: Ctx, m: Message): string {
  * (DM, grupa, wzmianka), potem reszta. Wewnatrz bloku chronologicznie, bo w obrebie
  * jednej rozmowy kolejnosc jest trescia.
  */
-function pogrupujPoRozmowach(ctx: Ctx, actorId: number, messages: Message[]): string {
+function pogrupujPoRozmowach(
+  ctx: Ctx,
+  actorId: number,
+  messages: Message[],
+  /** Ten sam slownik, ktorego uzyl budzet - inaczej ta lista formatuje sie
+   *  drugi raz od zera i oszczednosc znika w polowie. */
+  nazwy: Nazwy = nowySlownik(),
+): string {
   if (messages.length === 0) return "";
   const wzmianki = new Set<number>();
   if (messages.length > 0) {
@@ -483,19 +525,20 @@ function pogrupujPoRozmowach(ctx: Ctx, actorId: number, messages: Message[]): st
   const out: string[] = [`${messages.length} nowych w ${kolejnosc.length} rozmowach:`];
   for (const b of kolejnosc) {
     const czeka = b.doMnie > 0 ? `, ${b.doMnie} do Ciebie` : "";
-    out.push("", `=== ${convName(ctx, b.conv)} (${b.msgs.length} nowych${czeka}) ===`);
+    const nazwaBloku = nazwaRozmowy(ctx, b.conv, nazwy);
+    out.push("", `=== ${nazwaBloku} (${b.msgs.length} nowych${czeka}) ===`);
     // Nazwa rozmowy jest juz w naglowku bloku - powtarzanie jej w kazdej linii
     // kosztuje kontekst i nic nie wnosi.
     for (const m of b.msgs) {
-      out.push((wzmianki.has(m.id) ? "> " : "  ") + fmtMsg(ctx, m).replace(
-        ` ${convName(ctx, m.conversationId)} `, " ",
-      ));
+      out.push((wzmianki.has(m.id) ? "> " : "  ") +
+        fmtMsg(ctx, m, nazwy).replace(` ${nazwaBloku} `, " "));
     }
   }
   return out.join("\n");
 }
 
 function renderStatus(ctx: Ctx, actor: Actor): string {
+  const nazwy = nowySlownik();
   const out: string[] = [`Jestes @${actor.handle}.`];
   const rows = presence(ctx);
   out.push("", "=== KTO JEST ===");
@@ -516,7 +559,7 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   const open = openQuestions(ctx, { actorId: actor.id });
   out.push("", "=== OTWARTE PYTANIA ===");
   if (open.length === 0) out.push("  (nic)");
-  for (const q of open) out.push(`  [q${q.id}] ${fmtMsg(ctx, q.message)}`);
+  for (const q of open) out.push(`  [q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
   // Okno, z ktorego NAPRAWDE czytamy (nizej pokazujemy tylko ostatnie 8 z niego).
   // Kursor do talk_read MUSI wskazywac poczatek TEGO okna, nie globalny MAX(id) -
   // inaczej agent, ktory zobaczyl tylko 8 z np. 40 nieprzeczytanych, dostaje
@@ -528,7 +571,7 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   const last = inboxAfter(ctx, actor.id, windowStart).slice(-8);
   out.push("", "=== OSTATNIE WIADOMOSCI DO CIEBIE ===");
   if (last.length === 0) out.push("  (nic nowego)");
-  for (const m of last) out.push(`  ${fmtMsg(ctx, m)}`);
+  for (const m of last) out.push(`  ${fmtMsg(ctx, m, nazwy)}`);
   const wn = wikiPageCount(ctx);
   if (wn > 0) {
     out.push("", `=== WIKI ===`, `  ${wn} stron wiedzy - zanim zapytasz, sprawdz: wiki_search`);
@@ -687,11 +730,12 @@ async function callTool(
       // ktory audyt #1 zlapal przy globalnym MAX(id)). Budzet liczymy PRZED
       // grupowaniem, chronologicznie, zeby kursor dalej znaczyl "wszystko do tego id
       // widziales".
-      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m));
+      const nazwy = nowySlownik();
+      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy));
       const cursor = okno.pokazane[okno.pokazane.length - 1].id;
       const zostalo = okno.pominiete > 0 || messages.length === limit;
       return text(
-        pogrupujPoRozmowach(ctx, actor.id, okno.pokazane) +
+        pogrupujPoRozmowach(ctx, actor.id, okno.pokazane, nazwy) +
           `\n\nKursor: afterId=${cursor}` +
           (zostalo ? `\nTo nie wszystko - powtorz talk_read z afterId=${cursor}.` : ""),
       );
@@ -714,7 +758,8 @@ async function callTool(
       if (messages.length === 0) return text(`Pusto w ${convName(ctx, conv.id)}.`);
       // "od konca": to historia, wiec gdy nie miesci sie wszystko, cenniejsze sa
       // najnowsze wpisy. Doczytanie starszych ma juz kursor - beforeId.
-      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m), "konca");
+      const nazwy = nowySlownik();
+      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy), "konca");
       const glowa = okno.pokazane[0];
       return text(
         okno.linie.join("\n") +
@@ -786,7 +831,8 @@ async function callTool(
       const conv = ref ? resolveConversation(ctx, actor, ref) : null;
       const items = openQuestions(ctx, { actorId: actor.id, conversationId: conv?.id });
       if (items.length === 0) return text("Brak otwartych pytan.");
-      const okno = wBudzecie(items, (q) => `[q${q.id}] ${fmtMsg(ctx, q.message)}`);
+      const nazwy = nowySlownik();
+      const okno = wBudzecie(items, (q) => `[q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
       return text(
         okno.linie.join("\n") +
           (okno.pominiete > 0 ? `\n\n(${okno.pominiete} dalszych pytan pominieto)` : ""),
@@ -811,7 +857,8 @@ async function callTool(
         limit: num(args.limit),
       });
       if (hits.length === 0) return text("Brak trafien.");
-      const okno = wBudzecie(hits, (m) => fmtMsg(ctx, m));
+      const nazwy = nowySlownik();
+      const okno = wBudzecie(hits, (m) => fmtMsg(ctx, m, nazwy));
       return text(
         okno.linie.join("\n") +
           (okno.pominiete > 0
@@ -833,7 +880,8 @@ async function callTool(
       // kanalu prywatnego, bo konwersacja -1 nigdy nie istnieje.
       assertCanRead(ctx, first ? first.conversation_id : -1, actor.id);
       const messages = listThread(ctx, first!.thread_id ?? root);
-      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m), "konca");
+      const nazwy = nowySlownik();
+      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy), "konca");
       return text(
         okno.linie.join("\n") +
           (okno.pominiete > 0 ? `\n\n(${okno.pominiete} wczesniejszych w watku pominieto)` : ""),
@@ -859,6 +907,7 @@ async function callTool(
     case "talk_digest": {
       const d = digestFor(ctx, actor.id);
       if (!d) return text("Nic nowego od Twojej ostatniej aktywnosci.");
+      const nazwy = nowySlownik();
       const out = [
         `Pod Twoja nieobecnosc: ${d.count} wiadomosci`,
         "  kto:    " + d.byWho.map(([k, v]) => `${k} x${v}`).join(", "),
@@ -866,11 +915,11 @@ async function callTool(
       ];
       if (d.mentions.length) {
         out.push(`  DOTYCZY CIEBIE (${d.mentions.length}):`);
-        for (const m of d.mentions.slice(-3)) out.push("    " + fmtMsg(ctx, m));
+        for (const m of d.mentions.slice(-3)) out.push("    " + fmtMsg(ctx, m, nazwy));
       }
       if (d.open.length) {
         out.push(`  OTWARTE PYTANIA (${d.open.length}):`);
-        for (const q of d.open) out.push(`    [q${q.id}] ${fmtMsg(ctx, q.message)}`);
+        for (const q of d.open) out.push(`    [q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
       }
       return text(out.join("\n"));
     }
@@ -878,7 +927,8 @@ async function callTool(
     case "talk_mentions": {
       const ms = mentionsOf(ctx, actor.id, { afterId: num(args.afterId) });
       if (ms.length === 0) return text("Brak wzmianek.");
-      const okno = wBudzecie(ms, (m) => fmtMsg(ctx, m), "konca");
+      const nazwy = nowySlownik();
+      const okno = wBudzecie(ms, (m) => fmtMsg(ctx, m, nazwy), "konca");
       return text(
         okno.linie.join("\n") +
           (okno.pominiete > 0

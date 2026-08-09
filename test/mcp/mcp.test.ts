@@ -398,3 +398,51 @@ test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
     await s.close();
   }
 });
+
+/**
+ * Koszt jednego `talk_read` nie moze rosnac z liczba wiadomosci.
+ *
+ * Kazda linia rozwiazywala autora i nazwe rozmowy od nowa, a dla DM-a nazwa
+ * rozmowy dokladala zapytanie o sklad plus jedno na kazdego czlonka. Do tego
+ * lista formatowala sie DWA razy: raz w budzecie (zeby zmierzyc dlugosc), raz
+ * przy grupowaniu. Zmierzone: 710 zapytan na 50 wiadomosci, czyli 14 na
+ * wiadomosc przy odpowiedzi, ktora sie nie zmienia.
+ *
+ * To sie nie objawia bledem - tylko rachunkiem, ktory rosnie z wiekiem kanalu,
+ * czyli dokladnie ta klasa, ktora nikt nie zglosi. Prog 60 jest luzny (dzis
+ * jest 11), bo test ma lapac POWROT liniowego kosztu, a nie pilnowac liczby.
+ */
+test("talk_read nie odpytuje bazy raz na kazda linie", async () => {
+  const s = await startTestServer();
+  try {
+    const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
+    const bob = createActor(s.ctx, { kind: "agent", handle: "bob" });
+    // DM, bo to najdrozszy przypadek: nazwa rozmowy wymaga skladu i handli.
+    const dm = ensureDirect(s.ctx, [ala.id, bob.id]);
+    for (let i = 0; i < 50; i++) {
+      postMessage(s.ctx, { conversationId: dm.id, actorId: ala.id, body: `wiadomosc ${i}` });
+    }
+    const token = mintToken(s.ctx, bob.id, "t").token;
+    await mcpCall(s.url, token, INIT);
+
+    let zapytania = 0;
+    const oryginal = s.ctx.db.prepare.bind(s.ctx.db);
+    (s.ctx.db as unknown as { prepare: (sql: string) => unknown }).prepare = (sql: string) => {
+      zapytania++;
+      return oryginal(sql);
+    };
+
+    const r = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 600, method: "tools/call",
+      params: { name: "talk_read", arguments: { afterId: 0 } },
+    });
+    const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
+    assert.match(t, /50 nowych/, "test ma mierzyc pelna liste, a nie przycieta");
+    assert.ok(
+      zapytania < 60,
+      `${zapytania} zapytan na 50 wiadomosci - koszt znowu rosnie z dlugoscia listy`,
+    );
+  } finally {
+    await s.close();
+  }
+});
