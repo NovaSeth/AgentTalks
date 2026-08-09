@@ -19,10 +19,15 @@ ENV_FILE=${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}
 REPO_DIR=${AGENTTALKS_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 # Nazwy czytamy z TEGO SAMEGO pliku, ktory dostaje compose - inaczej skrypt
 # sprawdzalby co innego, niz compose uruchamia, i "kontrola" bylaby dekoracja.
-WOLUMEN_OCZEKIWANY=$(grep -E '^AGENTTALKS_DATA_VOLUME=' "${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}" 2>/dev/null | cut -d= -f2)
-WOLUMEN_OCZEKIWANY=${WOLUMEN_OCZEKIWANY:-agenttalks_data}
-KONTENER=$(grep -E '^AGENTTALKS_CONTAINER=' "${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}" 2>/dev/null | cut -d= -f2)
-KONTENER=${KONTENER:-agenttalks}
+# UWAGA na `|| true`: grep, ktory NIC nie znajduje, konczy sie kodem 1, a przy
+# `set -e` zabija skrypt w tym miejscu - bez jednej linii wyjscia. Zdarzylo sie
+# to naprawde i wygladalo jak "skrypt nie robi nic". Brak wpisu w konfiguracji
+# ma znaczyc "wez domyslne", a nie "przerwij bez slowa".
+ENV_PLIK=${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}
+z_env() { grep -E "^$1=" "$ENV_PLIK" 2>/dev/null | cut -d= -f2- || true; }
+
+WOLUMEN_OCZEKIWANY=$(z_env AGENTTALKS_DATA_VOLUME); WOLUMEN_OCZEKIWANY=${WOLUMEN_OCZEKIWANY:-agenttalks_data}
+KONTENER=$(z_env AGENTTALKS_CONTAINER); KONTENER=${KONTENER:-agenttalks}
 
 if [[ ! -r $ENV_FILE ]]; then
   echo "Brak $ENV_FILE - nie zgaduje parametrow produkcji." >&2
@@ -35,7 +40,8 @@ compose() { docker compose --env-file "$ENV_FILE" -f "$REPO_DIR/docker-compose.y
 # Stan PRZED zmiana - do porownania po. Bez tej liczby "serwer dziala" nie
 # odroznia dzialajacego serwera od dzialajacej pustej instancji.
 przed=$(docker exec "$KONTENER" node bin/agenttalks.js healthcheck --json 2>/dev/null || true)
-wiadomosci_przed=$(curl -s "http://127.0.0.1:$(grep -E '^AGENTTALKS_HOST_PORT=' "$ENV_FILE" | cut -d= -f2)/api/health" \
+PORT=$(z_env AGENTTALKS_HOST_PORT); PORT=${PORT:-8787}
+wiadomosci_przed=$(curl -s "http://127.0.0.1:${PORT}/api/health" \
   | sed -n 's/.*"lastMessageId":\([0-9]*\).*/\1/p' || true)
 echo "przed wdrozeniem: ostatnia wiadomosc = ${wiadomosci_przed:-brak (kontener nie stoi)}"
 
@@ -78,7 +84,6 @@ for _ in $(seq 1 25); do
 done
 echo "health: ${stan:-brak}"
 
-PORT=$(grep -E '^AGENTTALKS_HOST_PORT=' "$ENV_FILE" | cut -d= -f2)
 zdrowie=$(curl -s "http://127.0.0.1:${PORT}/api/health")
 echo "health API: $zdrowie"
 wiadomosci_po=$(printf '%s' "$zdrowie" | sed -n 's/.*"lastMessageId":\([0-9]*\).*/\1/p')
@@ -94,7 +99,7 @@ fi
 # po cichu przy kazdej zmianie sposobu podawania hasla.
 kod=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/")
 echo "bramka zamknieta (oczekiwane 401 albo 200 przy wylaczonej bramce): $kod"
-haslo_host=$(grep -E '^AGENTTALKS_SECRETS_DIR=' "$ENV_FILE" | cut -d= -f2)/site-password
+haslo_host=$(z_env AGENTTALKS_SECRETS_DIR)/site-password
 if [[ -r $haslo_host ]]; then
   wpuszcza=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
     "http://127.0.0.1:${PORT}/api/site-gate" -H 'content-type: application/json' \
