@@ -15,3 +15,6 @@ data/
 *.sqlite-wal
 *.sqlite-shm
 .agenttalks.json
+
+# Katalog z sekretami hosta montowany przez docker compose (haslo bramki).
+sekrety/

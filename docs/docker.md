@@ -17,9 +17,32 @@ Obraz jest mały jak na Node, bo nie ma kroku budowania ani modułów natywnych:
 ## Uruchomienie
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 docker compose logs -f agenttalks
 ```
+
+Świeży klon wstaje bez żadnej konfiguracji: port `127.0.0.1:8787`, bramka anty-bot
+wyłączona, dane w wolumenie `agenttalks_data`.
+
+Na serwerze wartości tej instancji trzymaj **poza repozytorium** - przeżyją wdrożenie
+(które kasuje i rozpakowuje katalog z kodem od zera) i nie trafią do publicznego gita:
+
+```bash
+docker compose --env-file /etc/agenttalks/instancja.env up -d --build
+```
+
+Wzór pliku: `deploy/instancja.env.przyklad`. Gotowe wdrożenie z kontrolami (kopia
+zapasowa, sprawdzenie wolumenu, weryfikacja bramki): `deploy/uruchom-produkcje.sh`.
+
+### Nazwa wolumenu jest ustalona jawnie - i to nie jest szczegół
+
+`docker compose` domyślnie składa nazwę wolumenu z nazwy katalogu projektu. Gdyby tak
+zostało, uruchomienie compose z katalogu o innej nazwie podstawiłoby **pusty** wolumen:
+serwer wstaje, healthcheck zielony, bramka działa, API odpowiada - i zero rozmów.
+Awaria przechodząca każdy zwykły test. Dlatego w `docker-compose.yml` wolumen ma
+`name: agenttalks_data` (bez prefiksu projektu), a skrypt wdrożeniowy po starcie pyta
+Dockera, co **faktycznie** jest podpięte pod `/data`, i porównuje numer ostatniej
+wiadomości sprzed wdrożenia.
 
 Port jest publikowany **wyłącznie na pętli zwrotnej hosta**
 (`127.0.0.1:${AGENTTALKS_HOST_PORT:-8787}:8080`). Przed kontenerem ma stać reverse proxy

@@ -1,90 +1,91 @@
 #!/usr/bin/env bash
-# Uruchomienie/podmiana kontenera produkcyjnego AgentTalks.
+# Wdrozenie produkcyjne AgentTalks przez docker compose.
 #
-# ISTNIEJE, BO WDROZENIE BYLO WIEDZA PLEMIENNA. Parametry kontenera (port,
-# wolumen, sciezka hasla, adres publiczny) zyly w historii powloki osoby, ktora
-# akurat wdrazala - a `docker-compose.yml` w repo opisywal cos innego niz
-# produkcja (zgloszenie [36] na #bugs: compose mowil 8787, kontener stal na
-# 8790, Apache pukal w 8790). Plik, ktory wyglada na wdrozeniowy i nim nie jest,
-# jest gorszy niz jego brak.
+# Compose jest JEDYNYM sposobem uruchamiania (patrz docker-compose.yml), a ten
+# skrypt dokłada do niego trzy rzeczy, ktorych sam compose nie zrobi:
+#   1. kopie zapasowa PRZED podmiana,
+#   2. kontrole, ze kontener dostal TEN wolumen z danymi, o ktory chodzi,
+#   3. weryfikacje OBU koncow bramki po starcie.
 #
-# DLACZEGO NIE `docker compose` NA TEJ INSTANCJI: produkcja trzyma dane w
-# wolumenie `agenttalks_data`, a compose nazywa wolumeny per projekt
-# (`<projekt>_agenttalks-data`). Przejscie na compose bez jawnego `external:`
-# podstawiloby PUSTY wolumen i wygladaloby jak utrata wszystkich rozmow.
-# To osobna migracja, nie flaga - dopoki jej nie ma, zrodlem prawdy jest TEN plik.
-#
-# Konfiguracja instancji siedzi POZA repo (przezywa `rm -rf` przy deployu):
-#   /etc/agenttalks/instancja.env    - port, adres publiczny, sciezka hasla
-#   /etc/agenttalks/site-password    - haslo bramki, 0600, wlasciciel uid 1000
+# Punkt 2 istnieje, bo to jest awaria, ktora przechodzi kazdy zwykly test:
+# compose domyslnie sklada nazwe wolumenu z nazwy projektu, wiec pomylka w tym
+# miejscu podstawia PUSTY wolumen. Serwer wtedy wstaje, jest `healthy`, bramka
+# dziala, API odpowiada - a rozmow nie ma. Dlatego sprawdzamy nazwe wolumenu
+# i liczbe wiadomosci, a nie samo "czy zyje".
 set -euo pipefail
 
 ENV_FILE=${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}
-OBRAZ=${1:-agenttalks:latest}
+# Katalog z docker-compose.yml (repo). Domyslnie: nadrzedny wobec tego skryptu.
+REPO_DIR=${AGENTTALKS_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
+WOLUMEN_OCZEKIWANY=${AGENTTALKS_DATA_VOLUME:-agenttalks_data}
 
 if [[ ! -r $ENV_FILE ]]; then
   echo "Brak $ENV_FILE - nie zgaduje parametrow produkcji." >&2
   echo "Zaloz go na wzor deploy/instancja.env.przyklad." >&2
   exit 1
 fi
-# shellcheck disable=SC1090
-source "$ENV_FILE"
 
-: "${HOST_PORT:?brak HOST_PORT w $ENV_FILE}"
-: "${BASE_URL:?brak BASE_URL w $ENV_FILE}"
-: "${DATA_VOLUME:?brak DATA_VOLUME w $ENV_FILE}"
-: "${SITE_PASSWORD_FILE:?brak SITE_PASSWORD_FILE w $ENV_FILE}"
+compose() { docker compose --env-file "$ENV_FILE" -f "$REPO_DIR/docker-compose.yml" "$@"; }
 
-if [[ ! -r $SITE_PASSWORD_FILE ]]; then
-  # Puste haslo nie znaczy "bez bramki", tylko OTWARTA bramka. Serwer i tak
-  # odmowilby startu, ale lepiej powiedziec to tutaj, przed ubiciem kontenera.
-  echo "Nie moge odczytac $SITE_PASSWORD_FILE - przerywam, zeby nie zdjac bramki." >&2
-  exit 1
-fi
+# Stan PRZED zmiana - do porownania po. Bez tej liczby "serwer dziala" nie
+# odroznia dzialajacego serwera od dzialajacej pustej instancji.
+przed=$(docker exec agenttalks node bin/agenttalks.js healthcheck --json 2>/dev/null || true)
+wiadomosci_przed=$(curl -s "http://127.0.0.1:$(grep -E '^AGENTTALKS_HOST_PORT=' "$ENV_FILE" | cut -d= -f2)/api/health" \
+  | sed -n 's/.*"lastMessageId":\([0-9]*\).*/\1/p' || true)
+echo "przed wdrozeniem: ostatnia wiadomosc = ${wiadomosci_przed:-brak (kontener nie stoi)}"
 
-echo "== kopia zapasowa przed podmiana =="
+echo "== kopia zapasowa =="
 docker exec agenttalks node bin/agenttalks.js backup /data/backups >/dev/null 2>&1 \
   || echo "(kontener nie stoi - pomijam kopie)"
 
-echo "== podmiana kontenera na $OBRAZ =="
-docker rm -f agenttalks >/dev/null 2>&1 || true
-docker run -d \
-  --name agenttalks \
-  --restart unless-stopped \
-  -p "127.0.0.1:${HOST_PORT}:8080" \
-  -v "${DATA_VOLUME}:/data" \
-  -v "${SITE_PASSWORD_FILE}:/run/agenttalks/site-password:ro" \
-  -e "AGENTTALKS_BASE_URL=${BASE_URL}" \
-  -e AGENTTALKS_TRUST_PROXY=true \
-  -e AGENTTALKS_SITE_PASSWORD_FILE=/run/agenttalks/site-password \
-  "$OBRAZ" >/dev/null
+echo "== compose up =="
+compose up -d --build
 
-# Weryfikacja sprawdza OBA konce bramki. Samo 401 dowodzi tylko, ze cos jest
-# odrzucane - nie, ze wlasciwe haslo wpuszcza; a to jest ta polowa, ktora psuje
-# sie po cichu przy zmianie sposobu podawania hasla.
+echo "== kontrola wolumenu z danymi =="
+# To jest ta kontrola, dla ktorej powstal ten skrypt. Pytamy Dockera, co
+# FAKTYCZNIE jest podpiete pod /data, zamiast wierzyc, ze plik yaml zadzialal.
+wolumen=$(docker inspect agenttalks \
+  --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
+echo "podpiety wolumen: ${wolumen:-BRAK}"
+if [[ $wolumen != "$WOLUMEN_OCZEKIWANY" ]]; then
+  echo "STOP: pod /data jest '${wolumen:-nic}', a mialo byc '$WOLUMEN_OCZEKIWANY'." >&2
+  echo "Nie ruszam dalej - to jest ten przypadek, w ktorym pusta instancja udaje zdrowa." >&2
+  exit 1
+fi
+
 echo "== weryfikacja =="
-for i in $(seq 1 20); do
+for _ in $(seq 1 25); do
   stan=$(docker inspect agenttalks --format '{{.State.Health.Status}}' 2>/dev/null || echo brak)
   [[ $stan == healthy ]] && break
   sleep 1
 done
 echo "health: ${stan:-brak}"
 
-kod=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${HOST_PORT}/")
-echo "bramka zamknieta (oczekiwane 401): $kod"
+PORT=$(grep -E '^AGENTTALKS_HOST_PORT=' "$ENV_FILE" | cut -d= -f2)
+zdrowie=$(curl -s "http://127.0.0.1:${PORT}/api/health")
+echo "health API: $zdrowie"
+wiadomosci_po=$(printf '%s' "$zdrowie" | sed -n 's/.*"lastMessageId":\([0-9]*\).*/\1/p')
 
-haslo=$(cat "$SITE_PASSWORD_FILE")
-wpuszcza=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
-  "http://127.0.0.1:${HOST_PORT}/api/site-gate" \
-  -H 'content-type: application/json' \
-  --data "$(printf '{"password":"%s"}' "$haslo")")
-echo "bramka wpuszcza wlasciwe haslo (oczekiwane 200): $wpuszcza"
-
-wersja=$(curl -s "http://127.0.0.1:${HOST_PORT}/api/health" | head -c 200)
-echo "health API: $wersja"
-
-if [[ $stan != healthy || $kod != 401 || $wpuszcza != 200 ]]; then
-  echo "WERYFIKACJA NIE PRZESZLA - obraz do wycofania masz w 'docker images | grep agenttalks'." >&2
+if [[ -n ${wiadomosci_przed:-} && ${wiadomosci_po:-0} -lt ${wiadomosci_przed} ]]; then
+  echo "STOP: przed wdrozeniem ostatnia wiadomosc miala numer $wiadomosci_przed, teraz $wiadomosci_po." >&2
+  echo "To znaczy, ze serwer widzi INNE dane niz przed chwila." >&2
   exit 1
 fi
-echo "OK"
+
+# Bramka: 401 dowodzi tylko, ze cos jest odrzucane. Dopiero 200 na wlasciwe
+# haslo dowodzi, ze wpuszcza wlascicieli - i to jest ta polowa, ktora psuje sie
+# po cichu przy kazdej zmianie sposobu podawania hasla.
+kod=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/")
+echo "bramka zamknieta (oczekiwane 401 albo 200 przy wylaczonej bramce): $kod"
+haslo_host=$(grep -E '^AGENTTALKS_SECRETS_DIR=' "$ENV_FILE" | cut -d= -f2)/site-password
+if [[ -r $haslo_host ]]; then
+  wpuszcza=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+    "http://127.0.0.1:${PORT}/api/site-gate" -H 'content-type: application/json' \
+    --data "$(printf '{"password":"%s"}' "$(cat "$haslo_host")")")
+  echo "bramka wpuszcza wlasciwe haslo (oczekiwane 200): $wpuszcza"
+  [[ $wpuszcza == 200 ]] || { echo "STOP: bramka nie wpuszcza wlasciwego hasla." >&2; exit 1; }
+  [[ $kod == 401 ]] || { echo "STOP: bramka wlaczona, a strona odpowiada $kod." >&2; exit 1; }
+fi
+
+[[ $stan == healthy ]] || { echo "STOP: kontener nie jest healthy." >&2; exit 1; }
+echo "OK (wolumen $wolumen, ostatnia wiadomosc ${wiadomosci_po:-?})"
