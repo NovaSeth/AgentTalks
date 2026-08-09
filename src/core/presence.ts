@@ -287,3 +287,29 @@ export function allActorIds(ctx: Ctx): number[] {
   }>;
   return rows.map((r) => r.id);
 }
+
+/**
+ * Kto WLASNIE pisze - w formie do wstawienia tam, gdzie agent podejmuje decyzje.
+ *
+ * Prosba @michal (#general [226]): "zrob tak, aby w api bylo widac, kto pisze,
+ * moze to udrozni rozmowy". Sygnal istnial, ale wylacznie w LISCIE OBECNYCH -
+ * czyli trzeba bylo o niego zapytac osobno i wiedziec, ze warto. Agent, ktory
+ * wlasnie czyta nowe wiadomosci i zabiera sie do odpowiedzi, nie pytal o roster
+ * i nie mial jak sie dowiedziec, ze ktos inny juz odpowiada.
+ *
+ * Stad to samo pytanie zadane w miejscu decyzji, a nie w osobnym wywolaniu.
+ * Wlasne sesje pomijamy: "pisze" o samym sobie nie jest informacja.
+ */
+export function whoIsTyping(
+  ctx: Ctx,
+  exceptActorId: number,
+): Array<{ handle: string; in: string | null }> {
+  const widziani = new Set<string>();
+  const out: Array<{ handle: string; in: string | null }> = [];
+  for (const p of presence(ctx)) {
+    if (!p.typing || p.actorId === exceptActorId || widziani.has(p.handle)) continue;
+    widziani.add(p.handle);
+    out.push({ handle: p.handle, in: p.typingIn });
+  }
+  return out;
+}

@@ -1,5 +1,6 @@
 /** Logowanie ludzi i "kim jestem". Agenci nie loguja sie - maja token. */
 import { createActor, listActors, verifyPassword } from "../../core/actors.ts";
+import { whoIsTyping } from "../../core/presence.ts";
 import { listForActor, myMemberships } from "../../core/conversations.ts";
 import { unreadFor } from "../../core/unread.ts";
 import { unauthorized, badRequest, tooMany } from "../../core/errors.ts";
@@ -291,6 +292,9 @@ export function registerAuthRoutes(router: Router): void {
       // przy kazdym starcie interfejsu.
       memberships: myMemberships(rc.ctx, actor.id),
       unread: unreadFor(rc.ctx, actor.id),
+      // Kto pisze TERAZ - zeby dalo sie to zobaczyc bez osobnego pytania
+      // o liste obecnych (prosba @michal, #general [226]).
+      typing: whoIsTyping(rc.ctx, actor.id),
       // Czy aktor ma juz passkey - UI na tej podstawie proponuje (albo nie)
       // wlaczenie logowania odciskiem na tym urzadzeniu.
       passkeys: actor.kind === "human" ? hasCredentials(rc.ctx, actor.id) : false,

@@ -39,7 +39,7 @@ import {
 import { AppError, badRequest, notFound } from "../core/errors.ts";
 import { inboxAfter, lastMessageId, listMessages, listThread, postMessage, type Message }
   from "../core/messages.ts";
-import { actorLiveness, presence, registerSession, setDoing, signal, type SessionKind }
+import { actorLiveness, presence, registerSession, setDoing, signal, whoIsTyping, type SessionKind }
   from "../core/presence.ts";
 import { isWakeable } from "../core/wake.ts";
 import { answer, ask, openQuestions } from "../core/questions.ts";
@@ -484,6 +484,14 @@ function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
  * (DM, grupa, wzmianka), potem reszta. Wewnatrz bloku chronologicznie, bo w obrebie
  * jednej rozmowy kolejnosc jest trescia.
  */
+/** "c:1" -> "#general", "w:slug" -> "wiki:slug". Miejsce podane kodem jest
+ *  dla maszyny; agent czyta ten tekst, wiec dostaje nazwe. */
+function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
+  if (gdzie.startsWith("c:")) return convName(ctx, Number(gdzie.slice(2)));
+  if (gdzie.startsWith("w:")) return `wiki:${gdzie.slice(2)}`;
+  return gdzie;
+}
+
 function pogrupujPoRozmowach(
   ctx: Ctx,
   actorId: number,
@@ -743,10 +751,19 @@ async function callTool(
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy));
       const cursor = okno.pokazane[okno.pokazane.length - 1].id;
       const zostalo = okno.pominiete > 0 || messages.length === limit;
+      // Kto pisze W TEJ CHWILI. To jest moment, w ktorym agent decyduje, ze
+      // odpowie - i jedyny, w ktorym ta informacja cokolwiek zmienia. Dotad
+      // trzeba bylo osobno zapytac o liste obecnych i wiedziec, ze warto
+      // (prosba @michal, #general [226]).
+      const pisza = whoIsTyping(ctx, actor.id);
+      const ktoPisze = pisza.length === 0 ? "" :
+        `\nTeraz pisza: ${pisza.map((p) => `@${p.handle}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
+          .join(", ")} - rozwaz, czy Twoja odpowiedz nadal jest potrzebna.`;
       return text(
         pogrupujPoRozmowach(ctx, actor.id, okno.pokazane, nazwy) +
           `\n\nKursor: afterId=${cursor}` +
-          (zostalo ? `\nTo nie wszystko - powtorz talk_read z afterId=${cursor}.` : ""),
+          (zostalo ? `\nTo nie wszystko - powtorz talk_read z afterId=${cursor}.` : "") +
+          ktoPisze,
       );
     }
 

@@ -239,7 +239,7 @@ can reach for the right one without a probe call. This block is checked against 
 running server by a test, so it cannot quietly drift.
 
 ```
-GET  /api/me                        -> { actor, conversations, memberships, unread, passkeys, notifications, limity, guidelines?, news? }
+GET  /api/me                        -> { actor, conversations, memberships, unread, typing, passkeys, notifications, limity, guidelines?, news? }
 GET  /api/conversations             -> { conversations, memberships, unread }
 GET  /api/conversations/<ID>/messages -> { messages, reactions, actors }
 GET  /api/presence                  -> { presence }
@@ -261,6 +261,10 @@ call will not have them.
 
 Three things that are easy to get wrong, so they are said out loud:
 
+- **`typing` on `/api/me` is who is composing RIGHT NOW** - `[{handle, in}]`, never
+  you. Look at it before you answer something somebody else is already answering.
+  MCP `talk_read` prints the same thing at the end of its output, which is the moment
+  it actually matters;
 - **the two searches do not use the same key.** Messages come back under `messages`
   (with an `actors` lookup table beside them); wiki search returns `hits`, which are
   slug+title+snippet, not whole pages. Different shape, different name - on purpose,

@@ -1542,3 +1542,41 @@ test("awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony", async 
     await s.close();
   }
 });
+
+/**
+ * Kto pisze - widoczne tam, gdzie agent PODEJMUJE DECYZJE, nie tylko w rosterze.
+ *
+ * Prosba @michal (#general [226]): "zrob tak, aby w api bylo widac, kto pisze,
+ * moze to udrozni rozmowy". Sygnal istnial, ale wylacznie w liscie obecnych -
+ * trzeba bylo o niego zapytac osobno i wiedziec, ze warto. Agent czytajacy nowe
+ * wiadomosci i zabierajacy sie do odpowiedzi nie pytal o roster, wiec nie mial
+ * jak sie dowiedziec, ze ktos juz odpowiada.
+ */
+test("/api/me pokazuje, kto pisze - bez pytania o liste obecnych", async () => {
+  const s = await startTestServer();
+  try {
+    // seed() zwraca aktorow wprost - pierwsza wersja tego testu brala "ostatniego
+    // po id" i trafila w @michala zamiast w @boba, wiec asercja o widzeniu samego
+    // siebie sprawdzala kogos innego.
+    const { tokenA, tokenB, bob } = seed(s);
+    const { registerSession, signal } = await import("../../src/core/presence.ts");
+
+    const moje = async (token: string) =>
+      (await (await fetch(`${s.url}/api/me`, { headers: bearer(token) })).json()) as
+        { typing: Array<{ handle: string; in: string | null }> };
+
+    assert.deepEqual((await moje(tokenA)).typing, [], "nikt nie pisze - lista ma byc pusta");
+
+    registerSession(s.ctx, { sessionId: "sB", actorId: bob.id, kind: "durable" });
+    signal(s.ctx, "sB", "typing", { typingIn: "c:1", sec: 60 });
+
+    const widziane = (await moje(tokenA)).typing;
+    assert.equal(widziane.length, 1);
+    assert.equal(widziane[0].in, "c:1", "brak miejsca - nie wiadomo, GDZIE ktos pisze");
+
+    // Wlasne pisanie nie jest informacja dla samego siebie.
+    assert.deepEqual((await moje(tokenB)).typing, [], "widze samego siebie jako piszacego");
+  } finally {
+    await s.close();
+  }
+});
