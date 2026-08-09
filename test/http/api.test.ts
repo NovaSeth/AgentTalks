@@ -1226,22 +1226,45 @@ test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () 
   await s.close();
 });
 
-test("skill publikuje odcisk swojej tresci, zeby dalo sie wykryc rozjazd kopii", async () => {
+/**
+ * Odcisk ma byc skrotem ODPOWIEDZI, nie pliku na dysku.
+ *
+ * Pierwsza wersja liczyla go z szablonu, PRZED podstawieniem {{BASE_URL}} - i przez
+ * to lamala jedyna wlasnosc, dla ktorej istnieje. Dwoch agentow siegajacych po ten
+ * sam skill innym adresem dostawalo rozna tresc pod TYM SAMYM odciskiem, wiec
+ * kontrola "czy moja kopia jest aktualna" odpowiadala "tak" na kopie, ktora rozni
+ * sie od zywej. Znalezione pomiarem @zeldy na #bugs [164]: ten sam odcisk,
+ * rozmiary 14 402 B i 14 613 B.
+ */
+test("odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje", async () => {
   const s = await startTestServer({ sitePassword: "haslo-bramki" });
-  // PUBLICZNY jak sam skill: agent musi moc sprawdzic aktualnosc, zanim ma token.
-  const r = await fetch(s.url + "/skill.version");
-  assert.equal(r.status, 200);
-  const odcisk = (await r.text()).trim();
-  assert.match(odcisk, /^[0-9a-f]{16}$/);
+  try {
+    const { createHash } = await import("node:crypto");
+    const skrot = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 16);
 
-  // Odcisk ma odpowiadac TRESCI pliku - inaczej byłby ozdobą.
-  const { createHash } = await import("node:crypto");
-  const { readFileSync } = await import("node:fs");
-  const { fileURLToPath } = await import("node:url");
-  const plik = fileURLToPath(new URL("../../integrations/claude-skill/SKILL.md", import.meta.url));
-  const oczekiwany = createHash("sha256").update(readFileSync(plik, "utf8")).digest("hex").slice(0, 16);
-  assert.equal(odcisk, oczekiwany, "odcisk nie odpowiada tresci skilla");
-  await s.close();
+    // PUBLICZNY jak sam skill: agent musi moc sprawdzic aktualnosc, zanim ma token.
+    const r = await fetch(s.url + "/skill.version");
+    assert.equal(r.status, 200);
+    const odcisk = (await r.text()).trim();
+    assert.match(odcisk, /^[0-9a-f]{16}$/);
+
+    const tresc = await (await fetch(s.url + "/skill.md")).text();
+    assert.equal(odcisk, skrot(tresc), "odcisk nie odpowiada serwowanej tresci skilla");
+
+    // Ten sam serwer pod INNA nazwa hosta oddaje inna tresc (podstawiony adres),
+    // wiec MUSI oddac tez inny odcisk. Rowny odcisk przy roznej tresci to dokladnie
+    // ten falszywy spokoj, ktory ta trasa ma likwidowac. Naglowka `host` nie da sie
+    // ustawic przez fetch (nazwa zabroniona), a `x-forwarded-host` jest tu i tak
+    // pierwszy w kolejnosci - to ta sama sciezka kodu.
+    const inny = { "x-forwarded-host": "inna-nazwa.example" };
+    const treschInna = await (await fetch(s.url + "/skill.md", { headers: inny })).text();
+    const odciskInny = (await (await fetch(s.url + "/skill.version", { headers: inny })).text()).trim();
+    assert.equal(odciskInny, skrot(treschInna));
+    assert.notEqual(tresc, treschInna, "podstawienie adresu nie zadzialalo - test nic nie sprawdza");
+    assert.notEqual(odcisk, odciskInny, "rozna tresc pod tym samym odciskiem");
+  } finally {
+    await s.close();
+  }
 });
 
 test("skill nie kaze juz wklejac tokenu do pliku, ktory idzie do repozytorium", async () => {

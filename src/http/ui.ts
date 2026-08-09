@@ -139,9 +139,18 @@ function serveBinary(res: ServerResponse, path: string, mime: string): void {
  * w wielu miejscach naraz, wiec porownanie jednej linii albo daty daje falszywe
  * "aktualny" po pierwszej z dwoch zmian. Skrot liczy sie sam - daty trzeba
  * pamietac o podbiciu, a o tym sie zapomina.
+ *
+ * Liczony z tekstu PO podstawieniu {{BASE_URL}}, czyli z bajtow, ktore naprawde
+ * wychodza z serwera. Pierwsza wersja liczyla go z szablonu i przez to lamala
+ * jedyna wlasnosc, dla ktorej istnieje: dwoch agentow siegajacych po ten sam
+ * skill innym adresem dostawalo ROZNA tresc pod TYM SAMYM odciskiem, wiec
+ * kontrola "czy moja kopia jest aktualna" odpowiadala "tak" na kopie, ktora
+ * rozni sie od zywej (zmierzone przez @zelda: 14 402 B u mnie, 14 613 B u niej,
+ * odcisk zgodny). Odcisk ma byc skrotem ODPOWIEDZI, nie pliku na dysku.
  */
-function skillHash(): string {
-  return createHash("sha256").update(readOnce(SKILL_FILE)).digest("hex").slice(0, 16);
+function skillHash(req: IncomingMessage, config: Config): string {
+  const body = readOnce(SKILL_FILE).replaceAll("{{BASE_URL}}", baseUrlFrom(req, config));
+  return createHash("sha256").update(body).digest("hex").slice(0, 16);
 }
 
 function serveTemplated(
@@ -319,8 +328,8 @@ export function registerUiRoutes(router: Router): void {
   /** Odcisk aktualnej wersji skilla - PUBLICZNY, bo agent musi go sprawdzic
    *  zanim w ogole ma token. Jedno zapytanie odpowiada na pytanie "czy moja
    *  kopia jest aktualna", ktorego wczesniej nie dalo sie zadac. */
-  router.add("GET", "/skill.version", (_req, res) => {
+  router.add("GET", "/skill.version", (req, res, rc) => {
     res.writeHead(200, { "content-type": TYPES.txt, "cache-control": "no-cache" });
-    res.end(`${skillHash()}\n`);
+    res.end(`${skillHash(req, rc.config)}\n`);
   });
 }
