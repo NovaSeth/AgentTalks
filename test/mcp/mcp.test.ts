@@ -503,3 +503,58 @@ test("kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge", as
     await s.close();
   }
 });
+
+/**
+ * Zdania, ktore agenci PARSUJA, sa kontraktem - nie proza.
+ *
+ * MCP oddaje tekst, wiec kazdy fragment, po ktory siega maszyna, jest interfejsem
+ * bez schematu. To nie jest teoria: @motowolt napisal tej nocy petle po kursorze
+ * (#bugs [163]), wyciagajac liczbe z "Kursor: afterId=N" i konczac, gdy zniknie
+ * "To nie wszystko". Przeredagowanie tych zdan - najzwyklejsza poprawka stylu -
+ * zatrzymaloby jego petle na pierwszym odcinku, BEZ zadnego bledu: dostalby
+ * pierwsze 50 wiadomosci i uznal, ze to wszystko.
+ *
+ * Ten test istnieje po to, zeby taka zmiana byla SWIADOMA. Nie zabrania jej -
+ * wymaga, zeby ktos zmienil takze to zdanie tutaj i zobaczyl, czyja petla
+ * przestanie dzialac.
+ */
+test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
+  const s = await startTestServer();
+  try {
+    const { ala, kanal, token } = seed(s);
+    await mcpCall(s.url, token, INIT);
+    const czytaj = async (args: Record<string, unknown>) => {
+      const r = await mcpCall(s.url, token, {
+        jsonrpc: "2.0", id: 800, method: "tools/call",
+        params: { name: "talk_read", arguments: args },
+      });
+      return (r.result as { content: Array<{ text: string }> }).content[0].text;
+    };
+
+    // Pusta skrzynka nadal MUSI oddac kursor - inaczej petla nie ma czym ruszyc.
+    assert.match(await czytaj({ afterId: 0 }), /Kursor: afterId=\d+/);
+
+    for (let i = 0; i < 5; i++) {
+      postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: `w ${i}` });
+    }
+    const odcinek = await czytaj({ afterId: 0, limit: 2 });
+    assert.match(odcinek, /Kursor: afterId=(\d+)/, "znika kursor - petla po nim traci zaczepienie");
+    assert.match(
+      odcinek, /To nie wszystko - powtorz talk_read z afterId=\d+\./,
+      "znika sygnal 'jest tego wiecej' - agent uzna odcinek za calosc i zgubi reszte",
+    );
+
+    // I najwazniejsze: liczba przy kursorze musi byc ID OSTATNIEJ POKAZANEJ
+    // wiadomosci, bo to na niej opiera sie nastepny obrot petli.
+    const kursor = Number(odcinek.match(/Kursor: afterId=(\d+)/)![1]);
+    const pokazane = [...odcinek.matchAll(/^[>\s]*\[(\d+)\] /gm)].map((m) => Number(m[1]));
+    assert.equal(kursor, Math.max(...pokazane));
+
+    // Gdy nic nie zostalo, zdania o reszcie NIE MOZE byc - inaczej petla
+    // krecilaby sie w nieskonczonosc.
+    const koniec = await czytaj({ afterId: kursor + 99 });
+    assert.doesNotMatch(koniec, /To nie wszystko/);
+  } finally {
+    await s.close();
+  }
+});
