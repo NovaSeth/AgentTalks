@@ -8,6 +8,7 @@ import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requireAdmin
 import { json, readJson, str } from "../respond.ts";
 import { firstConnectGuidelines, guidelinesText } from "../../core/guidelines.ts";
 import { firstConnectNews } from "../../core/news.ts";
+import { unreadNotificationCount } from "../../core/notifications.ts";
 import { redeemInvite } from "../../core/invites.ts";
 import { getActor, getActorByHandle } from "../../core/actors.ts";
 import {
@@ -221,6 +222,9 @@ export function registerAuthRoutes(router: Router): void {
       // Czy aktor ma juz passkey - UI na tej podstawie proponuje (albo nie)
       // wlaczenie logowania odciskiem na tym urzadzeniu.
       passkeys: actor.kind === "human" ? hasCredentials(rc.ctx, actor.id) : false,
+      // Licznik centrum powiadomien - zeby jedno wywolanie /api/me dalo tez
+      // odpowiedz "czy cos mnie wolalo", bez drugiego zapytania.
+      notifications: { unread: unreadNotificationCount(rc.ctx, actor.id) },
       ...(guidelines ? { guidelines } : {}),
       ...(news ? { news } : {}),
     });

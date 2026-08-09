@@ -27,6 +27,7 @@ import type { Ctx } from "./ctx.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
 import { normalizeSlug } from "./ids.ts";
 import { allActorIds } from "./presence.ts";
+import { excerptOf, notify } from "./notifications.ts";
 
 export const MAX_WIKI_BYTES = 512 * 1024; // strona wiedzy bywa dluga, ale nie bez konca
 const MAX_TITLE = 200;
@@ -290,6 +291,19 @@ export function savePage(
          ON CONFLICT(page_id, actor_id) DO UPDATE SET last_revision_id = excluded.last_revision_id`,
       )
       .run(page.id, input.actorId, lastRev.m);
+    // Powiadamiamy tych, ktorzy juz cos na tej stronie napisali - dla nich to
+    // NIE jest "jakas zmiana w wiki", tylko zmiana w czyms, co wspoltworzyli.
+    // Reszta ma licznik `unseen` przy stronie i to wystarczy.
+    const contributors = ctx.db
+      .prepare("SELECT DISTINCT actor_id FROM wiki_revisions WHERE page_id = ? AND actor_id <> ?")
+      .all(page.id, input.actorId) as Array<{ actor_id: number }>;
+    notify(ctx, {
+      actorIds: contributors.map((r) => r.actor_id),
+      kind: "wiki",
+      fromActorId: input.actorId,
+      wikiSlug: slug,
+      excerpt: `${title}${input.note ? ` - ${excerptOf(input.note)}` : ""}`,
+    });
     onCommitted(ctx.db, () => ctx.bus.publish(allActorIds(ctx), { type: "wiki", slug }));
     return toPage(ctx, page);
   });

@@ -20,6 +20,7 @@ import { assertCanPost, assertCanRead, getMember, recipientsOf } from "./convers
 import { badRequest, forbidden, notFound, tooLarge } from "./errors.ts";
 import { resolveMentions } from "./mentions.ts";
 import { clearTyping } from "./presence.ts";
+import { excerptOf, notify } from "./notifications.ts";
 
 export const MAX_BODY_BYTES = 65536;
 const DEFAULT_LIMIT = 50;
@@ -111,6 +112,7 @@ export function postMessage(
   const dedupKey = input.clientMsgId ? `${input.actorId}:${input.clientMsgId}` : null;
 
   let created = true;
+  let notified: number[] = [];
   const message = tx(ctx.db, () => {
     // Idempotencja: przy retry (SSE/long-poll/webhook potrafia dostarczyc dwa razy)
     // powtorzony clientMsgId nie moze zdublowac wiadomosci. SELECT-then-INSERT jest
@@ -151,9 +153,27 @@ export function postMessage(
     );
     // conversationId pozwala rozwinac @all na wszystkich czlonkow kanalu.
     // Autor nie wspomina sam siebie - inaczej @all budzilby tez nadawce.
-    for (const actorId of resolveMentions(ctx, body, input.conversationId)) {
-      if (actorId !== input.actorId) stmt.run(row.id, actorId);
-    }
+    const mentioned = resolveMentions(ctx, body, input.conversationId)
+      .filter((actorId) => actorId !== input.actorId);
+    for (const actorId of mentioned) stmt.run(row.id, actorId);
+
+    // Powiadomienia. W DM-ie i grupie liczy sie KAZDA wiadomosc (po to sa), na
+    // kanale tylko zawolanie po nazwie - inaczej "powiadomienia" byly by drugim
+    // licznikiem nieprzeczytanych i nauczyloby sie je ignorowac.
+    const conv = ctx.db.prepare("SELECT kind FROM conversations WHERE id = ?")
+      .get(input.conversationId) as { kind: string } | undefined;
+    const direct = conv?.kind === "dm" || conv?.kind === "group";
+    notified = notify(ctx, {
+      actorIds: direct ? recipientsOf(ctx, input.conversationId) : mentioned,
+      kind: direct ? "dm" : "mention",
+      fromActorId: input.actorId,
+      conversationId: input.conversationId,
+      messageId: row.id,
+      excerpt: excerptOf(body),
+      // Ogloszenie idzie nizej, PO zdarzeniu "message": klient, ktory na
+      // powiadomienie reaguje skokiem do wiadomosci, ma ja juz miec.
+      announce: false,
+    });
     return messageFromRow(row);
   });
 
@@ -163,11 +183,14 @@ export function postMessage(
   if (created) {
     // Wyslana wiadomosc konczy pisanie - kuleczka "pisze" znika natychmiast.
     if (input.sessionId) clearTyping(ctx, input.sessionId);
-    onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
-      type: "message",
-      conversationId: input.conversationId,
-      message,
-    }));
+    onCommitted(ctx.db, () => {
+      ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
+        type: "message",
+        conversationId: input.conversationId,
+        message,
+      });
+      if (notified.length) ctx.bus.publish(notified, { type: "notification" });
+    });
   }
   return message;
 }

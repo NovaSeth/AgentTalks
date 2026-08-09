@@ -390,5 +390,35 @@ ALTER TABLE messages ADD COLUMN resolved_at INTEGER;
 ALTER TABLE messages ADD COLUMN resolved_by INTEGER REFERENCES actors(id);
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10];
+/**
+ * Migracja 11: POWIADOMIENIA jako jedno miejsce.
+ *
+ * Do tej pory "czy cos mnie dotyczy" bylo rozsypane po trzech mechanizmach:
+ * licznik nieprzeczytanych (kanaly), tabela mentions (wzmianki) i nic (reakcje,
+ * zmiany wiki). Kazdy z nich odpowiadal na inne pytanie i zaden na to jedno:
+ * "co sie wydarzylo, o czym mam wiedziec". Powiadomienie jest wiec ODDZIELNYM
+ * rekordem: ma odbiorce, rodzaj, cel do klikniecia i wlasny znacznik odczytu -
+ * niezalezny od tego, czy przeczytales cala rozmowe.
+ *
+ * Cel jest zapisany rozlacznie (conversation_id + message_id ALBO wiki_slug),
+ * bo klikniecie ma prowadzic dokladnie tam, gdzie rzecz sie stala.
+ */
+const M11 = `
+CREATE TABLE notifications (
+  id              INTEGER PRIMARY KEY,
+  actor_id        INTEGER NOT NULL REFERENCES actors(id) ON DELETE CASCADE,
+  kind            TEXT    NOT NULL,
+  from_actor_id   INTEGER REFERENCES actors(id) ON DELETE SET NULL,
+  conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+  message_id      INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+  wiki_slug       TEXT,
+  excerpt         TEXT,
+  created_at      INTEGER NOT NULL,
+  read_at         INTEGER
+);
+CREATE INDEX idx_notif_actor ON notifications(actor_id, id DESC);
+CREATE INDEX idx_notif_unread ON notifications(actor_id, read_at);
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11];
 export const SCHEMA_VERSION = MIGRATIONS.length;

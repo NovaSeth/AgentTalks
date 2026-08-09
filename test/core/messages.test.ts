@@ -214,8 +214,9 @@ test("postMessage publikuje zdarzenie do czlonkow konwersacji", () => {
   const seen: Event[] = [];
   ctx.bus.subscribe(b.id, (e) => seen.push(e));
   postMessage(ctx, { conversationId: d.id, actorId: a.id, body: "hej" });
-  assert.equal(seen.length, 1);
-  assert.equal(seen[0].type, "message");
+  // DM daje odbiorcy dwa zdarzenia: sama wiadomosc i powiadomienie (osobny
+  // mechanizm z wlasnym znacznikiem odczytu), wiec sprawdzamy oba, a nie liczbe.
+  assert.deepEqual(seen.map((e) => e.type).sort(), ["message", "notification"]);
 });
 
 test("zdarzenie widzi wiadomosc juz zapisana w bazie (odczyt DRUGIM polaczeniem)", () => {

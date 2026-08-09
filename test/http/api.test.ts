@@ -838,3 +838,98 @@ test("panel admina: wylaczenie konta gasi token, wlaczenie przywraca", async () 
   assert.equal((await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).status, 200);
   await s.close();
 });
+
+// --- centrum powiadomien ----------------------------------------------------
+
+test("powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeruje licznik", async () => {
+  const s = await startTestServer();
+  const { ala, tokenA, tokenB } = seed(s);
+  const conv = await (await fetch(s.url + "/api/conversations", {
+    method: "POST", headers: bearer(tokenA),
+    body: JSON.stringify({ kind: "public", slug: "ogloszenia" }),
+  })).json();
+  const convId = conv.conversation.id;
+  await fetch(`${s.url}/api/conversations/${convId}/join`, { method: "POST", headers: bearer(tokenB), body: "{}" });
+
+  // 1. Wzmianka na kanale - powiadomienie dla wolanego, nie dla autora.
+  await fetch(`${s.url}/api/conversations/${convId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "@bob zerknij na deploy" }),
+  });
+  let mine = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
+  assert.equal(mine.unread, 1);
+  assert.equal(mine.notifications[0].kind, "mention");
+  assert.equal(mine.notifications[0].from, "ala");
+  assert.equal(mine.notifications[0].conversationId, convId);
+  assert.match(mine.notifications[0].excerpt, /deploy/);
+  const autor = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
+  assert.equal(autor.unread, 0, "wlasna wzmianka nie jest zdarzeniem dla autora");
+
+  // 2. DM: liczy sie kazda wiadomosc, nie tylko zawolanie po nazwie.
+  const dm = await (await fetch(s.url + "/api/conversations", {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ kind: "dm", members: ["@bob"] }),
+  })).json();
+  await fetch(`${s.url}/api/conversations/${dm.conversation.id}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "na priv" }),
+  });
+  mine = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
+  assert.equal(mine.unread, 2);
+  assert.equal(mine.notifications[0].kind, "dm");
+
+  // 3. Reakcja na CUDZY wpis powiadamia jego autora; zdjecie reakcji juz nie.
+  const post = await (await fetch(`${s.url}/api/conversations/${convId}/messages`, {
+    method: "POST", headers: bearer(tokenB), body: JSON.stringify({ body: "gotowe" }),
+  })).json();
+  const msgId = post.message.id;
+  await fetch(`${s.url}/api/messages/${msgId}/reactions`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ emoji: "🎉" }),
+  });
+  let bobowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
+  assert.equal(bobowe.notifications[0].kind, "reaction");
+  const poReakcji = bobowe.unread;
+  await fetch(`${s.url}/api/messages/${msgId}/reactions`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ emoji: "🎉" }),
+  });
+  bobowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
+  assert.equal(bobowe.unread, poReakcji, "zdjecie reakcji nie jest nowym powiadomieniem");
+
+  // 4. Odhaczenie wszystkiego + licznik w /api/me.
+  const read = await (await fetch(s.url + "/api/notifications/read", {
+    method: "POST", headers: bearer(tokenB), body: JSON.stringify({}),
+  })).json();
+  assert.equal(read.unread, 0);
+  assert.equal(read.changed, poReakcji);
+  const me = await (await fetch(s.url + "/api/me", { headers: bearer(tokenB) })).json();
+  assert.equal(me.notifications.unread, 0);
+  assert.ok(ala);
+  await s.close();
+});
+
+test("powiadomienia wiki: zmiana strony wola tych, ktorzy juz na niej pisali", async () => {
+  const s = await startTestServer();
+  const { tokenA, tokenB } = seed(s);
+  await fetch(s.url + "/api/wiki/wspolna-notatka", {
+    method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Notatka", body: "od ali" }),
+  });
+  // Bob dopisuje sie do strony (czyta, potem pisze) - od tej pory jest wspolautorem.
+  await fetch(s.url + "/api/wiki/wspolna-notatka", { headers: bearer(tokenB) });
+  await fetch(s.url + "/api/wiki/wspolna-notatka", {
+    method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "Notatka", body: "od ali + boba" }),
+  });
+  // Ala widzi powiadomienie o zmianie w czyms, co wspoltworzyla; Bob nie
+  // dostaje powiadomienia o wlasnej edycji.
+  const alowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
+  assert.equal(alowe.notifications[0].kind, "wiki");
+  assert.equal(alowe.notifications[0].wikiSlug, "wspolna-notatka");
+  assert.equal(alowe.notifications[0].from, "bob");
+  const bobowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
+  assert.equal(bobowe.unread, 0);
+
+  // Odhaczenie pojedynczego powiadomienia po id - lista nieprzeczytanych pusta.
+  await fetch(s.url + "/api/notifications/read", {
+    method: "POST", headers: bearer(tokenA),
+    body: JSON.stringify({ ids: [alowe.notifications[0].id] }),
+  });
+  const tylkoNowe = await (await fetch(s.url + "/api/notifications?unread=1", { headers: bearer(tokenA) })).json();
+  assert.equal(tylkoNowe.notifications.length, 0);
+  await s.close();
+});

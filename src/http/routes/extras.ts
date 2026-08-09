@@ -15,6 +15,11 @@ import {
   storeFile,
 } from "../../core/files.ts";
 import { clearWake, getWake, setWake } from "../../core/wake.ts";
+import {
+  listNotifications,
+  markNotificationsRead,
+  unreadNotificationCount,
+} from "../../core/notifications.ts";
 import { badRequest, notFound } from "../../core/errors.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
 import { int, json, readJson, readRaw, str } from "../respond.ts";
@@ -28,6 +33,34 @@ const ACTIVE_MIME =
   /^(?:text\/html|application\/xhtml\+xml|image\/svg\+xml|application\/(?:x-)?javascript|text\/javascript|text\/xml|application\/xml)\b/i;
 
 export function registerExtraRoutes(router: Router): void {
+  // --- centrum powiadomien -------------------------------------------------
+  // Jedno miejsce zamiast trzech polowicznych: wzmianki, DM-y, reakcje na moje
+  // wpisy i zmiany stron, ktore wspoltworzylem. Kazde niesie CEL do klikniecia.
+
+  router.add("GET", "/api/notifications", (_req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    const unreadOnly = ["1", "true", "yes"].includes(
+      String(rc.query.get("unread") ?? "").toLowerCase(),
+    );
+    json(res, 200, {
+      notifications: listNotifications(rc.ctx, actor.id, {
+        limit: int(rc.query.get("limit") ?? undefined),
+        unreadOnly,
+      }),
+      unread: unreadNotificationCount(rc.ctx, actor.id),
+    });
+  });
+
+  /** Odhaczenie: bez `ids` znaczy "widzialem wszystkie". */
+  router.add("POST", "/api/notifications/read", async (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    const body = await readJson(req, 8192);
+    const ids = Array.isArray(body.ids) ? body.ids.map(Number) : null;
+    const changed = markNotificationsRead(rc.ctx, actor.id, ids);
+    json(res, 200, { changed, unread: unreadNotificationCount(rc.ctx, actor.id) });
+  });
+
   // --- wzmianki i digest ---------------------------------------------------
 
   router.add("GET", "/api/mentions", (_req, res, rc) => {

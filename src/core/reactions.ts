@@ -10,6 +10,7 @@ import { canRead, recipientsOf } from "./conversations.ts";
 import { onCommitted } from "../store/db.ts";
 import { normalizeEmoji } from "./ids.ts";
 import { notFound } from "./errors.ts";
+import { excerptOf, notify } from "./notifications.ts";
 
 /** Przelacznik: druga taka sama reakcja tego samego aktora ja zdejmuje. */
 export function react(
@@ -26,6 +27,10 @@ export function react(
     throw notFound("wiadomosc", `nie ma wiadomosci ${input.messageId} (albo brak dostepu)`);
   }
 
+  const target = ctx.db
+    .prepare("SELECT actor_id, body FROM messages WHERE id = ?")
+    .get(input.messageId) as { actor_id: number; body: string } | undefined;
+
   const existing = ctx.db
     .prepare("SELECT 1 FROM reactions WHERE message_id=? AND actor_id=? AND emoji=?")
     .get(input.messageId, input.actorId, emoji);
@@ -37,6 +42,19 @@ export function react(
     ctx.db
       .prepare("INSERT INTO reactions(message_id, actor_id, emoji, created_at) VALUES(?,?,?,?)")
       .run(input.messageId, input.actorId, emoji, ctx.now());
+  }
+  // Powiadamiamy TYLKO o dolozeniu reakcji i tylko autora wpisu: zdjecie reakcji
+  // nie jest zdarzeniem, o ktorym warto kogos budzic, a reszta kanalu widzi
+  // emoji przy wiadomosci i bez powiadomienia.
+  if (!existing && target) {
+    notify(ctx, {
+      actorIds: [target.actor_id],
+      kind: "reaction",
+      fromActorId: input.actorId,
+      conversationId: msg.conversation_id,
+      messageId: input.messageId,
+      excerpt: `${emoji}  ${excerptOf(target.body)}`,
+    });
   }
   onCommitted(ctx.db, () => ctx.bus.publish(recipientsOf(ctx, msg.conversation_id), {
     type: "reaction",
