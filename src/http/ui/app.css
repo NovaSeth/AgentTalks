@@ -192,6 +192,11 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   backdrop-filter:saturate(1.4) blur(8px);position:relative;z-index:2}
 .topbar .hamburger{display:none}
 .topbar .title{min-width:0;flex:1}
+/* Przyciski w pasku gornym NIE moga byc na cala szerokosc. `.btn` jest szeroki
+   z zalozenia (jego dom to formularz), a tutaj rozpychal sie na caly pasek i
+   zgniatal tytul do zera - widok powiadomien nie mial naglowka, mimo ze jest
+   w kodzie. Widac to bylo dopiero, gdy panel boczny przestal zwezac te kolumne. */
+.topbar .btn, .topbar .pillbtn{width:auto;flex:0 0 auto}
 .topbar .title .t{font-family:var(--round);font-weight:800;font-size:1.05rem;line-height:1.15;
   display:flex;align-items:center;gap:.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .topbar .title .topic{font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
