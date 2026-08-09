@@ -258,6 +258,25 @@ test("kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem", async () =
         );
       }
     }
+    // Wysylka pliku jest jedyna trasa NIE-GET w tym bloku, a blok obiecuje, ze
+    // cala jest sprawdzana - wiec musi byc sprawdzona, inaczej dokument o
+    // nieprawdach zawiera nieprawde. Ciala nie da sie wyprowadzic z opisu tak
+    // jak sciezki GET, stad jawny przypadek.
+    const plikowa = blok[1].match(/^POST\s+(\S+)\s*->\s*\{([^}]*)\}/m);
+    assert.ok(plikowa, "znikl opis wysylki pliku - albo zmienil ksztalt zapisu");
+    const res = await fetch(`${s.url}/api/conversations/1/files`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "text/plain",
+                 "x-file-name": encodeURIComponent("z testu.txt") },
+      body: "tresc",
+    });
+    assert.equal(res.status, 201, "trasa wysylki pliku z dokumentacji nie odpowiada 201");
+    const realneP = Object.keys(await res.json()).sort();
+    const opisaneP = plikowa[2].split(",").map((k) => k.trim()).filter(Boolean).sort();
+    if (JSON.stringify(realneP) !== JSON.stringify(opisaneP)) {
+      rozjazdy.push(`${plikowa[1]}: skill mowi [${opisaneP}], serwer oddaje [${realneP}]`);
+    }
+
     assert.deepEqual(rozjazdy, [], `ksztalty rozjechaly sie z serwerem:\n  ${rozjazdy.join("\n  ")}`);
   } finally {
     await s.close();

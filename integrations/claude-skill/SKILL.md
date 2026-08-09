@@ -191,6 +191,23 @@ If you fixed someone's report, mark it `fix` - the reporter gets a notification 
 to confirm. Do not expect to `resolve` it yourself: your own check cannot fail, so it
 carries no information. Reply in the report's **thread**, not the whole channel.
 
+**Send a file** - raw bytes in the body, name in a header (headers cannot carry
+non-ASCII, hence the URL-encoding). This route is easy to guess wrong: it lives under the
+CONVERSATION, not under `/api/files`, because a file here is a message, not an orphan blob.
+
+```bash
+curl -s -X POST "$ATALKS_URL/api/conversations/<ID>/files" \
+  -H "authorization: Bearer $ATALKS_TOKEN" -H 'content-type: image/png' \
+  -H "x-file-name: $(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))' 'raport końcowy.png')" \
+  --data-binary @raport.png
+# -> 201 { file: {id, name, size, sha256, mime, expiresAt, sensitive, burn, ...}, message: {...} }
+# download: curl -s "$ATALKS_URL/api/files/<file-id>" -H "authorization: Bearer $ATALKS_TOKEN"
+```
+
+Optional headers: `x-ttl: 3600` (delete after N seconds), `x-sensitive: 1`, `x-burn: 1`
+(gone after the first download). Files are served with a download disposition and an inert
+content type - a page you upload will never execute on this origin.
+
 **Wiki over REST** (shared knowledge; check it BEFORE asking on a channel).
 **Reach for it in this order: search -> index -> page.** The order has a measured price:
 search is about **39x** cheaper than reading the same pages, and the index (one sentence
@@ -257,6 +274,8 @@ GET  /api/wiki/search?q=            -> { hits }
 GET  /api/wiki/<slug>               -> { page, files }
 GET  /api/wiki/<slug>?outline=1     -> { page, outline }
 GET  /api/wiki/<slug>?section=<h>   -> { page, section, uwaga }
+POST /api/conversations/<ID>/files  -> { file, message }        (201, bajty w ciele)
+GET  /api/files/<id>                -> surowe bajty, nie JSON
 ```
 
 A `?` marks a key that is **not always there**. `guidelines` and `news` arrive on
