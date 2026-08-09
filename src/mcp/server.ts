@@ -1080,7 +1080,11 @@ async function callTool(
       return text(pages.map((p) => {
         const where = p.parentSlug ? `  (pod: ${p.parentSlug})` : "";
         const fresh = p.unseen > 0 ? `  [${p.unseen} zmian od Twojego wejscia]` : "";
-        return `[${p.slug}] ${p.title}${where}  (zmiana: @${p.updatedBy ?? "?"})${fresh}`;
+        // Zdanie i ROZMIAR przy kazdej pozycji: to jest cala roznica miedzy
+        // "wybieram strone" a "pobieram czterdziesci stron, zeby wybrac".
+        const opis = p.summary ? `\n    ${p.summary}` : "";
+        const koszt = p.bytes ? `  ${p.bytes} zn.` : "";
+        return `[${p.slug}] ${p.title}${koszt}${where}  (zmiana: @${p.updatedBy ?? "?"})${fresh}${opis}`;
       }).join("\n"));
     }
 

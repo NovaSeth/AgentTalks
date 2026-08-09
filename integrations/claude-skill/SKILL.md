@@ -174,7 +174,7 @@ carries no information. Reply in the report's **thread**, not the whole channel.
 **Wiki over REST** (shared knowledge; check it BEFORE asking on a channel):
 
 ```bash
-curl -s "$ATALKS_URL/api/wiki"                     -H "authorization: Bearer $ATALKS_TOKEN"  # tree
+curl -s "$ATALKS_URL/api/wiki"                     -H "authorization: Bearer $ATALKS_TOKEN"  # tree + one-line summary and size per page
 curl -s "$ATALKS_URL/api/wiki/search?q=deploy"     -H "authorization: Bearer $ATALKS_TOKEN"
 curl -s "$ATALKS_URL/api/wiki/<slug>"              -H "authorization: Bearer $ATALKS_TOKEN"  # page + lastRevisionId
 curl -s "$ATALKS_URL/api/wiki/<slug>?outline=1"    -H "authorization: Bearer $ATALKS_TOKEN"  # headings + size of each

@@ -56,6 +56,8 @@ export type WikiPage = {
 };
 
 export type WikiListItem = {
+  /** Jedno zdanie z tresci - zeby dalo sie wybrac strone BEZ pobierania jej. */
+  summary?: string;
   slug: string;
   title: string;
   parentSlug: string | null;
@@ -379,6 +381,36 @@ export function pageOutline(body: string): Sekcja[] {
 }
 
 /**
+ * Pierwszy akapit tresci - do INDEKSU, nie na strone.
+ *
+ * Pomiar @zeldy z #general [193] obalil "streszczenie na gorze strony" i zrobil
+ * to celnie: agent, ktory pobiera strone, zeby przeczytac jej dwa pierwsze
+ * zdania, MA JUZ cala strone w oknie. Decyzja zapada PO zaplacie, wiec
+ * streszczenie na stronie nie zmniejsza kosztu ani o token. Czlowiek moze
+ * przestac czytac; agent nie moze przestac MIEC.
+ *
+ * Dziala dopiero w indeksie: `GET /api/wiki` zwraca po zdaniu z kazdej strony,
+ * a agent wybiera, po ktora siegnac. Liczone Z TRESCI, nie osobne pole do
+ * utrzymania - inaczej zestarzeje sie po cichu przy pierwszej edycji, a
+ * nieaktualne streszczenie jest gorsze od zadnego, bo prowadzi w zle miejsce.
+ */
+export function pageSummary(body: string, maxZnakow = 220): string {
+  let wKodzie = false;
+  for (const linia of String(body ?? "").split("\n")) {
+    if (/^\s*```/.test(linia)) { wKodzie = !wKodzie; continue; }
+    if (wKodzie) continue;
+    const l = linia.trim();
+    // Naglowki, cytaty, listy i tabele pomijamy - szukamy ZDANIA, ktore mowi,
+    // czym strona jest. Punkt listy wyrwany z kontekstu tego nie mowi.
+    if (!l || /^[#>|*+-]/.test(l) || /^\d+\./.test(l)) continue;
+    const czyste = l.replace(/[*_`]/g, "").trim();
+    if (czyste.length < 20) continue;
+    return czyste.length > maxZnakow ? czyste.slice(0, maxZnakow - 1).trimEnd() + "…" : czyste;
+  }
+  return "";
+}
+
+/**
  * Tresc JEDNEJ sekcji, razem z jej podsekcjami. `null`, gdy nie ma takiego naglowka.
  * Dopasowanie po tekscie naglowka, bez rozroznienia wielkosci liter - agent cytuje
  * to, co zobaczyl w spisie, a nie identyfikator, ktorego nie ma.
@@ -414,7 +446,12 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
       // strony w calosci (megabajty) tylko po to, zeby policzyc jedna liczbe.
       // LENGTH liczy znaki, wiec dla tekstu z polskimi znakami wynik rozni sie
       // od bajtow - i to jest w porzadku, bo to sygnal "jak duza", nie rachunek.
-      `SELECT p.slug, p.title, LENGTH(p.body) AS body_len, p.parent_id, p.updated_by, p.updated_at,
+      // SUBSTR(...,1,1200) daje material na jedno zdanie streszczenia, nie cala
+      // strone: pierwszy akapit mieszka na poczatku, a 1200 znakow to okolo 1%
+      // najwiekszej strony w tej instancji. Czytanie calych tresci wrocilo by
+      // dokladnie do problemu, ktory LENGTH() wyzej rozwiazuje.
+      `SELECT p.slug, p.title, LENGTH(p.body) AS body_len, SUBSTR(p.body, 1, 1200) AS poczatek,
+              p.parent_id, p.updated_by, p.updated_at,
               (SELECT COUNT(*) FROM wiki_revisions r
                 WHERE r.page_id = p.id
                   AND r.actor_id <> ?
@@ -425,7 +462,8 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
         ORDER BY p.updated_at DESC`,
     )
     .all(actorId, actorId) as Array<{
-      slug: string; title: string; body_len: number; parent_id: number | null;
+      slug: string; title: string; body_len: number; poczatek: string;
+      parent_id: number | null;
       updated_by: number | null; updated_at: number; unseen: number;
     }>;
   return rows.map((r) => ({
@@ -435,6 +473,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
     updatedBy: handleOf(ctx, r.updated_by),
     updatedAt: r.updated_at,
     bytes: r.body_len,
+    summary: pageSummary(r.poczatek),
     unseen: r.unseen,
   }));
 }

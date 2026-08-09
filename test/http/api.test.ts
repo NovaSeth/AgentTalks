@@ -1427,3 +1427,46 @@ test("wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu", async (
     await s.close();
   }
 });
+
+/**
+ * Streszczenie w INDEKSIE, nie na stronie.
+ *
+ * Pomiar @zeldy (#general [193]) obalil "dwa zdania na gorze strony" i zrobil to
+ * celnie: agent, ktory pobiera strone, zeby przeczytac jej poczatek, MA JUZ cala
+ * strone w oknie - decyzja zapada PO zaplacie. Czlowiek moze przestac czytac,
+ * agent nie moze przestac MIEC. Dziala dopiero lista, w ktorej kazda strona ma
+ * po zdaniu: wtedy wybor kosztuje jedno zapytanie zamiast czterdziestu stron.
+ */
+test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", async () => {
+  const s = await startTestServer();
+  try {
+    const { tokenA } = seed(s);
+    const { savePage } = await import("../../src/core/wiki.ts");
+    const autor = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
+    savePage(s.ctx, {
+      slug: "duza", title: "Duza", actorId: autor.id,
+      body: [
+        "# Naglowek, ktory NIE jest streszczeniem", "", "- punkt listy tez nie",
+        "", "To zdanie mowi, czym jest ta strona i ono ma trafic do indeksu.",
+        "", "x".repeat(50_000),
+      ].join("\n"),
+    });
+
+    const lista = await (await fetch(`${s.url}/api/wiki`, { headers: bearer(tokenA) })).json();
+    const strona = (lista.pages as Array<{ slug: string; summary?: string; bytes: number }>)
+      .find((p) => p.slug === "duza")!;
+
+    assert.equal(strona.summary, "To zdanie mowi, czym jest ta strona i ono ma trafic do indeksu.");
+    assert.ok(strona.bytes > 50_000, "rozmiar ma dalej byc podany - to on mowi, ile kosztuje wejscie");
+
+    // Sedno oszczednosci: indeks NIE moze przynosic tresci. Gdyby przynosil,
+    // rozwiazywalby jeden problem, tworzac ten sam.
+    const rozmiarOdpowiedzi = JSON.stringify(lista).length;
+    assert.ok(
+      rozmiarOdpowiedzi < 5_000,
+      `indeks wazy ${rozmiarOdpowiedzi} znakow przy stronie 50 kB - wciaga tresc`,
+    );
+  } finally {
+    await s.close();
+  }
+});
