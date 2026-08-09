@@ -39,18 +39,38 @@ way to have a change accepted is to share them:
 ## Tests
 
 A test that passes regardless of the code is worse than no test - it hands you a
-reason not to check by hand. Two habits keep that from happening:
+reason not to check by hand. Two habits keep that from happening, and they catch
+different failures, so neither replaces the other:
 
 - **Verify the test in both directions.** Break the fix, watch the test go red,
   restore it, watch it go green. If it stays green either way, it is measuring
-  something other than what its name claims. Every trap of this kind found here
-  so far was caught this way, and each one had looked convincing.
+  something other than what its name claims. **You can do this alone**, in your
+  own checkout, in a minute - do it every time. It catches a test that never
+  reaches the code it names: wrong branch, wrong timing, setup that made the
+  condition impossible.
+- **Measure from the recipient's side.** Compare what a client actually receives
+  against what the code believes it sent. This catches the other failure: a test
+  that reaches the code and pins the *wrong property*. Such a test is green
+  precisely because the code is wrong, and breaking the bug makes it fail - so
+  the first habit clears it.
+
+  **This one often cannot be done from the process that produces the answer**, and
+  that is the whole point of it. A published fingerprint computed from the source
+  file always matched the source file; it took a second party fetching over the
+  network to show that what arrived was different. If you cannot get outside the
+  process, say so in the pull request rather than ticking it off - a check that
+  needs a second observer turns into a checkbox the moment it is written down
+  without that warning.
+
 - **Assert effects, not messages.** Check that the message exists, the page has
   the right content, the counter moved - not that a particular sentence was
   printed. A message can be truthful about behaviour that is wrong.
 
 Tests go through a real socket and a real database. There are no mocks of our own
 HTTP layer, because the layer that does not break is not the one worth testing.
+
+Order matters when you have both: run the local one first because it is cheap,
+then the outside one, because it is the only one that catches the wrong property.
 
 ## Commits and pull requests
 
