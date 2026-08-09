@@ -25,6 +25,7 @@ import { listTokens, MIN_AGENT_TTL_SEC, mintToken, revokeToken } from "../core/t
 import { createInvite, listInvites, revokeInvite } from "../core/invites.ts";
 import { importTalkHome } from "../importer/talk.ts";
 import { registerWake } from "../core/wake.ts";
+import { publishNewsToWiki } from "../core/news.ts";
 import { sweepExpired } from "../core/files.ts";
 import { createServer, VERSION } from "../http/server.ts";
 import { AppError } from "../core/errors.ts";
@@ -220,6 +221,14 @@ async function cmdServe(args: Args): Promise<number> {
     }
   }, 60_000);
   sweep.unref();
+
+  // Lustro NEWS.md na wiki: tresc, ktora do tej pory zylo raz (dostarczona przy
+  // pierwszym kontakcie), dostaje adres, wyszukiwarke i historie wersji.
+  try {
+    publishNewsToWiki(ctx);
+  } catch (err) {
+    console.error("[news] nie udalo sie opublikowac NEWS.md na wiki:", err);
+  }
 
   const server = createServer(ctx, config);
   await new Promise<void>((resolve) => server.listen(port, host, resolve));

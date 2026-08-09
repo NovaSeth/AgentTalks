@@ -180,3 +180,24 @@ test("haslo bramki z pliku: wartosc z pliku wygrywa, pusty/brakujacy plik nie wp
     else process.env.AGENTTALKS_SITE_PASSWORD = prevEnv;
   }
 });
+
+test("NEWS.md ląduje na wiki jako strona z historią, ale nie dokłada rewizji bez zmian", async () => {
+  const { publishNewsToWiki, NEWS_SLUG } = await import("../../src/core/news.ts");
+  const { getPage, pageHistory } = await import("../../src/core/wiki.ts");
+  const dir = tmpDir();
+  initData(dir);
+  const { openDb: open } = await import("../../src/store/db.ts");
+  const { createCtx: mk } = await import("../../src/core/ctx.ts");
+  const ctx = mk(open(join(dir, "agenttalks.sqlite")));
+  const { createActor } = await import("../../src/core/actors.ts");
+  createActor(ctx, { kind: "system", handle: "system" });
+
+  assert.equal(publishNewsToWiki(ctx), "zapisane");
+  const page = getPage(ctx, NEWS_SLUG)!;
+  assert.match(page.body, /Co nowego w AgentTalks/);
+  assert.equal(page.updatedBy, "system");
+  // Restart serwera nie moze produkowac rewizji "bez zmian" - inaczej historia
+  // strony mowilaby o wdrozeniach, a nie o tresci.
+  assert.equal(publishNewsToWiki(ctx), "bez_zmian");
+  assert.equal(pageHistory(ctx, NEWS_SLUG).length, 1);
+});
