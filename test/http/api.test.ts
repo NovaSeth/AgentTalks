@@ -1480,3 +1480,65 @@ test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", 
     await s.close();
   }
 });
+
+/**
+ * Awatary: obrazek zamiast dwoch liter na kolorowej kropce (prosba @michal,
+ * #general [192]).
+ *
+ * Najwazniejsza asercja dotyczy SVG. Serwer rozpoznaje format po ZAWARTOSCI,
+ * nie po naglowku - naglowek pisze klient, wiec "content-type: image/png" przy
+ * dowolnych bajtach nie znaczy nic. SVG jest dokumentem ze skryptem, a nie
+ * obrazkiem: wyswietlony z naszej domeny bylby wektorem XSS w miejscu, w ktorym
+ * siedzi ciasteczko sesji. Dlatego biala lista formatow rastrowych, a nie
+ * "image/*".
+ */
+test("awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony", async () => {
+  const s = await startTestServer();
+  try {
+    const { tokenA, tokenB } = seed(s);
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 7),
+    ]);
+    const wyslij = (dane: Buffer, ct = "image/png") =>
+      fetch(`${s.url}/api/me/avatar`, {
+        method: "PUT",
+        headers: { ...bearer(tokenA), "content-type": ct },
+        body: new Uint8Array(dane),
+      });
+
+    const ok = await wyslij(png);
+    assert.equal(ok.status, 200);
+    const { url } = await ok.json() as { url: string };
+    assert.match(url, /^\/api\/actors\/\d+\/avatar\?v=[0-9a-f]{16}$/,
+      "adres ma niesc odcisk tresci - inaczej zmiana awatara nie bedzie widoczna");
+
+    // Widza go wszyscy zalogowani, bo po to jest.
+    const obraz = await fetch(s.url + url, { headers: bearer(tokenB) });
+    assert.equal(obraz.status, 200);
+    assert.equal(obraz.headers.get("content-type"), "image/png");
+    assert.equal(obraz.headers.get("x-content-type-options"), "nosniff");
+
+    // SVG z naglowkiem udajacym PNG: liczy sie zawartosc.
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+    const zly = await wyslij(svg, "image/png");
+    assert.equal(zly.status, 400, "SVG przeszedl jako awatar - to XSS w naszym origin");
+    assert.equal((await zly.json()).code, "zly_format");
+
+    // Odcisk zmienia sie razem z trescia, wiec przegladarka nie pokaze starego.
+    const drugi = await (await wyslij(Buffer.concat([png, Buffer.alloc(8, 9)]))).json() as { url: string };
+    assert.notEqual(drugi.url, url);
+
+    // Katalog aktorow niesie odcisk, zeby klient umial zlozyc adres.
+    const lista = await (await fetch(`${s.url}/api/actors`, { headers: bearer(tokenB) })).json();
+    const ja = (lista.actors as Array<{ handle: string; avatar: string | null }>)
+      .find((a) => a.avatar !== null);
+    assert.ok(ja, "katalog aktorow nie mowi, kto ma awatar");
+
+    // Usuniecie wraca do kropki z inicjalami.
+    const usun = await fetch(`${s.url}/api/me/avatar`, { method: "DELETE", headers: bearer(tokenA) });
+    assert.equal(usun.status, 200);
+    assert.equal((await fetch(s.url + url, { headers: bearer(tokenB) })).status, 404);
+  } finally {
+    await s.close();
+  }
+});

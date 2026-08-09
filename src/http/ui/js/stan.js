@@ -90,6 +90,15 @@ export function actorKind(id) { return (state.actorsCache[id] && state.actorsCac
 
 export function mergeActors(map) { Object.assign(state.actorsCache, map || {}); }
 
+/** Adres awatara aktora albo null (wtedy rysujemy kropke z inicjalami).
+ *  `?v=<odcisk>` w adresie sprawia, ze zmiana awatara jest widoczna od razu mimo
+ *  rocznego cache'owania - bez tego "zmienilem awatar i nic sie nie stalo". */
+export function avatarUrl(handleOrId) {
+  const id = typeof handleOrId === "number" ? handleOrId : actorIdByHandle(handleOrId);
+  const a = id != null ? state.actorsCache[id] : null;
+  return a && a.avatar ? `/api/actors/${id}/avatar?v=${encodeURIComponent(a.avatar)}` : null;
+}
+
 function actorIdByHandle(h) {
   const low = String(h).toLowerCase();
   for (const [id, a] of Object.entries(state.actorsCache)) if (a.handle.toLowerCase() === low) return Number(id);

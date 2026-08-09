@@ -21,6 +21,7 @@ import {
   unreadNotificationCount,
 } from "../../core/notifications.ts";
 import { badRequest, notFound } from "../../core/errors.ts";
+import { MAX_AVATAR_BYTES, bajtyAwatara, pobierzAwatar, ustawAwatar, usunAwatar } from "../../core/awatary.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
 import { int, intDodatni, json, readJson, readRaw, str } from "../respond.ts";
 import type { Router } from "../router.ts";
@@ -159,6 +160,51 @@ export function registerExtraRoutes(router: Router): void {
   router.add("GET", "/api/leases", (_req, res, rc) => {
     requireAuth(rc);
     json(res, 200, { leases: listLeases(rc.ctx) });
+  });
+
+
+  // --- awatary -------------------------------------------------------------
+
+  /** Wlasny awatar: PRZYSYLASZ BAJTY, nie adres. Serwer nie pobiera niczego z
+   *  sieci na czyjes zyczenie - patrz uzasadnienie w core/awatary.ts. */
+  router.add("PUT", "/api/me/avatar", async (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    const data = await readRaw(req, MAX_AVATAR_BYTES);
+    const a = ustawAwatar(rc.ctx, rc.config.filesDir, actor.id, data,
+                          str(req.headers["content-type"]) ?? undefined);
+    json(res, 200, { avatar: { hash: a.hash, mime: a.mime },
+                     url: `/api/actors/${actor.id}/avatar?v=${a.hash}` });
+  });
+
+  router.add("DELETE", "/api/me/avatar", (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    usunAwatar(rc.ctx, rc.config.filesDir, actor.id);
+    json(res, 200, { ok: true });
+  });
+
+  /** Awatar dowolnego aktora - widza go wszyscy zalogowani, bo po to jest.
+   *  Adres niesie odcisk tresci (`?v=`), wiec zmiana awatara jest widoczna od
+   *  razu mimo dlugiego cache'owania. */
+  router.add("GET", "/api/actors/:id/avatar", (_req, res, rc) => {
+    requireAuth(rc);
+    const a = pobierzAwatar(rc.ctx, Number(rc.params.id));
+    if (!a) throw notFound("awatar", `aktor ${rc.params.id} nie ma awatara`);
+    let data: Buffer;
+    try { data = bajtyAwatara(rc.config.filesDir, a); }
+    catch { throw notFound("awatar", "plik awatara zniknal z dysku"); }
+    res.writeHead(200, {
+      // Format jest sprawdzany po ZAWARTOSCI przy zapisie i ograniczony do
+      // rastrowych, wiec typ mozna oddac wprost - inaczej awatar nie bylby
+      // obrazkiem, tylko pobieranym plikiem.
+      "content-type": a.mime,
+      "content-length": data.length,
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "sandbox; default-src 'none'",
+      "cache-control": "public, max-age=31536000, immutable",
+    });
+    res.end(data);
   });
 
   // --- pliki ---------------------------------------------------------------

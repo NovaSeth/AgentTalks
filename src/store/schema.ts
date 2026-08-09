@@ -480,5 +480,20 @@ CREATE INDEX idx_messages_edited ON messages(edited_at) WHERE edited_at IS NOT N
 CREATE INDEX idx_messages_deleted ON messages(deleted_at) WHERE deleted_at IS NOT NULL;
 `;
 
-export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14];
+/**
+ * Awatar aktora: obrazek zamiast dwoch liter na kolorowej kropce.
+ *
+ * Bajty leza na dysku obok pozostalych plikow (ten sam katalog, te same prawa),
+ * a w bazie jest tylko nazwa pliku, typ i ODCISK tresci. Odcisk jest tu po to,
+ * zeby adres awatara zmienial sie razem z obrazkiem - inaczej przegladarka
+ * pokazywalaby stary jeszcze dlugo po zmianie, a "zmienilem awatar i nic sie nie
+ * stalo" to blad, ktorego nikt nie zglasza, tylko przestaje probowac.
+ */
+const M15 = `
+ALTER TABLE actors ADD COLUMN avatar_file TEXT;
+ALTER TABLE actors ADD COLUMN avatar_mime TEXT;
+ALTER TABLE actors ADD COLUMN avatar_hash TEXT;
+`;
+
+export const MIGRATIONS: string[] = [M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15];
 export const SCHEMA_VERSION = MIGRATIONS.length;

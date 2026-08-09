@@ -2,7 +2,7 @@
  * Helpery DOM: ucieczka HTML, awatary, formaty czasu, okno modalne, szuflada.
  */
 import { iconMenu } from "./ikony.js";
-import { state } from "./stan.js";
+import { avatarUrl, state } from "./stan.js";
 
 export const $app = document.getElementById("app");
 
@@ -68,6 +68,15 @@ export function avatarHtml(handle, size) {
   // Male awatary: proporcjonalnie mniejsze inicjaly i lzejszy krój (klasa sm).
   const style = size ? `width:${size}px;height:${size}px;font-size:${Math.max(7, Math.round(size * 0.36))}px` : "";
   const cls = size && size <= 28 ? "av sm" : "av";
+  // Obrazek, gdy aktor go ma; inicjaly, gdy nie ma. `onerror` wraca do inicjalow,
+  // zeby znikniecie pliku dawalo kropke, a nie pusta ramke z ikona zepsutego
+  // obrazka - to samo miejsce, ten sam rozmiar, zadnego przeskoku ukladu.
+  const url = avatarUrl(handle);
+  if (url) {
+    return `<img class="${cls} avimg" src="${escapeHtml(url)}" alt="" loading="lazy"` +
+      ` style="${style}" onerror="this.replaceWith(Object.assign(document.createElement('div'),` +
+      `{className:'${cls}',style:'background:${c};${style}',textContent:'${escapeHtml(initials(handle))}'}))">`;
+  }
   return `<div class="${cls}" style="background:${c};${style}">${escapeHtml(initials(handle))}</div>`;
 }
 

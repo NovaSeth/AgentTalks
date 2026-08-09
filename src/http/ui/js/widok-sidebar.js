@@ -2,14 +2,14 @@
  * Panel boczny: kanaly, wiadomosci, drzewo wiki, dzierzawy, digest.
  */
 import { claimLease, releaseLease, startDirect } from "./akcje.js";
-import { api } from "./api.js";
+import { api, csrf } from "./api.js";
 import { ensureActors, refreshDigestAndLeases } from "./dane.js";
 import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
 import { iconChevron, iconDigest, iconDoc, iconLock, iconOut, iconQuestion, iconSearch } from "./ikony.js";
 import { mdToHtml } from "./markdown.js";
-import { actorHandle, dmLabel, dmOthers, handleOnline, state, wikiCollapsed } from "./stan.js";
+import { actorHandle, dmLabel, dmOthers, handleOnline, state, widok, wikiCollapsed } from "./stan.js";
 import { openSearchPalette } from "./szukaj.js";
-import { showError } from "./toasty.js";
+import { showError, showToast } from "./toasty.js";
 import { openConversation, openNewConversationModal, openQuestionsPanel } from "./widok-czat.js";
 import { doLogout } from "./widok-login.js";
 import { newWikiPageModal, openWikiPage } from "./widok-wiki.js";
@@ -20,7 +20,9 @@ export function renderSidebar() {
   el.innerHTML = `
     <div class="sb-head">
       <div class="who">
-        <div class="me"><span class="dot"></span><span class="mename">@${escapeHtml(state.actor.handle)}</span></div>
+        <button class="me" id="btn-avatar" title="Zmień swój awatar" aria-label="Zmień swój awatar">
+          ${avatarHtml(state.actor.handle, 24)}<span class="mename">@${escapeHtml(state.actor.handle)}</span>
+        </button>
       </div>
       <button class="iconbtn" id="btn-search" aria-label="Szukaj i przełącz rozmowę (Cmd+K)" title="Szukaj (Cmd+K)">${iconSearch()}</button>
       <button class="iconbtn" id="btn-guidelines" aria-label="Jak tu rozmawiamy" title="Jak tu rozmawiamy">${iconQuestion()}</button>
@@ -30,6 +32,7 @@ export function renderSidebar() {
     <div class="sb-foot" id="sb-foot">
       <span id="sb-ui" title="Wersja interfejsu, który masz teraz załadowany. Jeśli po wdrożeniu się nie zmieniła, Twoja przeglądarka trzyma starą kopię - odśwież stronę z pominięciem pamięci podręcznej."></span>
     </div>`;
+  document.getElementById("btn-avatar").addEventListener("click", zmienAwatar);
   document.getElementById("btn-logout").addEventListener("click", doLogout);
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
@@ -428,4 +431,54 @@ function claimLeaseModal() {
       Number(modal.querySelector("#cl-ttl").value));
     if (ok) refreshDigestAndLeases(true);
   });
+}
+
+
+/**
+ * Zmiana awatara: wybor pliku z dysku, bez posrednich ekranow.
+ *
+ * Plik idzie BAJTAMI - serwer nie pobiera niczego z adresu (patrz core/awatary.ts),
+ * wiec przegladarka robi dokladnie to samo, co agent przez REST.
+ */
+function zmienAwatar() {
+  const ma = Boolean(state.actorsCache[state.actor.id]?.avatar);
+  const wybor = document.createElement("input");
+  wybor.type = "file";
+  wybor.accept = "image/png,image/jpeg,image/webp,image/gif";
+  wybor.addEventListener("change", async () => {
+    const plik = wybor.files?.[0];
+    if (!plik) return;
+    try {
+      const odp = await fetch("/api/me/avatar", {
+        method: "PUT",
+        headers: { "content-type": plik.type || "application/octet-stream", "x-at-csrf": csrf },
+        body: plik,
+      });
+      const dane = await odp.json().catch(() => ({}));
+      if (!odp.ok) throw new Error(dane.error || `HTTP ${odp.status}`);
+      // Katalog aktorow trzyma odcisk, z ktorego sklada sie adres obrazka -
+      // bez tej aktualizacji awatar zmienilby sie dopiero po odswiezeniu strony.
+      if (state.actorsCache[state.actor.id]) state.actorsCache[state.actor.id].avatar = dane.avatar?.hash ?? null;
+      widok.sidebar();
+      widok.glowny();
+      showToast("Awatar zmieniony.");
+    } catch (e) {
+      showError(e);
+    }
+  });
+  if (ma) {
+    // Ma juz awatar, wiec sensowne sa DWIE rzeczy, nie jedna - a menu z dwoma
+    // pozycjami jest tanszym pytaniem niz modal.
+    const usun = window.confirm("OK - wybierz nowy obrazek.\nAnuluj - wróć do kropki z inicjałami.");
+    if (!usun) {
+      fetch("/api/me/avatar", { method: "DELETE", headers: { "x-at-csrf": csrf } })
+        .then(() => {
+          if (state.actorsCache[state.actor.id]) state.actorsCache[state.actor.id].avatar = null;
+          widok.sidebar(); widok.glowny(); showToast("Awatar usunięty - wróciły inicjały.");
+        })
+        .catch(showError);
+      return;
+    }
+  }
+  wybor.click();
 }

@@ -21,10 +21,15 @@ export type Actor = {
   isAdmin: boolean;
   createdAt: number;
   disabledAt: number | null;
+  /** Odcisk tresci awatara albo null. Klient sklada z niego adres obrazka
+   *  (`/api/actors/<id>/avatar?v=<avatar>`) - odcisk w adresie sprawia, ze zmiana
+   *  awatara jest widoczna od razu mimo dlugiego cache'owania. */
+  avatar: string | null;
 };
 
 type ActorRow = {
   id: number;
+  avatar_hash?: string | null;
   kind: ActorKind;
   handle: string;
   display_name: string;
@@ -41,6 +46,7 @@ const toActor = (r: ActorRow): Actor => ({
   isAdmin: r.is_admin === 1,
   createdAt: r.created_at,
   disabledAt: r.disabled_at,
+  avatar: r.avatar_hash ?? null,
 });
 
 export function createActor(
@@ -81,15 +87,20 @@ export function getActorByHandle(ctx: Ctx, handle: string): Actor | null {
 export function actorsByIds(
   ctx: Ctx,
   ids: readonly number[],
-): Record<number, { handle: string; displayName: string; kind: ActorKind }> {
+): Record<number, { handle: string; displayName: string; kind: ActorKind; avatar: string | null }> {
   const uniq = [...new Set(ids)];
   if (uniq.length === 0) return {};
   const marks = uniq.map(() => "?").join(",");
+  // avatar_hash, nie sciezka do pliku: klient sklada adres sam, a odcisk sluzy
+  // do uniewaznienia cache'a. Nazwa pliku na dysku nie jest niczyja sprawa.
   const rows = ctx.db
-    .prepare(`SELECT id, handle, display_name, kind FROM actors WHERE id IN (${marks})`)
-    .all(...uniq) as Array<{ id: number; handle: string; display_name: string; kind: ActorKind }>;
-  const out: Record<number, { handle: string; displayName: string; kind: ActorKind }> = {};
-  for (const r of rows) out[r.id] = { handle: r.handle, displayName: r.display_name, kind: r.kind };
+    .prepare(`SELECT id, handle, display_name, kind, avatar_hash FROM actors WHERE id IN (${marks})`)
+    .all(...uniq) as Array<{ id: number; handle: string; display_name: string; kind: ActorKind;
+                             avatar_hash: string | null }>;
+  const out: Record<number, { handle: string; displayName: string; kind: ActorKind; avatar: string | null }> = {};
+  for (const r of rows) {
+    out[r.id] = { handle: r.handle, displayName: r.display_name, kind: r.kind, avatar: r.avatar_hash ?? null };
+  }
   return out;
 }
 

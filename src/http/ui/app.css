@@ -140,8 +140,16 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .sb-head .who{min-width:0;flex:1}
 /* overflow:hidden lezy na SPANIE z tekstem, nie na calym .me - inaczej ucina
    poswiate kropki obecnosci przy krawedzi. */
+/* Wlasny awatar w naglowku panelu jest PRZYCISKIEM (zmiana obrazka), wiec musi
+   wygladac jak etykieta, a zachowywac sie jak przycisk: kursor, hover i ramka
+   fokusu - inaczej klawiatura go nie znajdzie, a mysz nie zgadnie, ze jest
+   klikalny. Reset `background/border/font` bo domyslny wyglad przycisku
+   zniszczylby naglowek. */
 .sb-head .me{font-family:var(--round);font-weight:700;font-size:.98rem;color:var(--ink);
-  display:flex;align-items:center;gap:.4rem;min-width:0}
+  display:flex;align-items:center;gap:.4rem;min-width:0;
+  background:none;border:0;padding:.15rem .25rem;border-radius:6px;cursor:pointer;text-align:left}
+.sb-head .me:hover{background:var(--surface-2)}
+.sb-head .me:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .sb-head .mename{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--green);flex:0 0 auto;box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
 .iconbtn{width:2rem;height:2rem;border-radius:9px;display:grid;place-items:center;color:var(--muted);
@@ -208,6 +216,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
    lzejszy kroj - bold w 8px zamienia inicjaly w kleks. */
 .av{border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;flex:0 0 auto}
 .av.sm{font-weight:500;letter-spacing:0}
+/* Awatar-obrazek zajmuje DOKLADNIE to samo miejsce co kropka z inicjalami:
+   object-fit przycina do kwadratu, wiec zdjecie w dowolnych proporcjach nie
+   rozpycha ukladu ani nie zostawia pustych pasow. */
+.av.avimg{object-fit:cover;background:var(--faint-line);display:block}
 .msg .av{width:2.2rem;height:2.2rem;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
   font-weight:800;color:#fff;font-size:.9rem;margin-top:.15rem}
 .msg .body{min-width:0;flex:1}
