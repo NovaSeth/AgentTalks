@@ -15,13 +15,18 @@
 #   docker compose --env-file /etc/agenttalks/instancja.env up -d --build
 #
 # Wzor takiego pliku: deploy/instancja.env.przyklad
-name: agenttalks
+name: ${AGENTTALKS_PROJEKT:-agenttalks}
 
 services:
   agenttalks:
     build: .
     image: agenttalks:latest
-    container_name: agenttalks
+    # Nazwa kontenera i wolumenu sa STALE, bo tak maja byc: dzieki temu `docker
+    # logs agenttalks` znaczy to samo na kazdej maszynie. Jesli stawiasz DRUGA
+    # instancje na tym samym hoscie, nadaj obu wlasne nazwy - inaczej ta druga
+    # przejmie dane pierwszej (i to jest jedyny scenariusz, w ktorym ta stalosc
+    # szkodzi, wiec zostawiamy furtke zamiast udawac, ze go nie ma).
+    container_name: ${AGENTTALKS_CONTAINER:-agenttalks}
     restart: unless-stopped
     ports:
       # Port TYLKO na petli zwrotnej hosta - przed kontenerem ma stac reverse
@@ -58,4 +63,4 @@ volumes:
     # `name` bez prefiksu projektu: wolumen nazywa sie dokladnie tak i tylko tak,
     # niezaleznie od katalogu, z ktorego uruchamiasz compose. To jest jedyna
     # rzecz, ktora chroni dane przed cicha podmiana na pusty wolumen.
-    name: agenttalks_data
+    name: ${AGENTTALKS_DATA_VOLUME:-agenttalks_data}

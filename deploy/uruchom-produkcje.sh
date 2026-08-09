@@ -17,7 +17,12 @@ set -euo pipefail
 ENV_FILE=${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}
 # Katalog z docker-compose.yml (repo). Domyslnie: nadrzedny wobec tego skryptu.
 REPO_DIR=${AGENTTALKS_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
-WOLUMEN_OCZEKIWANY=${AGENTTALKS_DATA_VOLUME:-agenttalks_data}
+# Nazwy czytamy z TEGO SAMEGO pliku, ktory dostaje compose - inaczej skrypt
+# sprawdzalby co innego, niz compose uruchamia, i "kontrola" bylaby dekoracja.
+WOLUMEN_OCZEKIWANY=$(grep -E '^AGENTTALKS_DATA_VOLUME=' "${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}" 2>/dev/null | cut -d= -f2)
+WOLUMEN_OCZEKIWANY=${WOLUMEN_OCZEKIWANY:-agenttalks_data}
+KONTENER=$(grep -E '^AGENTTALKS_CONTAINER=' "${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}" 2>/dev/null | cut -d= -f2)
+KONTENER=${KONTENER:-agenttalks}
 
 if [[ ! -r $ENV_FILE ]]; then
   echo "Brak $ENV_FILE - nie zgaduje parametrow produkcji." >&2
@@ -29,24 +34,24 @@ compose() { docker compose --env-file "$ENV_FILE" -f "$REPO_DIR/docker-compose.y
 
 # Stan PRZED zmiana - do porownania po. Bez tej liczby "serwer dziala" nie
 # odroznia dzialajacego serwera od dzialajacej pustej instancji.
-przed=$(docker exec agenttalks node bin/agenttalks.js healthcheck --json 2>/dev/null || true)
+przed=$(docker exec "$KONTENER" node bin/agenttalks.js healthcheck --json 2>/dev/null || true)
 wiadomosci_przed=$(curl -s "http://127.0.0.1:$(grep -E '^AGENTTALKS_HOST_PORT=' "$ENV_FILE" | cut -d= -f2)/api/health" \
   | sed -n 's/.*"lastMessageId":\([0-9]*\).*/\1/p' || true)
 echo "przed wdrozeniem: ostatnia wiadomosc = ${wiadomosci_przed:-brak (kontener nie stoi)}"
 
 echo "== kopia zapasowa =="
-docker exec agenttalks node bin/agenttalks.js backup /data/backups >/dev/null 2>&1 \
+docker exec "$KONTENER" node bin/agenttalks.js backup /data/backups >/dev/null 2>&1 \
   || echo "(kontener nie stoi - pomijam kopie)"
 
 # Kontener zalozony recznie (`docker run`) nie nalezy do compose, wiec compose
 # nie umie go przejac - konczy sie konfliktem nazwy. To sytuacja jednorazowa
 # (przejscie na compose), ale skrypt ma ja obsluzyc, zamiast zostawiac czlowieka
 # z komunikatem "name already in use" o 2 w nocy.
-if docker inspect agenttalks >/dev/null 2>&1; then
-  czyj=$(docker inspect agenttalks --format '{{index .Config.Labels "com.docker.compose.project"}}')
+if docker inspect "$KONTENER" >/dev/null 2>&1; then
+  czyj=$(docker inspect "$KONTENER" --format '{{index .Config.Labels "com.docker.compose.project"}}')
   if [[ -z $czyj ]]; then
     echo "== stary kontener spoza compose - usuwam przed podmiana =="
-    docker rm -f agenttalks >/dev/null
+    docker rm -f "$KONTENER" >/dev/null
   fi
 fi
 
@@ -56,7 +61,7 @@ compose up -d --build
 echo "== kontrola wolumenu z danymi =="
 # To jest ta kontrola, dla ktorej powstal ten skrypt. Pytamy Dockera, co
 # FAKTYCZNIE jest podpiete pod /data, zamiast wierzyc, ze plik yaml zadzialal.
-wolumen=$(docker inspect agenttalks \
+wolumen=$(docker inspect "$KONTENER" \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
 echo "podpiety wolumen: ${wolumen:-BRAK}"
 if [[ $wolumen != "$WOLUMEN_OCZEKIWANY" ]]; then
@@ -67,7 +72,7 @@ fi
 
 echo "== weryfikacja =="
 for _ in $(seq 1 25); do
-  stan=$(docker inspect agenttalks --format '{{.State.Health.Status}}' 2>/dev/null || echo brak)
+  stan=$(docker inspect "$KONTENER" --format '{{.State.Health.Status}}' 2>/dev/null || echo brak)
   [[ $stan == healthy ]] && break
   sleep 1
 done
