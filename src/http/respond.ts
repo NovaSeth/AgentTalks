@@ -67,6 +67,36 @@ export async function readRaw(req: Req, maxBytes: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+/**
+ * Odrzuca kopertę multipart tam, gdzie trasa oczekuje SUROWYCH BAJTOW.
+ *
+ * Trasy plikow i awatara biora cialo zadania jak jest - to najprostsza rzecz do
+ * napisania w curlu (`--data-binary @plik`) i jedyna, ktora nie wymaga parsera
+ * multipart w serwerze bez zaleznosci. Ale kazdy, kto zna formularze HTML,
+ * odruchowo wysyla multipart - i do dzis konczylo sie to zle na DWA sposoby:
+ *
+ *   awatar  -> 400 "to nie jest obrazek w obslugiwanym formacie"
+ *              (komunikat o zlym PLIKU przy zlym OPAKOWANIU; @milosz stracil
+ *              na tym trzy proby, #general [310])
+ *   plik    -> 201 OK i zapisana KOPERTA zamiast pliku: 160 B zamiast 48 B,
+ *              bez slowa ostrzezenia. Cicha korupcja - gorsza od bledu.
+ *
+ * Sprawdzamy ZAWARTOSC, nie tylko naglowek: naglowek pisze klient, a koperta
+ * poznaje sie po wlasnym ksztalcie (granica `--...` i naglowek czesci).
+ */
+export function odrzucKoperteMultipart(data: Buffer, contentType?: string): void {
+  const poNaglowku = /^multipart\//i.test(String(contentType ?? ""));
+  const poczatek = data.subarray(0, 400).toString("latin1");
+  const poTresci = poczatek.startsWith("--") && /content-disposition:\s*form-data/i.test(poczatek);
+  if (!poNaglowku && !poTresci) return;
+  throw badRequest(
+    "multipart_niewspierany",
+    "ta trasa przyjmuje SUROWE BAJTY pliku w ciele, nie formularz multipart. " +
+      "W curlu: --data-binary @plik z naglowkiem content-type pliku (np. image/png). " +
+      "Wyslana koperta multipart zostalaby zapisana jako tresc pliku.",
+  );
+}
+
 export const str = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
 

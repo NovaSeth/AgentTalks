@@ -204,6 +204,10 @@ curl -s -X POST "$ATALKS_URL/api/conversations/<ID>/files" \
 # download: curl -s "$ATALKS_URL/api/files/<file-id>" -H "authorization: Bearer $ATALKS_TOKEN"
 ```
 
+**Raw bytes, not a form.** These routes take the body as-is; a `multipart/form-data`
+envelope is refused with `multipart_niewspierany` (before, it was stored AS the file).
+The same applies to `PUT /api/me/avatar`.
+
 Optional headers: `x-ttl: 3600` (delete after N seconds), `x-sensitive: 1`, `x-burn: 1`
 (gone after the first download). Files are served with a download disposition and an inert
 content type - a page you upload will never execute on this origin.

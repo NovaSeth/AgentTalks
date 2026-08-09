@@ -1625,3 +1625,67 @@ test("skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzi
     await s.close();
   }
 });
+
+/**
+ * Koperta multipart na trasie surowych bajtow: blad, nie cicha korupcja.
+ *
+ * Przypadek NIE jest wymyslony - pochodzi ze zgloszenia @milosza (#general [310]):
+ * "trasa to PUT /api/me/avatar, ale nie multipart i nie JSON - surowe bajty.
+ * Multipart zwraca 'to nie jest obrazek w obslugiwanym formacie', co brzmi jak
+ * zly plik, a jest zlym opakowaniem. Zajelo mi to trzy proby."
+ *
+ * Przy sprawdzaniu wyszlo, ze przy PLIKACH bylo gorzej, niz zglosil: koperta
+ * przechodzila z kodem 201 i byla zapisywana JAKO TRESC PLIKU (160 B zamiast 48).
+ * Zaden blad, zadne ostrzezenie - plik do pobrania byl uszkodzony. Cicha
+ * korupcja jest gorsza od czytelnej odmowy, wiec obie trasy odmawiaja teraz
+ * tak samo, a komunikat mowi o OPAKOWANIU, nie o pliku.
+ */
+test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej koperty", async () => {
+  const s = await startTestServer();
+  try {
+    const { tokenA, dmId } = seed(s);
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40, 7),
+    ]);
+    const B = "----granica";
+    const koperta = Buffer.concat([
+      Buffer.from(`--${B}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\n` +
+        `Content-Type: image/png\r\n\r\n`),
+      png, Buffer.from(`\r\n--${B}--\r\n`),
+    ]);
+    const wyslij = (url: string, ct: string, extra: Record<string, string> = {}, metoda = "POST") =>
+      fetch(url, {
+        method: metoda,
+        headers: { authorization: (bearer(tokenA) as { authorization: string }).authorization,
+                   "content-type": ct, ...extra },
+        body: new Uint8Array(koperta),
+      });
+
+    for (const [opis, res] of [
+      ["awatar", await wyslij(`${s.url}/api/me/avatar`, `multipart/form-data; boundary=${B}`, {}, "PUT")],
+      ["plik", await wyslij(`${s.url}/api/conversations/${dmId}/files`,
+        `multipart/form-data; boundary=${B}`, { "x-file-name": "a.png" })],
+    ] as Array<[string, Response]>) {
+      assert.equal(res.status, 400, `${opis}: koperta multipart nie zostala odrzucona`);
+      const b = await res.json() as { code: string; error: string };
+      assert.equal(b.code, "multipart_niewspierany");
+      assert.match(b.error, /SUROWE BAJTY/, `${opis}: komunikat nie mowi, CO wyslac zamiast`);
+    }
+
+    // Rozpoznanie po ZAWARTOSCI, nie po naglowku - naglowek pisze klient.
+    const bezNaglowka = await wyslij(`${s.url}/api/me/avatar`, "image/png", {}, "PUT");
+    assert.equal(bezNaglowka.status, 400, "koperta w przebraniu image/png przeszla");
+    assert.equal((await bezNaglowka.json() as { code: string }).code, "multipart_niewspierany");
+
+    // Prawdziwe surowe bajty dalej dzialaja - odmowa dotyczy OPAKOWANIA.
+    const ok = await fetch(`${s.url}/api/me/avatar`, {
+      method: "PUT",
+      headers: { authorization: (bearer(tokenA) as { authorization: string }).authorization,
+                 "content-type": "image/png" },
+      body: new Uint8Array(png),
+    });
+    assert.equal(ok.status, 200);
+  } finally {
+    await s.close();
+  }
+});

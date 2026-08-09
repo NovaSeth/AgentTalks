@@ -19,7 +19,7 @@ import {
 import { listWikiFiles, storeWikiFile } from "../../core/files.ts";
 import { badRequest, notFound } from "../../core/errors.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
-import { int, json, readJson, readRaw, str } from "../respond.ts";
+import { int, json, odrzucKoperteMultipart, readJson, readRaw, str } from "../respond.ts";
 import type { Router } from "../router.ts";
 
 export function registerWikiRoutes(router: Router): void {
@@ -162,6 +162,7 @@ export function registerWikiRoutes(router: Router): void {
       throw badRequest("brak_nazwy", "podaj naglowek X-File-Name (URL-encoded)");
     }
     const data = await readRaw(req, rc.config.maxFileBytes);
+    odrzucKoperteMultipart(data, str(req.headers["content-type"]));
     const file = storeWikiFile(rc.ctx, rc.config.filesDir, {
       actorId: actor.id,
       wikiPageId: id,

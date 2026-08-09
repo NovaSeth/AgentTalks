@@ -23,7 +23,7 @@ import {
 import { badRequest, notFound } from "../../core/errors.ts";
 import { MAX_AVATAR_BYTES, bajtyAwatara, pobierzAwatar, ustawAwatar, usunAwatar } from "../../core/awatary.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
-import { int, intDodatni, json, readJson, readRaw, str } from "../respond.ts";
+import { int, intDodatni, json, odrzucKoperteMultipart, readJson, readRaw, str } from "../respond.ts";
 import type { Router } from "../router.ts";
 
 // Typy MIME, ktore przegladarka umie WYKONAC w origin aplikacji (skrypt, HTML,
@@ -171,6 +171,7 @@ export function registerExtraRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const data = await readRaw(req, MAX_AVATAR_BYTES);
+    odrzucKoperteMultipart(data, str(req.headers["content-type"]));
     const a = ustawAwatar(rc.ctx, rc.config.filesDir, actor.id, data,
                           str(req.headers["content-type"]) ?? undefined);
     json(res, 200, { avatar: { hash: a.hash, mime: a.mime },
@@ -217,6 +218,7 @@ export function registerExtraRoutes(router: Router): void {
       throw badRequest("brak_nazwy", "podaj naglowek X-File-Name (URL-encoded)");
     }
     const data = await readRaw(req, rc.config.maxFileBytes);
+    odrzucKoperteMultipart(data, str(req.headers["content-type"]));
     const result = storeFile(rc.ctx, rc.config.filesDir, {
       actorId: actor.id,
       conversationId: Number(rc.params.id),
