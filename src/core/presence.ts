@@ -17,7 +17,22 @@
 import type { Ctx } from "./ctx.ts";
 import { notFound } from "./errors.ts";
 
+/**
+ * Ile sekund zyje sygnal "pisze" bez odswiezenia.
+ *
+ * Siedem sekund jest dobre dla CZLOWIEKA: kazde uderzenie w klawisz odswieza
+ * sygnal, wiec bak nika chwile po tym, jak ktos przestal pisac. Dla AGENTA jest
+ * bezuzyteczne - agent "pisze" jednym ruchem, ktory trwa kilkadziesiat sekund
+ * albo minute, i nie ma czego odswiezac po drodze. Zmierzone na tej instancji:
+ * 8 z 26 sesji ustawilo sygnal KIEDYKOLWIEK, wiekszosc z nich to moje proby.
+ * Funkcja istniala i byla nieuzywalna dla polowy uczestnikow tego kanalu.
+ *
+ * Dlatego sygnal moze nieść WLASNY czas zycia (do TYPING_MAX). Nie grozi to
+ * wiszacymi bakami, bo wyslanie wiadomosci gasi sygnal natychmiast - a stop
+ * jest jednym wywolaniem.
+ */
 export const TYPING_TTL = 7;
+export const TYPING_MAX = 300;
 export const BUSY_TTL = 30;
 export const ONLINE_WINDOW = 900;
 export const STALE_DURABLE = 600;
@@ -143,18 +158,24 @@ export function signal(
   ctx: Ctx,
   sessionId: string,
   kind: "typing" | "busy",
-  opts?: { typingIn?: string | null; stop?: boolean },
+  opts?: { typingIn?: string | null; stop?: boolean; sec?: number | null },
 ): void {
   const now = ctx.now();
   if (kind === "typing") {
     if (opts?.stop) {
       ctx.db
-        .prepare("UPDATE sessions SET typing_at = NULL, typing_in = NULL, last_seen_at = ? WHERE id = ?")
+        .prepare("UPDATE sessions SET typing_at = NULL, typing_in = NULL, typing_sec = NULL, last_seen_at = ? WHERE id = ?")
         .run(now, sessionId);
     } else {
+      // Wlasny czas zycia zapisujemy OBOK znacznika, nie przez przesuniecie
+      // znacznika w przyszlosc: inaczej "kiedy zaczal pisac" i "jak dlugo to
+      // wazne" bylyby ta sama liczba i nie dalo by sie odroznic swiezego
+      // sygnalu od dlugiego.
+      const sec = opts?.sec == null ? null
+        : Math.min(Math.max(Math.trunc(Number(opts.sec) || 0), 1), TYPING_MAX);
       ctx.db
-        .prepare("UPDATE sessions SET typing_at = ?, typing_in = ?, last_seen_at = ? WHERE id = ?")
-        .run(now, opts?.typingIn ? String(opts.typingIn).slice(0, 100) : null, now, sessionId);
+        .prepare("UPDATE sessions SET typing_at = ?, typing_in = ?, typing_sec = ?, last_seen_at = ? WHERE id = ?")
+        .run(now, opts?.typingIn ? String(opts.typingIn).slice(0, 100) : null, sec, now, sessionId);
     }
   } else {
     ctx.db
@@ -187,6 +208,7 @@ type SessionRow = {
   cwd: string | null;
   last_seen_at: number;
   typing_at: number | null;
+  typing_sec: number | null;
   typing_in: string | null;
   busy_at: number | null;
   doing: string | null;
@@ -198,7 +220,7 @@ export function presence(ctx: Ctx): PresenceRow[] {
   const rows = ctx.db
     .prepare(
       `SELECT s.id, s.actor_id, a.handle, a.display_name, s.label, s.kind, s.cwd,
-              s.last_seen_at, s.typing_at, s.typing_in, s.busy_at, s.doing, s.ended_at
+              s.last_seen_at, s.typing_at, s.typing_in, s.typing_sec, s.busy_at, s.doing, s.ended_at
          FROM sessions s JOIN actors a ON a.id = s.actor_id
         ORDER BY a.handle, s.label, s.id`,
     )
@@ -229,7 +251,7 @@ export function presence(ctx: Ctx): PresenceRow[] {
       lastSeenAt: r.last_seen_at,
       online: !r.ended_at && age < ONLINE_WINDOW,
       stale,
-      typing: r.typing_at !== null && now - r.typing_at < TYPING_TTL,
+      typing: r.typing_at !== null && now - r.typing_at < (r.typing_sec ?? TYPING_TTL),
       typingIn: r.typing_in,
       busy: r.busy_at !== null && now - r.busy_at < BUSY_TTL,
     });

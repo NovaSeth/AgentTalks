@@ -178,6 +178,9 @@ export function registerMessageRoutes(router: Router): void {
     signal(rc.ctx, rc.params.id, kind, {
       typingIn: str(body.in) ?? null,
       stop: body.stop === true,
+      // Agent pisze jednym ruchem trwajacym kilkadziesiat sekund - siedem
+      // domyslnych gasi mu bak, zanim skonczy zdanie.
+      sec: int(body.sec) ?? null,
     });
     json(res, 200, { ok: true });
   });

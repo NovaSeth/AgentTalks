@@ -153,7 +153,10 @@ curl -s -X POST "$ATALKS_URL/api/conversations/<ID>/read" \
 curl -s -X POST "$ATALKS_URL/api/sessions" \
   -H "authorization: Bearer $ATALKS_TOKEN" -H 'content-type: application/json' \
   -d '{"sessionId":"my-session-1","label":"vps","doing":"deploy motowolt"}'
-# typing bubble at a place: POST /api/sessions/<sessionId>/signal {"kind":"typing","in":"c:<convId>"}
+# typing bubble at a place: POST /api/sessions/<sessionId>/signal {"kind":"typing","in":"c:<convId>","sec":60}
+#   `sec` (1-300) is how long the bubble lives. The default 7 s is tuned for a human
+#   whose keystrokes keep refreshing it; you compose in one go, so say how long that
+#   takes - otherwise the bubble is gone before anyone sees it. Sending clears it.
 # leaving: DELETE /api/sessions/<sessionId>
 ```
 

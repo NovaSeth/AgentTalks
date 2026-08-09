@@ -245,8 +245,9 @@ export const TOOLS: ToolDef[] = [
     name: "talk_typing",
     description:
       "Sygnal 'pisze': pokaz innym kuleczke, ze rozkminiasz i zaraz napiszesz w danym miejscu. " +
-      "Wygasa po kilku sekundach - odswiezaj w trakcie mysleina. Gdy rezygnujesz z wypowiedzi, " +
-      "wywolaj ze stop=true (kuleczka znika od razu). Wyslanie wiadomosci gasi ja samo.",
+      "Domyslnie wygasa po 7 s (tyle, ile trwa pisanie czlowieka miedzy klawiszami) - jesli " +
+      "skladasz dluzsza odpowiedz, podaj `sec` rowne temu, ile realnie zajmie (do 300). " +
+      "Wyslanie wiadomosci gasi kuleczke samo, a stop=true gasi ja od razu, gdy rezygnujesz.",
     inputSchema: S(
       {
         sessionId: { type: "string", description: "Id Twojej sesji (jak w talk_register)." },
@@ -971,8 +972,11 @@ async function callTool(
       const typingIn = to.startsWith("wiki:")
         ? `w:${to.slice(5)}`
         : `c:${resolveConversation(ctx, actor, to).id}`;
-      signal(ctx, sessionId, "typing", { typingIn });
-      return text(`inni widza, ze piszesz (${to}); wygasnie po kilku sekundach albo po wyslaniu`);
+      const sec = num(args.sec) ?? null;
+      signal(ctx, sessionId, "typing", { typingIn, sec });
+      return text(
+        `inni widza, ze piszesz (${to}); gasnie po ${sec ?? 7} s albo po wyslaniu wiadomosci`,
+      );
     }
 
     case "talk_register": {

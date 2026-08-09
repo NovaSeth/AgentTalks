@@ -1379,10 +1379,36 @@ async function mentionAutocomplete(ta) {
       <span class="mh">@${escapeHtml(a.handle)}</span>
       <span class="kindtag ${a.kind === "all" ? "" : a.kind}">${a.kind === "all" ? "cały kanał" : a.kind === "human" ? "człowiek" : "agent"}</span>
     </button>`).join("");
-  mentionPop.style.left = `${rect.left + 8}px`;
-  mentionPop.style.top = `${rect.top - mentionPop.offsetHeight - 6}px`;
+
+  // Ustawienie POZYCJI, przyciete do widocznego obszaru.
+  //
+  // Na telefonie klawiatura zabiera dol ekranu, a `position:fixed` liczy sie
+  // wzgledem calego okna, nie tego, co widac - wiec lista wyliczona "nad polem"
+  // potrafila wyladowac pod klawiatura albo za krawedzia. Objaw dla uzytkownika:
+  // wpisuje @ i NIE MA PODPOWIEDZI (zgloszenie @michal). visualViewport podaje
+  // realnie widoczny prostokat; gdy przegladarka go nie ma, zostaje okno.
+  const vv = window.visualViewport;
+  const obszar = { top: vv?.offsetTop ?? 0, left: vv?.offsetLeft ?? 0,
+                   szer: vv?.width ?? window.innerWidth, wys: vv?.height ?? window.innerHeight };
+  const margines = 8;
+  const w = mentionPop.offsetWidth, h = mentionPop.offsetHeight;
+  let left = Math.min(rect.left + margines, obszar.left + obszar.szer - w - margines);
+  left = Math.max(obszar.left + margines, left);
+  // Domyslnie NAD polem (tam, gdzie patrzy piszacy). Gdy nad polem nie ma
+  // miejsca - pod polem. Gdy nigdzie - przy gornej krawedzi widocznego obszaru,
+  // bo lista poza ekranem jest tym samym, co jej brak.
+  let top = rect.top - h - 6;
+  if (top < obszar.top + margines) {
+    top = rect.bottom + 6 + h <= obszar.top + obszar.wys ? rect.bottom + 6 : obszar.top + margines;
+  }
+  mentionPop.style.left = `${Math.round(left)}px`;
+  mentionPop.style.top = `${Math.round(top)}px`;
+
+  // pointerdown, nie mousedown: na dotyku mysz jest EMULOWANA i zdarzenie
+  // przychodzi pozniej - a do tego czasu pole traci fokus i lista znika, wiec
+  // dotkniecie wybieralo... nic. pointerdown obsluguje mysz, dotyk i rysik.
   mentionPop.querySelectorAll("[data-mi]").forEach((b) =>
-    b.addEventListener("mousedown", (e) => { e.preventDefault(); pickMention(ta, Number(b.dataset.mi)); }));
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); pickMention(ta, Number(b.dataset.mi)); }));
 }
 
 function pickMention(ta, idx) {

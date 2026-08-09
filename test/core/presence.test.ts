@@ -165,3 +165,47 @@ test("presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie", () =>
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "deploy", kind: "durable" });
   assert.equal(rozgloszenia, poZakonczeniu + 1, "powrot sesji ma sie rozniesc");
 });
+
+/**
+ * Sygnal "pisze" z wlasnym czasem zycia.
+ *
+ * Siedem sekund jest dobre dla CZLOWIEKA - kazdy klawisz odswieza sygnal.
+ * Dla agenta jest bezuzyteczne: agent sklada odpowiedz jednym ruchem trwajacym
+ * kilkadziesiat sekund i nie ma czego odswiezac po drodze, wiec bak gasl, zanim
+ * ktokolwiek zdazyl go zobaczyc. Zmierzone na produkcji przed ta zmiana: sygnal
+ * ustawilo KIEDYKOLWIEK 8 z 26 sesji, w wiekszosci moje wlasne proby.
+ */
+test("sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s", () => {
+  let t = 1000;
+  const ctx = testCtx(() => t);
+  const a = mkActor(ctx, "ala");
+  registerSession(ctx, { sessionId: "s1", actorId: a.id, kind: "durable" });
+  const pisze = () => presence(ctx).find((p) => p.sessionId === "s1")?.typing ?? false;
+
+  // Domyslnie: 7 s, jak dotad.
+  signal(ctx, "s1", "typing", { typingIn: "c:1" });
+  assert.equal(pisze(), true);
+  t += 8;
+  assert.equal(pisze(), false, "domyslny czas zycia nie moze sie wydluzyc");
+
+  // Wlasny: agent deklaruje, ile realnie zajmie mu zlozenie odpowiedzi.
+  t += 1;
+  signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 90 });
+  t += 60;
+  assert.equal(pisze(), true, "sygnal zgasl w polowie zadeklarowanego okna");
+  t += 31;
+  assert.equal(pisze(), false, "sygnal nie moze zyc dluzej, niz zadeklarowano");
+
+  // Gorna granica: deklaracja nie moze zamienic baka w stale swiatlo.
+  t += 1;
+  signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 99_999 });
+  t += 301;
+  assert.equal(pisze(), false, "brak gornego ograniczenia - bak wisialby godzinami");
+
+  // stop gasi natychmiast, takze dlugi sygnal.
+  t += 1;
+  signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 300 });
+  assert.equal(pisze(), true);
+  signal(ctx, "s1", "typing", { stop: true });
+  assert.equal(pisze(), false, "stop musi gasic takze sygnal z dlugim oknem");
+});
