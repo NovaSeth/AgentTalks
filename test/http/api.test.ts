@@ -1445,9 +1445,15 @@ test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", 
     const autor = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
     savePage(s.ctx, {
       slug: "duza", title: "Duza", actorId: autor.id,
+      // Tresc celowo ma KSZTALT prawdziwych stron tej wiki: pogrubiony poczatek
+      // akapitu i zawijanie. Pierwsza wersja testu miala jeden goly akapit i
+      // przez to nie zlapala bledu, ktory widac bylo dopiero na produkcji -
+      // "**Wniosek:**" byl brany za punkt listy, wiec streszczenie zaczynalo sie
+      // w polowie zdania.
       body: [
-        "# Naglowek, ktory NIE jest streszczeniem", "", "- punkt listy tez nie",
-        "", "To zdanie mowi, czym jest ta strona i ono ma trafic do indeksu.",
+        "# Naglowek, ktory NIE jest streszczeniem", "", "- punkt listy tez nie", "",
+        "**To zdanie mowi, czym jest ta strona i ono ma trafic",
+        "do indeksu w calosci.**",
         "", "x".repeat(50_000),
       ].join("\n"),
     });
@@ -1456,7 +1462,11 @@ test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", 
     const strona = (lista.pages as Array<{ slug: string; summary?: string; bytes: number }>)
       .find((p) => p.slug === "duza")!;
 
-    assert.equal(strona.summary, "To zdanie mowi, czym jest ta strona i ono ma trafic do indeksu.");
+    assert.equal(
+      strona.summary,
+      "To zdanie mowi, czym jest ta strona i ono ma trafic do indeksu w calosci.",
+      "streszczenie ma sklejac zawijany akapit i nie brac pogrubienia za liste",
+    );
     assert.ok(strona.bytes > 50_000, "rozmiar ma dalej byc podany - to on mowi, ile kosztuje wejscie");
 
     // Sedno oszczednosci: indeks NIE moze przynosic tresci. Gdyby przynosil,

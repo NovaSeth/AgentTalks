@@ -395,19 +395,27 @@ export function pageOutline(body: string): Sekcja[] {
  * nieaktualne streszczenie jest gorsze od zadnego, bo prowadzi w zle miejsce.
  */
 export function pageSummary(body: string, maxZnakow = 220): string {
+  const akapit: string[] = [];
   let wKodzie = false;
   for (const linia of String(body ?? "").split("\n")) {
     if (/^\s*```/.test(linia)) { wKodzie = !wKodzie; continue; }
     if (wKodzie) continue;
     const l = linia.trim();
-    // Naglowki, cytaty, listy i tabele pomijamy - szukamy ZDANIA, ktore mowi,
-    // czym strona jest. Punkt listy wyrwany z kontekstu tego nie mowi.
-    if (!l || /^[#>|*+-]/.test(l) || /^\d+\./.test(l)) continue;
-    const czyste = l.replace(/[*_`]/g, "").trim();
-    if (czyste.length < 20) continue;
-    return czyste.length > maxZnakow ? czyste.slice(0, maxZnakow - 1).trimEnd() + "…" : czyste;
+    if (!l) { if (akapit.length) break; continue; }
+    // Znaczniki listy i naglowka wymagaja SPACJI po sobie. Bez tego warunku
+    // "**Wniosek: ...**" - najczestszy poczatek strony w tej wiki - byl brany za
+    // punkt listy i pomijany, wiec streszczenie zaczynalo sie od DRUGIEJ linii
+    // akapitu, czyli w polowie zdania. Widac to bylo dopiero na prawdziwej
+    // tresci; na moim tescie z jednym akapitem wygladalo poprawnie.
+    if (/^(#{1,6}|[*+-]|\d+\.)\s/.test(l) || /^[>|]/.test(l)) { if (akapit.length) break; continue; }
+    // Akapit markdown bywa ZAWIJANY, wiec zdanie ciagnie sie przez kilka linii -
+    // zbieramy do pustej linii, inaczej urywamy w losowym miejscu.
+    akapit.push(l);
+    if (akapit.join(" ").length >= maxZnakow) break;
   }
-  return "";
+  const czyste = akapit.join(" ").replace(/[*_`]/g, "").replace(/\s+/g, " ").trim();
+  if (czyste.length < 20) return "";
+  return czyste.length > maxZnakow ? czyste.slice(0, maxZnakow - 1).trimEnd() + "…" : czyste;
 }
 
 /**
