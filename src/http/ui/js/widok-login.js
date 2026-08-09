@@ -176,8 +176,14 @@ async function passkeyEnroll() {
       timeout: 60000,
     },
   });
+  // Challenge NIE jest odsylany i to jest celowe. Serwer go nie czyta, bo
+  // wiarygodne wyzwanie i tak przychodzi WEWNATRZ clientDataJSON, podpisanego
+  // przez authenticator - kopia podana obok przez klienta niczego nie dowodzi,
+  // skoro klient moglby podac dowolna. Serwerowy typ pozbyl sie tego pola przy
+  // audycie z tym samym uzasadnieniem; dopoki wysylalismy je stad, kod UI dalej
+  // sugerowal kontrole, ktorej nie ma - a pozorna kontrola jest gorsza od jej
+  // braku, bo zabiera powod, zeby o nia zapytac.
   await api("POST", "/api/webauthn/register", {
-    challenge: opts.challenge,
     clientDataJSON: bufToB64u(cred.response.clientDataJSON),
     attestationObject: bufToB64u(cred.response.attestationObject),
     label: navigator.platform || "urządzenie",
