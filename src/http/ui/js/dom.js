@@ -68,17 +68,40 @@ export function avatarHtml(handle, size) {
   // Male awatary: proporcjonalnie mniejsze inicjaly i lzejszy krój (klasa sm).
   const style = size ? `width:${size}px;height:${size}px;font-size:${Math.max(7, Math.round(size * 0.36))}px` : "";
   const cls = size && size <= 28 ? "av sm" : "av";
-  // Obrazek, gdy aktor go ma; inicjaly, gdy nie ma. `onerror` wraca do inicjalow,
-  // zeby znikniecie pliku dawalo kropke, a nie pusta ramke z ikona zepsutego
-  // obrazka - to samo miejsce, ten sam rozmiar, zadnego przeskoku ukladu.
+  // Obrazek, gdy aktor go ma; inicjaly, gdy nie ma. Znikniecie pliku ma dac kropke,
+  // a nie pusta ramke z ikona zepsutego obrazka - to samo miejsce, ten sam rozmiar,
+  // zadnego przeskoku ukladu.
+  //
+  // Dane do zastepstwa ida w atrybutach `data-`, a nie w kodzie `onerror`.
+  // Pierwsza wersja sklejala tam JavaScript z inicjalami przepuszczonymi przez
+  // escapeHtml - a to NIE chroni w tym miejscu: przegladarka najpierw odkodowuje
+  // encje atrybutu, a dopiero potem czyta jego tresc jako kod, wiec `&#39;` wraca
+  // jako apostrof i zamyka literal. Dzis handle jest walidowany do [a-z0-9._-],
+  // wiec nie da sie tego wykorzystac - ale zabezpieczenie, ktore trzyma sie na
+  // walidacji w innym pliku, przestaje istniec przy pierwszym nowym miejscu
+  // wywolania. Atrybut `data-` + textContent nie ma tej klasy w ogole.
   const url = avatarUrl(handle);
   if (url) {
     return `<img class="${cls} avimg" src="${escapeHtml(url)}" alt="" loading="lazy"` +
-      ` style="${style}" onerror="this.replaceWith(Object.assign(document.createElement('div'),` +
-      `{className:'${cls}',style:'background:${c};${style}',textContent:'${escapeHtml(initials(handle))}'}))">`;
+      ` style="${style}" data-ini="${escapeHtml(initials(handle))}" data-bg="${escapeHtml(c)}">`;
   }
   return `<div class="${cls}" style="background:${c};${style}">${escapeHtml(initials(handle))}</div>`;
 }
+
+// Zdarzenie `error` obrazka NIE bakieluje, wiec nasluch musi byc w fazie
+// przechwytywania - i wystarczy JEDEN na dokument, bo listy przerysowuja sie
+// przez innerHTML i podpinanie po kazdym renderze gubiloby sie przy pierwszym
+// zapomnianym miejscu.
+document.addEventListener("error", (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLImageElement) || !el.classList.contains("avimg")) return;
+  const kropka = document.createElement("div");
+  kropka.className = el.className.replace(/\bavimg\b/, "").trim();
+  kropka.setAttribute("style", el.getAttribute("style") || "");
+  kropka.style.background = el.dataset.bg || "";
+  kropka.textContent = el.dataset.ini || "";
+  el.replaceWith(kropka);
+}, true);
 
 export function fmtTime(ts) {
   return new Date(ts * 1000).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });

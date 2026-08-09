@@ -340,8 +340,17 @@ export type Sekcja = {
   level: number;
   /** Numer pierwszej linii sekcji (od 1) - do zacytowania w rozmowie. */
   line: number;
-  /** Ile znakow ma ta sekcja RAZEM z naglowkiem. */
+  /** Ile znakow ma cala GALAZ: ta sekcja razem z podsekcjami. */
   bytes: number;
+  /** Ile znakow ma sam LISC: tekst tej sekcji PRZED pierwszym glebszym naglowkiem.
+   *
+   *  Dwie liczby, bo jedna zapraszala do bledu i to sie stalo. @zelda przeczytala
+   *  `bytes` sekcji H2 jako "tyle placi ten, kto po nia siegnie" i wyprowadzila
+   *  zalecenie, ktore kazaloby jej przepisac piec stron; w rzeczywistosci H3
+   *  wewnatrz tez sa adresowalne, wiec platnoscia jest LISC, a galaz jest tylko
+   *  wygoda dla tego, kto chce caly temat naraz. Duza galaz zlozona z malych lisci
+   *  jest zaleta, nie wada - i teraz widac to bez liczenia. */
+  ownBytes: number;
 };
 
 /**
@@ -367,7 +376,7 @@ export function pageOutline(body: string): Sekcja[] {
     if (wKodzie) continue;
     const m = l.match(/^(#{1,6})\s+(.+?)\s*$/);
     if (!m) continue;
-    out.push({ heading: m[2], level: m[1].length, line: i + 1, bytes: 0 });
+    out.push({ heading: m[2], level: m[1].length, line: i + 1, bytes: 0, ownBytes: 0 });
   }
   // Rozmiar sekcji = do nastepnego naglowka TEGO SAMEGO albo wyzszego poziomu.
   // Podsekcje licza sie do rodzica, bo agent pobierajacy "## Wdrozenie" oczekuje
@@ -376,6 +385,9 @@ export function pageOutline(body: string): Sekcja[] {
     const nast = out.findIndex((s2, j) => j > i && s2.level <= out[i].level);
     const koniec = nast === -1 ? linie.length : out[nast].line - 1;
     out[i].bytes = linie.slice(out[i].line - 1, koniec).join("\n").length;
+    // Lisc konczy sie na KAZDYM nastepnym naglowku, takze glebszym.
+    const dziecko = i + 1 < out.length ? out[i + 1].line - 1 : koniec;
+    out[i].ownBytes = linie.slice(out[i].line - 1, Math.min(dziecko, koniec)).join("\n").length;
   }
   return out;
 }

@@ -162,3 +162,36 @@ test("kazda flaga CLI z dokumentacji istnieje w parserze", () => {
     `dokumentacja uczy flag, ktorych parser nie zna (w atalk ladują w TRESCI): ${nieznane.join(", ")}`,
   );
 });
+
+/**
+ * Zaden atrybut zdarzenia w UI nie moze byc SKLEJANY z danych.
+ *
+ * Znalezione przez przeglad bezpieczenstwa w moim wlasnym, swiezym kodzie:
+ * awatar mial `onerror="...${escapeHtml(initials(handle))}..."`. HTML-escape
+ * w tym miejscu NIE chroni - przegladarka najpierw odkodowuje encje atrybutu,
+ * a dopiero potem czyta jego tresc jako kod, wiec `&#39;` wraca jako apostrof
+ * i zamyka literal.
+ *
+ * Wtedy nie bylo to wykonalne, bo handle jest walidowany do [a-z0-9._-] przez
+ * INNY plik. Dokladnie dlatego jest tu test: zabezpieczenie oparte na walidacji
+ * gdzie indziej znika w chwili, gdy ktos wywola te funkcje z innym argumentem,
+ * i nikt tego nie zauwazy, bo nic sie nie psuje.
+ */
+test("UI nie sklada atrybutow zdarzen z danych", () => {
+  const dir = fileURLToPath(new URL("../src/http/ui/js/", import.meta.url));
+  const pliki = readdirSync(dir).filter((f) => f.endsWith(".js"));
+  assert.ok(pliki.length >= 10, `znaleziono tylko ${pliki.length} modulow UI - sciezka sie zmienila`);
+
+  const zle: string[] = [];
+  for (const f of pliki) {
+    const src = readFileSync(dir + f, "utf8");
+    for (const m of src.matchAll(/\bon[a-z]+\s*=\s*"[^"]*\$\{/g)) {
+      zle.push(`${f}: ${m[0].slice(0, 40)}`);
+    }
+  }
+  assert.deepEqual(
+    zle, [],
+    "atrybut zdarzenia sklejany z danych - escapeHtml tam nie chroni, uzyj data-* " +
+      `i addEventListener: ${zle.join("; ")}`,
+  );
+});
