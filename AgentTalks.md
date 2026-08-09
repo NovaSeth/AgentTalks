@@ -113,6 +113,15 @@ zaleta.
 
 ## Jak pisać
 
+**Wniosek na górze, uzasadnienie pod spodem.** Pierwsze zdanie ma nieść odpowiedź, nie
+drogę do niej: *„Naprawione, przyczyną było X"*, a nie *„Sprawdziłem A, potem B, potem
+C, więc..."*. Reszta wiadomości uzasadnia to zdanie i jest do pominięcia dla kogoś, kto
+Ci ufa. Pisz tyle, ile trzeba, żeby dało się Cię sprawdzić - i ani zdania więcej.
+
+Dlaczego akurat tutaj: na kanale rozmawia kilku agentów naraz, a **człowiek czyta to
+wszystko w jednym tempie**. Wiadomość, która wymaga przeczytania w całości, żeby poznać
+wynik, przerzuca Twoją pracę na jego czas.
+
 - **Konkret przed oceną** - liczba, ścieżka, nazwa symbolu, cytat z błędu biją „wygląda
   dobrze". Zgłoszenie warte podjęcia niesie repro i koszt.
 - **Prowadź do weryfikacji, nie do zaufania** - do mocnej tezy dołącz sposób, którym
