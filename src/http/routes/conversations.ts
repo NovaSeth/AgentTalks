@@ -1,4 +1,4 @@
-/** Konwersacje: lista, zakladanie, czlonkostwo, znaczniki odczytu, otwarte pytania. */
+/** Conversations: listing, creating, membership, read markers, open questions. */
 import { actorsByIds, getActor, getActorByHandle } from "../../core/actors.ts";
 import {
   myMemberships,
@@ -28,8 +28,8 @@ import { int, json, readJson, str, zHandlem} from "../respond.ts";
 import type { Router } from "../router.ts";
 import type { Ctx } from "../../core/ctx.ts";
 
-/** Handle na id aktora. Wymagane, bo klient adresuje po handle, a rdzen po id -
- *  i to jest wlasciwa granica: handle jest publiczna nazwa, id jest kluczem. */
+/** A handle to an actor id. Needed, because the client addresses by handle and the core by
+/**  id - and that is the right boundary: a handle is a public name, an id is a key. */
 function resolveHandles(ctx: Ctx, raw: unknown): number[] {
   if (!Array.isArray(raw)) throw badRequest("brak_czlonkow", "podaj liste members");
   return raw.map((h) => {
@@ -58,10 +58,10 @@ const convId = (rc: { params: Record<string, string> }): number => {
 export function registerConversationRoutes(router: Router): void {
   router.add("GET", "/api/conversations", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
-    // `memberships` jest osobno od `conversations`, bo to sa dwie rozne rzeczy:
-    // lista zawiera tez kanaly publiczne, ktore aktor tylko WIDZI, a licznikow
-    // i ustawien powiadomien nie ma dla czegos, do czego sie nie dolaczylo.
-    // Bez tego rozroznienia klient nie umie odroznic "kanal moj" od "kanal do wziecia".
+    // `memberships` is separate from `conversations`, because they are two different things:
+    // the list also contains public channels the actor merely SEES, and there are no counters
+    // or notification settings for something you have not joined. Without that distinction a
+    // client cannot tell "my channel" from "a channel to take".
     json(res, 200, {
       conversations: listForActor(rc.ctx, actor.id),
       memberships: myMemberships(rc.ctx, actor.id),
@@ -104,8 +104,8 @@ export function registerConversationRoutes(router: Router): void {
       return;
     }
     if (kind === "dm" || kind === "group") {
-      // Nadawca zawsze jest uczestnikiem swojej rozmowy - inaczej powstalaby
-      // konwersacja, ktorej autor nie widzi.
+      // The sender is always a participant in their own conversation - otherwise a conversation
+      // would exist that its author cannot see.
       const ids = [actor.id, ...resolveHandles(rc.ctx, body.members)];
       json(res, 201, { conversation: ensureDirect(rc.ctx, ids) });
       return;
@@ -141,29 +141,28 @@ export function registerConversationRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const body = await readJson(req, rc.config.maxMessageBytes + 4096);
-    // `actorId` z ciala jest ignorowane celowo i bez komunikatu: tozsamosc wynika
-    // wylacznie z uwierzytelnienia, wiec proba podania jej w ciele nie jest bledem
-    // do zaraportowania, tylko polem, ktore nie istnieje.
-    // `kind` NIE jest przyjmowane: pytania ida przez /ask (wiadomosc + wpis
-    // pytania atomowo), a "ask" przemycone tedy tworzyloby pytanie-sierote,
-    // na ktore nie da sie odpowiedziec.
+    // `actorId` in the body is ignored deliberately and without a message: identity follows
+    // exclusively from authentication, so trying to supply it in the body is not an error to be
+    // reported but a field that does not exist.
+    // `kind` is NOT accepted: questions go through /ask (a message + a question row, atomically),
+    // and an "ask" smuggled through here would create an orphaned question that cannot be
+    // answered.
     const id = convId(rc);
     const message = postMessage(rc.ctx, {
       conversationId: id,
       actorId: actor.id,
       body: str(body.body) ?? "",
       threadId: int(body.threadId),
-      // Idempotencja: powtorzony clientMsgId zwraca te sama wiadomosc (to samo id),
-      // bez drugiego wiersza i bez drugiego pusha. Klient rozpoznaje powtorke po
-      // tym, ze dostaje id, ktore juz zna.
+      // Idempotency: a repeated clientMsgId returns the same message (the same id), with no second
+      // row and no second push. The client recognises a repeat by receiving an id it already knows.
       clientMsgId: str(body.clientMsgId) ?? null,
       sessionId: str(body.sessionId) ?? null,
       maxBytes: rc.config.maxMessageBytes,
     });
-    // Feedback z #nextIteration: prototypowe `talk to <ktokolwiek>` zawsze mowilo
-    // "wyslane" i o martwym adresacie dowiadywales sie z braku odpowiedzi, po
-    // godzinie. W rozmowie prywatnej odpowiedz niesie wiec zywotnosc adresatow -
-    // dane juz sa w obecnosci, wystarczy je pokazac PRZY zapisie.
+    // Feedback from #nextIteration: the prototype's `talk to <anybody>` always said "sent" and
+    // you learned about a dead addressee from the absence of an answer, an hour later. In a
+    // direct conversation the response therefore carries the addressees' liveness - the data is
+    // already in presence, it just has to be shown AT write time.
     const conversation = getConversation(rc.ctx, id)!;
     let delivery:
       | Array<{ handle: string; online: boolean; lastSeenAt: number | null;
@@ -176,9 +175,9 @@ export function registerConversationRoutes(router: Router): void {
           const a = getActor(rc.ctx, m.actorId);
           const live = actorLiveness(rc.ctx, m.actorId);
           const wakeable = isWakeable(rc.ctx, m.actorId);
-          // reachable = dojdzie do adresata TERAZ albo przez wake. Nieobecny
-          // i nieobudzalny = wiadomosc czeka, ale nikt jej nie zobaczy - to
-          // sygnal, ktory ma dojsc do nadawcy przy zapisie.
+          // reachable = it will reach the addressee NOW or through wake. Absent and unwakeable = the
+          // message waits but nobody will see it - a signal that has to reach the sender at write
+          // time.
           return { handle: a?.handle ?? "?", ...live, wakeable, reachable: live.online || wakeable };
         });
     }
@@ -203,14 +202,13 @@ export function registerConversationRoutes(router: Router): void {
     assertCanRead(rc.ctx, id, actor.id);
     const conversation = getConversation(rc.ctx, id);
     if (conversation?.kind === "dm" || conversation?.kind === "group") {
-      // Dolozenie osoby do istniejacej rozmowy zmienialoby jej sklad, a wiec i to,
-      // kto widzi wczesniejsze wiadomosci. Wlasciwa operacja to nowa rozmowa.
+      // Adding a person to an existing conversation would change its membership, and thereby who
+      // sees the earlier messages. The right operation is a new conversation.
       throw badRequest("nie_dla_rozmow", "do rozmowy bezposredniej nie dodaje sie osob; zaloz nowa");
     }
     if (conversation?.kind === "public") {
-      // Do kanalu publicznego kazdy dolacza SAM (join). Przymusowe dopisywanie
-      // cudzych kont to zaproszenie do spamu licznikow - kazdy moglby kazdemu
-      // dolozyc dowolny kanal do nieprzeczytanych.
+      // Anybody joins a public channel THEMSELVES (join). Forcibly adding other people's accounts
+      // is an invitation to counter spam - anybody could add any channel to anybody's unread.
       throw badRequest("publiczny_sam",
         "do kanalu publicznego dolacza sie samemu (POST .../join)");
     }
@@ -218,7 +216,7 @@ export function registerConversationRoutes(router: Router): void {
     json(res, 200, { member: join(rc.ctx, id, memberId) });
   });
 
-  /** Edycja kanalu (temat, slug). Zarzadza admin kanalu albo admin instancji. */
+  /** Editing a channel (topic, slug). Managed by a channel admin or the instance admin. */
   router.add("PATCH", "/api/conversations/:id", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
@@ -233,8 +231,8 @@ export function registerConversationRoutes(router: Router): void {
     json(res, 200, { conversation });
   });
 
-  /** "Usun kanal" = archiwizacja (znika z list, nie przyjmuje wiadomosci,
-   *  historia zostaje). Twardego kasowania nie ma z rozmyslem. */
+  /** "Delete channel" = archiving (it disappears from lists, stops accepting messages, the
+  /**  history stays). There is no hard deletion, deliberately. */
   router.add("DELETE", "/api/conversations/:id", (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
@@ -246,7 +244,7 @@ export function registerConversationRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
-  /** Usuniecie uczestnika kanalu (siebie moze kazdy, innych - zarzadzajacy). */
+  /** Removing a channel participant (anybody can remove themselves, others - a manager). */
   router.add("DELETE", "/api/conversations/:id/members/:handle", (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);

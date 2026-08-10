@@ -1,13 +1,13 @@
 /**
- * Panel admina: aktorzy, tokeny, zaproszenia, aktywnosc - to, co dotad
- * wymagalo ssh i CLI, dostepne z UI.
- *
- * Dostep: WYLACZNIE zalogowany CZLOWIEK z uprawnieniem admina. Token agenta,
- * nawet adminowski, tu nie wystarcza - wylaczanie kont i gaszenie tokenow to
- * decyzje czlowieka (spojnie z zasada "zgode na rzeczy nieodwracalne daje
- * czlowiek"). Bootstrap bez otwartych drzwi: pierwszego admina zaklada sie
- * z konsoli serwera (agenttalks actor create ... --admin); instalacja domyslna
- * nie ma ZADNEGO konta z haslem, wiec publiczny setup niczego nie wystawia.
+ * The admin panel: actors, tokens, invites, activity - what until now required ssh and the
+ * CLI, available from the UI.
+ * 
+ * Access: ONLY a signed-in HUMAN with the admin privilege. An agent's token, even an admin
+ * one, is not enough here - disabling accounts and putting out tokens are a human's
+ * decisions (consistent with the rule "consent for irreversible things comes from a human").
+ * Bootstrap with no open door: the first admin is created from the server console
+ * (agenttalks actor create ... --admin); a default installation has NO password account at
+ * all, so a public setup exposes nothing.
  */
 import { getActor, listActors, renameActor, setDisabled } from "../../core/actors.ts";
 import { createInvite, listInvites, revokeInvite } from "../../core/invites.ts";
@@ -28,13 +28,13 @@ function requireHumanAdmin(rc: RouteCtx): Auth {
 }
 
 export function registerAdminRoutes(router: Router): void {
-  /** Pelny obraz: aktorzy z zywotnoscia i tokenami + zaproszenia. */
+  /** The full picture: actors with their liveness and tokens + invites. */
   router.add("GET", "/api/admin/actors", (_req, res, rc) => {
     requireHumanAdmin(rc);
     const now = Math.floor(Date.now() / 1000);
-    // JEDNO zapytanie zgrupowane zamiast pelnego skanu tabeli wiadomosci na
-    // KAZDEGO aktora: przy 20 kontach panel robil 20 skanow calej historii.
-    // Indeks messages(actor_id) doszedl w migracji 13.
+    // ONE grouped query instead of a full scan of the messages table per ACTOR: with 20 accounts
+    // the panel did 20 scans of the whole history. The messages(actor_id) index arrived in
+    // migration 13.
     const statystyki = new Map<number, { n: number; last: number | null }>();
     for (const r of rc.ctx.db.prepare(
       "SELECT actor_id, COUNT(*) AS n, MAX(ts) AS last FROM messages WHERE deleted_at IS NULL GROUP BY actor_id",
@@ -57,7 +57,7 @@ export function registerAdminRoutes(router: Router): void {
     json(res, 200, { actors, invites: listInvites(rc.ctx) });
   });
 
-  /** Zaproszenie z UI - koniec z ssh po kazdy nowy agent. Kod widac RAZ. */
+  /** An invite from the UI - no more ssh for every new agent. The code is seen ONCE. */
   router.add("POST", "/api/admin/invites", async (req, res, rc) => {
     const { actor } = requireHumanAdmin(rc);
     assertCsrf(rc, req);
@@ -66,8 +66,8 @@ export function registerAdminRoutes(router: Router): void {
       createdBy: actor.id,
       ttlSec: int(body.ttlSec) ?? null,
       uses: int(body.uses) ?? null,
-      // makeAdmin celowo NIE jest wystawione w UI: admin-agent to decyzja
-      // na tyle rzadka i powazna, ze zostaje w konsoli.
+      // makeAdmin is deliberately NOT exposed in the UI: an admin agent is a decision rare and
+      // serious enough to stay in the console.
       note: str(body.note) ?? null,
     });
     json(res, 201, { code, invite: info });
@@ -81,12 +81,11 @@ export function registerAdminRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
-  /** Odwolanie tokenu DOWOLNEGO aktora (agent traci dostep od nastepnego zadania). */
+  /** Revoking ANY actor's token (the agent loses access from its next request). */
   /**
-   * Wystawienie tokenu ISTNIEJACEMU aktorowi. Bez tej trasy panel nazywal sie
-   * "Uzytkownicy i dostep", a najczestsza czynnosc przy dostepie - rotacja
-   * tokenu po wyciekowi albo po zgubieniu - wymagala wejscia po ssh na serwer.
-   * Token jest widoczny RAZ: w bazie lezy tylko jego sha256.
+   * Issuing a token to an EXISTING actor. Without this route the panel was called "Users and
+   * access" while the most common access operation - rotating a token after a leak or a loss -
+   * required ssh onto the server. The token is visible ONCE: only its sha256 is in the database.
    */
   router.add("POST", "/api/admin/tokens", async (req, res, rc) => {
     requireHumanAdmin(rc);
@@ -96,8 +95,8 @@ export function registerAdminRoutes(router: Router): void {
     if (actorId === undefined) throw badRequest("brak_aktora", "podaj actorId");
     const cel = getActor(rc.ctx, actorId);
     if (!cel) throw notFound("aktor", `nie ma aktora ${actorId}`);
-    // Ten sam prog co w konsoli: token agenta ponizej 3 miesiecy tylko swiadomie,
-    // bo wygasly token to nie rotacja, tylko drugie konto tej samej osoby.
+    // The same threshold as in the console: an agent token below 3 months only deliberately,
+    // because an expired token is not a rotation but a second account for the same person.
     const ttlSec = int(body.ttlSec) ?? null;
     if (ttlSec !== null && ttlSec > 0 && ttlSec < MIN_AGENT_TTL_SEC && body.short !== true) {
       throw badRequest(
@@ -119,9 +118,9 @@ export function registerAdminRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
-  /** Zmiana nazwy aktora z zachowaniem tozsamosci. Bez tej trasy jedyna droga
-   *  do "chce sie nazywac inaczej" jest nowe zaproszenie - czyli drugie konto
-   *  tej samej osoby, z rozjechana historia. */
+  /** Renaming an actor while keeping its identity. Without this route the only way to "I want a
+  /**  different name" is a new invite - that is, a second account for the same person, with the
+  /**  history split. */
   router.add("PATCH", "/api/admin/actors/:id", async (req, res, rc) => {
     requireHumanAdmin(rc);
     assertCsrf(rc, req);
@@ -147,9 +146,9 @@ export function registerAdminRoutes(router: Router): void {
     json(res, 200, { actor: setDisabled(rc.ctx, Number(rc.params.id), false) });
   });
 
-  /** Ostatnia aktywnosc aktora. Tresc pokazujemy TYLKO z kanalow publicznych -
-   *  prywatne rozmowy (private/dm/group) ida jako sama metadana. Admin instancji
-   *  i tak ma baze na dysku, ale UI nie robi z cudzych DM-ow przegladarki. */
+  /** An actor's recent activity. We show content ONLY from public channels - private
+  /**  conversations (private/dm/group) go as metadata alone. The instance admin has the database
+  /**  on disk anyway, but the UI does not turn other people's DMs into a reading app. */
   router.add("GET", "/api/admin/actors/:id/activity", (_req, res, rc) => {
     requireHumanAdmin(rc);
     const targetId = Number(rc.params.id);

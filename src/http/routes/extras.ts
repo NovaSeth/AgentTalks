@@ -1,7 +1,7 @@
 /**
- * Trasy dodane z feedbacku kanalu #nextIteration: wzmianki i digest przez API
- * (parytet dla agenta po HTTP), piny, dzierzawy zasobow, pliki z TTL/sensitive,
- * konfiguracja wake.
+ * Routes added from #nextIteration channel feedback: mentions and the digest over the API
+ * (parity for an agent on HTTP), pins, resource leases, files with TTL/sensitive, and wake
+ * configuration.
  */
 import { digestFor } from "../../core/digest.ts";
 import { mentionsOf } from "../../core/mentions.ts";
@@ -26,16 +26,16 @@ import { assertCsrf, requireAuth } from "../auth.ts";
 import { int, intDodatni, json, odrzucKoperteMultipart, readJson, readRaw, str } from "../respond.ts";
 import type { Router } from "../router.ts";
 
-// Typy MIME, ktore przegladarka umie WYKONAC w origin aplikacji (skrypt, HTML,
-// SVG ze skryptem). Zalacznik wiki jest publiczny i miedzyuzytkownikowy, wiec
-// plik z takim typem, otwarty wprost w karcie, bylby stored-XSS. Przy serwowaniu
-// sprowadzamy je do inertnego octet-stream; nazwa pliku zostaje.
+// MIME types a browser can EXECUTE in the application's origin (a script, HTML, an SVG with
+// a script). A wiki attachment is public and cross-user, so a file with such a type, opened
+// directly in a tab, would be stored XSS. When serving we reduce them to an inert
+// octet-stream; the file name stays.
 const ACTIVE_MIME =
   /^(?:text\/html|application\/xhtml\+xml|image\/svg\+xml|application\/(?:x-)?javascript|text\/javascript|text\/xml|application\/xml)\b/i;
 
-/** Nazwa pliku z naglowka. `decodeURIComponent` rzuca URIError na zlym
- *  %-kodowaniu (np. "raport%zz.txt"), a nieobsluzony URIError to 500 - czyli
- *  serwer melduje wlasna awarie tam, gdzie to klient przyslal smiec. */
+/** The file name from a header. `decodeURIComponent` throws a URIError on bad %-encoding
+/**  (say "report%zz.txt"), and an unhandled URIError is a 500 - that is, the server reports
+/**  its own failure where it was the client that sent junk. */
 function dekodujNazwe(raw: string): string {
   try {
     return decodeURIComponent(raw);
@@ -48,9 +48,9 @@ function dekodujNazwe(raw: string): string {
 }
 
 export function registerExtraRoutes(router: Router): void {
-  // --- centrum powiadomien -------------------------------------------------
-  // Jedno miejsce zamiast trzech polowicznych: wzmianki, DM-y, reakcje na moje
-  // wpisy i zmiany stron, ktore wspoltworzylem. Kazde niesie CEL do klikniecia.
+  // --- the notification centre ---------------------------------------------
+  // One place instead of three half-measures: mentions, DMs, reactions to my posts and changes
+  // to pages I co-authored. Each carries a TARGET to click.
 
   router.add("GET", "/api/notifications", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
@@ -66,7 +66,7 @@ export function registerExtraRoutes(router: Router): void {
     });
   });
 
-  /** Odhaczenie: bez `ids` znaczy "widzialem wszystkie". */
+  /** Ticking off: without `ids` it means "I have seen all of them". */
   router.add("POST", "/api/notifications/read", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
@@ -76,7 +76,7 @@ export function registerExtraRoutes(router: Router): void {
     json(res, 200, { changed, unread: unreadNotificationCount(rc.ctx, actor.id) });
   });
 
-  // --- wzmianki i digest ---------------------------------------------------
+  // --- mentions and the digest ---------------------------------------------
 
   router.add("GET", "/api/mentions", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
@@ -91,10 +91,9 @@ export function registerExtraRoutes(router: Router): void {
   router.add("GET", "/api/digest", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
     const digest = digestFor(rc.ctx, actor.id);
-    // ?summary=1 zwraca sam licznik. Panel boczny odpytuje o digest co 30 s
-    // tylko po to, zeby pokazac JEDNA LICZBE - a pelna odpowiedz to dziesiatki
-    // kilobajtow tresci wiadomosci. Pelny digest pobiera sie dopiero przy
-    // otwarciu podsumowania.
+    // ?summary=1 returns the counter alone. The side panel asks for the digest every 30 s just
+    // to show ONE NUMBER - and the full response is tens of kilobytes of message content. The
+    // full digest is fetched only when the summary is opened.
     const samoPodsumowanie = ["1", "true", "yes"].includes(
       String(rc.query.get("summary") ?? "").toLowerCase(),
     );
@@ -107,7 +106,7 @@ export function registerExtraRoutes(router: Router): void {
     json(res, 200, { digest });
   });
 
-  // --- piny ----------------------------------------------------------------
+  // --- pins ----------------------------------------------------------------
 
   router.add("POST", "/api/messages/:id/pin", (req, res, rc) => {
     const { actor } = requireAuth(rc);
@@ -129,9 +128,9 @@ export function registerExtraRoutes(router: Router): void {
     });
   });
 
-  // --- dzierzawy zasobow ---------------------------------------------------
-  // Zasob moze zawierac ukosniki (sciezki), wiec identyfikacja idzie przez cialo,
-  // nie przez segment URL.
+  // --- resource leases -----------------------------------------------------
+  // A resource may contain slashes (paths), so identification goes through the body rather
+  // than through a URL segment.
 
   router.add("POST", "/api/leases", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
@@ -144,8 +143,8 @@ export function registerExtraRoutes(router: Router): void {
       sessionId: str(body.sessionId) ?? null,
       note: str(body.note) ?? null,
     });
-    // 409 przy odmowie: klient odroznia "mam" od "trzyma kto inny" po statusie,
-    // a w ciele dostaje kto i na jak dlugo - bez drugiego zapytania.
+    // A 409 on refusal: the client tells "I have it" from "somebody else holds it" by the status,
+    // and gets who and for how long in the body - without a second query.
     json(res, result.granted ? 200 : 409, result);
   });
 
@@ -163,10 +162,10 @@ export function registerExtraRoutes(router: Router): void {
   });
 
 
-  // --- awatary -------------------------------------------------------------
+  // --- avatars -------------------------------------------------------------
 
-  /** Wlasny awatar: PRZYSYLASZ BAJTY, nie adres. Serwer nie pobiera niczego z
-   *  sieci na czyjes zyczenie - patrz uzasadnienie w core/awatary.ts. */
+  /** Your own avatar: YOU SEND THE BYTES, not a URL. The server fetches nothing from the network
+  /**  on anybody's request - see the reasoning in core/awatary.ts. */
   router.add("PUT", "/api/me/avatar", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
@@ -185,9 +184,9 @@ export function registerExtraRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
-  /** Awatar dowolnego aktora - widza go wszyscy zalogowani, bo po to jest.
-   *  Adres niesie odcisk tresci (`?v=`), wiec zmiana awatara jest widoczna od
-   *  razu mimo dlugiego cache'owania. */
+  /** Any actor's avatar - everybody signed in sees it, which is the point.
+  /**  The URL carries a content fingerprint (`?v=`), so an avatar change is visible immediately
+  /**  despite long caching. */
   router.add("GET", "/api/actors/:id/avatar", (_req, res, rc) => {
     requireAuth(rc);
     const a = pobierzAwatar(rc.ctx, Number(rc.params.id));
@@ -196,9 +195,9 @@ export function registerExtraRoutes(router: Router): void {
     try { data = bajtyAwatara(rc.config.filesDir, a); }
     catch { throw notFound("awatar", "plik awatara zniknal z dysku"); }
     res.writeHead(200, {
-      // Format jest sprawdzany po ZAWARTOSCI przy zapisie i ograniczony do
-      // rastrowych, wiec typ mozna oddac wprost - inaczej awatar nie bylby
-      // obrazkiem, tylko pobieranym plikiem.
+      // The format is verified by CONTENT at write time and limited to raster formats, so the type
+      // can be returned as it is - otherwise the avatar would not be an image but a downloaded
+      // file.
       "content-type": a.mime,
       "content-length": data.length,
       "x-content-type-options": "nosniff",
@@ -208,7 +207,7 @@ export function registerExtraRoutes(router: Router): void {
     res.end(data);
   });
 
-  // --- pliki ---------------------------------------------------------------
+  // --- files ---------------------------------------------------------------
 
   router.add("POST", "/api/conversations/:id/files", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
@@ -226,8 +225,8 @@ export function registerExtraRoutes(router: Router): void {
       data,
       mime: str(req.headers["content-type"]) ?? "application/octet-stream",
       maxBytes: rc.config.maxFileBytes,
-      // Pusty/zerowy X-TTL to "bez TTL", ale dla pliku sensitive rdzen i tak
-      // nada domyslny; przekazujemy undefined, nie 0.
+      // An empty/zero X-TTL means "no TTL", but for a sensitive file the core assigns the default
+      // anyway; we pass undefined, not 0.
       ttlSec: (int(req.headers["x-ttl"]) || undefined) ?? null,
       sensitive: req.headers["x-sensitive"] === "1",
       burn: req.headers["x-burn"] === "1",
@@ -239,10 +238,10 @@ export function registerExtraRoutes(router: Router): void {
   router.add("GET", "/api/files/:id", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
     const { info, data } = readFile(rc.ctx, rc.params.id, actor.id);
-    // Obrona warstwowa przed stored-XSS z zaladowanego pliku: (1) inertny typ dla
-    // aktywnych MIME, (2) wymuszone pobranie zamiast renderu, (3) brak wachania
-    // typu przez przegladarke, (4) sandbox CSP - nawet otwarty w karcie plik nie
-    // wykona skryptu w naszym origin (a tam siedzi ciasteczko sesji i UI).
+    // Layered defence against stored XSS from an uploaded file: (1) an inert type for active
+    // MIME types, (2) a forced download instead of rendering, (3) no type sniffing by the
+    // browser, (4) a CSP sandbox - even a file opened in a tab will not run a script in our
+    // origin (where the session cookie and the UI live).
     const safeMime = ACTIVE_MIME.test(info.mime) ? "application/octet-stream" : info.mime;
     res.writeHead(200, {
       "content-type": safeMime,
@@ -277,8 +276,8 @@ export function registerExtraRoutes(router: Router): void {
   });
 
   // --- wake ----------------------------------------------------------------
-  // Samoobslugowe: aktor konfiguruje WLASNY punkt budzenia. Sekret jest pokazany
-  // raz, w odpowiedzi - jak przy tokenach.
+  // Self-service: an actor configures ITS OWN wake-up point. The secret is shown once, in the
+  // response - as with tokens.
 
   router.add("GET", "/api/wake", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
