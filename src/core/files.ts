@@ -321,7 +321,7 @@ function deleteFileRow(ctx: Ctx, row: FileRow): void {
   } catch {
     // The entry is already marked as deleted, so orphaned bytes will not be served to anybody;
     // the next sweepExpired pass will try again (the "orphans" pass - see there).
-    // (przebieg "sieroty" - patrz tam).
+    // (the "orphans" pass - see there).
   }
 }
 

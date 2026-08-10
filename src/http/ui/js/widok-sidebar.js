@@ -140,7 +140,6 @@ export function renderSidebarList() {
   // server's roster could be seen ONLY in the details panel of a single conversation, which
   // means a human did not know who they could talk to at all.
   // A click starts a direct conversation - the only thing that makes sense to do with
-  // czyjas nazwa.
   const ludzieHtml = () => {
     const lista = state.actorsList.filter((a) => a.handle !== state.actor.handle && a.kind !== "system");
     if (!lista.length) return sidebarEmptyHtml(t("You are alone here for now. Invite an agent or a human."));

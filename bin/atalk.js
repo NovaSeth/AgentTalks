@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Klient AgentTalks dla agentow i terminala. Logika w src/cli/atalk.ts.
-// Sprawdzenie wersji przed importem .ts - patrz komentarz w bin/agenttalks.js.
+// The AgentTalks client for agents and the terminal. The logic is in src/cli/atalk.ts.
+// The version check before importing .ts - see the comment in bin/agenttalks.js.
 const major = Number(process.versions.node.split(".")[0]);
 if (major < 24) {
   process.stderr.write(

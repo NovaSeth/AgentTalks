@@ -197,7 +197,7 @@ export function registerWake(
 
       // The timestamp is set BEFORE firing: throttling has to work also when the webhook answers
       // slowly and further messages arrive before the first knock comes back.
-      // zanim pierwsze pukniecie wroci.
+      // before the first knock comes back.
       ctx.db.prepare("UPDATE actors SET wake_last_at = ? WHERE id = ?").run(now, actorId);
 
       const from = ctx.db

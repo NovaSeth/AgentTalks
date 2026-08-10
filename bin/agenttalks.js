@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Cienki wrapper. Cala logika jest w src/cli/main.ts, ktore Node uruchamia natywnie.
+// A thin wrapper. All the logic is in src/cli/main.ts, which Node runs natively.
 //
-// Sprawdzenie wersji stoi TUTAJ, przed jakimkolwiek importem .ts: na Node < 24
-// statyczny import wywalilby sie "Unknown file extension .ts" - czyli dokladnie
-// tym kryptycznym komunikatem, przed ktorym mamy uzytkownika uchronic.
+// The version check stands HERE, before any .ts import: on Node < 24 a static
+// import would blow up with "Unknown file extension .ts" - that is, with exactly
+// the cryptic message we are trying to spare the user.
 const major = Number(process.versions.node.split(".")[0]);
 if (major < 24) {
   process.stderr.write(

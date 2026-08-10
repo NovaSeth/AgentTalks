@@ -9,14 +9,14 @@ export const state = {
   actor: null,
   conversations: [],
   memberships: {},         // convId -> membership
-  unread: {},              // convId -> liczba nieprzeczytanych (pogrubienie + licznik)
-  unreadBadge: {},         // convId -> ile z nich "wazy" (DM/grupa: kazda; kanal: wzmianki)
+  unread: {},              // convId -> number of unread (bold + counter)
+  unreadBadge: {},         // convId -> how many of them "weigh" (DM/group: every one; channel: mentions)
   activeId: null,
   msgs: {},                // convId -> Message[] (rosnaco po id)
-  loaded: {},              // convId -> czy historia byla POBRANA (nie: czy sa jakies wiadomosci)
+  loaded: {},              // convId -> whether the history was FETCHED (not: whether any messages exist)
   readMark: {},            // convId -> id ostatniej przeczytanej, ZAMROZONE przy wejsciu (kreska "nowe")
   drafts: {},              // convId -> {text, replyTo} - szkic przezywajacy przelaczenie rozmowy
-  pending: {},             // convId -> lokalne wiadomosci w locie (id "tmp-...")
+  pending: {},             // convId -> local in-flight messages (ids "tmp-...")
   actorsCache: {},         // id -> {handle, displayName, kind}
   actorsAt: 0,             // kiedy ostatnio pobrano katalog aktorow (TTL)
   online: true,            // czy strumien zdarzen zyje (stopka sidebara)
@@ -31,17 +31,17 @@ export const state = {
   drawerOpen: false,
   loadingConv: false,
   guidelines: null,
-  news: null,              // "Co nowego" z /api/me - do pokazania raz, po czym null
-  digest: null,            // "Co Cie ominelo" z GET /api/digest (null = nic)
+  news: null,              // "What's new" from /api/me - shown once, then null
+  digest: null,            // "What you missed" from GET /api/digest (null = nothing)
   leases: [],              // aktywne dzierzawy zasobow (GET /api/leases)
-  hasMore: {},             // convId -> czy sa starsze wiadomosci do doladowania
+  hasMore: {},             // convId -> whether there are older messages to load
   actorsList: [],
   openQuestions: {},       // messageId -> questionId (otwarte, widoczne dla mnie)
   lastDelivery: null,      // {conversationId, messageId, delivery[]} z ostatniej wysylki
-  pendingFiles: [],        // pliki czekajace na wyslanie (podglady w composerze)
-  sseCursor: 0,            // najwyzsze widziane id wiadomosci = kursor dosylki SSE (?after=)
-  newBelow: 0,             // ile nowych przyszlo, gdy lista byla przewinieta w gore
-  askMode: false,          // composer wysyla PYTANIE do kanalu zamiast zwyklej wiadomosci
+  pendingFiles: [],        // files waiting to be sent (previews in the composer)
+  sseCursor: 0,            // highest message id seen = the SSE replay cursor (?after=)
+  newBelow: 0,             // how many new ones arrived while the list was scrolled up
+  askMode: false,          // the composer sends a QUESTION to the channel instead of an ordinary message
   view: "chat",            // "chat" | "wiki" | "users" | "notifications"
   notifUnread: 0,          // licznik centrum powiadomien (dzwonek w sidebarze)
   notifications: [],       // ostatnie powiadomienia (GET /api/notifications)
@@ -58,15 +58,15 @@ export const state = {
 /**  default empty functions mean everything works even before any view exists at all (say, an
 /**  error during login). */
 export const widok = {
-  render: () => {},           // caly ekran: login albo powloka
+  render: () => {},           // the whole screen: login or the shell
   powloka: () => {},          // rail + panel boczny + kolumna glowna
   glowny: () => {},           // kolumna glowna biezacego widoku
-  sidebar: () => {},          // lista kanalow, wiadomosci i wiki
-  wiersz: () => {},           // JEDEN wiersz rozmowy (pogrubienie + plakietka)
+  sidebar: () => {},          // the list of channels, messages and wiki
+  wiersz: () => {},           // ONE conversation row (bold + badge)
   obecnosc: () => {},         // kropki, pasek "pisze/pracuje", topbar, kuleczki wiki
-  wiadomosci: () => {},       // cala lista wiadomosci
-  wiadomosc: () => {},        // JEDEN dymek
-  naDol: () => {},            // przewiniecie listy na najnowsza
+  wiadomosci: () => {},       // the whole message list
+  wiadomosc: () => {},        // ONE bubble
+  naDol: () => {},            // scrolling the list to the newest
   watek: () => {},
   otworzWatek: () => {},      // otwarcie panelu watku dla danego korzenia
   pasekOffline: () => {},     // pasek "brak polaczenia" nad rozmowa
@@ -75,7 +75,7 @@ export const widok = {
   wiki: () => {},
   powiadomienia: () => {},
   uzytkownicy: () => {},
-  podepnijTresc: () => {},    // delegowane zdarzenia w swiezo wyrenderowanej tresci
+  podepnijTresc: () => {},    // delegated events in freshly rendered content
   pisze: () => "",            // HTML kuleczek piszacych dla danego miejsca
   szczegolyDane: async () => {},
   otworzRozmowe: () => {},
@@ -246,7 +246,7 @@ export const wikiCollapsed = new Set((() => {
   catch { return []; }
 })());
 
-export const dmMembersCache = {}; // convId -> [actorId,...] (bez mnie)
+export const dmMembersCache = {}; // convId -> [actorId,...] (without me)
 
 /** The participants of a direct conversation: [{handle, displayName, kind}], without me.
 /**  The source of truth is the `others` field from the server (GET /api/me and

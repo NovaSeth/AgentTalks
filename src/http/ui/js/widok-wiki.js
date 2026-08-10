@@ -10,7 +10,7 @@ import { mdToHtml } from "./markdown.js";
 import { state, widok } from "./stan.js";
 import { showError, showToast } from "./toasty.js";
 
-// ------------------------------------------------ wersja robocza edytora wiki
+// --------------------------------------------------- the wiki editor's draft
 // The chat has long kept a message draft that survives F5 and a deployment; the wiki editor
 // kept nothing, and it is where the longest texts are written. Leaving the editor (Cancel, a
 // click on another page, closing the tab) erased them without asking.
@@ -51,7 +51,7 @@ export async function mozeszOpuscicEdytorWiki() {
       parentSlug: document.getElementById("we-parent")?.value || null,
     });
   };
-  zapamietaj();   // najpierw ratujemy tekst, potem pytamy - w tej kolejnosci
+  zapamietaj();   // save the text first, ask afterwards - in that order
   return await confirmModal({
     title: t("You have unsaved changes on this page"),
     body: t("I saved them as a draft in this browser - they come back when you open the editor again. Leave without saving to the server?"),
@@ -141,7 +141,7 @@ export function newWikiPageModal() {
 async function saveWikiEdit(title, body, note, parentSlug) {
   const slug = state.wiki.slug;
   try {
-    // baseRevision = wersja, ktora widzielismy otwierajac strone. Gdy ktos zapisal
+    // baseRevision = the revision we saw when opening the page. When somebody saved
     // in the meantime, the server refuses (409) rather than silently erasing their change;
     // for a new page 0 means "create it if it does not exist".
     const data = await api("PUT", `/api/wiki/${encodeURIComponent(slug)}`, {
@@ -258,7 +258,7 @@ async function odtworzStroneWiki(deleted) {
   } catch (e) { showError(e); }
 }
 
-/** Sciezka przodkow strony ("Infra / VPS / ") - kazdy czlon klikalny. */
+/** The page's ancestor path ("Infra / VPS / ") - every part clickable. */
 function wikiBreadcrumbHtml(page) {
   if (!page || !page.parentSlug) return "";
   const bySlug = new Map(state.wiki.pages.map((p) => [p.slug, p]));

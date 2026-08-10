@@ -1,5 +1,5 @@
 /**
- * Widok rozmowy: lista wiadomosci, composer, watek, panel szczegolow.
+ * The conversation view: the message list, the composer, a thread, the details panel.
  */
 import { answerQuestion, askChannel, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./akcje.js";
 import { api, csrf } from "./api.js";
@@ -18,7 +18,7 @@ const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀",
 
 // ------------------------------------------------- entering a conversation
 export async function openConversation(id, focusMessageId) {
-  saveDraft();                       // szkic POPRZEDNIEJ rozmowy, zanim cokolwiek przerysujemy
+  saveDraft();                       // the PREVIOUS conversation's draft, before we redraw anything
   const poprzednia = state.activeId;
   // The "new messages" line disappears only on LEAVING a conversation - otherwise the one place
   // that said "this is where you stopped" gets lost while you are still reading.
@@ -475,8 +475,8 @@ function bindScrollWatch(el) {
   }, { passive: true });
 }
 
-/** Otwarta edycja inline zyje WYLACZNIE w DOM - przed przerysowaniem trzeba ja
- *  zapamietac, inaczej dowolne zdarzenie SSE kasuje w polowie napisane zdanie. */
+/** An open inline edit lives ONLY in the DOM - it has to be remembered before a
+ *  redraw, otherwise any SSE event erases a half-written sentence. */
 function zapiszOtwartaEdycje(el) {
   const ta = el.querySelector(".inline-edit textarea");
   if (!ta) return null;
@@ -1222,9 +1222,9 @@ export function renderComposer() {
   autosize();
 }
 
-/** Opcje pliku pod podgladem. Ida jako naglowki x-sensitive / x-burn / x-ttl.
+/** File options under the preview. They travel as the x-sensitive / x-burn / x-ttl headers.
  *
- *  Byly trzema nieopisanymi piktogramami (tarcza, plomien, lista) - w tym
+ *  They were three unlabelled pictograms (a shield, a flame, a list) - including
  *  "burn after reading", an IRREVERSIBLE action triggered by one click on a picture. Now it is
  *  a collapsed menu with full labels and a sentence about the consequence; closed by default,
  *  so sending a file normally does not get harder, but nobody burns an attachment without

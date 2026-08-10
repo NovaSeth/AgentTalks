@@ -14,11 +14,11 @@ import { actorHandle, findMsgById, mentionsMe, state, upsertMessage, widok } fro
 // a replay cursor, and a visible connection state in the sidebar footer.
 let es = null;
 
-let sseRetry = 0;        // numer proby: 1s, 2s, 4s ... max 30 s
+let sseRetry = 0;        // attempt number: 1s, 2s, 4s ... max 30 s
 
 let sseTimer = null;
 
-let sseWznowienie = false; // czy to polaczenie jest powrotem po przerwie
+let sseWznowienie = false; // whether this connection is a return after a break
 
 function setOnline(online) {
   if (state.online === online) return;

@@ -122,7 +122,7 @@ export function verifyToken(ctx: Ctx, token: string): Actor | null {
   // last_used_at is telemetry, so: (a) throttled to one write per minute, (b) best-effort -
   // when another process (a CLI import) is holding the write lock, authentication must NOT
   // fall over because of it, because that would take down every agent's GETs as well.
-  // to takze wszystkie GET-y agentow.
+  // that would take down every agent's GETs as well.
   if (row.last_used_at === null || ctx.now() - row.last_used_at >= 60) {
     try {
       ctx.db.prepare("UPDATE tokens SET last_used_at = ? WHERE id = ?").run(ctx.now(), row.id);

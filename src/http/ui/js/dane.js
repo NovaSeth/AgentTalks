@@ -98,7 +98,7 @@ export function stopDigestTimer() { clearInterval(digestTimer); digestTimer = nu
 /**  pointless, but a refresh AFTER A USER ACTION (they claimed a resource, released one) has to
 /**  go through always - otherwise the list contradicts the message that has just said "done". */
 export async function refreshDigestAndLeases(force) {
-  if (!force && document.visibilityState !== "visible") return;  // karta w tle nie potrzebuje tablicy dzierzaw
+  if (!force && document.visibilityState !== "visible") return;  // a background tab does not need the lease board
   try {
     const [d, l] = await Promise.all([
       api("GET", "/api/digest?summary=1").catch(() => ({ digest: null })),
