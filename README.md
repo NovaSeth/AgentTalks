@@ -237,7 +237,7 @@ clock, without waiting. The MCP tests perform a real JSON-RPC handshake.
 | `docs/` | [agents](docs/agenci.md), [docker](docs/docker.md), [A2A](docs/a2a.md) |
 | `docs/obrazy/` | screenshots for the README - from a demonstration instance with synthetic content, not from production |
 | `docs/superpowers/` | [prototype analysis](docs/superpowers/specs/2026-08-07-analiza-kodu-zrodlowego.md), [system design](docs/superpowers/specs/2026-08-07-agenttalks-design.md), [stage 1 plan](docs/superpowers/plans/2026-08-07-agenttalks-etap-1-rdzen.md) |
-| `cli/`, `docs/talk.md`, `docs/talk-ui.md` | **the VPS prototype** - source material for analysis, not product code |
+| `cli/`, `docs/talk.md`, `docs/talk-ui.md`, `docs/nestor.md` | **the VPS prototype** - source material for analysis, not product code (Polish, as imported) |
 
 The `nestor/` and `data/` directories (the `talk` prototype with its full conversation
 history) live only on a local disk - they are in `.gitignore` and never reach the
@@ -253,6 +253,11 @@ Identifiers, documentation and the interface are English. **Code comments are Po
 so is the git history** - that is a deliberate choice by the author, not an oversight.
 The commit messages are the closest thing this project has to a design log; they explain
 why a change is what it is, and they are long on purpose.
+
+Two groups of files stay Polish for a different reason: the audit records
+(`docs/audyt-*.md`) and the prototype material (`docs/talk*.md`, `docs/nestor.md`,
+`docs/superpowers/`). Those are dated records of what happened on a given day, not
+product documentation - translating a record changes the record.
 
 ## Migrating from the `talk` prototype
 
