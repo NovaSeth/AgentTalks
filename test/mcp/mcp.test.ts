@@ -1,7 +1,7 @@
 /**
- * MCP przez zywy serwer HTTP: prawdziwy handshake JSON-RPC, bez atrap transportu.
- * Odpowiedz Streamable HTTP moze byc application/json albo text/event-stream -
- * parsujemy obie, jak zrobi to kazdy klient MCP.
+ * MCP through a live HTTP server: a real JSON-RPC handshake, with no transport stubs.
+ * A Streamable HTTP response can be application/json or text/event-stream - we parse both,
+ * as every MCP client does.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -146,21 +146,20 @@ test("KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad 
     conversationId: kanal.id, actorId: ala.id, body: "material do testow narzedzi",
   });
 
-  // Lista narzedzi jest zrodlem prawdy - test nie ma wlasnej kopii, wiec nowe
-  // narzedzie automatycznie wchodzi do pokrycia. Wczesniej test sprawdzal same
-  // NAZWY na liscie (asercja na stalej tablicy), a realnie wywolywal cztery
-  // z dwudziestu kilku - czyli wiekszosc "glownego interfejsu agentow" nie miala
-  // ani jednego przebiegu.
+  // The tool list is the source of truth - the test keeps no copy of its own, so a new tool
+  // enters the coverage automatically. Previously the test checked only the NAMES on the list
+  // (an assertion against a constant array) while actually calling four out of twenty-odd -
+  // that is, most of "the main interface for agents" had not a single run.
   const lista = await mcpCall(s.url, token, {
     jsonrpc: "2.0", id: 100, method: "tools/list", params: {},
   });
   const narzedzia = (lista.result as { tools: Array<{ name: string }> }).tools.map((t) => t.name);
   assert.ok(narzedzia.length >= 15, `spodziewalem sie kompletu narzedzi, jest ${narzedzia.length}`);
 
-  // Argumenty minimalne, ktore maja sens dla kazdego narzedzia. Narzedzia
-  // wymagajace stanu spoza tego testu (wake, pliki) dostaja argumenty, przy
-  // ktorych odpowiedz "nie ma czegos takiego" jest POPRAWNA - sprawdzamy, ze
-  // narzedzie odpowiada po ludzku, a nie wywala sie bledem protokolu.
+  // Minimal arguments that make sense for every tool. Tools requiring state from outside this
+  // test (wake, files) get arguments for which the answer "there is no such thing" is CORRECT -
+  // we are checking that the tool answers in human terms rather than blowing up with a protocol
+  // error.
   const argumenty: Record<string, Record<string, unknown>> = {
     talk_status: {},
     talk_send: { to: "#general", body: "z testu pokrycia" },
@@ -201,8 +200,8 @@ test("KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad 
     const r = await mcpCall(s.url, token, {
       jsonrpc: "2.0", id: 200, method: "tools/call", params: { name: nazwa, arguments: args },
     });
-    // Blad DOMENOWY ("nie ma takiej strony") jest w porzadku - to odpowiedz.
-    // Blad PROTOKOLU (r.error) znaczy, ze narzedzie w ogole nie dziala.
+    // A DOMAIN error ("there is no such page") is fine - that is an answer.
+    // A PROTOCOL error (r.error) means the tool does not work at all.
     assert.equal(r.error, undefined, `narzedzie ${nazwa} zwrocilo blad protokolu`);
     const tresc = (r.result as { content?: Array<{ text: string }> }).content;
     assert.ok(Array.isArray(tresc) && tresc.length > 0, `narzedzie ${nazwa} nie zwrocilo tresci`);
@@ -213,19 +212,19 @@ test("KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad 
 });
 
 /**
- * Zgloszenie [149] @motowolta: `talk_read {afterId: 0}` na kanale z 133 wiadomosciami
- * zwrocil 132 355 znakow w jednym bloku i klient ODRZUCIL calosc - agent nie dostal
- * nawet pierwszej wiadomosci. Pilnujemy obu konców naraz, bo kazdy z osobna zawodzi:
- *
- *   - odcinek (`limit`) nie wystarczy, bo o odrzuceniu decyduje ROZMIAR, a jedna
- *     wiadomosc miewa 65 kB;
- *   - budzet znakow nie wystarczy, bo bez kursora wskazujacego OSTATNIA POKAZANA
- *     wiadomosc obciecie po cichu przeskakuje reszte.
+ * @motowolt's report [149]: `talk_read {afterId: 0}` on a channel with 133 messages returned
+ * 132,355 characters in one block and the client REJECTED all of it - the agent did not get
+ * even the first message. We guard both ends at once, because each alone fails:
+ * 
+ *   - a page size (`limit`) is not enough, because rejection is decided by SIZE, and one
+ *     message can be 65 kB;
+ *   - a character budget is not enough, because without a cursor pointing at the LAST MESSAGE
+ *     SHOWN, truncation silently skips the rest.
  */
 test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomosci", async () => {
   const s = await startTestServer();
   const { ala, kanal, token } = seed(s);
-  // 60 wiadomosci po ~2 kB: razem ~120 kB, czyli powyzej budzetu 40 000 znakow.
+  // 60 messages of ~2 kB: ~120 kB in total, that is, above the 40,000-character budget.
   const duza = "x".repeat(2000);
   for (let i = 0; i < 60; i++) {
     postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: `${i} ${duza}` });
@@ -244,14 +243,14 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
   assert.match(pierwszy, /To nie wszystko - powtorz talk_read z afterId=(\d+)\./);
   const kursor = Number(pierwszy.match(/afterId=(\d+)\./)![1]);
 
-  // Kursor MUSI wskazywac wiadomosc, ktora agent naprawde zobaczyl. Gdyby wskazywal
-  // ostatnia POBRANA, wszystko miedzy obcieciem a nim zniknieloby bezpowrotnie.
-  // Wynik jest grupowany po rozmowach, wiec "ostatnia pokazana" to najwyzsze
-  // pokazane id, a nie ostatnia linia.
+  // The cursor MUST point at a message the agent really saw. If it pointed at the last one
+  // FETCHED, everything between the truncation and it would disappear irreversibly. The result
+  // is grouped by conversation, so "the last one shown" is the highest id shown, not the last
+  // line.
   const idWyniku = (t: string) => [...t.matchAll(/^[>\s]*\[(\d+)\] /gm)].map((m) => Number(m[1]));
   assert.equal(kursor, Math.max(...idWyniku(pierwszy)));
 
-  // Petla po kursorze dochodzi do konca i nie gubi ani jednej wiadomosci.
+  // The cursor loop reaches the end and loses not a single message.
   const widziane = new Set<number>();
   let cursor = 0;
   for (let obrot = 0; obrot < 20; obrot++) {
@@ -263,16 +262,16 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
   }
   assert.equal(widziane.size, 60, `petla po kursorze zobaczyla ${widziane.size} z 60 wiadomosci`);
 
-  // Jawny `limit` tnie odcinek - to jest to pole, ktorego brakowalo w MCP.
+  // An explicit `limit` sets the page size - this is the field MCP was missing.
   const maly = await wynik({ afterId: 0, limit: 3 });
   assert.match(maly, /^3 nowych w \d+ rozmow/);
   await s.close();
 });
 
 /**
- * Odczyt strony wiki odblokowuje jej zapis, a zapis podmienia CALA tresc. Gdyby
- * przyciety odczyt tez odblokowywal, agent odsylajacy "to, co przeczytalem, plus
- * moj akapit" skasowalby brakujaca czesc i nikt by sie nie dowiedzial.
+ * Reading a wiki page unlocks writing to it, and a write replaces the WHOLE content. If a
+ * truncated read also unlocked it, an agent sending back "what I read plus my paragraph" would
+ * delete the missing part and nobody would find out.
  */
 test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
   const s = await startTestServer();
@@ -292,7 +291,7 @@ test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
     assert.match(t, /przycieto/);
     assert.match(t, /NIE zapisuj/);
 
-    // Bob widzial tylko kawalek, wiec zapis ma odbic sie o ochrone przed nadpisaniem.
+    // Bob saw only a fragment, so the write has to bounce off the overwrite protection.
     const zapis = await mcpCall(s.url, token, {
       jsonrpc: "2.0", id: 302, method: "tools/call",
       params: {
@@ -309,10 +308,10 @@ test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
 });
 
 /**
- * Prosba @michal z [143]: "znajdzcie sposob, zeby ogarniac wiele rozmow".
- * Plaska lista chronologiczna mowi, CO sie stalo; agent po przerwie potrzebuje
- * wiedziec, GDZIE ma odpisac. Test pilnuje, ze kolejnosc blokow niesie te
- * odpowiedz: rozmowa osobista przed kanalem ze wzmianka, ten przed reszta.
+ * @michal's request in [143]: "find a way to handle several conversations". A flat
+ * chronological list says WHAT happened; an agent after a break needs to know WHERE to reply.
+ * The test enforces that the order of the blocks carries that answer: a personal conversation
+ * before a channel with a mention, that before the rest.
  */
 test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", async () => {
   const s = await startTestServer();
@@ -322,8 +321,8 @@ test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", 
     join(s.ctx, cichy.id, bob.id);
     const dm = ensureDirect(s.ctx, [ala.id, bob.id]);
 
-    // Kolejnosc wysylki jest ODWROTNA do oczekiwanej kolejnosci w wyniku, zeby
-    // test nie przeszedl przypadkiem na samej chronologii.
+    // The send order is the REVERSE of the expected order in the result, so that the test cannot
+    // pass by chronology alone.
     postMessage(s.ctx, { conversationId: cichy.id, actorId: ala.id, body: "nikogo nie wolam" });
     postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: "@bob zerknij prosze" });
     postMessage(s.ctx, { conversationId: dm.id, actorId: ala.id, body: "na priv" });
@@ -344,9 +343,9 @@ test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", 
     assert.equal(kolejnosc[2][1], "#cichy");
     assert.equal(kolejnosc[2][3], "", "kanal bez wzmianki nie udaje pilnego");
 
-    // Wzmianka jest oznaczona w linii, zeby dalo sie ja znalezc wzrokiem.
+    // A mention is marked on the line, so that it can be found by eye.
     assert.match(t, /^> \[\d+\].*zerknij prosze$/m);
-    // Nazwa rozmowy jest w naglowku bloku, wiec nie powtarza sie w kazdej linii.
+    // The conversation name is in the block header, so it does not repeat on every line.
     assert.equal((t.match(/#general/g) ?? []).length, 1);
   } finally {
     await s.close();
@@ -354,21 +353,20 @@ test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", 
 });
 
 /**
- * `limit` musi obowiazywac TAKZE po przeczekaniu ciszy.
+ * `limit` has to apply ALSO after waiting out silence.
  *
- * Long-poll szedl wlasna sciezka do skrzynki i nie dostawal odcinka, wiec agent,
- * ktory poczekal na wiadomosci, mogl dostac domyslne 200 naraz. Bledu nie widac
- * w zwyklym uzyciu, bo przy waitSec=0 wszystko dziala.
+ *The long-poll went its own way to the inbox and did not receive the page size, so an agent
+ *that waited for messages could get the default 200 at once. The bug is invisible in ordinary
+ *use, because with waitSec=0 everything works.
  *
- * Zeby to w ogole DALO SIE sprawdzic, wiadomosci musza dojsc HURTEM: czekajacy
- * budzi sie na pierwszej, wiec przy zapisie po jednej w chwili przebudzenia
- * istnieje dokladnie jedna i limit nie ma czego przyciac. Jedna transakcja to
- * zalatwia - publikacje ida po commicie, wiec w chwili przebudzenia stoi juz
- * caly komplet. To nie jest sztuczka pod test: tak wyglada import i kazdy
- * zapis zbiorczy.
+ *For this to be CHECKABLE at all, the messages have to arrive IN BULK: the waiter wakes on
+ *the first one, so when written one at a time there is exactly one message at wake-up and the
+ *limit has nothing to trim. One transaction takes care of that - publications go out after
+ *the commit, so at wake-up the whole set is already there. This is not a trick for the test:
+ *that is what an import and every bulk write look like.
  *
- * Pierwsze dwie wersje tego testu przechodzily TAKZE bez naprawy (sprawdzone
- * przez cofniecie jej) - dlatego ta wersja jest zweryfikowana w obie strony.
+ *The first two versions of this test passed EVEN WITHOUT the fix (verified by reverting it) -
+ *which is why this version is verified in both directions.
  */
 test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
   const s = await startTestServer();
@@ -380,8 +378,8 @@ test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
       jsonrpc: "2.0", id: 500, method: "tools/call",
       params: { name: "talk_read", arguments: { afterId: 0, limit: 2, waitSec: 5 } },
     });
-    // Pauza: bez niej pierwszy, natychmiastowy odczyt zlapalby wiadomosci
-    // i sciezka long-poll nie wykonalaby sie wcale.
+    // A pause: without it the first, immediate read would catch the messages and the long-poll
+    // path would not execute at all.
     await new Promise((r) => setTimeout(r, 300));
     tx(s.ctx.db, () => {
       for (let i = 0; i < 9; i++) {
@@ -400,24 +398,24 @@ test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
 });
 
 /**
- * Koszt jednego `talk_read` nie moze rosnac z liczba wiadomosci.
+ * The cost of one `talk_read` must not grow with the number of messages.
  *
- * Kazda linia rozwiazywala autora i nazwe rozmowy od nowa, a dla DM-a nazwa
- * rozmowy dokladala zapytanie o sklad plus jedno na kazdego czlonka. Do tego
- * lista formatowala sie DWA razy: raz w budzecie (zeby zmierzyc dlugosc), raz
- * przy grupowaniu. Zmierzone: 710 zapytan na 50 wiadomosci, czyli 14 na
- * wiadomosc przy odpowiedzi, ktora sie nie zmienia.
+ *Every line resolved the author and the conversation name from scratch, and for a DM the
+ *conversation name added a query for the membership plus one per member. On top of that the
+ *list formatted itself TWICE: once for the budget (to measure its length), once while
+ *grouping. Measured: 710 queries for 50 messages, that is 14 per message, for a response that
+ *does not change.
  *
- * To sie nie objawia bledem - tylko rachunkiem, ktory rosnie z wiekiem kanalu,
- * czyli dokladnie ta klasa, ktora nikt nie zglosi. Prog 60 jest luzny (dzis
- * jest 11), bo test ma lapac POWROT liniowego kosztu, a nie pilnowac liczby.
+ *This does not show up as an error - only as a bill that grows with the channel's age, which
+ *is exactly the class nobody reports. The threshold of 60 is loose (today it is 11), because
+ *the test is to catch the RETURN of linear cost, not to police a number.
  */
 test("talk_read nie odpytuje bazy raz na kazda linie", async () => {
   const s = await startTestServer();
   try {
     const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
     const bob = createActor(s.ctx, { kind: "agent", handle: "bob" });
-    // DM, bo to najdrozszy przypadek: nazwa rozmowy wymaga skladu i handli.
+    // A DM, because it is the most expensive case: the conversation name needs the membership and handles.
     const dm = ensureDirect(s.ctx, [ala.id, bob.id]);
     for (let i = 0; i < 50; i++) {
       postMessage(s.ctx, { conversationId: dm.id, actorId: ala.id, body: `wiadomosc ${i}` });
@@ -448,17 +446,16 @@ test("talk_read nie odpytuje bazy raz na kazda linie", async () => {
 });
 
 /**
- * Kazdy ZADEKLAROWANY parametr narzedzia musi byc CZYTANY przez jego obsluge.
+ * Every DECLARED tool parameter has to be READ by its handler.
  *
- * Parametr w schemacie, ktorego handler nie czyta, jest gorszy od braku
- * parametru: klient widzi go w opisie narzedzia, wysyla, dostaje `200 OK`
- * i nic sie nie dzieje. Zadnego bledu, zadnego sladu - tak samo, jak `workingOn`
- * w REST, ktory przez dlugi czas po cichu znikal, bo skill obiecywal jedna
- * nazwe, a serwer czytal druga.
+ *A parameter in the schema that the handler does not read is worse than a missing parameter:
+ *the client sees it in the tool's description, sends it, gets `200 OK` and nothing happens.
+ *No error, no trace - exactly like `workingOn` in REST, which disappeared silently for a long
+ *time because the skill promised one name and the server read another.
  *
- * Lista narzedzi pochodzi z ZYWEGO serwera (tools/list), nie z odczytu stalej w
- * kodzie - inaczej test sprawdzalby zgodnosc kodu z samym soba. Ten sam powod,
- * dla ktorego test pokrycia narzedzi pyta serwer, a nie plik.
+ *The tool list comes from the LIVE server (tools/list), not from reading a constant in the
+ *code - otherwise the test would be checking the code against itself. The same reason the
+ *tool coverage test asks the server rather than a file.
  */
 test("kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge", async () => {
   const s = await startTestServer();
@@ -495,8 +492,8 @@ test("kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge", as
         if (!new RegExp(`args\\.${p}\\b|args\\["${p}"\\]`).test(c)) martwe.push(`${t.name}.${p}`);
       }
     }
-    // Bez tego test przechodzilby takze wtedy, gdyby wyciaganie parametrow
-    // przestalo cokolwiek znajdowac - a wtedy "wszystko czytane" nic nie znaczy.
+    // Without this the test would also pass if extracting the parameters stopped finding anything -
+    // and then "everything is read" means nothing.
     assert.ok(sprawdzonych > 40, `sprawdzono tylko ${sprawdzonych} parametrow - wyciaganie sie zepsulo`);
     assert.deepEqual(martwe, [], `parametry zadeklarowane, ale nieczytane: ${martwe.join(", ")}`);
   } finally {
@@ -505,18 +502,16 @@ test("kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge", as
 });
 
 /**
- * Zdania, ktore agenci PARSUJA, sa kontraktem - nie proza.
+ * Sentences that agents PARSE are a contract - not prose.
  *
- * MCP oddaje tekst, wiec kazdy fragment, po ktory siega maszyna, jest interfejsem
- * bez schematu. To nie jest teoria: @motowolt napisal tej nocy petle po kursorze
- * (#bugs [163]), wyciagajac liczbe z "Kursor: afterId=N" i konczac, gdy zniknie
- * "To nie wszystko". Przeredagowanie tych zdan - najzwyklejsza poprawka stylu -
- * zatrzymaloby jego petle na pierwszym odcinku, BEZ zadnego bledu: dostalby
- * pierwsze 50 wiadomosci i uznal, ze to wszystko.
+ *MCP returns text, so every fragment a machine reaches for is an interface with no schema.
+ *This is not theory: @motowolt wrote a cursor loop that night (#bugs [163]), extracting the
+ *number from "Kursor: afterId=N" and stopping when "To nie wszystko" disappeared. Rewording
+ *those sentences - an ordinary style fix - would have stopped his loop at the first page,
+ *with NO error: he would have got the first 50 messages and concluded that was all.
  *
- * Ten test istnieje po to, zeby taka zmiana byla SWIADOMA. Nie zabrania jej -
- * wymaga, zeby ktos zmienil takze to zdanie tutaj i zobaczyl, czyja petla
- * przestanie dzialac.
+ *This test exists so that such a change is DELIBERATE. It does not forbid it - it requires
+ *somebody to change this sentence here as well, and to see whose loop stops working.
  */
 test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
   const s = await startTestServer();
@@ -531,7 +526,7 @@ test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
       return (r.result as { content: Array<{ text: string }> }).content[0].text;
     };
 
-    // Pusta skrzynka nadal MUSI oddac kursor - inaczej petla nie ma czym ruszyc.
+    // An empty inbox still MUST return a cursor - otherwise the loop has nothing to start from.
     assert.match(await czytaj({ afterId: 0 }), /Kursor: afterId=\d+/);
 
     for (let i = 0; i < 5; i++) {
@@ -544,14 +539,14 @@ test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
       "znika sygnal 'jest tego wiecej' - agent uzna odcinek za calosc i zgubi reszte",
     );
 
-    // I najwazniejsze: liczba przy kursorze musi byc ID OSTATNIEJ POKAZANEJ
-    // wiadomosci, bo to na niej opiera sie nastepny obrot petli.
+    // And most importantly: the number next to the cursor has to be the ID OF THE LAST MESSAGE
+    // SHOWN, because that is what the next turn of the loop builds on.
     const kursor = Number(odcinek.match(/Kursor: afterId=(\d+)/)![1]);
     const pokazane = [...odcinek.matchAll(/^[>\s]*\[(\d+)\] /gm)].map((m) => Number(m[1]));
     assert.equal(kursor, Math.max(...pokazane));
 
-    // Gdy nic nie zostalo, zdania o reszcie NIE MOZE byc - inaczej petla
-    // krecilaby sie w nieskonczonosc.
+    // When nothing is left, the sentence about the remainder must NOT be there - otherwise the
+    // loop would spin forever.
     const koniec = await czytaj({ afterId: kursor + 99 });
     assert.doesNotMatch(koniec, /To nie wszystko/);
   } finally {
@@ -560,16 +555,16 @@ test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
 });
 
 /**
- * Nieznany parametr NIE moze byc przyjety w ciszy.
+ * An unknown parameter must NOT be accepted in silence.
  *
- * @flowstate stracil pol godziny na ustalenie, czy `limit` ginie u niego, czy
- * u nas (#bugs [246]): wysylal pole, dostawal 200 i pelna liste, i nie mial jak
- * odroznic "wyslalem, zignorowano" od "nie wyslalem". Okazalo sie, ze jego klient
- * trzymal stary schemat narzedzia - ale rozstrzygnac to mogl dopiero pomiarem
- * z trzech stron, bo serwer nie powiedzial ani slowa.
+ *@flowstate lost half an hour establishing whether `limit` was dying on his side or on ours
+ *(#bugs [246]): he sent the field, got a 200 and the full list, and had no way to tell "I
+ *sent it, it was ignored" from "I did not send it". It turned out his client held an old
+ *schema of the tool - but he could only settle that by measuring from three sides, because
+ *the server said not a word.
  *
- * Nie odrzucamy takiego wywolania: odrzucanie lamie zgodnosc w przod, bo starszy
- * serwer musi znosic nowsze pole. Odbieramy sama cisze.
+ *We do not reject such a call: rejecting breaks forward compatibility, because an older
+ *server has to tolerate a newer field. We only take away the silence.
  */
 test("MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna", async () => {
   const s = await startTestServer();
@@ -589,12 +584,12 @@ test("MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna", async () => {
     assert.match(zle, /nie zna pola: limitt/);
     assert.match(zle, /ZIGNOROWANE/, "uwaga ma mowic o SKUTKU, nie tylko o nazwie");
 
-    // Znane pola nie moga wywolywac ostrzezenia - inaczej stanie sie szumem
-    // i przestanie cokolwiek znaczyc.
+    // Known fields must not trigger a warning - otherwise it becomes noise and stops meaning
+    // anything.
     const dobre = await wolaj({ afterId: 0, limit: 2, waitSec: 0 });
     assert.doesNotMatch(dobre, /nie zna pola/);
 
-    // Wynik zostaje nietkniety: ostrzezenie DOPISUJE, a nie zastepuje.
+    // The result is left untouched: the warning APPENDS, it does not replace.
     assert.match(zle, /Kursor: afterId=/, "ostrzezenie zjadlo wlasciwa odpowiedz");
   } finally {
     await s.close();
@@ -602,17 +597,17 @@ test("MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna", async () => {
 });
 
 /**
- * talk_status podaje schemat narzedzi WEDLUG SERWERA.
+ * talk_status reports the tool schema ACCORDING TO THE SERVER.
  *
- * Zgloszenie @motowolta [340], oparte na dwoch niezaleznych pomiarach: klient MCP
- * pobiera liste narzedzi RAZ i po wdrozeniu nowego pola wycina je z zadania.
- * Serwer nie wie, ze cos przyszlo; agent dostaje poprawna odpowiedz na zadanie,
- * ktorego nie wyslal. Zadna strona nie moze tego wykryc - i to jest ostrzejsza
- * wersja calej rodziny, ktora zbieramy.
+ *@motowolt's report [340], based on two independent measurements: an MCP client fetches the
+ *tool list ONCE and, after a new field is deployed, strips it from the request. The server
+ *does not know anything arrived; the agent gets a correct answer to a request it did not
+ *send. Neither side can detect this - and that is a sharper version of the whole family we
+ *are collecting.
  *
- * Jedyna asymetria: serwer zna SWOJ schemat. Wypisany w wywolaniu, ktore agent
- * i tak robi pierwsze, daje mu cos do porownania z tym, co widzi u siebie.
- * Lista jest generowana z TOOLS, wiec test pilnuje, ze nie zostala wpisana recznie.
+ *The one asymmetry: the server knows ITS OWN schema. Printed in the call the agent makes
+ *first anyway, it gives it something to compare with what it sees on its side. The list is
+ *generated from TOOLS, so the test enforces that it was not typed by hand.
  */
 test("talk_status wypisuje pola narzedzi z TOOLS, nie z reki", async () => {
   const s = await startTestServer();
@@ -628,8 +623,8 @@ test("talk_status wypisuje pola narzedzi z TOOLS, nie z reki", async () => {
     assert.match(t, /NARZEDZIA WEDLUG SERWERA/);
     assert.match(t, /zamrozony schemat/, "brak wyjasnienia, PO CO ta lista");
 
-    // Pola musza pochodzic z deklaracji narzedzia - inaczej lista sama sie
-    // rozjedzie i bedzie klamac dokladnie tam, gdzie ma wykrywac rozjazd.
+    // The fields have to come from the tool's declaration - otherwise the list drifts on its own
+    // and lies in exactly the place where it is supposed to detect drift.
     const lista = await mcpCall(s.url, token, {
       jsonrpc: "2.0", id: 951, method: "tools/list", params: {},
     });
@@ -650,17 +645,16 @@ test("talk_status wypisuje pola narzedzi z TOOLS, nie z reki", async () => {
 });
 
 /**
- * Stopka ze schematem musi byc w talk_read, nie tylko w talk_status.
+ * The schema footer has to be in talk_read, not only in talk_status.
  *
- * Zarzut @motowolta [350], oparty na jego wlasnym trybie pracy: agent w petli
- * wola `talk_status` RAZ, na starcie - czyli przed wdrozeniem, ktore ma wykryc -
- * a `talk_read` co kilka minut. Sygnal umieszczony wylacznie w statusie trafia
- * wiec tylko do tych, ktorzy i tak sa ostrozni. Do tego `talk_status` przy
- * pierwszym uzyciu doklada dlugi blok "co nowego", wiec jest wywolaniem, ktorego
- * agent w petli SWIADOMIE unika.
+ *@motowolt's objection [350], based on his own way of working: an agent in a loop calls
+ *`talk_status` ONCE, at startup - that is, before the deployment it is meant to detect - and
+ *`talk_read` every few minutes. A signal placed only in the status therefore reaches only
+ *those who are being careful anyway. On top of that `talk_status` on first use appends a long
+ *"what's new" block, so it is a call an agent in a loop DELIBERATELY avoids.
  *
- * Test pilnuje obu warunkow odbioru z jego zgloszenia: stopka jest w kazdej
- * odpowiedzi talk_read (takze pustej) i pochodzi z deklaracji narzedzia.
+ *The test enforces both acceptance conditions from his report: the footer is in every
+ *talk_read response (including an empty one) and comes from the tool's declaration.
  */
 test("talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci", async () => {
   const s = await startTestServer();
@@ -684,8 +678,8 @@ test("talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci", 
     assert.match(zTrescia, /\[schemat\] talk_read: /);
     assert.match(zTrescia, /zamrozona liste/, "stopka nie mowi, co znaczy roznica");
 
-    // Pola z DEKLARACJI, nie z reki - inaczej stopka sklamie dokladnie tam,
-    // gdzie ma wykrywac klamstwo.
+    // The fields from the DECLARATION, not by hand - otherwise the footer lies in exactly the
+    // place where it is supposed to detect a lie.
     const lista = await mcpCall(s.url, token, {
       jsonrpc: "2.0", id: 961, method: "tools/list", params: {},
     });
@@ -696,7 +690,7 @@ test("talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci", 
       assert.ok(zTrescia.includes(p), `stopka nie wymienia pola ${p}`);
     }
 
-    // Krotka: to jest wywolanie petli, wiec stopka nie moze rosnac w koszt.
+    // Short: this is a loop call, so the footer must not grow into a cost.
     const stopka = zTrescia.slice(zTrescia.indexOf("[schemat]"));
     assert.ok(stopka.length < 160, `stopka ma ${stopka.length} znakow - za duzo jak na kazde wywolanie`);
   } finally {
