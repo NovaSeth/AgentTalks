@@ -126,5 +126,39 @@ if [[ -r $haslo_host ]]; then
   [[ $kod == 401 ]] || { echo "STOP: bramka wlaczona, a strona odpowiada $kod." >&2; exit 1; }
 fi
 
+# Czy INTERFEJS sie zaladuje. Dotad ten skrypt sprawdzal, ze serwer zyje, baza
+# odpowiada i bramka dziala - i wszystko to bylo prawda, gdy strona byla BIALA:
+# do listy serwowanych modulow nie dopisano i18n.js, wiec przegladarka dostawala
+# 404 i caly graf modulow padal przy ladowaniu. Zaden test, tsc, CI ani ten skrypt
+# tego nie widzialy, bo zaden z nich nie pobiera modulow UI.
+#
+# Pobieramy dokladnie te pliki, ktore wymienia shell aplikacji, i sprawdzamy, ze
+# kazdy z nich wraca. Kontrola idzie po pojedynczych plikach, a nie po samym "/",
+# bo "/" oddaje szkielet HTML takze wtedy, gdy nie da sie zaladowac ani jednego
+# modulu - czyli odpowiada 200 na pytanie, ktorego nikt nie zadal.
+naglowek_bramki=()
+if [[ -r $haslo_host ]]; then
+  ciasteczko=$(printf '{"password":"%s"}' "$(cat "$haslo_host")" | curl -s -i -X POST \
+    "http://127.0.0.1:${PORT}/api/site-gate" -H 'content-type: application/json' --data @- \
+    | tr -d '\r' | grep -i '^set-cookie:' | sed 's/set-cookie: *//; s/;.*//')
+  [[ -n $ciasteczko ]] && naglowek_bramki=(-H "cookie: ${ciasteczko}")
+fi
+# Zrodlem listy jest KATALOG, nie HTML. Pierwsza wersja tego sprawdzenia brala
+# nazwy z atrybutow src="" w shellu - a shell wymienia TYLKO app.js, bo reszta
+# wchodzi przez `import` w srodku modulow. Sprawdzalo wiec jeden plik z dziewietnastu
+# i przeszlo na zielono takze wtedy, gdy celowo usunalem i18n.js z bialej listy.
+# Zlapalem to jedynie dlatego, ze puscilem probe negatywna; sam wynik "OK" wygladal
+# identycznie w obu przypadkach.
+zle_moduly=0; sprawdzonych=0
+for plik in src/http/ui/js/*.js; do
+  nazwa=$(basename "$plik"); sprawdzonych=$((sprawdzonych+1))
+  kod_modulu=$(curl -s -o /dev/null -w '%{http_code}' "${naglowek_bramki[@]}" \
+    "http://127.0.0.1:${PORT}/js/${nazwa}")
+  [[ $kod_modulu == 200 ]] || { echo "  BRAK: /js/${nazwa} -> ${kod_modulu}"; zle_moduly=$((zle_moduly+1)); }
+done
+echo "moduly UI (${sprawdzonych} plikow): $([[ $zle_moduly == 0 ]] && echo OK || echo "${zle_moduly} nie do pobrania")"
+[[ $sprawdzonych -ge 15 ]] || { echo "STOP: sprawdzono tylko ${sprawdzonych} modulow - katalog sie przeniosl?" >&2; exit 1; }
+[[ $zle_moduly == 0 ]] || { echo "STOP: interfejs sie nie zaladuje - biala strona." >&2; exit 1; }
+
 [[ $stan == healthy ]] || { echo "STOP: kontener nie jest healthy." >&2; exit 1; }
 echo "OK (wolumen $wolumen, ostatnia wiadomosc ${wiadomosci_po:-?})"
