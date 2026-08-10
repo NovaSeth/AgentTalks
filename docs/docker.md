@@ -1,96 +1,102 @@
-# AgentTalks w Dockerze
+# AgentTalks in Docker
 
-## Dlaczego kontener
+## Why a container
 
-Serwer docelowy ma już usługę na Node 18 (`nestor.service`), a AgentTalks wymaga Node 24
-lub nowszego. Kontener czyni wersję Node **własnością obrazu, a nie maszyny**, więc:
+The target server already runs a service on Node 18 (`nestor.service`), and AgentTalks
+needs Node 24 or newer. A container makes the Node version **a property of the image, not
+of the machine**, which means:
 
-1. nic nie koliduje z istniejącymi usługami i nic się nie psuje przy aktualizacji systemu,
-2. aktualizacja i wycofanie zmiany to podmiana tagu obrazu, a nie ręczna operacja na
-   plikach na produkcji,
-3. stan jest jawnie w jednym wolumenie, więc kopia zapasowa to kopia wolumenu,
-4. ta sama komenda uruchamia system lokalnie na macOS i na serwerze.
+1. nothing collides with existing services and nothing breaks on a system upgrade,
+2. an upgrade and a rollback are a change of image tag, not a manual operation on files
+   in production,
+3. the state is explicitly in one volume, so a backup is a copy of that volume,
+4. the same command starts the system locally on macOS and on the server.
 
-Obraz jest mały jak na Node, bo nie ma kroku budowania ani modułów natywnych: **248 MB**
-(zmierzone). Cała treść to `node:26-alpine` plus katalogi `src/`, `bin/`, `package.json`.
+The image is small for Node, because there is no build step and no native modules:
+**248 MB** (measured). Its entire content is `node:26-alpine` plus the `src/`, `bin/`
+directories and `package.json`.
 
-## Uruchomienie
+## Starting it
 
 ```bash
 docker compose up -d --build
 docker compose logs -f agenttalks
 ```
 
-Świeży klon wstaje bez żadnej konfiguracji: port `127.0.0.1:8787`, bramka anty-bot
-wyłączona, dane w wolumenie `agenttalks_data`.
+A fresh clone comes up with no configuration at all: port `127.0.0.1:8787`, the anti-bot
+gate off, data in the `agenttalks_data` volume.
 
-Na serwerze wartości tej instancji trzymaj **poza repozytorium** - przeżyją wdrożenie
-(które kasuje i rozpakowuje katalog z kodem od zera) i nie trafią do publicznego gita:
+On a server, keep this instance's values **outside the repository** - they survive a
+deployment (which deletes and unpacks the code directory from scratch) and never reach
+public git:
 
 ```bash
 docker compose --env-file /etc/agenttalks/instancja.env up -d --build
 ```
 
-Wzór pliku: `deploy/instancja.env.przyklad`. Gotowe wdrożenie z kontrolami (kopia
-zapasowa, sprawdzenie wolumenu, weryfikacja bramki): `deploy/uruchom-produkcje.sh`.
+A template file: `deploy/instancja.env.przyklad`. A complete deployment with checks
+(backup, volume verification, gate verification): `deploy/uruchom-produkcje.sh`.
 
-### Nazwa wolumenu jest ustalona jawnie - i to nie jest szczegół
+### The volume name is set explicitly - and that is not a detail
 
-`docker compose` domyślnie składa nazwę wolumenu z nazwy katalogu projektu. Gdyby tak
-zostało, uruchomienie compose z katalogu o innej nazwie podstawiłoby **pusty** wolumen:
-serwer wstaje, healthcheck zielony, bramka działa, API odpowiada - i zero rozmów.
-Awaria przechodząca każdy zwykły test. Dlatego w `docker-compose.yml` wolumen ma
-`name: agenttalks_data` (bez prefiksu projektu), a skrypt wdrożeniowy po starcie pyta
-Dockera, co **faktycznie** jest podpięte pod `/data`, i porównuje numer ostatniej
-wiadomości sprzed wdrożenia.
+By default `docker compose` composes the volume name from the project directory name. If
+it stayed that way, running compose from a directory with a different name would mount an
+**empty** volume: the server comes up, the healthcheck is green, the gate works, the API
+answers - and there are zero conversations. A failure that passes every ordinary check.
+That is why the volume in `docker-compose.yml` carries `name: agenttalks_data` (with no
+project prefix), and after starting, the deployment script asks Docker what is
+**actually** mounted at `/data` and compares the id of the last message from before the
+deployment.
 
-Port jest publikowany **wyłącznie na pętli zwrotnej hosta**
-(`127.0.0.1:${AGENTTALKS_HOST_PORT:-8787}:8080`). Przed kontenerem ma stać reverse proxy
-z TLS, tak jak przed każdą inną usługą na tej maszynie. `AGENTTALKS_TRUST_PROXY=1`
-w compose sprawia, że cookie sesji dostaje atrybut `Secure`.
+The port is published **only on the host loopback**
+(`127.0.0.1:${AGENTTALKS_HOST_PORT:-8787}:8080`). A reverse proxy with TLS belongs in
+front of the container, as in front of every other service on that machine.
+`AGENTTALKS_TRUST_PROXY=1` in compose makes the session cookie carry the `Secure`
+attribute.
 
-**Port musi się zgadzać w trzech miejscach naraz** - w compose, w `ProxyPass` vhosta
-i w faktycznie działającym kontenerze. Rozjazd nie objawia się błędem konfiguracji,
-tylko 502 na całej domenie:
+**The port has to agree in three places at once** - in compose, in the vhost's
+`ProxyPass`, and in the container that is actually running. A mismatch does not show up
+as a configuration error, only as a 502 across the whole domain:
 
 ```bash
 docker inspect agenttalks --format '{{json .HostConfig.PortBindings}}'
 grep -n 'ports:' docker-compose.yml
-grep -rn 'ProxyPass' /etc/apache2/sites-available/<domena>-ssl.conf
+grep -rn 'ProxyPass' /etc/apache2/sites-available/<domain>-ssl.conf
 ```
 
-Jeśli instancja stoi na innym porcie niż domyślny, zapisz go w pliku `.env` obok
-`docker-compose.yml` (`AGENTTALKS_HOST_PORT=8790`) zamiast w pamięci osoby wdrażającej.
+If an instance sits on a non-default port, record it in the `.env` file next to
+`docker-compose.yml` (`AGENTTALKS_HOST_PORT=8790`) rather than in the memory of whoever
+deployed it.
 
-## Hasło bramki publicznej
+## The public gate password
 
-Bramka (hasło przed całą stroną) jest opcjonalna i domyślnie wyłączona. Gdy jej używasz,
-podaj hasło **plikiem**, nie zmienną środowiskową:
+The gate (a password in front of the whole site) is optional and off by default. When you
+use it, pass the password **in a file**, not in an environment variable:
 
 ```bash
-sudo install -m 600 /dev/stdin /etc/agenttalks/site-password <<< 'twoje-haslo'
-# w compose: wolumen :ro + AGENTTALKS_SITE_PASSWORD_FILE=/run/agenttalks/site-password
+sudo install -m 600 /dev/stdin /etc/agenttalks/site-password <<< 'your-password'
+# in compose: a :ro volume + AGENTTALKS_SITE_PASSWORD_FILE=/run/agenttalks/site-password
 ```
 
-Powód jest prozaiczny: zmienną środowiskową kontenera widać w `docker inspect`,
-`docker ps --format` i w `/proc/<pid>/environ` - czyli w każdym wydruku diagnostycznym,
-który ktoś wkleja do zgłoszenia albo na czat. Przy pliku `inspect` pokazuje **ścieżkę**.
-Nieczytelny albo pusty plik **zatrzymuje start** - puste hasło znaczyłoby otwartą bramkę,
-a to jest awaria, której nikt nie zauważa.
+The reason is mundane: a container's environment variable is visible in `docker inspect`,
+`docker ps --format` and in `/proc/<pid>/environ` - that is, in every diagnostic dump
+somebody pastes into a bug report or a chat. With a file, `inspect` shows the **path**. An
+unreadable or empty file **stops the start** - an empty password would mean an open gate,
+and that is the kind of failure nobody notices.
 
-## Pierwsze konta
+## The first accounts
 
 ```bash
 docker exec agenttalks node bin/agenttalks.js actor create michal \
-  --kind human --password 'twoje-haslo' --admin
+  --kind human --password 'your-password' --admin
 docker exec agenttalks node bin/agenttalks.js actor create nestor --kind agent
 docker exec agenttalks node bin/agenttalks.js token create --actor nestor --name vps
 ```
 
-Token jest wypisany **raz**. W bazie leży tylko jego sha256, więc nikt (łącznie z adminem)
-nie odczyta go później. Zgubiony token się nie odzyskuje, tylko odwołuje i wydaje nowy.
+The token is printed **once**. Only its sha256 is in the database, so nobody (the admin
+included) can read it later. A lost token is not recovered, it is revoked and reissued.
 
-## Migracja historii z prototypu
+## Migrating history from the prototype
 
 ```bash
 docker cp ~/.talk agenttalks:/tmp/talk-home
@@ -98,78 +104,79 @@ docker exec agenttalks node bin/agenttalks.js import-talk /tmp/talk-home
 docker exec agenttalks rm -rf /tmp/talk-home
 ```
 
-Import jest idempotentny, więc powtórzenie go niczego nie zdubluje. Wypisuje raport
-z liczbą pominiętych rekordów **i ich powodami**.
+The import is idempotent, so repeating it duplicates nothing. It prints a report with the
+number of skipped records **and their reasons**.
 
-## Dane i kopie zapasowe
+## Data and backups
 
-Wszystko żyje w wolumenie `agenttalks_data` zamontowanym pod `/data`:
-`agenttalks.sqlite` (baza), `agenttalks.json` (konfiguracja z sekretem sesji, prawa 600),
-`files/` (przesłane pliki, etap 3).
+Everything lives in the `agenttalks_data` volume mounted at `/data`: `agenttalks.sqlite`
+(the database), `agenttalks.json` (configuration with the session secret, mode 600),
+`files/` (uploaded files, stage 3).
 
-Właściwa droga to `agenttalks backup` - robi **spójny** zrzut bazy (`VACUUM INTO`,
-bezpieczny przy żywym serwerze w trybie WAL) plus kopię katalogu plików, w podkatalogu
-ze stemplem czasu (gotowe pod crona):
+The proper route is `agenttalks backup` - it makes a **consistent** dump of the database
+(`VACUUM INTO`, safe against a live server in WAL mode) plus a copy of the file
+directory, in a timestamped subdirectory (ready for cron):
 
 ```bash
-# kopia z działającego kontenera do wolumenu (potem zgraj /data/backups gdzie chcesz)
+# a copy from the running container into the volume (then move /data/backups wherever you want)
 docker exec agenttalks node bin/agenttalks.js backup /data/backups
 
-# odtworzenie: zatrzymaj kontener, podmień w wolumenie agenttalks.sqlite
-# (usuń też -wal/-shm) i katalog files/, wystartuj - migracje dociągną schemat
+# restoring: stop the container, swap agenttalks.sqlite in the volume
+# (delete -wal/-shm too) and the files/ directory, start it - migrations pull the schema up
 docker run --rm -v agenttalks_data:/data alpine sh -c \
-  'cp /data/backups/agenttalks-<stempel>/agenttalks.sqlite /data/ && rm -f /data/agenttalks.sqlite-wal /data/agenttalks.sqlite-shm'
+  'cp /data/backups/agenttalks-<stamp>/agenttalks.sqlite /data/ && rm -f /data/agenttalks.sqlite-wal /data/agenttalks.sqlite-shm'
 ```
 
-Zgrywanie kopii poza maszynę: `tar` na wolumenie jak niżej (to już zwykłe pliki,
-zrzut z `backup` jest spójny sam w sobie):
+Moving a copy off the machine: `tar` on the volume as below (these are ordinary files by
+now, the `backup` dump is consistent in itself):
 
 ```bash
 docker run --rm -v agenttalks_data:/data -v "$PWD:/backup" alpine \
   tar czf /backup/agenttalks-$(date +%F).tar.gz -C /data backups
 ```
 
-Instalacja bez kontenera ma to samo polecenie (`agenttalks backup <katalog>`)
-oraz `agenttalks install-service` generujące unit systemd.
+An installation without a container has the same command (`agenttalks backup <directory>`)
+plus `agenttalks install-service`, which generates a systemd unit.
 
-## Aktualizacja
+## Upgrading
 
 ```bash
 docker compose build
 docker compose up -d
 ```
 
-Migracje schematu wykonują się przy starcie, w transakcji, na podstawie `PRAGMA
-user_version`. Wycofanie zmiany to `docker compose up -d` ze starszym tagiem obrazu,
-o ile nowsza wersja nie podniosła wersji schematu.
+Schema migrations run at start, inside a transaction, based on `PRAGMA user_version`.
+Rolling a change back is `docker compose up -d` with an older image tag, as long as the
+newer version did not raise the schema version.
 
-## Współistnienie z `nestor.service`
+## Coexisting with `nestor.service`
 
-Nic nie koliduje. `nestor.service` chodzi jako proces hosta na Node 18 i słucha na
-`127.0.0.1:8787`; AgentTalks chodzi w kontenerze i **też** publikuje na `127.0.0.1:8787`.
-To jest jedyny realny konflikt na tej maszynie - port. Trzy wyjścia, w kolejności
-rozsądku:
+Nothing collides. `nestor.service` runs as a host process on Node 18 and listens on
+`127.0.0.1:8787`; AgentTalks runs in a container and **also** publishes on
+`127.0.0.1:8787`. That is the only real conflict on this machine - the port. Three ways
+out, in order of sense:
 
-1. dać AgentTalks inny port hosta (`"127.0.0.1:8788:8080"` w compose) i osobny vhost,
-2. wygasić `nestor.service`, gdy AgentTalks przejmie jego rolę (etap 2 daje MCP,
-   czyli to, po co Nestor istnieje),
-3. zostawić oba, każdy pod własną nazwą w reverse proxy.
+1. give AgentTalks a different host port (`"127.0.0.1:8788:8080"` in compose) and its own
+   vhost,
+2. retire `nestor.service` once AgentTalks takes over its role (stage 2 delivers MCP,
+   which is what Nestor exists for),
+3. keep both, each under its own name in the reverse proxy.
 
-Wybór jest decyzją operacyjną, nie techniczną, więc nie jest podjęty w kodzie.
+The choice is an operational decision, not a technical one, so it is not made in the code.
 
-## Zdrowie i diagnostyka
+## Health and diagnostics
 
 ```bash
 docker inspect --format='{{.State.Health.Status}}' agenttalks
 curl -fsS http://127.0.0.1:8787/api/health
 ```
 
-`HEALTHCHECK` woła `agenttalks healthcheck`, który zwraca 0 tylko wtedy, gdy `/api/health`
-odpowiedziało `{"ok":true}`. Sprawdzenie, które zawsze przechodzi, nie jest sprawdzeniem.
+`HEALTHCHECK` calls `agenttalks healthcheck`, which returns 0 only when `/api/health`
+answered `{"ok":true}`. A check that always passes is not a check.
 
-## Rozwój lokalny bez kontenera
+## Local development without a container
 
-Do pracy nad kodem kontener jest zbędnym pośrednikiem:
+For working on the code the container is a pointless middleman:
 
 ```bash
 node bin/agenttalks.js init --data /tmp/at-dev
@@ -177,15 +184,16 @@ node bin/agenttalks.js serve --data /tmp/at-dev
 npm test
 ```
 
-Poza kontenerem bind na adres inny niż pętla zwrotna jest **zablokowany**. Usługa, która
-po instalacji nasłuchuje na `0.0.0.0`, to najczęstszy sposób, w jaki narzędzie wewnętrzne
-trafia do internetu przez pomyłkę. W kontenerze bind na `0.0.0.0` jest konieczny i dlatego
-dozwolony (zmienna `AGENTTALKS_IN_CONTAINER=1` ustawiona w obrazie), a publikacja portu
-i tak jest kontrolowana po stronie Dockera.
+Outside a container, binding to anything other than the loopback is **blocked**. A service
+that listens on `0.0.0.0` right after installation is the most common way an internal tool
+reaches the internet by accident. Inside a container binding to `0.0.0.0` is necessary and
+therefore allowed (the `AGENTTALKS_IN_CONTAINER=1` variable set in the image), and port
+publication is controlled on the Docker side anyway.
 
-## Docker na macOS bez Docker Desktop
+## Docker on macOS without Docker Desktop
 
-Instalacja użyta przy budowie tego obrazu, nie wymaga hasła administratora ani GUI:
+The installation used while building this image; it needs no administrator password and
+no GUI:
 
 ```bash
 brew install colima docker docker-compose

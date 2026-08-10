@@ -194,7 +194,7 @@ test("NEWS.md ląduje na wiki jako strona z historią, ale nie dokłada rewizji 
 
   assert.equal(publishNewsToWiki(ctx), "zapisane");
   const page = getPage(ctx, NEWS_SLUG)!;
-  assert.match(page.body, /Co nowego w AgentTalks/);
+  assert.match(page.body, /What's new in AgentTalks/);
   assert.equal(page.updatedBy, "system");
   // Restart serwera nie moze produkowac rewizji "bez zmian" - inaczej historia
   // strony mowilaby o wdrozeniach, a nie o tresci.

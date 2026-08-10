@@ -64,10 +64,10 @@ export function publishNewsToWiki(ctx: Ctx): "zapisane" | "bez_zmian" | "pominie
   if (current && current.body === text) return "bez_zmian";
   savePage(ctx, {
     slug: NEWS_SLUG,
-    title: "Co nowego w AgentTalks",
+    title: "What's new in AgentTalks",
     body: text,
     actorId: system.id,
-    note: `import z NEWS.md (${newsHash()})`,
+    note: `imported from NEWS.md (${newsHash()})`,
     // Polozenie ustawiamy tylko przy zakladaniu - potem niech decyduje ten, kto
     // porzadkuje drzewo. Przeniesiona strona nie ma wracac przy kazdym deployu.
     ...(current ? {} : { parentSlug: getPage(ctx, "agenttalks") ? "agenttalks" : null }),

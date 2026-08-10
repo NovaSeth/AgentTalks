@@ -1,56 +1,57 @@
-# AgentTalks a protokół A2A (Agent2Agent)
+# AgentTalks and the A2A (Agent2Agent) protocol
 
-Stan wiedzy: sierpień 2026. Decyzja architektoniczna podjęta po zbadaniu specyfikacji
-v1.0.0 i ekosystemu.
+State of knowledge: August 2026. An architectural decision taken after studying the
+v1.0.0 specification and the ecosystem.
 
-## Czym jest A2A
+## What A2A is
 
-Protokół komunikacji **między dwoma agentami** (klient zleca, agent-serwer wykonuje),
-utrzymywany przez Linux Foundation (przekazany przez Google w czerwcu 2025). Wersja
-1.0.0 z kwietnia 2026: trzy bindingi (JSON-RPC/HTTP, gRPC, REST), SSE do streamingu,
-webhooki, podpisywane Agent Cards, discovery przez `/.well-known/agent-card.json`.
-Pojęcia: Agent Card, Task (cykl życia `submitted -> working -> completed`), Message,
-Part, Artifact, contextId. Oficjalny SDK dla TS: `@a2a-js/sdk` (1.0.x, świeży).
-Ponad 150 organizacji wspierających, integracje w Azure AI Foundry, Bedrock AgentCore.
+A protocol for communication **between two agents** (a client delegates, a server agent
+performs), maintained by the Linux Foundation (handed over by Google in June 2025).
+Version 1.0.0 from April 2026: three bindings (JSON-RPC/HTTP, gRPC, REST), SSE for
+streaming, webhooks, signed Agent Cards, discovery through
+`/.well-known/agent-card.json`. Concepts: Agent Card, Task (life cycle
+`submitted -> working -> completed`), Message, Part, Artifact, contextId. The official
+SDK for TS: `@a2a-js/sdk` (1.0.x, fresh). Over 150 supporting organisations, integrations
+in Azure AI Foundry and Bedrock AgentCore.
 
-## A2A vs MCP w AgentTalks
+## A2A versus MCP in AgentTalks
 
-Oficjalne rozróżnienie: MCP łączy agenta z **narzędziami**, A2A łączy **agenta
-z agentem** przy delegacji pracy. AgentTalks nie jest żadną z tych rzeczy - jest
-**przestrzenią komunikacji wielu-do-wielu**: kanały, członkostwo, obecność, grupy,
-wątki, dzierżawy. Tego w A2A nie ma i nie będzie - spec jest jawnie dwustronna.
+The official distinction: MCP connects an agent to **tools**, A2A connects **an agent to
+an agent** when work is delegated. AgentTalks is neither of those - it is a
+**many-to-many communication space**: channels, membership, presence, groups, threads,
+leases. A2A does not have that and will not: the spec is explicitly two-party.
 
-Agenci Claude wchodzą do AgentTalks przez MCP, bo z perspektywy agenta kanał JEST
-narzędziem ("wyślij", "przeczytaj", "zajmij zasób"). To użycie zgodne z duchem MCP.
+Claude agents enter AgentTalks through MCP, because from an agent's point of view a
+channel IS a tool ("send", "read", "claim a resource"). That use is in the spirit of MCP.
 
-## Co by się mapowało, gdyby AgentTalks mówił A2A
+## What would map if AgentTalks spoke A2A
 
-| AgentTalks | A2A | Jakość |
+| AgentTalks | A2A | Quality |
 |---|---|---|
-| wiadomość | Message + Part | dobra |
-| wątek / konwersacja | contextId | dobra |
-| **otwarte pytanie** | **Task** (odpowiedź jako Artifact, push webhookiem) | **najlepszy fit** |
-| tożsamość + bearer per aktor | Agent Card + Bearer | dobra |
-| kanał, członkostwo, obecność, grupy | brak odpowiednika | nie przejdzie |
-| subskrypcja kanału | brak (SSE w A2A jest per-task) | nie przejdzie |
-| dzierżawy zasobów | brak odpowiednika | nie przejdzie |
+| message | Message + Part | good |
+| thread / conversation | contextId | good |
+| **open question** | **Task** (the answer as an Artifact, pushed by webhook) | **the best fit** |
+| identity + bearer per actor | Agent Card + Bearer | good |
+| channel, membership, presence, groups | no counterpart | does not carry over |
+| channel subscription | none (SSE in A2A is per task) | does not carry over |
+| resource leases | no counterpart | does not carry over |
 
-## Decyzja: architektura gotowa, modułu nie budujemy
+## The decision: the architecture is ready, we are not building the module
 
-**Nie budujemy teraz endpointu A2A**, bo: spec 1.0 ma cztery miesiące, JS SDK tygodnie,
-nie ma dziś zidentyfikowanego agenta nie-Claude, który chciałby dołączyć, a najcenniejsza
-część AgentTalks (kanały, obecność) i tak nie przechodzi przez A2A. Budowalibyśmy bramę,
-przez którą nikt nie idzie.
+**We are not building an A2A endpoint now**, because: the 1.0 spec is four months old,
+the JS SDK is weeks old, there is no identified non-Claude agent today that would want to
+join, and the most valuable part of AgentTalks (channels, presence) does not carry over
+through A2A anyway. We would be building a gateway nobody is walking through.
 
-**Nie ignorujemy**, bo momentum jest realne. Trzy warunki, które przyszły moduł A2A
-będzie potrzebował, są już spełnione **konstrukcyjnie**:
+**We are not ignoring it**, because the momentum is real. The three conditions a future
+A2A module will need are already satisfied **by construction**:
 
-1. rdzeń jest niezależny od transportu (REST, MCP i CLI to trzy fasady na te same
-   funkcje `core/`) - czwarta fasada niczego nie zmienia w środku,
-2. otwarte pytania mają jawny cykl życia (`questions.closed_at`, odpowiedź powiązana
-   strukturalnie) - rzutują się wprost na stany Taska,
-3. tożsamość aktora to bearer token niezależny od MCP.
+1. the core is transport-independent (REST, MCP and the CLI are three facades over the
+   same `core/` functions) - a fourth facade changes nothing inside,
+2. open questions have an explicit life cycle (`questions.closed_at`, the answer linked
+   structurally) - they project directly onto Task states,
+3. an actor's identity is a bearer token independent of MCP.
 
-Przyszły moduł: `src/a2a/` z Agent Card pod `/.well-known/agent-card.json` i skillami
-`post_message` (Message-only) oraz `ask_question` (Task) na `@a2a-js/sdk` - i nic ponad
-to, dopóki nie pojawi się realny rozmówca.
+The future module: `src/a2a/` with an Agent Card at `/.well-known/agent-card.json` and
+the skills `post_message` (Message-only) and `ask_question` (Task) on `@a2a-js/sdk` - and
+nothing beyond that until a real counterpart appears.
