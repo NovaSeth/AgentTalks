@@ -1,51 +1,56 @@
 /**
- * Helpery DOM: ucieczka HTML, awatary, formaty czasu, okno modalne, szuflada.
+ * DOM helpers: HTML escaping, avatars, time formats, modal window, drawer.
  */
 import { iconMenu } from "./ikony.js";
+import { locale, t } from "./i18n.js";
 import { avatarUrl, state } from "./stan.js";
 
 export const $app = document.getElementById("app");
 
-// Wersja zaladowanego UI - czytana z adresu WLASNEGO modulu (?v=...), wiec mowi
-// o pliku, ktory faktycznie sie wykonuje, a nie o tym, co serwer ma na dysku.
-// W module nie ma document.currentScript (jest null), za to jest import.meta.url.
+// Version of the loaded UI - read from THIS module's own URL (?v=...), so it
+// describes the file that is actually executing rather than what the server has
+// on disk. Modules have no document.currentScript (it is null); they do have
+// import.meta.url.
 export const UI_STAMP = (() => {
   const m = import.meta.url.match(/[?&]v=([a-f0-9]+)/);
   return m ? m[1] : "";
 })();
 
-// ---------------------------------------------------------------- pomocnicze
+// ------------------------------------------------------------------- helpers
 export const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
 ));
 
-// Preferencja "mniej ruchu" czytana raz: samo CSS nie wylaczy scrollTo({behavior})
-// ani scrollIntoView, bo one nie sa animacja CSS tylko wywolaniem API.
-const RUCH_OGRANICZONY = window.matchMedia("(prefers-reduced-motion: reduce)");
+// "Reduced motion" preference, read once: CSS alone will not stop
+// scrollTo({behavior}) or scrollIntoView, because those are API calls rather
+// than CSS animations.
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-export const zachowanieScrolla = (smooth) => (smooth && !RUCH_OGRANICZONY.matches ? "smooth" : "auto");
+export const zachowanieScrolla = (smooth) => (smooth && !REDUCED_MOTION.matches ? "smooth" : "auto");
 
-/** Jedyny region "na zywo" w aplikacji (#live). Oglaszamy NOWOSC, a nie cala
- *  przerysowana galaz - dlatego tekst skladamy recznie, zamiast opakowywac
- *  aria-live wokol kontenera, ktory przy kazdym renderze wymienia sie w calosci. */
+/** The only live region in the application (#live). We announce what is NEW,
+ *  not the whole re-rendered branch - hence the text is assembled by hand
+ *  instead of wrapping aria-live around a container that is replaced wholesale
+ *  on every render. */
 export function announce(text) {
   const el = document.getElementById("live");
   if (el) el.textContent = String(text ?? "");
 }
 
-/** Licznik nieprzeczytanych w tytule karty. To jedyny (obok powiadomien systemowych)
- *  sygnal, ktory dziala, gdy karta jest w tle - a tam jest przez wiekszosc czasu.
+/** Unread counter in the tab title. Together with system notifications this is
+ *  the only signal that works while the tab is in the background - which is
+ *  where it spends most of its life.
  *
- *  Liczymy WIADOMOSCI, nie powiadomienia: kazda wzmianka i kazdy DM ma i wiersz
- *  nieprzeczytanych, i powiadomienie, wiec proste `unread + notifUnread` liczylo
- *  te sama rzecz dwa razy i tytul przeczyl plakietkom w panelu bocznym. Doliczamy
- *  tylko te powiadomienia, ktore NIE maja odpowiednika w licznikach rozmow -
- *  czyli zmiany stron wiki. */
+ *  We count MESSAGES, not notifications: every mention and every DM produces
+ *  both an unread row and a notification, so a plain `unread + notifUnread`
+ *  counted the same thing twice and the title contradicted the sidebar badges.
+ *  Only notifications with no counterpart in the conversation counters are
+ *  added - that is, wiki page changes. */
 export function updateTitleBadge() {
-  const rozmowy = Object.values(state.unread).reduce((n, v) => n + (v || 0), 0);
+  const conversations = Object.values(state.unread).reduce((n, v) => n + (v || 0), 0);
   const wiki = (state.notifications || []).filter((n) => !n.readAt && n.wikiSlug).length;
-  const suma = rozmowy + wiki;
-  document.title = suma > 0 ? `(${suma > 99 ? "99+" : suma}) AgentTalks` : "AgentTalks";
+  const total = conversations + wiki;
+  document.title = total > 0 ? `(${total > 99 ? "99+" : total}) AgentTalks` : "AgentTalks";
 }
 
 const PALETTE = ["#3b5ce0", "#ff6b3d", "#1fae7a", "#a45ee5", "#e0466b", "#0ea5c4", "#c98a1f", "#5c6bc0"];
@@ -65,21 +70,22 @@ function initials(nameOrHandle) {
 
 export function avatarHtml(handle, size) {
   const c = colorFor(handle || "?");
-  // Male awatary: proporcjonalnie mniejsze inicjaly i lzejszy krój (klasa sm).
+  // Small avatars: proportionally smaller initials and a lighter cut (class sm).
   const style = size ? `width:${size}px;height:${size}px;font-size:${Math.max(7, Math.round(size * 0.36))}px` : "";
   const cls = size && size <= 28 ? "av sm" : "av";
-  // Obrazek, gdy aktor go ma; inicjaly, gdy nie ma. Znikniecie pliku ma dac kropke,
-  // a nie pusta ramke z ikona zepsutego obrazka - to samo miejsce, ten sam rozmiar,
-  // zadnego przeskoku ukladu.
+  // An image when the actor has one; initials when they do not. A vanished file
+  // must produce the dot, not an empty frame with a broken-image icon - same
+  // place, same size, no layout jump.
   //
-  // Dane do zastepstwa ida w atrybutach `data-`, a nie w kodzie `onerror`.
-  // Pierwsza wersja sklejala tam JavaScript z inicjalami przepuszczonymi przez
-  // escapeHtml - a to NIE chroni w tym miejscu: przegladarka najpierw odkodowuje
-  // encje atrybutu, a dopiero potem czyta jego tresc jako kod, wiec `&#39;` wraca
-  // jako apostrof i zamyka literal. Dzis handle jest walidowany do [a-z0-9._-],
-  // wiec nie da sie tego wykorzystac - ale zabezpieczenie, ktore trzyma sie na
-  // walidacji w innym pliku, przestaje istniec przy pierwszym nowym miejscu
-  // wywolania. Atrybut `data-` + textContent nie ma tej klasy w ogole.
+  // The substitution data travels in `data-` attributes rather than inside an
+  // `onerror` handler. The first version glued JavaScript together there with
+  // initials passed through escapeHtml - which does NOT protect in that
+  // position: the browser decodes the attribute entities first and only then
+  // reads the content as code, so `&#39;` comes back as an apostrophe and closes
+  // the literal. Today the handle is validated down to [a-z0-9._-], so it cannot
+  // be exploited - but a safeguard resting on validation in another file stops
+  // existing at the first new call site. `data-` plus textContent does not have
+  // this class of bug at all.
   const url = avatarUrl(handle);
   if (url) {
     return `<img class="${cls} avimg" src="${escapeHtml(url)}" alt="" loading="lazy"` +
@@ -88,29 +94,29 @@ export function avatarHtml(handle, size) {
   return `<div class="${cls}" style="background:${c};${style}">${escapeHtml(initials(handle))}</div>`;
 }
 
-// Zdarzenie `error` obrazka NIE bakieluje, wiec nasluch musi byc w fazie
-// przechwytywania - i wystarczy JEDEN na dokument, bo listy przerysowuja sie
-// przez innerHTML i podpinanie po kazdym renderze gubiloby sie przy pierwszym
-// zapomnianym miejscu.
+// An image `error` event does NOT bubble, so the listener has to run in the
+// capture phase - and one per document is enough, because the lists re-render
+// through innerHTML and re-attaching after every render would be lost at the
+// first forgotten spot.
 document.addEventListener("error", (e) => {
   const el = e.target;
   if (!(el instanceof HTMLImageElement) || !el.classList.contains("avimg")) return;
-  const kropka = document.createElement("div");
-  kropka.className = el.className.replace(/\bavimg\b/, "").trim();
-  kropka.setAttribute("style", el.getAttribute("style") || "");
-  kropka.style.background = el.dataset.bg || "";
-  kropka.textContent = el.dataset.ini || "";
-  el.replaceWith(kropka);
+  const dot = document.createElement("div");
+  dot.className = el.className.replace(/\bavimg\b/, "").trim();
+  dot.setAttribute("style", el.getAttribute("style") || "");
+  dot.style.background = el.dataset.bg || "";
+  dot.textContent = el.dataset.ini || "";
+  el.replaceWith(dot);
 }, true);
 
 export function fmtTime(ts) {
-  return new Date(ts * 1000).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  return new Date(ts * 1000).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 export function fmtDateTime(ts) {
   const d = new Date(ts * 1000);
-  return d.toLocaleDateString("pl-PL", { day: "numeric", month: "short" }) + ", " +
-    d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString(locale(), { day: "numeric", month: "short" }) + ", " +
+    d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 export function dayKey(ts) {
@@ -122,18 +128,18 @@ export function dayLabel(ts) {
   const today = new Date();
   const y = new Date(); y.setDate(today.getDate() - 1);
   const sameDay = (a, b) => a.toDateString() === b.toDateString();
-  if (sameDay(d, today)) return "Dzisiaj";
-  if (sameDay(d, y)) return "Wczoraj";
-  return d.toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined });
+  if (sameDay(d, today)) return t("Today");
+  if (sameDay(d, y)) return t("Yesterday");
+  return d.toLocaleDateString(locale(), { day: "numeric", month: "long", year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined });
 }
 
 export function timeAgo(ts) {
-  if (!ts) return "dawno temu";
+  if (!ts) return t("a long time ago");
   const s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
-  if (s < 90) return "przed chwila";
-  if (s < 3600) return `${Math.floor(s / 60)} min temu`;
-  if (s < 86400) return `${Math.floor(s / 3600)} godz. temu`;
-  return `${Math.floor(s / 86400)} dni temu`;
+  if (s < 90) return t("just now");
+  if (s < 3600) return t("{n} min ago", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("{n} h ago", { n: Math.floor(s / 3600) });
+  return t("{n} days ago", { n: Math.floor(s / 86400) });
 }
 
 export function formatBytes(n) {
@@ -145,19 +151,19 @@ export function formatBytes(n) {
 
 export const IMG_RE = /\.(png|jpe?g|gif|webp|avif)$/i;
 
-// ------------------------------------------------------------------- modale
-// JEDNA implementacja okna modalnego dla calego UI. Powod: okno bez pulapki
-// fokusu wyglada jak modal, ale nim nie jest - Tab wychodzi na strone pod
-// spodem, Escape nie dziala, a po zamknieciu fokus laduje na <body>, czyli
-// uzytkownik klawiatury zaczyna nawigacje od poczatku dokumentu.
-const FOKUSOWALNE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+// -------------------------------------------------------------------- modals
+// ONE modal implementation for the whole UI. Reason: a window without a focus
+// trap looks like a modal but is not one - Tab walks out onto the page
+// underneath, Escape does nothing, and after closing, focus lands on <body>,
+// so a keyboard user restarts navigation from the top of the document.
+const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-/** @param html tresc modala; naglowek powinien miec id="m-title" (aria-labelledby).
- *  @param opts.trwaly okno, ktorego NIE da sie zamknac Escapem ani klikiem w tlo.
- *         Zarezerwowane dla tresci pokazywanej raz i nie do odzyskania (kod
- *         zaproszenia): odruchowy Escape kosztowal tam cala czynnosc od nowa. */
+/** @param html modal content; the heading should carry id="m-title" (aria-labelledby).
+ *  @param opts.trwaly a window that CANNOT be dismissed with Escape or a backdrop
+ *         click. Reserved for content shown once and unrecoverable (an invite
+ *         code): a reflexive Escape cost the whole operation there. */
 export function openModal(html, opts = {}) {
-  const wrocDo = document.activeElement;
+  const returnTo = document.activeElement;
   const ov = document.createElement("div");
   ov.className = `overlay ${opts.overlayClass ?? ""}`.trim();
   ov.innerHTML = `<div class="modal ${opts.modalClass ?? ""}" role="dialog" aria-modal="true"
@@ -167,7 +173,7 @@ export function openModal(html, opts = {}) {
   const onKey = (e) => {
     if (e.key === "Escape" && !ov.dataset.trwaly) { e.preventDefault(); close(); return; }
     if (e.key !== "Tab") return;
-    const f = [...ov.querySelectorAll(FOKUSOWALNE)].filter((el) => el.offsetParent !== null);
+    const f = [...ov.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
     if (!f.length) return;
     const first = f[0], last = f[f.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -176,20 +182,23 @@ export function openModal(html, opts = {}) {
   function close() {
     document.removeEventListener("keydown", onKey, true);
     ov.remove();
-    // Fokus wraca tam, skad przyszedl - inaczej po zamknieciu okna czytnik
-    // ekranu zaczyna od poczatku strony, a nie od przycisku, ktory je otworzyl.
-    if (wrocDo && document.contains(wrocDo)) wrocDo.focus();
+    // Focus returns where it came from - otherwise, after the window closes, a
+    // screen reader starts from the top of the page instead of from the button
+    // that opened it.
+    if (returnTo && document.contains(returnTo)) returnTo.focus();
   }
   document.addEventListener("keydown", onKey, true);
   ov.addEventListener("click", (e) => { if (e.target === ov && !ov.dataset.trwaly) close(); });
   const modal = ov.querySelector(".modal");
   if (opts.trwaly) ov.dataset.trwaly = "1";
-  // Fokus na pierwszym polu, a gdy okno jest samym komunikatem - na oknie.
+  // Focus on the first field, or - when the window is just a message - on the
+  // window itself.
   const firstField = modal.querySelector('input:not([type="hidden"]),textarea,select,button');
   if (firstField) firstField.focus();
   else { modal.tabIndex = -1; modal.focus(); }
-  // Zamiana okna w "nie do zgubienia" po jego otwarciu: kod zaproszenia powstaje
-  // dopiero po kliknieciu "Utwórz", czyli juz w otwartym oknie.
+  // Turning a window into "cannot be lost" after it has opened: the invite code
+  // only comes into existence after the "Create" click, i.e. inside an already
+  // open window.
   return {
     overlay: ov,
     modal,
@@ -198,35 +207,37 @@ export function openModal(html, opts = {}) {
   };
 }
 
-/** Potwierdzenie nieodwracalnej czynnosci. Systemowy `confirm()` mowil wszedzie
- *  "OK / Anuluj" - to samo przy skasowaniu jednej wiadomosci i przy skasowaniu
- *  dzialu wiki razem z historia. Tutaj przycisk NAZYWA czynnosc, a wersja
- *  `danger` odroznia wage kolorem, wiec da sie odczytac, na co sie zgadzasz,
- *  nie czytajac calego zdania.
+/** Confirmation of an irreversible action. The system `confirm()` said "OK /
+ *  Cancel" everywhere - the same words for deleting one message and for deleting
+ *  a wiki section together with its history. Here the button NAMES the action,
+ *  and the `danger` variant separates the weight by colour, so what you are
+ *  agreeing to is readable without reading the whole sentence.
  *  @returns Promise<boolean> */
-export function confirmModal({ title, body, ok = "Tak, zrób to", cancel = "Anuluj", danger = false }) {
+export function confirmModal({ title, body, ok, cancel, danger = false }) {
+  const okLabel = ok ?? t("Yes, do it");
+  const cancelLabel = cancel ?? t("Cancel");
   return new Promise((resolve) => {
     const { modal, close } = openModal(`
       <h2 id="m-title">${escapeHtml(title)}</h2>
       ${body ? `<p class="mhint">${escapeHtml(body)}</p>` : ""}
       <div class="row">
-        <button class="btn ghost" id="cf-no">${escapeHtml(cancel)}</button>
-        <button class="btn ${danger ? "danger" : ""}" id="cf-yes">${escapeHtml(ok)}</button>
+        <button class="btn ghost" id="cf-no">${escapeHtml(cancelLabel)}</button>
+        <button class="btn ${danger ? "danger" : ""}" id="cf-yes">${escapeHtml(okLabel)}</button>
       </div>`);
-    let odpowiedziano = false;
-    const zakoncz = (v) => { if (odpowiedziano) return; odpowiedziano = true; resolve(v); };
-    // Escape i klik w tlo znacza "nie" - a bez tego obietnica nigdy by sie nie
-    // rozwiazala i wywolujacy czekalby w nieskonczonosc.
-    modal.closest(".overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) zakoncz(false); });
+    let answered = false;
+    const finish = (v) => { if (answered) return; answered = true; resolve(v); };
+    // Escape and a backdrop click mean "no" - without that the promise would
+    // never settle and the caller would wait forever.
+    modal.closest(".overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) finish(false); });
     document.addEventListener("keydown", function esc(e) {
       if (e.key !== "Escape") return;
       document.removeEventListener("keydown", esc, true);
-      zakoncz(false);
+      finish(false);
     }, true);
-    modal.querySelector("#cf-no").addEventListener("click", () => { close(); zakoncz(false); });
-    modal.querySelector("#cf-yes").addEventListener("click", () => { close(); zakoncz(true); });
-    // Fokus na wyjsciu, nie na czynnosci: Enter odruchowo nacisniety w oknie
-    // ostrzegajacym nie moze potwierdzac kasowania.
+    modal.querySelector("#cf-no").addEventListener("click", () => { close(); finish(false); });
+    modal.querySelector("#cf-yes").addEventListener("click", () => { close(); finish(true); });
+    // Focus on the way out, not on the action: an Enter pressed reflexively in a
+    // warning window must not confirm a deletion.
     modal.querySelector("#cf-no").focus();
   });
 }
@@ -236,16 +247,16 @@ export function toggleDrawerClass() {
   if (shell) shell.classList.toggle("drawer", state.drawerOpen);
   const sb = document.getElementById("sidebar");
   const mobile = window.matchMedia("(max-width:760px)").matches;
-  // Transform wypycha szuflade poza ekran, ale NIE usuwa jej z kolejnosci Tab
-  // ani z drzewa dostepnosci: bez `inert` uzytkownik klawiatury wpadal
-  // w niewidoczna liste kanalow i nie mial jak z niej wyjsc.
+  // A transform pushes the drawer off screen, but does NOT remove it from the
+  // Tab order or from the accessibility tree: without `inert` a keyboard user
+  // fell into an invisible channel list with no way out.
   if (sb) sb.inert = mobile && !state.drawerOpen;
   const menu = document.getElementById("btn-menu");
   if (menu) menu.setAttribute("aria-expanded", String(!!state.drawerOpen));
   if (mobile && state.drawerOpen && sb) sb.querySelector("button")?.focus();
 }
 
-/** Ile zostalo dzierzawie - tekst odswiezany razem z sidebar (poll 30 s). */
+/** How much of a lease is left - text refreshed together with the sidebar (30 s poll). */
 export function leaseCountdown(expiresAt) {
   const s = Math.max(0, expiresAt - Math.floor(Date.now() / 1000));
   if (s >= 3600) return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
@@ -253,22 +264,22 @@ export function leaseCountdown(expiresAt) {
   return `${s} s`;
 }
 
-// ------------------------------------------------------- czesci wspolne widokow
-// Hamburger jest w czterech widokach i wszedzie steruje ta sama szuflada -
-// wiec i nazwa dostepna, i aria-expanded maja byc w jednym miejscu.
-export const hamburgerHtml = () => `<button class="iconbtn hamburger" id="btn-menu" aria-label="Lista rozmów"
-  aria-expanded="${state.drawerOpen}" aria-controls="sidebar" title="Lista rozmów">${iconMenu()}</button>`;
+// --------------------------------------------------------- shared view pieces
+// The hamburger appears in four views and drives the same drawer everywhere -
+// so both its accessible name and aria-expanded belong in one place.
+export const hamburgerHtml = () => `<button class="iconbtn hamburger" id="btn-menu" aria-label="${t("Conversation list")}"
+  aria-expanded="${state.drawerOpen}" aria-controls="sidebar" title="${t("Conversation list")}">${iconMenu()}</button>`;
 
-/** Pusty stan mowi, CO TU ZROBIC, a nie tylko "brak". Trzeci argument to
- *  opcjonalny przycisk {id, label} - podpiecie zostaje po stronie widoku,
- *  bo to on wie, co ma sie stac. */
+/** An empty state says WHAT TO DO HERE, not merely "nothing". The third argument
+ *  is an optional button {id, label} - wiring it up stays with the view, because
+ *  the view is what knows what should happen. */
 export function emptyStateHtml(iconHtml, title, sub, akcja) {
   return `<div class="empty"><div class="big">${iconHtml}</div><h2>${escapeHtml(title)}</h2>
     <p>${escapeHtml(sub)}</p>
     ${akcja ? `<button class="btn slim" id="${akcja.id}">${escapeHtml(akcja.label)}</button>` : ""}</div>`;
 }
 
-/** Pusta sekcja panelu bocznego: jedno zdanie i, gdy jest co zrobic, przycisk. */
+/** An empty sidebar section: one sentence and, when there is something to do, a button. */
 export function sidebarEmptyHtml(text, akcja) {
   return `<div class="sb-empty">${escapeHtml(text)}
     ${akcja ? `<button class="sb-cta" id="${akcja.id}">${escapeHtml(akcja.label)}</button>` : ""}</div>`;
@@ -279,7 +290,7 @@ export function skeletonHtml() {
     <div class="skeleton"><div class="sk-line w40"></div><div class="sk-line w80"></div></div>`).join("");
 }
 
-// ------------------------------------------------- pozycja czytania na liscie
+// ------------------------------------------------------- reading position
 export function isScrolledToBottom() {
   const el = document.getElementById("messages");
   if (!el) return true;
@@ -289,13 +300,14 @@ export function isScrolledToBottom() {
 export function scrollToBottom(smooth) {
   const el = document.getElementById("messages");
   if (!el) return;
-  // Preferencja "mniej ruchu" musi byc uszanowana takze tutaj: scrollTo nie jest
-  // animacja CSS, wiec zadna regula @media by go nie zatrzymala.
+  // The "reduced motion" preference has to be honoured here too: scrollTo is not
+  // a CSS animation, so no @media rule would stop it.
   el.scrollTo({ top: el.scrollHeight, behavior: zachowanieScrolla(smooth) });
 }
 
-/** Pill "nowe ponizej": widoczny, gdy nie jestes na dole; klik przewija do
- *  najnowszej. Licznik rosnie od wiadomosci, ktore przyszly poza polem widzenia. */
+/** The "new below" pill: visible when you are not at the bottom; a click scrolls
+ *  to the newest message. The counter grows from messages that arrived out of
+ *  sight. */
 export function updateJumpPill() {
   const pill = document.getElementById("jump-newest");
   if (!pill) return;
@@ -303,8 +315,10 @@ export function updateJumpPill() {
   if (atBottom) { state.newBelow = 0; pill.classList.remove("show"); return; }
   pill.classList.add("show");
   const label = pill.querySelector(".jn-label");
-  if (label) label.textContent = state.newBelow > 0
-    ? `${state.newBelow} ${state.newBelow === 1 ? "nowa wiadomość" : "nowe wiadomości"}`
-    : "Najnowsze";
+  if (label) {
+    label.textContent = state.newBelow > 0
+      ? t("{n} new messages", { n: state.newBelow })
+      : t("Latest");
+  }
   pill.classList.toggle("hascount", state.newBelow > 0);
 }

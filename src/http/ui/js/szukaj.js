@@ -1,16 +1,17 @@
 /**
- * Paleta Cmd+K: najpierw rozmowy i ludzie (bez sieci), potem tresci.
+ * The Cmd+K palette: conversations and people first (no network), content after.
  */
 import { startDirect } from "./akcje.js";
 import { api } from "./api.js";
 import { ensureActors } from "./dane.js";
 import { avatarHtml, escapeHtml, timeAgo } from "./dom.js";
 import { iconDoc, iconSearch } from "./ikony.js";
+import { t } from "./i18n.js";
 import { actorHandle, dmLabel, mergeActors, ostatnieRozmowy, state } from "./stan.js";
 import { openConversation } from "./widok-czat.js";
 import { openWikiPage } from "./widok-wiki.js";
 
-// ============================================================= SZUKAJ (Cmd+K)
+// ============================================================= SEARCH (Cmd+K)
 let searchOverlay = null;
 
 export function openSearchPalette() {
@@ -18,10 +19,10 @@ export function openSearchPalette() {
   searchOverlay = document.createElement("div");
   searchOverlay.className = "overlay palette-overlay";
   searchOverlay.innerHTML = `
-    <div class="palette" role="dialog" aria-modal="true" aria-label="Przejdź do rozmowy albo szukaj">
+    <div class="palette" role="dialog" aria-modal="true" aria-label="${t("Jump to a conversation or search")}">
       <div class="pal-head">${iconSearch()}
-        <label class="sr-only" for="pal-input">Przejdź do rozmowy albo szukaj w wiadomościach i wiki</label>
-        <input id="pal-input" placeholder="Przejdź do rozmowy albo szukaj..." autocomplete="off"></div>
+        <label class="sr-only" for="pal-input">${t("Jump to a conversation, or search messages and the wiki")}</label>
+        <input id="pal-input" placeholder="${t("Jump to a conversation or search...")}" autocomplete="off"></div>
       <div class="pal-results" id="pal-results"></div>
     </div>`;
   document.body.appendChild(searchOverlay);
@@ -29,8 +30,8 @@ export function openSearchPalette() {
   const input = searchOverlay.querySelector("#pal-input");
   const results = searchOverlay.querySelector("#pal-results");
   let items = [], remote = [], sel = 0, debounce = null, seq = 0;
-  // Lista osob bywa nieswieza, a paleta ma umiec zalozyc rozmowe - dociagamy
-  // ja w tle, bez blokowania otwarcia okna.
+  // The list of people can be stale, and the palette has to be able to start a
+  // conversation - so we fetch it in the background without blocking the window.
   ensureActors().then(() => przebuduj());
 
   const close = () => {
@@ -41,9 +42,9 @@ export function openSearchPalette() {
   };
   searchOverlay.addEventListener("click", (e) => { if (e.target === searchOverlay) close(); });
 
-  // Rozmowy i ludzie siedza JUZ w pamieci klienta, wiec ta sekcja nie czeka na
-  // siec i stoi na gorze: "przejdz do #bugs" zdarza sie kilkadziesiat razy
-  // dziennie, "znajdz wiadomosc ze slowem bugs" - kilka razy w tygodniu.
+  // Conversations and people are ALREADY in the client's memory, so this section
+  // does not wait for the network and sits on top: "jump to #bugs" happens dozens
+  // of times a day, "find a message containing bugs" - a few times a week.
   const nazwaRozmowy = (c) => (c.kind === "dm" || c.kind === "group") ? dmLabel(c) : `#${c.slug || c.topic || c.id}`;
   const lokalne = (q) => {
     const norm = q.trim().toLowerCase();
@@ -52,7 +53,7 @@ export function openSearchPalette() {
       ? moje.filter((c) => nazwaRozmowy(c).toLowerCase().includes(norm))
       : ostatnieRozmowy(moje);
     const out = wybrane.slice(0, 6).map((c) => ({
-      section: "Rozmowy",
+      section: t("Conversations"),
       html: `<span class="pal-title">${escapeHtml(nazwaRozmowy(c))}</span>
              <span class="pal-where">${c.topic ? escapeHtml(c.topic) : ""}</span>`,
       go: () => openConversation(c.id),
@@ -64,9 +65,9 @@ export function openSearchPalette() {
       const pasuje = a.handle.toLowerCase().includes(norm) || (a.displayName || "").toLowerCase().includes(norm);
       if (!pasuje) continue;
       out.push({
-        section: "Osoby",
+        section: t("People"),
         html: `${avatarHtml(a.handle, 22)}<span class="pal-title">@${escapeHtml(a.handle)}</span>
-               <span class="pal-where">${a.kind === "human" ? "człowiek" : "agent"} · rozmowa prywatna</span>`,
+               <span class="pal-where">${a.kind === "human" ? t("human") : t("agent")} · ${t("direct conversation")}</span>`,
         go: () => startDirect(a.handle),
       });
     }
@@ -83,8 +84,8 @@ export function openSearchPalette() {
   const renderResults = () => {
     if (!items.length) {
       results.innerHTML = input.value.trim()
-        ? `<div class="pal-hint">Nic nie znaleziono.</div>`
-        : `<div class="pal-hint">Wpisz nazwę kanału albo osoby - albo słowo, którego szukasz w treściach.</div>`;
+        ? `<div class="pal-hint">${t("Nothing found.")}</div>`
+        : `<div class="pal-hint">${t("Type a channel or person - or a word you are looking for in the content.")}</div>`;
       return;
     }
     let html = "", lastSection = null;
@@ -119,7 +120,7 @@ export function openSearchPalette() {
       remote = [];
       for (const h of wiki.hits) {
         remote.push({
-          section: "Wiki",
+          section: t("Wiki"),
           html: `${iconDoc()} <span class="pal-title">${escapeHtml(h.title)}</span>
                  <span class="pal-snip">${escapeHtml(h.snippet).replace(/\[/g, "<mark>").replace(/\]/g, "</mark>")}</span>`,
           go: () => openWikiPage(h.slug),
@@ -129,7 +130,7 @@ export function openSearchPalette() {
         const conv = state.conversations.find((c) => c.id === m.conversationId);
         const where = conv ? (conv.slug ? "#" + conv.slug : dmLabel(conv)) : "";
         remote.push({
-          section: "Wiadomości",
+          section: t("Messages"),
           html: `${avatarHtml(actorHandle(m.actorId), 22)}
                  <span class="pal-title">@${escapeHtml(actorHandle(m.actorId))} <span class="pal-where">${escapeHtml(where)} · ${timeAgo(m.ts)}</span></span>
                  <span class="pal-snip">${escapeHtml(m.body.slice(0, 140))}</span>`,
@@ -142,7 +143,7 @@ export function openSearchPalette() {
   };
 
   input.addEventListener("input", () => {
-    // Sekcja lokalna reaguje NATYCHMIAST; siec dopiero po 250 ms bezruchu.
+    // The local section reacts IMMEDIATELY; the network only after 250 ms of stillness.
     przebuduj();
     clearTimeout(debounce);
     debounce = setTimeout(() => doSearch(input.value), 250);
@@ -159,5 +160,5 @@ export function openSearchPalette() {
   };
   document.addEventListener("keydown", onKey, true);
   input.focus();
-  przebuduj();   // przy pustym polu: ostatnio otwierane rozmowy
+  przebuduj();   // with an empty field: the most recently opened conversations
 }

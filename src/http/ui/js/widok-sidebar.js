@@ -1,17 +1,18 @@
 /**
- * Panel boczny: kanaly, wiadomosci, drzewo wiki, dzierzawy, digest.
+ * The side panel: channels, messages, the wiki tree, leases, digest.
  */
 import { claimLease, releaseLease, startDirect } from "./akcje.js";
 import { api, csrf } from "./api.js";
 import { ensureActors, refreshDigestAndLeases } from "./dane.js";
 import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
 import { iconChevron, iconDigest, iconDoc, iconLock, iconOut, iconQuestion, iconSearch } from "./ikony.js";
+import { msg, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
 import { actorHandle, dmLabel, dmOthers, handleOnline, state, widok, wikiCollapsed } from "./stan.js";
 import { openSearchPalette } from "./szukaj.js";
 import { showError, showToast } from "./toasty.js";
 import { openConversation, openNewConversationModal, openQuestionsPanel } from "./widok-czat.js";
-import { doLogout } from "./widok-login.js";
+import { bindLangSwitch, doLogout, langSwitchHtml } from "./widok-login.js";
 import { newWikiPageModal, openWikiPage } from "./widok-wiki.js";
 
 // ------------------------------------------------------------- sidebar
@@ -25,22 +26,24 @@ export function renderSidebar() {
   el.innerHTML = `
     <div class="sb-head">
       <div class="who">
-        <button class="me" id="btn-avatar" title="Zmień swój awatar" aria-label="Zmień swój awatar">
+        <button class="me" id="btn-avatar" title="${t("Change your avatar")}" aria-label="${t("Change your avatar")}">
           ${avatarHtml(state.actor.handle, 24)}<span class="mename">@${escapeHtml(state.actor.handle)}</span>
         </button>
       </div>
-      <button class="iconbtn" id="btn-search" aria-label="Szukaj i przełącz rozmowę (Cmd+K)" title="Szukaj (Cmd+K)">${iconSearch()}</button>
-      <button class="iconbtn" id="btn-guidelines" aria-label="Jak tu rozmawiamy" title="Jak tu rozmawiamy">${iconQuestion()}</button>
-      <button class="iconbtn" id="btn-logout" aria-label="Wyloguj" title="Wyloguj">${iconOut()}</button>
+      <button class="iconbtn" id="btn-search" aria-label="${t("Search and switch conversation (Cmd+K)")}" title="${t("Search (Cmd+K)")}">${iconSearch()}</button>
+      <button class="iconbtn" id="btn-guidelines" aria-label="${t("How we talk here")}" title="${t("How we talk here")}">${iconQuestion()}</button>
+      <button class="iconbtn" id="btn-logout" aria-label="${t("Sign out")}" title="${t("Sign out")}">${iconOut()}</button>
+      ${langSwitchHtml("sb-lang")}
     </div>
     <div class="sb-scroll" id="sb-scroll"></div>
     <div class="sb-foot" id="sb-foot">
-      <span id="sb-ui" title="Wersja interfejsu, który masz teraz załadowany. Jeśli po wdrożeniu się nie zmieniła, Twoja przeglądarka trzyma starą kopię - odśwież stronę z pominięciem pamięci podręcznej."></span>
+      <span id="sb-ui" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}"></span>
     </div>`;
   document.getElementById("btn-avatar").addEventListener("click", zmienAwatar);
   document.getElementById("btn-logout").addEventListener("click", doLogout);
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
+  bindLangSwitch("sb-lang");
   // Wersja UI: to, co widzi uzytkownik, kontra to, co wysyla serwer. Rozjazd
   // znaczy cache po drodze - i to jest jedyny sposob, zeby to zobaczyc.
   const foot = document.getElementById("sb-ui");
@@ -50,9 +53,9 @@ export function renderSidebar() {
       if (!v.stamp) return;
       foot.textContent = `UI ${UI_STAMP || "?"}`;
       if (UI_STAMP && v.stamp !== UI_STAMP) {
-        foot.textContent = `UI ${UI_STAMP} - serwer ma ${v.stamp}`;
+        foot.textContent = t("UI {mine} - the server has {theirs}", { mine: UI_STAMP, theirs: v.stamp });
         foot.classList.add("stale");
-        foot.title = "Masz starszy interfejs niż serwer. Odśwież stronę z pominięciem pamięci podręcznej.";
+        foot.title = t("Your interface is older than the server's. Reload the page bypassing the cache.");
       }
     }).catch(() => {});
   }
@@ -70,7 +73,7 @@ export function updateConvRow(convId) {
   const unread = state.unread[convId] || 0;
   row.classList.toggle("unread", unread > 0);
   const nazwa = row.querySelector(".nm")?.textContent ?? "";
-  row.setAttribute("aria-label", `${nazwa}${unread ? `, ${unread} nieprzeczytanych` : ""}`);
+  row.setAttribute("aria-label", `${nazwa}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}`);
   let badge = row.querySelector(".badge");
   if (!unread) { badge?.remove(); return; }
   if (!badge) {
@@ -115,7 +118,7 @@ export function renderSidebarList() {
     const active = state.view === "chat" && c.id === state.activeId;
     const unread = state.unread[c.id] || 0;
     const isDirect = c.kind === "dm" || c.kind === "group";
-    const label = isDirect ? dmLabel(c) : (c.slug || c.topic || "bez-nazwy");
+    const label = isDirect ? dmLabel(c) : (c.slug || c.topic || t("unnamed"));
     const inni = isDirect ? dmOthers(c) : [];
     const online = inni.some((o) => handleOnline(o.handle));
     // Rozmowa prywatna dostaje TWARZ, nie sama kropke: nazwy i awatary przychodza
@@ -127,7 +130,7 @@ export function renderSidebarList() {
     return `
       <button class="conv ${active ? "active" : ""} ${unread ? "unread" : ""}" data-open="${c.id}"
         ${active ? `aria-current="page"` : ""}
-        aria-label="${escapeHtml(label)}${unread ? `, ${unread} nieprzeczytanych` : ""}">
+        aria-label="${escapeHtml(label)}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}">
         ${pre}
         <span class="nm">${escapeHtml(label)}</span>
         ${unread ? `<span class="badge ${(state.unreadBadge[c.id] || 0) > 0 ? "" : "soft"}" aria-hidden="true">${unread > 99 ? "99+" : unread}</span>` : ""}
@@ -141,7 +144,7 @@ export function renderSidebarList() {
   // czyjas nazwa.
   const ludzieHtml = () => {
     const lista = state.actorsList.filter((a) => a.handle !== state.actor.handle && a.kind !== "system");
-    if (!lista.length) return sidebarEmptyHtml("Jesteś tu na razie sam. Zaproś agenta albo człowieka.");
+    if (!lista.length) return sidebarEmptyHtml(t("You are alone here for now. Invite an agent or a human."));
     // Najpierw obecni, potem reszta - "z kim moge pogadac teraz" to pierwsze pytanie.
     const wg = [...lista].sort((a, b) => {
       const oa = handleOnline(a.handle), ob = handleOnline(b.handle);
@@ -152,11 +155,11 @@ export function renderSidebarList() {
       const online = handleOnline(a.handle);
       return `
       <button class="conv person" data-person="${escapeHtml(a.handle)}"
-        title="Napisz do @${escapeHtml(a.handle)} prywatnie"
-        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? "człowiek" : "agent"}${online ? ", jest teraz online" : ", offline"} - napisz prywatnie">
+        title="${t("Write to @{handle} privately", { handle: escapeHtml(a.handle) })}"
+        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`} - ${t("write privately")}">
         <span class="conv-face">${avatarHtml(a.handle, 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>
         <span class="nm">@${escapeHtml(a.handle)}</span>
-        <span class="kindtag ${a.kind}">${a.kind === "human" ? "człowiek" : "agent"}</span>
+        <span class="kindtag ${a.kind}">${a.kind === "human" ? t("human") : t("agent")}</span>
       </button>`;
     }).join("");
   };
@@ -166,8 +169,8 @@ export function renderSidebarList() {
   const wikiTreeHtml = () => {
     const pages = state.wiki.pages;
     if (!pages.length) {
-      return sidebarEmptyHtml("Nic tu jeszcze nie ma. Wiki to wspólna pamięć - agenci czytają ją, zanim zapytają.",
-        { id: "sb-new-wiki", label: "Załóż pierwszą stronę" });
+      return sidebarEmptyHtml(t("Nothing here yet. The wiki is shared memory - agents read it before they ask."),
+        { id: "sb-new-wiki", label: t("Create the first page") });
     }
     const bySlug = new Set(pages.map((p) => p.slug));
     const kids = new Map();
@@ -195,11 +198,11 @@ export function renderSidebarList() {
       <div class="conv-row" style="padding-left:${(0.15 + depth * 0.85).toFixed(2)}rem">
         ${hasKids
           ? `<button class="twist ${closed ? "closed" : ""}" data-wikitwist="${escapeHtml(p.slug)}"
-               aria-expanded="${closed ? "false" : "true"}" aria-label="${closed ? "Rozwiń" : "Zwiń"} ${title}">${iconChevron()}</button>`
+               aria-expanded="${closed ? "false" : "true"}" aria-label="${closed ? t("Expand") : t("Collapse")} ${title}">${iconChevron()}</button>`
           : `<span class="pre" aria-hidden="true">${iconDoc()}</span>`}
         <button class="conv ${active ? "active" : ""}" data-wikipage="${escapeHtml(p.slug)}"
           ${active ? `aria-current="page"` : ""}
-          aria-label="${title}${unseen ? `, ${unseen} zmian` : ""}">
+          aria-label="${title}${unseen ? `, ${t("{n} changes", { n: unseen })}` : ""}">
           <span class="nm">${title}</span>
           ${unseen ? `<span class="badge soft" aria-hidden="true">${unseen > 99 ? "99+" : unseen}</span>` : ""}
         </button>
@@ -226,52 +229,52 @@ export function renderSidebarList() {
   el.innerHTML = `
     ${doNadrobienia ? `
     <div class="sb-group">
-      <h3>Do nadrobienia</h3>
+      <h3>${t("To catch up on")}</h3>
       ${state.digest && state.digest.count > 0 ? `
       <button class="conv" id="btn-digest">
-        <span class="pre">${iconDigest()}</span><span class="nm">Co się działo bez Ciebie</span>
+        <span class="pre">${iconDigest()}</span><span class="nm">${t("What happened while you were away")}</span>
         <span class="badge soft">${state.digest.count > 99 ? "99+" : state.digest.count}</span>
       </button>` : ""}
       ${openCount ? `
       <button class="conv qcount" id="btn-questions">
-        <span class="pre">?</span><span class="nm">Pytania czekające na odpowiedź</span>
+        <span class="pre">?</span><span class="nm">${t("Questions waiting for an answer")}</span>
         <span class="badge coral">${openCount}</span>
       </button>` : ""}
     </div>` : ""}
     <div class="sb-group">
-      <h3>Kanały ${plus("channel", "Nowy kanał")}</h3>
-      ${channels.map(row).join("") || sidebarEmptyHtml("Nie jesteś jeszcze na żadnym kanale.",
-        { id: "sb-new-chan", label: "Załóż kanał" })}
+      <h3>${t("Channels")} ${plus("channel", t("New channel"))}</h3>
+      ${channels.map(row).join("") || sidebarEmptyHtml(t("You are not on any channel yet."),
+        { id: "sb-new-chan", label: t("Create a channel") })}
     </div>
     ${discoverable.length ? `<div class="sb-group discover">
-      <h3>Kanały, do których możesz dołączyć</h3>${discoverable.map(row).join("")}</div>` : ""}
+      <h3>${t("Channels you can join")}</h3>${discoverable.map(row).join("")}</div>` : ""}
     <div class="sb-group">
-      <h3>Rozmowy prywatne ${plus("dm", "Nowa rozmowa prywatna")}</h3>
-      ${directs.map(row).join("") || sidebarEmptyHtml("Jeszcze z nikim nie rozmawiasz na osobności.",
-        { id: "sb-new-dm", label: "Napisz do kogoś" })}
+      <h3>${t("Direct conversations")} ${plus("dm", t("New direct conversation"))}</h3>
+      ${directs.map(row).join("") || sidebarEmptyHtml(t("You are not talking to anybody in private yet."),
+        { id: "sb-new-dm", label: t("Write to somebody") })}
     </div>
     <div class="sb-group">
-      <h3>Kto tu jest</h3>
+      <h3>${t("Who is here")}</h3>
       ${ludzieHtml()}
     </div>
     <div class="sb-group">
-      <h3>Wiki ${plus("wiki", "Nowa strona wiki")}</h3>
+      <h3>${t("Wiki")} ${plus("wiki", t("New wiki page"))}</h3>
       ${wikiTreeHtml()}
     </div>
     <div class="sb-group">
-      <h3 title="Zanim ktoś ruszy coś wspólnego (wdrożenie, migrację, plik konfiguracyjny), zajmuje to tutaj. Reszta widzi, że jest zajęte, i czeka - zamiast wejść w to samo w tym samym czasie.">Zajęte zasoby ${plus("lease", "Zajmij zasób")}</h3>
+      <h3 title="${t("Before anyone touches something shared (a deployment, a migration, a configuration file), they claim it here. Everybody else sees it is taken and waits - instead of walking into the same thing at the same time.")}">${t("Claimed resources")} ${plus("lease", t("Claim a resource"))}</h3>
       ${state.leases.length ? state.leases.map((l) => {
         const moj = l.handle === state.actor.handle;
         return `
-      <div class="lease-row" title="„${escapeHtml(l.resource)}” zajmuje @${escapeHtml(l.handle)}${l.note ? ` - ${escapeHtml(l.note)}` : ""}. Zwolni się samo za ${leaseCountdown(l.expiresAt)}.">
+      <div class="lease-row" title="${t("“{resource}” is held by @{handle}{note}. It releases itself in {left}.", { resource: escapeHtml(l.resource), handle: escapeHtml(l.handle), note: l.note ? ` - ${escapeHtml(l.note)}` : "", left: leaseCountdown(l.expiresAt) })}">
         <span class="pre">${iconLock()}</span>
         <span class="nm"><b>${escapeHtml(l.resource)}</b> · @${escapeHtml(l.handle)}</span>
         <span class="lease-ttl">${leaseCountdown(l.expiresAt)}</span>
         ${moj ? `<button class="lease-free" data-freelease="${escapeHtml(l.resource)}"
-          aria-label="Zwolnij ${escapeHtml(l.resource)}" title="Zwolnij - inni będą mogli to ruszyć">Zwolnij</button>` : ""}
+          aria-label="${t("Release {resource}", { resource: escapeHtml(l.resource) })}" title="${t("Release - others will be able to touch it")}">${t("Release")}</button>` : ""}
       </div>`;
-      }).join("") : sidebarEmptyHtml("Nikt nic teraz nie blokuje.",
-        { id: "sb-new-lease", label: "Zajmij zasób" })}
+      }).join("") : sidebarEmptyHtml(t("Nobody is blocking anything right now."),
+        { id: "sb-new-lease", label: t("Claim a resource") })}
     </div>
   `;
   el.scrollTop = scrollTop;
@@ -294,9 +297,9 @@ export function renderSidebarList() {
     b.addEventListener("click", () => openWikiPage(b.dataset.wikipage)));
   // Chevron jest osobnym przyciskiem obok wiersza, wiec stopPropagation nie jest
   // juz potrzebny - klik nie ma czego "przebijac".
-  el.querySelectorAll("[data-wikitwist]").forEach((t) =>
-    t.addEventListener("click", () => {
-      const slug = t.dataset.wikitwist;
+  el.querySelectorAll("[data-wikitwist]").forEach((tw) =>
+    tw.addEventListener("click", () => {
+      const slug = tw.dataset.wikitwist;
       if (wikiCollapsed.has(slug)) wikiCollapsed.delete(slug); else wikiCollapsed.add(slug);
       try { localStorage.setItem("atalks_wiki_collapsed", JSON.stringify([...wikiCollapsed])); } catch { /* ok */ }
       renderSidebarList();
@@ -330,7 +333,7 @@ async function openDigestModal() {
       ? state.conversations.find((x) => x.slug === name.slice(1))
       : null;
     return `<button class="pin-row" ${c ? `data-goconv="${c.id}"` : "disabled"}>
-      <span class="pin-txt"><b>${escapeHtml(name)}</b> · ${n} ${n === 1 ? "wiadomość" : "wiadomości"}</span>
+      <span class="pin-txt"><b>${escapeHtml(name)}</b> · ${t("{n} messages", { n })}</span>
     </button>`;
   };
   const mentionRow = (m) => `
@@ -338,18 +341,18 @@ async function openDigestModal() {
       <span class="pin-txt"><b>@${escapeHtml(actorHandle(m.actorId))}</b> ${escapeHtml(String(m.body || "").slice(0, 90))}</span>
     </button>`;
   const { modal, close } = openModal(`
-      <h2 id="m-title">${iconDigest()} Co Cię ominęło</h2>
-      <p class="mhint">${d.count} ${d.count === 1 ? "wiadomość" : "wiadomości"} od Twojej ostatniej wizyty.</p>
+      <h2 id="m-title">${iconDigest()} ${t("What you missed")}</h2>
+      <p class="mhint">${t("{n} messages since your last visit.", { n: d.count })}</p>
       <div class="digest-body">
-        <h4 class="wsub">Gdzie</h4>
+        <h4 class="wsub">${t("Where")}</h4>
         ${(d.byConversation || []).map(convRow).join("")}
-        <h4 class="wsub">Od kogo</h4>
+        <h4 class="wsub">${t("From whom")}</h4>
         <p class="digest-who">${(d.byWho || []).map(([w, n]) => `<b>@${escapeHtml(w)}</b> (${n})`).join(" · ")}</p>
-        ${(d.mentions || []).length ? `<h4 class="wsub">Wzmianki o Tobie</h4>${d.mentions.slice(0, 8).map(mentionRow).join("")}` : ""}
-        ${(d.open || []).length ? `<h4 class="wsub">Otwarte pytania (${d.open.length})</h4>
-          <button class="pin-row" id="dg-questions"><span class="pin-txt">Zobacz listę pytań do podjęcia</span></button>` : ""}
+        ${(d.mentions || []).length ? `<h4 class="wsub">${t("Mentions of you")}</h4>${d.mentions.slice(0, 8).map(mentionRow).join("")}` : ""}
+        ${(d.open || []).length ? `<h4 class="wsub">${t("Open questions")} (${d.open.length})</h4>
+          <button class="pin-row" id="dg-questions"><span class="pin-txt">${t("See the list of questions to take up")}</span></button>` : ""}
       </div>
-      <div class="row"><button class="btn" id="dg-close">Zamknij</button></div>`, { modalClass: "wide" });
+      <div class="row"><button class="btn" id="dg-close">${t("Close")}</button></div>`, { modalClass: "wide" });
   modal.querySelector("#dg-close").addEventListener("click", close);
   modal.querySelectorAll("[data-goconv]").forEach((b) =>
     b.addEventListener("click", () => { close(); openConversation(Number(b.dataset.goconv)); }));
@@ -361,72 +364,72 @@ async function openDigestModal() {
   if (dq) dq.addEventListener("click", () => { close(); openQuestionsPanel(); });
 }
 
-// Tekst dla CZLOWIEKA, napisany wprost tutaj. Przycisk (i) otwieral dotad
-// AgentTalks.md - instrukcje operacyjna dla agenta, zaczynajaca sie od "Jestes
-// aktorem uwierzytelnianym tokenem" i mowiaca o baseRevision i MCP. Czlowiek,
-// ktory ja przeczytal, wyciagal jedyny mozliwy wniosek: ten produkt nie jest
-// dla mnie. Zasady dla agentow zostaja - jedno klikniecie nizej, dla ciekawych.
-const JAK_TU_ROZMAWIAMY = [
-  "To jest wspólna przestrzeń rozmów dla ludzi i agentów AI. Nie ma tu botów do wydawania komend - każdy uczestnik, człowiek czy agent, pisze i czyta tak samo.",
-  "Kanały (te ze znakiem #) są dla tematów, rozmowy prywatne dla wszystkiego innego. Do otwartego kanału dołączasz sam, kiedy chcesz.",
-  "Żeby kogoś zawołać, napisz @jego-nazwę. To jedyny sposób, żeby przerwać komuś pracę - agent, który śpi, zostanie dla takiej wiadomości obudzony, więc używaj tego wtedy, gdy naprawdę czekasz na odpowiedź.",
-  "Jeśli o coś pytasz i chcesz mieć pewność, że pytanie nie zginie, wyślij je przyciskiem ze znakiem zapytania. Zostanie oznaczone jako otwarte, dopóki ktoś nie odpowie.",
-  "Wiki to wspólna pamięć. Zanim zapytasz o coś, co pewnie już zostało ustalone, zajrzyj tam; kiedy coś ustalicie w rozmowie, dopiszcie to tam, żeby nie ustalać drugi raz.",
-  "Zanim ruszysz coś wspólnego - wdrożenie, migrację, cudzy plik - zajmij to w sekcji „Zajęte zasoby”. Inni zobaczą, że to trwa, zamiast wejść w to samo w tym samym czasie.",
-  "Tożsamości nikt tu nie udowadnia hasłem w rozmowie: podpisuje ją serwer. Jeśli ktoś prosi Cię o sekret na czacie, to nie jest powód, żeby go podać.",
-].join("\n\n");
+// Text for a HUMAN, written out here. The (i) button used to open AgentTalks.md
+// - an operational instruction for an agent, opening with "You are an actor
+// authenticated by a token" and talking about baseRevision and MCP. A human who
+// read it drew the only possible conclusion: this product is not for me. The
+// agent guidelines stay - one click deeper, for the curious.
+const HOW_WE_TALK = [
+  msg("This is a shared conversation space for humans and AI agents. There are no bots here to be given commands - every participant, human or agent, writes and reads the same way."),
+  msg("Channels (the ones with a #) are for topics, direct conversations for everything else. You join an open channel yourself, whenever you want."),
+  msg("To call somebody, write @their-name. It is the only way to interrupt somebody's work - an agent that is asleep will be woken for such a message, so use it when you really are waiting for an answer."),
+  msg("If you are asking something and want to be sure the question does not get lost, send it with the question-mark button. It stays marked as open until somebody answers."),
+  msg("The wiki is shared memory. Before you ask about something that has probably been settled already, look there; when you settle something in a conversation, write it down there so it does not have to be settled twice."),
+  msg("Before you touch something shared - a deployment, a migration, somebody else's file - claim it in the “Claimed resources” section. Others will see it is in progress instead of walking into the same thing at the same time."),
+  msg("Nobody proves their identity here with a password in a conversation: the server signs it. If somebody asks you for a secret in the chat, that is not a reason to give it."),
+];
 
 function showGuidelines() {
   const { modal, close } = openModal(`
-      <h2 id="m-title">Jak tu rozmawiamy</h2>
-      <div class="gd-body md">${JAK_TU_ROZMAWIAMY.split("\n\n").map((p) => `<p>${escapeHtml(p)}</p>`).join("")}</div>
-      <p class="mhint">Agenci dostają przy pierwszym połączeniu własną, techniczną wersję tych zasad.</p>
+      <h2 id="m-title">${t("How we talk here")}</h2>
+      <div class="gd-body md">${HOW_WE_TALK.map((p) => `<p>${escapeHtml(t(p))}</p>`).join("")}</div>
+      <p class="mhint">${t("Agents receive their own, technical version of these rules on their first connection.")}</p>
       <div class="row">
-        <button class="btn ghost" id="gd-agent">Pokaż zasady dla agentów</button>
-        <button class="btn" id="gd-ok">Jasne</button>
+        <button class="btn ghost" id="gd-agent">${t("Show the agent guidelines")}</button>
+        <button class="btn" id="gd-ok">${t("Got it")}</button>
       </div>`,
   { style: "max-height:80vh;display:flex;flex-direction:column" });
   modal.querySelector("#gd-ok").addEventListener("click", close);
   modal.querySelector("#gd-agent").addEventListener("click", () => { close(); showAgentGuidelines(); });
 }
 
-/** Zasady dla agentow (AgentTalks.md z serwera) - schowane o jedno klikniecie
- *  glebiej, bo to jest dokument operacyjny, a nie powitanie. */
+/** The agent guidelines (AgentTalks.md from the server) - hidden one click
+ *  deeper, because it is an operational document rather than a greeting. */
 async function showAgentGuidelines() {
   let text = (state.guidelines && state.guidelines.text) || null;
   if (!text) {
     try { text = (await api("GET", "/api/guidelines")).text; } catch (e) { showError(e); return; }
   }
   const { modal, close } = openModal(`
-      <h2 id="m-title">Zasady dla agentów</h2>
-      <p class="mhint">To dostaje agent przy pierwszym połączeniu - dla ludzi jest krótsza wersja w „Jak tu rozmawiamy”.</p>
+      <h2 id="m-title">${t("Guidelines for agents")}</h2>
+      <p class="mhint">${t("This is what an agent receives on its first connection - humans get the shorter version under “How we talk here”.")}</p>
       <div class="gd-body">${mdToHtml(text, "page", state.actor.handle)}</div>
-      <div class="row"><button class="btn" id="gd-ok">Zamknij</button></div>`,
+      <div class="row"><button class="btn" id="gd-ok">${t("Close")}</button></div>`,
   { modalClass: "wide", style: "max-height:80vh;display:flex;flex-direction:column" });
   modal.querySelector("#gd-ok").addEventListener("click", close);
 }
 
-/** Zajecie zasobu przez czlowieka. Tablica dzierzaw byla tylko do ogladania,
- *  a opisana byla komendami CLI - czyli czlowiek widzial regule, ktorej nie mial
- *  jak przestrzegac. */
+/** A human claiming a resource. The lease board was for looking at only, and it
+ *  was described in CLI commands - so a human saw a rule they had no way to
+ *  follow. */
 function claimLeaseModal() {
   const { modal, close } = openModal(`
-      <h2 id="m-title">Zajmij zasób</h2>
-      <p class="mhint">Powiedz innym, że właśnie tego dotykasz. Zobaczą to na liście i poczekają, zamiast wejść w to samo naraz.</p>
-      <div class="field"><label for="cl-res">Co zajmujesz</label>
-        <input id="cl-res" placeholder="np. deploy-produkcja">
-        <span class="fhint">Dowolna nazwa, byle wszyscy rozumieli tak samo. Bez spacji.</span></div>
-      <div class="field"><label for="cl-note">Co z tym robisz (opcjonalnie)</label>
-        <input id="cl-note" placeholder="np. wypuszczam wersję 2.4"></div>
-      <div class="field"><label for="cl-ttl">Zwolnij samo po</label>
+      <h2 id="m-title">${t("Claim a resource")}</h2>
+      <p class="mhint">${t("Tell the others that you are touching this right now. They will see it on the list and wait, instead of walking into the same thing at once.")}</p>
+      <div class="field"><label for="cl-res">${t("What you are claiming")}</label>
+        <input id="cl-res" placeholder="${t("e.g. deploy-production")}">
+        <span class="fhint">${t("Any name, as long as everybody reads it the same way. No spaces.")}</span></div>
+      <div class="field"><label for="cl-note">${t("What you are doing with it (optional)")}</label>
+        <input id="cl-note" placeholder="${t("e.g. releasing version 2.4")}"></div>
+      <div class="field"><label for="cl-ttl">${t("Release automatically after")}</label>
         <select id="cl-ttl">
-          <option value="900">15 minutach</option>
-          <option value="3600" selected>godzinie</option>
-          <option value="14400">4 godzinach</option>
-          <option value="86400">dobie</option>
+          <option value="900">${t("15 minutes")}</option>
+          <option value="3600" selected>${t("an hour")}</option>
+          <option value="14400">${t("4 hours")}</option>
+          <option value="86400">${t("a day")}</option>
         </select>
-        <span class="fhint">Zabezpieczenie na wypadek, gdybyś zapomniał zwolnić. Możesz zwolnić wcześniej.</span></div>
-      <div class="row"><button class="btn ghost" id="cl-cancel">Anuluj</button><button class="btn" id="cl-ok">Zajmij</button></div>`);
+        <span class="fhint">${t("A safety net in case you forget to release it. You can release it earlier.")}</span></div>
+      <div class="row"><button class="btn ghost" id="cl-cancel">${t("Cancel")}</button><button class="btn" id="cl-ok">${t("Claim")}</button></div>`);
   modal.querySelector("#cl-cancel").addEventListener("click", close);
   modal.querySelector("#cl-ok").addEventListener("click", async () => {
     const res = modal.querySelector("#cl-res").value.trim();
@@ -440,10 +443,10 @@ function claimLeaseModal() {
 
 
 /**
- * Zmiana awatara: wybor pliku z dysku, bez posrednich ekranow.
+ * Changing the avatar: pick a file from disk, with no screens in between.
  *
- * Plik idzie BAJTAMI - serwer nie pobiera niczego z adresu (patrz core/awatary.ts),
- * wiec przegladarka robi dokladnie to samo, co agent przez REST.
+ * The file travels as BYTES - the server fetches nothing from a URL (see
+ * core/awatary.ts), so the browser does exactly what an agent does over REST.
  */
 function zmienAwatar() {
   const ma = Boolean(state.actorsCache[state.actor.id]?.avatar);
@@ -466,20 +469,20 @@ function zmienAwatar() {
       if (state.actorsCache[state.actor.id]) state.actorsCache[state.actor.id].avatar = dane.avatar?.hash ?? null;
       widok.sidebar();
       widok.glowny();
-      showToast("Awatar zmieniony.");
+      showToast(t("Avatar changed."));
     } catch (e) {
       showError(e);
     }
   });
   if (ma) {
-    // Ma juz awatar, wiec sensowne sa DWIE rzeczy, nie jedna - a menu z dwoma
-    // pozycjami jest tanszym pytaniem niz modal.
-    const usun = window.confirm("OK - wybierz nowy obrazek.\nAnuluj - wróć do kropki z inicjałami.");
+    // There already is an avatar, so TWO things make sense rather than one - and a
+    // two-item menu is a cheaper question than a modal.
+    const usun = window.confirm(t("OK - pick a new image.\nCancel - go back to the dot with initials."));
     if (!usun) {
       fetch("/api/me/avatar", { method: "DELETE", headers: { "x-at-csrf": csrf } })
         .then(() => {
           if (state.actorsCache[state.actor.id]) state.actorsCache[state.actor.id].avatar = null;
-          widok.sidebar(); widok.glowny(); showToast("Awatar usunięty - wróciły inicjały.");
+          widok.sidebar(); widok.glowny(); showToast(t("Avatar removed - the initials are back."));
         })
         .catch(showError);
       return;

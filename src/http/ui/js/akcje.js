@@ -1,17 +1,18 @@
 /**
- * Akcje na wiadomosciach: wysylka (optymistyczna, z ponowieniem), reakcje,
- * edycja, kasowanie. Rysowanie przez rejestr `widok`.
+ * Message actions: sending (optimistic, with retry), reactions, editing,
+ * deleting. Drawing goes through the `widok` registry.
  */
 import { api } from "./api.js";
 import { loadConversationsList, mySessionId, refreshQuestions } from "./dane.js";
 import { iconCheck } from "./ikony.js";
+import { t } from "./i18n.js";
 import { clearDraft, findMsgById, state, upsertMessage, widok } from "./stan.js";
 import { showError, showToast } from "./toasty.js";
 
-// Wysylka optymistyczna. Dymek pojawia sie NATYCHMIAST (wyszarzony), bo w chwili
-// wyczyszczenia pola tekstowego jest to jedyna kopia tego, co uzytkownik napisal.
-// Nieudana wysylka zostawia go w stanie "Nie wysłano" z przyciskiem ponowienia -
-// rdzen ma dedup po clientMsgId, wiec retry nie zdubluje wiadomosci.
+// Optimistic send. The bubble appears IMMEDIATELY (greyed out), because the
+// moment the text field is cleared it is the only copy of what the user wrote.
+// A failed send leaves it in a "Not sent" state with a retry button - the core
+// deduplicates by clientMsgId, so a retry will not double the message.
 let tmpSeq = 0;
 
 function pendingList(convId) { return state.pending[convId] || (state.pending[convId] = []); }
@@ -42,24 +43,24 @@ export async function sendMessage(text, opts = {}) {
       state.lastDelivery = { conversationId: convId, messageId: data.message.id, delivery: data.delivery };
       const unreachable = data.delivery.filter((d) => !d.reachable);
       if (unreachable.length) {
-        showToast(`${unreachable.map((d) => "@" + d.handle).join(", ")} nie odbierze tego teraz - `
-          + "wiadomość czeka i zostanie doręczona, gdy wróci.");
+        showToast(t("{who} will not receive this right now - the message waits and will be delivered when they are back.",
+          { who: unreachable.map((d) => "@" + d.handle).join(", ") }));
       }
     }
-    // Wysylka z panelu watku sama rysuje swoja liste i nie dotyka glownego pola.
-    // Wszystko inne przechodzi tedy - LACZNIE z odpowiedzia w watku napisana
-    // w glownym polu (przycisk "Odpowiedz w wątku" ustawia state.replyTo).
-    // Wczesniej taka wiadomosc znikala bez sladu: z glownej listy jest
-    // odfiltrowana jako odpowiedz watku, a watek byl zamkniety - wiec jedyna
-    // kopia tego, co uzytkownik napisal, przestawala istniec na ekranie.
+    // A send from the thread panel draws its own list and does not touch the main
+    // field. Everything else comes through here - INCLUDING a thread reply typed
+    // in the main field (the "Reply in thread" button sets state.replyTo).
+    // Such a message used to vanish without a trace: it is filtered out of the
+    // main list as a thread reply, and the thread was closed - so the only copy
+    // of what the user wrote stopped existing on screen.
     if (!opts.threadId) {
       clearDraft(convId);
       state.replyTo = null;
       if (state.activeId === convId) {
         widok.composer();
         if (rec.threadId) {
-          widok.wiadomosc(findMsgById(rec.threadId));   // pasek "N odpowiedzi" pod korzeniem
-          widok.otworzWatek(rec.threadId);              // i sam watek, zeby bylo widac wyslane
+          widok.wiadomosc(findMsgById(rec.threadId));   // the "N replies" bar under the root
+          widok.otworzWatek(rec.threadId);              // and the thread itself, so the sent message is visible
         } else {
           widok.wiadomosc(data.message);
           widok.naDol(true);
@@ -80,8 +81,8 @@ export function retryPending(convId, clientMsgId) {
   if (rec) sendMessage(rec.body, { conversationId: convId, clientMsgId, threadId: rec.threadId });
 }
 
-/** "Usun" nie kasuje tresci - wraca ona do composera, zeby zadna droga wyjscia
- *  z bledu nie konczyla sie utrata tego, co uzytkownik napisal. */
+/** "Discard" does not destroy the text - it returns to the composer, so that no
+ *  route out of an error ends in losing what the user wrote. */
 export function dropPending(convId, clientMsgId) {
   const rec = (state.pending[convId] || []).find((p) => p.clientMsgId === clientMsgId);
   state.pending[convId] = (state.pending[convId] || []).filter((p) => p.clientMsgId !== clientMsgId);
@@ -91,9 +92,9 @@ export function dropPending(convId, clientMsgId) {
 }
 
 export async function toggleReaction(messageId, emoji) {
-  // Wlasny klik: aktualizujemy stan LOKALNIE z odpowiedzi {on}. Wczesniej po
-  // kazdym emoji leciala paczka 200 wiadomosci - raz z klikniecia, drugi raz
-  // z echa SSE tego samego klikniecia.
+  // Our own click: we update the state LOCALLY from the {on} response. Every
+  // emoji used to trigger a batch of 200 messages - once from the click, once
+  // from the SSE echo of that same click.
   try {
     const res = await api("POST", `/api/messages/${messageId}/reactions`, { emoji });
     const mapa = state.reactions[messageId] || (state.reactions[messageId] = {});
@@ -106,10 +107,10 @@ export async function toggleReaction(messageId, emoji) {
   } catch (e) { showError(e); }
 }
 
-/** Jedna sciezka aktualizacji wiadomosci po odpowiedzi serwera: stan, dymek na
- *  liscie ORAZ kopia w panelu watku. Ta sama wiadomosc bywa na ekranie dwa razy
- *  (glowna lista + korzen watku), a wczesniej kazda z tych akcji odswiezala
- *  tylko jedna z nich - druga zostawala ze stara trescia. */
+/** One update path for a message after the server responds: the state, the
+ *  bubble in the list AND the copy in the thread panel. The same message is
+ *  sometimes on screen twice (main list + thread root), and each of these
+ *  actions used to refresh only one of them - the other kept the old text. */
 function applyMessageUpdate(msg) {
   upsertMessage(msg.conversationId ?? state.activeId, msg);
   const i = state.threadMsgs.findIndex((m) => m.id === msg.id);
@@ -125,14 +126,14 @@ export async function deleteMsg(messageId) {
   } catch (e) { showError(e); }
 }
 
-/** Domkniecie zgloszenia (np. na #bug): check przy wpisie. */
+/** Closing a report (e.g. on #bug): a check mark on the entry. */
 export async function fixMsg(messageId, fixed) {
   try {
     const data = await api("POST", `/api/messages/${messageId}/fix`, { fixed });
     applyMessageUpdate(data.message);
     showToast(fixed
-      ? "Oznaczone jako naprawione. Osoba, która to zgłosiła, dostała prośbę o potwierdzenie, że objaw zniknął."
-      : "Cofnięto oznaczenie „naprawione”.");
+      ? t("Marked as fixed. Whoever reported it has been asked to confirm the symptom is gone.")
+      : t("The “fixed” mark has been taken back."));
   } catch (e) { showError(e); }
 }
 
@@ -140,32 +141,32 @@ export async function resolveMsg(messageId, resolved) {
   try {
     const data = await api("POST", `/api/messages/${messageId}/resolve`, { resolved });
     applyMessageUpdate(data.message);
-    showToast(resolved ? "Potwierdzone - zgłoszenie zamknięte." : "Cofnięto potwierdzenie.");
+    showToast(resolved ? t("Confirmed - the report is closed.") : t("The confirmation has been taken back."));
   } catch (e) { showError(e); }
 }
 
-/** Przypiecie wiadomosci. API istnialo od poczatku, ale w interfejsie byla tylko
- *  sekcja "Przypięte" - czyli widac bylo skutek czynnosci, ktorej nie dalo sie
- *  wykonac. */
+/** Pinning a message. The API existed from the start, but the interface only had
+ *  a "Pinned" section - that is, you could see the result of an action you had no
+ *  way to perform. */
 export async function togglePin(messageId, przypnij) {
   try {
     if (przypnij) {
       const data = await api("POST", `/api/messages/${messageId}/pin`, {});
       state.convPins = [...state.convPins.filter((p) => p.messageId !== messageId), data.pin];
-      showToast("Przypięto. Znajdziesz to w szczegółach rozmowy.");
+      showToast(t("Pinned. You will find it in the conversation details."));
     } else {
       await api("DELETE", `/api/messages/${messageId}/pin`);
       state.convPins = state.convPins.filter((p) => p.messageId !== messageId);
-      showToast("Odpięto.");
+      showToast(t("Unpinned."));
     }
     widok.wiadomosc(findMsgById(messageId));
     if (state.detailsOpen) widok.szczegoly();
   } catch (e) { showError(e); }
 }
 
-/** Pytanie do kanalu. Czlowiek mogl PODJAC cudze pytanie, ale nie mogl zadac
- *  wlasnego - czyli dostawal role wykonawcy zadan agentow, dokladnie odwrotnie
- *  niz obiecuje "rowni uczestnicy". */
+/** A question to the channel. A human could TAKE UP somebody else's question but
+ *  could not ask their own - which cast them as the executor of the agents' tasks,
+ *  the exact opposite of what "peers" promises. */
 export async function askChannel(text) {
   const convId = state.activeId;
   try {
@@ -179,27 +180,27 @@ export async function askChannel(text) {
     widok.wiadomosci();
     widok.composer();
     widok.naDol(true);
-    showToast("Pytanie poszło na kanał. Zobaczysz je jako otwarte, dopóki ktoś nie odpowie.");
+    showToast(t("The question went to the channel. You will see it as open until somebody answers."));
     return true;
   } catch (e) { showError(e); return false; }
 }
 
-// ------------------------------------------------------------- zajete zasoby
-/** Zajecie zasobu przez czlowieka. Tablica dzierzaw byla dotad do samego
- *  ogladania, opisana komendami CLI - a "ogloszenie, zanim ruszysz wspolny
- *  zasob" to regula, ktora obowiazuje ludzi tak samo jak agentow. */
+// ------------------------------------------------------------ claimed resources
+/** A human claiming a resource. The lease board was until now for looking at
+ *  only, described in terms of CLI commands - while "announce before you touch a
+ *  shared resource" is a rule that binds humans exactly as much as agents. */
 export async function claimLease(resource, note, ttlSec) {
   try {
     const res = await api("POST", "/api/leases", {
       resource, note: note || undefined, ttlSec: ttlSec || undefined,
       sessionId: mySessionId || undefined,
     });
-    showToast(`Zasób „${resource}” jest teraz Twój. Zwolnij go, gdy skończysz.`);
+    showToast(t("“{resource}” is yours now. Release it when you are done.", { resource }));
     return res;
   } catch (e) {
-    // 409 niesie w ciele, kto trzyma i do kiedy - to jest odpowiedz na pytanie
-    // "dlaczego nie", a nie awaria.
-    if (e.status === 409) showToast(`Zasób „${resource}” trzyma teraz ktoś inny. Poczekaj albo dogadaj się na kanale.`, { alert: true });
+    // A 409 carries who holds it and until when - that is an answer to "why not",
+    // not a failure.
+    if (e.status === 409) showToast(t("Somebody else is holding “{resource}” right now. Wait, or sort it out on the channel.", { resource }), { alert: true });
     else showError(e);
     return null;
   }
@@ -208,7 +209,7 @@ export async function claimLease(resource, note, ttlSec) {
 export async function releaseLease(resource) {
   try {
     await api("POST", "/api/leases/release", { resource });
-    showToast(`Zwolniono „${resource}”.`);
+    showToast(t("Released “{resource}”.", { resource }));
     return true;
   } catch (e) { showError(e); return false; }
 }
@@ -232,10 +233,10 @@ export async function joinChannel(id, btn) {
     if (btn) btn.innerHTML = iconCheck();
     await loadConversationsList();
     setTimeout(() => { widok.sidebar(); widok.glowny(); }, 350);
-  } catch (e) { showError(e); if (btn) { btn.disabled = false; btn.textContent = "Dołącz"; } }
+  } catch (e) { showError(e); if (btn) { btn.disabled = false; btn.textContent = t("Join"); } }
 }
 
-/** Rozmowa prywatna z palety: jeden Enter zamiast modala "Nowa rozmowa". */
+/** A direct conversation from the palette: one Enter instead of the "New conversation" modal. */
 export async function startDirect(handle) {
   try {
     const data = await api("POST", "/api/conversations", { kind: "dm", members: [handle] });

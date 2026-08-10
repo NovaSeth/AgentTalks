@@ -1,10 +1,11 @@
 /**
- * Wiki: strona, edytor, historia, drzewo rewizji.
+ * Wiki: page, editor, history, revision tree.
  */
 import { api } from "./api.js";
 import { loadWikiList, signalTyping } from "./dane.js";
 import { avatarHtml, confirmModal, escapeHtml, fmtDateTime, formatBytes, hamburgerHtml, openModal, skeletonHtml, timeAgo, toggleDrawerClass } from "./dom.js";
 import { iconDoc, iconEdit, iconFile, iconHistory, iconTrash } from "./ikony.js";
+import { locale, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
 import { state, widok } from "./stan.js";
 import { showError, showToast } from "./toasty.js";
@@ -52,9 +53,9 @@ export async function mozeszOpuscicEdytorWiki() {
   };
   zapamietaj();   // najpierw ratujemy tekst, potem pytamy - w tej kolejnosci
   return await confirmModal({
-    title: "Masz niezapisane zmiany na tej stronie",
-    body: "Zapisałem je jako wersję roboczą w tej przeglądarce - wrócą, gdy znów otworzysz edytor. Wyjść bez zapisywania na serwerze?",
-    ok: "Wyjdź, wrócę do tego", cancel: "Zostań i zapisz",
+    title: t("You have unsaved changes on this page"),
+    body: t("I saved them as a draft in this browser - they come back when you open the editor again. Leave without saving to the server?"),
+    ok: t("Leave, I will come back to it"), cancel: t("Stay and save"),
   });
 }
 
@@ -105,19 +106,19 @@ export function newWikiPageModal() {
   const defaultParent = state.view === "wiki" && state.wiki.page ? state.wiki.page.slug : "";
   const options = state.wiki.pages
     .slice()
-    .sort((a, b) => (a.title || a.slug).localeCompare(b.title || b.slug, "pl"))
+    .sort((a, b) => (a.title || a.slug).localeCompare(b.title || b.slug, locale()))
     .map((p) => `<option value="${escapeHtml(p.slug)}" ${p.slug === defaultParent ? "selected" : ""}>${escapeHtml(p.title || p.slug)}</option>`)
     .join("");
   const { modal, close } = openModal(`
-      <h2 id="m-title">Nowa strona wiki</h2>
-      <div class="field"><label for="nw-slug">Adres strony</label><input id="nw-slug" placeholder="np. jak-wdrazac">
-        <span class="fhint">Krótka nazwa w adresie: małe litery, cyfry i myślniki, bez spacji i polskich znaków.</span></div>
-      <div class="field"><label for="nw-title">Tytuł</label><input id="nw-title" placeholder="np. Jak wdrażać"></div>
-      <div class="field"><label for="nw-parent">Umiejscowienie</label><select id="nw-parent">
-        <option value="" ${defaultParent ? "" : "selected"}>(korzeń wiki)</option>${options}
+      <h2 id="m-title">${t("New wiki page")}</h2>
+      <div class="field"><label for="nw-slug">${t("Page address")}</label><input id="nw-slug" placeholder="${t("e.g. how-to-deploy")}">
+        <span class="fhint">${t("A short name in the address: lower-case letters, digits and hyphens, no spaces and no accented characters.")}</span></div>
+      <div class="field"><label for="nw-title">${t("Title")}</label><input id="nw-title" placeholder="${t("e.g. How to deploy")}"></div>
+      <div class="field"><label for="nw-parent">${t("Placement")}</label><select id="nw-parent">
+        <option value="" ${defaultParent ? "" : "selected"}>${t("(wiki root)")}</option>${options}
       </select></div>
-      <p class="mhint">Wiki jest wspólna - każdy zalogowany może czytać i edytować. Historia zapisze, kto co zmienił.</p>
-      <div class="row"><button class="btn ghost" id="nw-cancel">Anuluj</button><button class="btn" id="nw-create">Utwórz</button></div>`);
+      <p class="mhint">${t("The wiki is shared - anybody signed in can read and edit. The history records who changed what.")}</p>
+      <div class="row"><button class="btn ghost" id="nw-cancel">${t("Cancel")}</button><button class="btn" id="nw-create">${t("Create")}</button></div>`);
   modal.querySelector("#nw-cancel").addEventListener("click", close);
   modal.querySelector("#nw-create").addEventListener("click", () => {
     const slug = modal.querySelector("#nw-slug").value.trim().toLowerCase();
@@ -156,7 +157,7 @@ async function saveWikiEdit(title, body, note, parentSlug) {
     state.wiki.history = hist.revisions;
     loadWikiList();
     renderWikiMain();
-    showToast("Zapisano stronę.");
+    showToast(t("Page saved."));
   } catch (e) {
     // Konflikt to nie awaria zapisu tylko cudza zmiana - i wymaga DECYZJI, a nie
     // komunikatu znikajacego po czterech sekundach.
@@ -166,8 +167,8 @@ async function saveWikiEdit(title, body, note, parentSlug) {
     // dostawal w toascie instrukcje z curl-em, napisana dla agenta.
     if (e.code === "konflikt_wiki") { pokazKonfliktWiki(title, body, note, parentSlug); return; }
     showError(e, {
-      slug: "Nieprawidłowy adres strony. Użyj małych liter, cyfr, myślnika i kropki - bez spacji i polskich znaków.",
-      slug_zarezerwowany: "Ten adres jest zarezerwowany przez system. Wybierz inny.",
+      slug: t("Invalid page address. Use lower-case letters, digits, hyphen and dot - no spaces and no accented characters."),
+      slug_zarezerwowany: t("This address is reserved by the system. Pick another one."),
     });
   }
 }
@@ -179,21 +180,20 @@ function pokazKonfliktWiki(title, body, note, parentSlug) {
   const slug = state.wiki.slug;
   zapiszWersjeRobocza(slug, { title, body, parentSlug });
   const { modal, close } = openModal(`
-      <h2 id="m-title">Ktoś zapisał tę stronę przed Tobą</h2>
-      <p class="mhint">Odkąd zacząłeś pisać, ktoś inny zmienił tę stronę. Twój tekst jest bezpieczny -
-        został w edytorze i w tej przeglądarce. Wybierz, co dalej.</p>
+      <h2 id="m-title">${t("Somebody saved this page before you")}</h2>
+      <p class="mhint">${t("Since you started writing, somebody else changed this page. Your text is safe - it stayed in the editor and in this browser. Choose what happens next.")}</p>
       <div class="kw-opcje">
         <button class="kw-opt" id="kw-porownaj">
-          <b>Pokaż, co się zmieniło</b>
-          <span>Otworzy aktualną wersję w nowej karcie. Twoja zostaje tutaj, żebyś mógł ją wkomponować.</span>
+          <b>${t("Show what changed")}</b>
+          <span>${t("Opens the current version in a new tab. Yours stays here so you can weave it in.")}</span>
         </button>
         <button class="kw-opt" id="kw-nadpisz">
-          <b>Zapisz moją wersję mimo to</b>
-          <span>Twój tekst stanie się aktualny. Tamta zmiana nie zniknie - zostanie w historii strony.</span>
+          <b>${t("Save my version anyway")}</b>
+          <span>${t("Your text becomes the current one. That other change does not disappear - it stays in the page history.")}</span>
         </button>
         <button class="kw-opt" id="kw-wroc">
-          <b>Wróć do edytora</b>
-          <span>Nic nie zapisuję. Poprawisz tekst i spróbujesz jeszcze raz.</span>
+          <b>${t("Back to the editor")}</b>
+          <span>${t("I save nothing. You fix the text and try again.")}</span>
         </button>
       </div>`, { modalClass: "wide" });
   modal.querySelector("#kw-porownaj").addEventListener("click", () => {
@@ -223,9 +223,9 @@ async function viewWikiRevision(revId) {
 
 async function revertWikiTo(revId) {
   if (!await confirmModal({
-    title: "Przywrócić tę wersję?",
-    body: "Treść strony wróci do tego, co widzisz. Nic nie ginie - obecna wersja zostanie w historii i da się do niej wrócić tak samo.",
-    ok: "Przywróć tę wersję",
+    title: t("Restore this version?"),
+    body: t("The page content goes back to what you see. Nothing is lost - the current version stays in the history and can be returned to the same way."),
+    ok: t("Restore this version"),
   })) return;
   try {
     const data = await api("POST", `/api/wiki/${encodeURIComponent(state.wiki.slug)}/revert`, { revisionId: revId });
@@ -235,7 +235,7 @@ async function revertWikiTo(revId) {
     state.wiki.history = hist.revisions;
     loadWikiList();
     renderWikiMain();
-    showToast("Przywrócono. Poprzednia treść została w historii.");
+    showToast(t("Restored. The previous content stayed in the history."));
   } catch (e) { showError(e); }
 }
 
@@ -250,12 +250,12 @@ async function odtworzStroneWiki(deleted) {
       title: deleted.title,
       body: deleted.body,
       parentSlug: deleted.parentSlug ?? null,
-      note: "przywrócenie skasowanej strony",
+      note: t("restoring a deleted page"),
       baseRevision: 0,
     });
     await loadWikiList();
     openWikiPage(deleted.slug);
-    showToast("Strona wróciła. Historia sprzed skasowania nie wróciła - ta wersja jest pierwsza.");
+    showToast(t("The page is back. The history from before the deletion is not - this version is the first one."));
   } catch (e) { showError(e); }
 }
 
@@ -289,11 +289,11 @@ export function renderWikiMain(loading) {
       <div class="title">
         <div class="t">${iconDoc()} ${wikiBreadcrumbHtml(page)}${escapeHtml(title ?? "")}
           <span id="wiki-typing">${widok.pisze(`w:${w.slug}`)}</span></div>
-        <div class="topic">${page ? `wersja ${page.revisions} · ostatnio zmienił(a) @${escapeHtml(page.updatedBy ?? "?")} ${timeAgo(page.updatedAt)}` : "nowa strona, jeszcze niezapisana"}</div>
+        <div class="topic">${page ? t("version {n} · last changed by @{who} {when}", { n: page.revisions, who: escapeHtml(page.updatedBy ?? "?"), when: timeAgo(page.updatedAt) }) : t("a new page, not saved yet")}</div>
       </div>
-      ${!w.editing && !w.revision && (page || w.draft) ? `<button class="pillbtn" id="wiki-edit">${iconEdit()} Edytuj</button>` : ""}
+      ${!w.editing && !w.revision && (page || w.draft) ? `<button class="pillbtn" id="wiki-edit">${iconEdit()} ${t("Edit")}</button>` : ""}
       ${!w.editing && !w.revision && page && (page.createdBy === state.actor.handle || state.actor.isAdmin)
-        ? `<button class="iconbtn" id="wiki-delete" aria-label="Skasuj stronę" title="Skasuj stronę">${iconTrash()}</button>` : ""}
+        ? `<button class="iconbtn" id="wiki-delete" aria-label="${t("Delete page")}" title="${t("Delete page")}">${iconTrash()}</button>` : ""}
     </div>
     <div class="wiki-body viewfade">
       <div class="wiki-content" id="wiki-content"></div>
@@ -309,9 +309,9 @@ export function renderWikiMain(loading) {
     // Kasowanie zabiera takze historie, wiec pytamy NAZWA strony, a nie samym
     // "na pewno?" - zeby klik w zly wiersz nie kosztowal dzialu wiki.
     if (!await confirmModal({
-      title: `Skasować stronę „${page.title}”?`,
-      body: "Zniknie razem z historią zmian i załącznikami. Podstrony nie znikną - przejdą o poziom wyżej.",
-      ok: "Skasuj stronę", danger: true,
+      title: t("Delete the page “{title}”?", { title: page.title }),
+      body: t("It goes away together with its change history and attachments. Subpages do not disappear - they move one level up."),
+      ok: t("Delete page"), danger: true,
     })) return;
     const kasowany = w.slug;
     kasowaneStrony.add(kasowany);
@@ -323,8 +323,8 @@ export function renderWikiMain(loading) {
       const { deleted } = await api("DELETE", `/api/wiki/${encodeURIComponent(kasowany)}`);
       state.wiki.page = null; state.wiki.slug = null; state.view = "chat";
       loadWikiList(); widok.render();
-      showToast(`Skasowano „${deleted?.title ?? page.title}”.`, {
-        action: { label: "Cofnij", onClick: () => { kasowaneStrony.delete(kasowany); odtworzStroneWiki(deleted); } },
+      showToast(t("Deleted “{title}”.", { title: deleted?.title ?? page.title }), {
+        action: { label: t("Undo"), onClick: () => { kasowaneStrony.delete(kasowany); odtworzStroneWiki(deleted); } },
       });
     } catch (e) { showError(e); }
     // Blokada zdejmowana z opoznieniem: dosylka SSE potrafi przyjsc po
@@ -341,7 +341,7 @@ export function renderWikiMain(loading) {
       ? { title: robocza.title || page?.title || w.slug, body: robocza.body ?? "", parentSlug: robocza.parentSlug }
       : { title: page?.title ?? w.slug, body: page?.body ?? "" };
     renderWikiMain();
-    if (robocza) showToast("Wróciłem do Twojej niezapisanej wersji z poprzedniego razu.");
+    if (robocza) showToast(t("I brought back your unsaved version from last time."));
   });
   renderWikiContent(loading);
   renderWikiSide();
@@ -370,31 +370,31 @@ function renderWikiContent(loading) {
     const currentParent = d.parentSlug !== undefined ? d.parentSlug : (w.page?.parentSlug ?? null);
     const options = state.wiki.pages
       .filter((p) => !descendants.has(p.slug))
-      .sort((a, b) => (a.title || a.slug).localeCompare(b.title || b.slug, "pl"))
+      .sort((a, b) => (a.title || a.slug).localeCompare(b.title || b.slug, locale()))
       .map((p) => `<option value="${escapeHtml(p.slug)}" ${p.slug === currentParent ? "selected" : ""}>${escapeHtml(p.title || p.slug)}</option>`)
       .join("");
     el.innerHTML = `
       <div class="wiki-editor">
-        <label class="sr-only" for="we-title">Tytuł strony</label>
-        <input id="we-title" class="we-title" placeholder="Tytuł strony">
-        <label class="sr-only" for="we-body">Treść strony (markdown)</label>
-        <textarea id="we-body" class="we-body" placeholder="Treść w markdown... # nagłówek, **pogrubienie**, - lista, \`\`\`kod\`\`\`"></textarea>
+        <label class="sr-only" for="we-title">${t("Page title")}</label>
+        <input id="we-title" class="we-title" placeholder="${t("Page title")}">
+        <label class="sr-only" for="we-body">${t("Page content (markdown)")}</label>
+        <textarea id="we-body" class="we-body" placeholder="${t("Content in markdown... # heading, **bold**, - list, \`\`\`code\`\`\`")}"></textarea>
         <div class="we-foot">
           <span class="we-zapis" id="we-zapis" aria-live="polite"></span>
-          <label class="we-where" for="we-parent">w: </label>
+          <label class="we-where" for="we-parent">${t("in:")} </label>
           <select id="we-parent" class="we-parent">
-            <option value="">(korzeń wiki)</option>${options}
+            <option value="">${t("(wiki root)")}</option>${options}
           </select>
-          <label class="sr-only" for="we-note">Opis zmiany</label>
-          <input id="we-note" class="we-note" placeholder="Co zmieniasz (opcjonalnie)">
-          <button class="btn ghost" id="we-cancel">Anuluj</button>
-          <button class="btn slim" id="we-save">Zapisz</button>
+          <label class="sr-only" for="we-note">${t("Change description")}</label>
+          <input id="we-note" class="we-note" placeholder="${t("What you are changing (optional)")}">
+          <button class="btn ghost" id="we-cancel">${t("Cancel")}</button>
+          <button class="btn slim" id="we-save">${t("Save")}</button>
         </div>
       </div>`;
-    const t = el.querySelector("#we-title"), b = el.querySelector("#we-body"), n = el.querySelector("#we-note");
+    const ti = el.querySelector("#we-title"), b = el.querySelector("#we-body"), n = el.querySelector("#we-note");
     const par = el.querySelector("#we-parent");
     const znacznik = el.querySelector("#we-zapis");
-    t.value = d.title; b.value = d.body;
+    ti.value = d.title; b.value = d.body;
     // Autozapis wersji roboczej: co sekunde bezruchu, do localStorage. Nie
     // zastepuje zapisu na serwer i mowi to wprost - ma tylko sprawic, zeby
     // zamkniecie karty, F5 albo klik w inna strone nie kosztowaly calego tekstu.
@@ -402,13 +402,13 @@ function renderWikiContent(loading) {
     const autozapis = () => {
       clearTimeout(autoTimer);
       autoTimer = setTimeout(() => {
-        zapiszWersjeRobocza(w.slug, { title: t.value, body: b.value, parentSlug: par.value || null });
-        if (znacznik) znacznik.textContent = "wersja robocza zachowana w przeglądarce";
+        zapiszWersjeRobocza(w.slug, { title: ti.value, body: b.value, parentSlug: par.value || null });
+        if (znacznik) znacznik.textContent = t("draft kept in the browser");
       }, 1000);
     };
     // Edycja wiki tez sygnalizuje pisanie - kuleczka przy stronie u innych.
     b.addEventListener("input", () => { signalTyping(`w:${w.slug}`); autozapis(); });
-    t.addEventListener("input", autozapis);
+    ti.addEventListener("input", autozapis);
     par.addEventListener("change", autozapis);
     el.querySelector("#we-cancel").addEventListener("click", async () => {
       if (!await mozeszOpuscicEdytorWiki()) return;
@@ -418,7 +418,7 @@ function renderWikiContent(loading) {
       renderWikiMain();
     });
     el.querySelector("#we-save").addEventListener("click", () =>
-      saveWikiEdit(t.value.trim() || w.slug, b.value, n.value.trim(), par.value || null));
+      saveWikiEdit(ti.value.trim() || w.slug, b.value, n.value.trim(), par.value || null));
     b.focus();
     return;
   }
@@ -428,18 +428,18 @@ function renderWikiContent(loading) {
   el.innerHTML = `
     ${rev ? `
     <div class="rev-banner">
-      ${iconHistory()} Przeglądasz wersję z <b>${fmtDateTime(rev.createdAt)}</b> (@${escapeHtml(rev.actor ?? "?")})
+      ${iconHistory()} ${t("You are looking at the version from <b>{when}</b> (@{who})", { when: fmtDateTime(rev.createdAt), who: escapeHtml(rev.actor ?? "?") })}
       <span class="rb-actions">
-        <button id="rb-back">Wróć do najnowszej</button>
-        <button id="rb-revert" class="accent">Przywróć tę wersję</button>
+        <button id="rb-back">${t("Back to the newest")}</button>
+        <button id="rb-revert" class="accent">${t("Restore this version")}</button>
       </span>
     </div>` : ""}
-    <article class="md ${rev ? "dimmed" : ""}">${mdToHtml(body, "page", state.actor.handle) || `<p class="mdempty">Ta strona jest jeszcze pusta - kliknij Edytuj i dopisz pierwszą treść.</p>`}</article>`;
+    <article class="md ${rev ? "dimmed" : ""}">${mdToHtml(body, "page", state.actor.handle) || `<p class="mdempty">${t("This page is still empty - click Edit and write the first content.")}</p>`}</article>`;
   const back = el.querySelector("#rb-back");
   if (back) back.addEventListener("click", () => { w.revision = null; renderWikiMain(); });
   const rvt = el.querySelector("#rb-revert");
   if (rvt) rvt.addEventListener("click", () => revertWikiTo(rev.id));
-  widok.podepnijTresc(el);   // copybtn, wikilinki i lightbox w tresci strony
+  widok.podepnijTresc(el);   // copy button, wiki links and the lightbox inside the page
 }
 
 function renderWikiSide() {
@@ -448,11 +448,11 @@ function renderWikiSide() {
   const w = state.wiki;
   const page = w.page;
   el.innerHTML = `
-    <div class="seg small" role="tablist" aria-label="Informacje o stronie">
+    <div class="seg small" role="tablist" aria-label="${t("Page information")}">
       <button role="tab" aria-selected="${w.tab === "info"}" aria-controls="wiki-side-body"
-        data-wtab="info" class="${w.tab === "info" ? "on" : ""}">Info</button>
+        data-wtab="info" class="${w.tab === "info" ? "on" : ""}">${t("Info")}</button>
       <button role="tab" aria-selected="${w.tab === "history"}" aria-controls="wiki-side-body"
-        data-wtab="history" class="${w.tab === "history" ? "on" : ""}">Historia${w.history.length ? ` (${w.history.length})` : ""}</button>
+        data-wtab="history" class="${w.tab === "history" ? "on" : ""}">${t("History")}${w.history.length ? ` (${w.history.length})` : ""}</button>
     </div>
     <div id="wiki-side-body" role="tabpanel"></div>`;
   el.querySelectorAll("[data-wtab]").forEach((b) =>
@@ -461,19 +461,19 @@ function renderWikiSide() {
   if (w.tab === "info") {
     body.innerHTML = page ? `
       <dl class="winfo">
-        <dt>Utworzył</dt><dd>@${escapeHtml(page.createdBy ?? "?")} · ${fmtDateTime(page.createdAt)}</dd>
-        <dt>Ostatnia zmiana</dt><dd>@${escapeHtml(page.updatedBy ?? "?")} · ${fmtDateTime(page.updatedAt)}</dd>
-        <dt>Wersji</dt><dd>${page.revisions}</dd>
-        <dt>Rozmiar</dt><dd>${formatBytes(new Blob([page.body]).size)}</dd>
+        <dt>${t("Created by")}</dt><dd>@${escapeHtml(page.createdBy ?? "?")} · ${fmtDateTime(page.createdAt)}</dd>
+        <dt>${t("Last change")}</dt><dd>@${escapeHtml(page.updatedBy ?? "?")} · ${fmtDateTime(page.updatedAt)}</dd>
+        <dt>${t("Versions")}</dt><dd>${page.revisions}</dd>
+        <dt>${t("Size")}</dt><dd>${formatBytes(new Blob([page.body]).size)}</dd>
       </dl>
       ${w.files.length ? `
-      <h4 class="wsub">Załączniki</h4>
+      <h4 class="wsub">${t("Attachments")}</h4>
       ${w.files.map((f) => `
         <a class="attachment slim" href="/api/files/${encodeURIComponent(f.id)}" download="${escapeHtml(f.name)}">
           <span class="fic">${iconFile()}</span>
           <span><span class="fname">${escapeHtml(f.name)}</span><br><span class="fsize">${formatBytes(f.size)}</span></span>
         </a>`).join("")}` : ""}
-    ` : `<p class="sb-empty">Ta strona nie została jeszcze zapisana - informacje pojawią się po pierwszym zapisie.</p>`;
+    ` : `<p class="sb-empty">${t("This page has not been saved yet - the information appears after the first save.")}</p>`;
   } else {
     body.innerHTML = w.history.length ? `
       <div class="wh-list">
@@ -482,16 +482,16 @@ function renderWikiSide() {
           const viewing = w.revision ? w.revision.id === r.id : current;
           return `
           <button class="wh-row ${viewing ? "sel" : ""}" data-rev="${r.id}" data-current="${current ? "1" : ""}"
-            ${viewing ? `aria-current="true"` : ""} aria-label="Wersja z ${fmtDateTime(r.createdAt)}, @${escapeHtml(r.actor ?? "?")}">
+            ${viewing ? `aria-current="true"` : ""} aria-label="${t("Version from {when}, @{who}", { when: fmtDateTime(r.createdAt), who: escapeHtml(r.actor ?? "?") })}">
             ${avatarHtml(r.actor ?? "?", 24)}
             <span class="wh-main">
-              <span class="wh-actor">@${escapeHtml(r.actor ?? "?")}${current ? ` <span class="wh-tag">aktualna</span>` : ""}</span>
+              <span class="wh-actor">@${escapeHtml(r.actor ?? "?")}${current ? ` <span class="wh-tag">${t("current")}</span>` : ""}</span>
               <span class="wh-when">${fmtDateTime(r.createdAt)}</span>
               ${r.note ? `<span class="wh-note">${escapeHtml(r.note)}</span>` : ""}
             </span>
           </button>`;
         }).join("")}
-      </div>` : `<p class="sb-empty">Historia pojawi się po pierwszym zapisie. Każda zmiana zostaje tu z nazwiskiem i datą.</p>`;
+      </div>` : `<p class="sb-empty">${t("The history appears after the first save. Every change stays here with a name and a date.")}</p>`;
     body.querySelectorAll("[data-rev]").forEach((b) =>
       b.addEventListener("click", () => {
         if (b.dataset.current) { w.revision = null; renderWikiMain(); }

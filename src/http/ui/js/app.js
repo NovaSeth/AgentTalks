@@ -1,19 +1,20 @@
 /**
- * AgentTalks - sklejka interfejsu. Waniliowe moduly ES, zero bundlera, zero zaleznosci.
+ * AgentTalks - the interface glue. Vanilla ES modules, no bundler, no dependencies.
  *
- * Ten plik jest KORZENIEM: jako jedyny zna wszystkie widoki naraz. Dzieki temu
- * warstwy nizsze (stan, dane, akcje, strumien zdarzen) nie musza importowac
- * niczego, co rysuje - dostaja funkcje rysujace przez rejestr `widok`, a graf
- * importow zostaje acykliczny.
+ * This file is the ROOT: it alone knows every view at once. That is what lets the
+ * lower layers (state, data, actions, event stream) avoid importing anything that
+ * draws - they receive the drawing functions through the `widok` registry, and the
+ * import graph stays acyclic.
  *
- * Poza rejestracja widokow siedzi tu tylko to, co z natury jest globalne:
- * powloka aplikacji, start i skroty klawiszowe calego okna.
+ * Apart from registering the views, only what is global by nature lives here: the
+ * application shell, the boot sequence, and window-wide keyboard shortcuts.
  */
 import {
   ensureActors, loadConversationsList, loadWikiList, markReadDebounced, refreshDigestAndLeases,
   refreshNotifications, refreshPresence, registerPresenceSession, startDigestTimer,
 } from "./dane.js";
 import { $app, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
+import { onLangChange, t } from "./i18n.js";
 import { iconBell, iconChat, iconUsers } from "./ikony.js";
 import { lastMessageId, rebuildMentionRe, saveDraft, state, zarejestrujWidoki } from "./stan.js";
 import { showToast } from "./toasty.js";
@@ -30,44 +31,44 @@ import { renderSidebar, renderSidebarList, updateConvRow, updatePresenceDots } f
 import { openWikiPage, renderWikiMain } from "./widok-wiki.js";
 import { connectSSE, ensureSSE } from "./zdarzenia-sse.js";
 
-// ------------------------------------------------------------------ powloka
+// -------------------------------------------------------------------- shell
 function render() {
   if (!state.actor) { renderLogin(); return; }
   renderShell();
 }
 
 function renderShell() {
-  // Icon-rail: staly pasek nawigacji na skrajnej lewej. Trzy MIEJSCA, a nie trzy
-  // skroty do tego samego: powiadomienia ("co mnie wolalo"), rozmowy ("gdzie
-  // gadamy"), uzytkownicy ("kto ma dostep"). Plakietka przy dzwonku jest jedynym
-  // licznikiem, ktory widac bez wchodzenia gdziekolwiek.
+  // Icon rail: a fixed navigation strip on the far left. Three PLACES, not three
+  // shortcuts to the same one: notifications ("what called me"), conversations
+  // ("where we talk"), users ("who has access"). The badge on the bell is the one
+  // counter visible without entering anything.
   const adminHuman = state.actor?.isAdmin && state.actor?.kind === "human";
-  // Panel boczny nalezy do ROZMOW, nie do calej aplikacji: trzyma kanaly, DM-y
-  // i drzewo wiki. W powiadomieniach i w kontach nie ma czego z niego wybrac -
-  // stal tam tylko dlatego, ze powloka renderowala go bezwarunkowo, i zabieral
-  // trzecia szerokosci ekranu na liste, ktora do niczego w tym widoku nie
-  // prowadzi (zgloszenie @michal).
+  // The side panel belongs to CONVERSATIONS, not to the whole application: it
+  // holds channels, DMs and the wiki tree. In notifications and in accounts there
+  // is nothing to pick from it - it stood there only because the shell rendered it
+  // unconditionally, and it took a third of the screen width for a list that leads
+  // nowhere in that view (reported by @michal).
   const zPanelem = state.view === "chat" || state.view === "wiki";
   $app.innerHTML = `
     <div class="shell with-rail ${zPanelem ? "" : "bez-panelu"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
       <div class="scrim" id="scrim"></div>
-      <nav class="rail" id="rail" aria-label="Główna nawigacja">
+      <nav class="rail" id="rail" aria-label="${t("Main navigation")}">
         <button class="rail-btn ${state.view === "notifications" ? "on" : ""}" id="rail-notif"
           ${state.view === "notifications" ? `aria-current="page"` : ""}
-          aria-label="Powiadomienia${state.notifUnread ? `, ${state.notifUnread} nowych` : ""}"
-          title="Powiadomienia: wzmianki, wiadomości prywatne, reakcje, zmiany Twoich stron wiki">
+          aria-label="${t("Notifications")}${state.notifUnread ? `, ${t("{n} new", { n: state.notifUnread })}` : ""}"
+          title="${t("Notifications: mentions, direct messages, reactions, changes to your wiki pages")}">
           ${iconBell()}
           <span class="rail-badge ${state.notifUnread ? "" : "off"}" id="rail-badge" aria-hidden="true">${state.notifUnread > 99 ? "99+" : state.notifUnread}</span>
         </button>
         <button class="rail-btn ${state.view === "chat" || state.view === "wiki" ? "on" : ""}" id="rail-chats"
           ${state.view === "chat" || state.view === "wiki" ? `aria-current="page"` : ""}
-          aria-label="Rozmowy i wiki" title="Rozmowy i wiki">${iconChat()}</button>
+          aria-label="${t("Conversations and wiki")}" title="${t("Conversations and wiki")}">${iconChat()}</button>
         ${adminHuman ? `
         <button class="rail-btn ${state.view === "users" ? "on" : ""}" id="rail-users"
           ${state.view === "users" ? `aria-current="page"` : ""}
-          aria-label="Konta i dostęp" title="Konta i dostęp">${iconUsers()}</button>` : ""}
+          aria-label="${t("Accounts and access")}" title="${t("Accounts and access")}">${iconUsers()}</button>` : ""}
       </nav>
-      ${zPanelem ? `<aside class="sidebar" id="sidebar" aria-label="Kanały, wiadomości i wiki"></aside>` : ""}
+      ${zPanelem ? `<aside class="sidebar" id="sidebar" aria-label="${t("Channels, messages and wiki")}"></aside>` : ""}
       <main class="main" id="main"></main>
     </div>`;
   document.getElementById("scrim").addEventListener("click", () => { state.drawerOpen = false; toggleDrawerClass(); });
@@ -75,10 +76,10 @@ function renderShell() {
   document.getElementById("rail-chats").addEventListener("click", () => {
     resetUsersError();
     if (state.view === "chat") {
-      // Na telefonie szuflada jest jedyna droga do listy, wiec klik ja przelacza.
-      // Na desktopie lista jest widoczna zawsze i klik nie robil NIC - a ikona
-      // wygladala na klikalna. Przewijamy liste na gore: to jest odpowiednik
-      // "wroc na poczatek", ktorego szuka sie w tym miejscu.
+      // On a phone the drawer is the only route to the list, so a click toggles it.
+      // On the desktop the list is always visible and the click did NOTHING - while
+      // the icon looked clickable. We scroll the list to the top: that is the
+      // equivalent of "back to the beginning", which is what people look for here.
       if (window.matchMedia("(max-width:760px)").matches) {
         state.drawerOpen = !state.drawerOpen;
         toggleDrawerClass();
@@ -96,18 +97,19 @@ function renderShell() {
   renderMain();
 }
 
-// ------------------------------------------------------- rejestracja widokow
-// Jedyne miejsce, w ktorym warstwa danych i akcji "poznaje" widoki. Kazda inna
-// droga (import widoku w akcje.js) zamykalaby cykl: widok wola akcje, akcja
-// przerysowuje widok.
+// ----------------------------------------------------------- view registration
+// The only place where the data and action layers "learn about" the views. Any
+// other route (importing a view inside akcje.js) would close a cycle: the view
+// calls the action, the action redraws the view.
 zarejestrujWidoki({
   render,
   powloka: renderShell,
   glowny: renderMain,
   sidebar: renderSidebarList,
   wiersz: updateConvRow,
-  // Obecnosc dotyka czterech miejsc naraz - sklejamy je tutaj, zeby refreshPresence
-  // nie musial wiedziec, gdzie sa kropki, pasek, topbar i kuleczki w wiki.
+  // Presence touches four places at once - they are glued together here so that
+  // refreshPresence does not have to know where the dots, the bar, the topbar and
+  // the typing bubbles in the wiki live.
   obecnosc: () => {
     updatePresenceDots();
     renderPresenceBar();
@@ -134,12 +136,16 @@ zarejestrujWidoki({
   poZalogowaniu: afterLogin,
 });
 
-// ------------------------------------------------------------------- start
-// Pierwsze wejscie witalo czlowieka toastem i DWOMA modalami naraz - changelogiem
-// wdrozeniowym i propozycja passkeya - zanim zobaczyl jedna wiadomosc. Teraz
-// wszystko, co chce czegos od uzytkownika, stoi w kolejce ZA otwarciem pierwszej
-// rozmowy, a passkey czeka do drugiego logowania: propozycja "zaloguj sie
-// szybciej" ma sens dopiero, gdy wiadomo, ze sie tu wraca.
+// A language switch changes every rendered string, so the cheapest correct answer
+// is to redraw from the root - and the root is the only place that can.
+onLangChange(() => render());
+
+// --------------------------------------------------------------------- boot
+// The first entry used to greet a human with a toast and TWO modals at once - a
+// deployment changelog and a passkey offer - before they saw a single message.
+// Now everything that wants something from the user queues up BEHIND the opening
+// of the first conversation, and the passkey waits for the second login: an offer
+// to "sign in faster" only makes sense once it is clear you come back here.
 const LOGOWANIA_KEY = "atalks_logowania";
 
 function policzLogowanie() {
@@ -151,54 +157,54 @@ function policzLogowanie() {
   return n;
 }
 
-/** Powitania i propozycje po kolei, nie na kupe. Kazdy krok czeka, az poprzedni
- *  zniknie z ekranu - dwa modale naraz to dla uzytkownika jeden nieczytelny stos. */
+/** Greetings and offers one after another, not in a heap. Each step waits for the
+ *  previous one to leave the screen - two modals at once are, to the user, a
+ *  single unreadable stack. */
 async function kolejkaPowitan(logowanie) {
-  // Krok 1: "Co nowego" - dotyczy tego, co sie zmienilo, wiec idzie pierwsze.
+  // Step 1: "What's new" - it is about what changed, so it comes first.
   if (state.news) {
     await new Promise((gotowe) => showNewsModal(state.news, gotowe));
     state.news = null;
   }
-  // Krok 2: zasady - tylko przy PIERWSZYM polaczeniu i tylko jako toast
-  // z odeslaniem, nie jako sciana tekstu na wejsciu.
+  // Step 2: the guidelines - only on the FIRST connection and only as a toast
+  // pointing at them, not as a wall of text on arrival.
   if (state.guidelines) {
-    showToast("Witaj. Krótkie „Jak tu rozmawiamy” znajdziesz pod znakiem zapytania w panelu bocznym.");
+    showToast(t("Welcome. The short “How we talk here” lives under the question mark in the side panel."));
     state.guidelines = null;
   }
-  // Krok 3: passkey - dopiero od drugiego logowania.
+  // Step 3: passkey - from the second login onwards.
   if (logowanie >= 2) await maybeOfferPasskey();
 }
 
 async function afterLogin() {
   rebuildMentionRe();
-  // Gdy sesje odtworzylo /api/me, mamy juz komplet: rozmowy, liczniki i
-  // czlonkostwa. Powtorzenie GET /api/conversations to drugi przebieg tego
-  // samego, najdrozszego zapytania agregujacego na kazde wejscie.
+  // When /api/me restored the session we already have the full set: conversations,
+  // counters and memberships. Repeating GET /api/conversations is a second run of
+  // the same, most expensive aggregate query on every entry.
   if (!Object.keys(state.memberships).length) await loadConversationsList();
   connectSSE();
   registerPresenceSession();
   refreshPresence();
   loadWikiList();
-  // Pierwsze pobranie z pominieciem warunku widocznosci: przy logowaniu
-  // uzytkownik na pewno jest przy karcie, a gdy zaraz potem przelaczy sie gdzie
-  // indziej, tablica dzierzaw i digest zostalyby puste az do przypadkowego
-  // tykniecia zegara przy widocznej karcie.
+  // The first fetch skips the visibility condition: at login the user is certainly
+  // at the tab, and if they switch elsewhere right afterwards, the lease board and
+  // the digest would stay empty until an accidental clock tick with a visible tab.
   refreshDigestAndLeases(true);
   refreshNotifications();
-  // Katalog kont jest teraz czescia glownego widoku ("Kto tu jest"), a nie
-  // dodatkiem podpowiedzi @ - wiec pobieramy go od razu.
+  // The account directory is now part of the main view ("Who is here") rather than
+  // an add-on to @-completion - so we fetch it straight away.
   ensureActors();
   startDigestTimer();
   render();
   updateTitleBadge();
   const logowanie = policzLogowanie();
-  // Ostatnio ogladana rozmowa, nie pierwsza nieprzeczytana: auto-otwarcie
-  // nieprzeczytanej znaczylo ja jako przeczytana, zanim user zobaczyl licznik.
+  // The last viewed conversation, not the first unread one: auto-opening an unread
+  // conversation marked it as read before the user saw the counter.
   const lastId = Number(localStorage.getItem("atalks_last_conv"));
   const last = state.conversations.find((c) => c.id === lastId && state.memberships[c.id]);
   const first = last || state.conversations.find((c) => state.memberships[c.id]) || state.conversations[0];
   if (first) await openConversation(first.id);
-  // Dopiero teraz - uzytkownik widzi juz produkt, a nie okna o produkcie.
+  // Only now - the user already sees the product rather than windows about the product.
   kolejkaPowitan(logowanie);
 }
 
@@ -208,23 +214,23 @@ async function afterLogin() {
   render();
 })();
 
-// ------------------------------------------------------- zdarzenia globalne
+// --------------------------------------------------------------- global events
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !state.actor) return;
   ensureSSE();
-  // Powrot do karty = dopiero teraz "przeczytane" to, na co user patrzy (i tylko
-  // gdy naprawde widzi najnowsze, czyli jest na dole listy).
+  // Returning to the tab = only now is what the user is looking at "read" (and
+  // only when they really see the newest messages, i.e. are at the bottom).
   if (state.view === "chat" && state.activeId && state.memberships[state.activeId]
       && state.unread[state.activeId] > 0 && isScrolledToBottom()) {
     markReadDebounced(state.activeId, lastMessageId(state.activeId));
   }
 });
 
-// Upuszczenie pliku POZA strefa zrzutu nie moze zabrac uzytkownika na plik
-// (domyslne zachowanie przegladarki to nawigacja do niego).
+// Dropping a file OUTSIDE a drop zone must not take the user to that file (the
+// browser's default behaviour is to navigate to it).
 window.addEventListener("dragover", (e) => e.preventDefault());
 window.addEventListener("drop", (e) => e.preventDefault());
-// Zamkniecie karty nie moze kasowac tego, co uzytkownik wlasnie napisal.
+// Closing the tab must not discard what the user has just written.
 window.addEventListener("beforeunload", () => saveDraft());
 
 document.addEventListener("keydown", (e) => {
@@ -235,8 +241,8 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key !== "Escape") return;
-  // Modale, lightbox i paleta maja wlasna obsluge Escape - tu domykamy warstwy,
-  // ktore nie sa oknami: szuflade, watek i panel szczegolow.
+  // Modals, the lightbox and the palette handle Escape themselves - here we close
+  // the layers that are not windows: the drawer, the thread and the details panel.
   if (document.querySelector(".overlay")) return;
   if (state.drawerOpen) {
     state.drawerOpen = false;

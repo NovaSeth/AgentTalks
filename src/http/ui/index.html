@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -14,9 +14,10 @@
 </head>
 <body>
 <div id="app"></div>
-<!-- Jedyny region "na zywo": aplikacja przerysowuje sie calymi galeziami, wiec
-     aria-live na #app oglaszalo przy kazdym zdarzeniu cala liste kanalow i pasek
-     narzedzi. Tutaj laduje wylacznie to, co faktycznie nowe (jedna wiadomosc). -->
+<!-- The only live region: the application re-renders whole branches, so aria-live
+     on #app announced the entire channel list and toolbar on every event. Only what
+     is actually new lands here (a single message). The lang attribute is a starting
+     value - js/i18n.js overwrites it with the chosen interface language. -->
 <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 <script type="module" src="/js/app.js"></script>
 </body>

@@ -7,6 +7,7 @@ import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, l
 import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, zachowanieScrolla } from "./dom.js";
 import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./ikony.js";
 import { renderBody } from "./markdown.js";
+import { t } from "./i18n.js";
 import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, czyZgloszenie, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, przytnijCache, pushRecent, saveDraft, state, upsertMessage, widoczneWiadomosci, widok, zgloszenia } from "./stan.js";
 import { showError, showToast } from "./toasty.js";
 import { openWikiPage, renderWikiMain } from "./widok-wiki.js";
@@ -101,7 +102,7 @@ export function offlineBarHtml() {
   if (state.online) return "";
   return `<div class="offbar" role="status" id="offbar">
     <span class="offdot" aria-hidden="true"></span>
-    Brak połączenia z serwerem - nowe wiadomości nie dochodzą. Próbuję połączyć ponownie...
+    ${t("No connection to the server - new messages are not arriving. Trying to reconnect...")}
   </div>`;
 }
 
@@ -127,9 +128,9 @@ export function renderMain() {
     // Pusty stan mowi, co zrobic, i daje na to przycisk - "wybierz rozmowę" bez
     // niczego wiecej zostawialo czlowieka przy pustym ekranie i liscie, ktora
     // tez bywa pusta pierwszego dnia.
-    el.innerHTML = emptyStateHtml(iconChat(2.6), "Nie masz jeszcze otwartej rozmowy",
-      "Wejdź na kanał z listy po lewej albo napisz do kogoś prywatnie.",
-      { id: "empty-new", label: "Zacznij rozmowę" });
+    el.innerHTML = emptyStateHtml(iconChat(2.6), t("You have no conversation open yet"),
+      t("Enter a channel from the list on the left, or write to somebody privately."),
+      { id: "empty-new", label: t("Start a conversation") });
     document.getElementById("empty-new")?.addEventListener("click", () => openNewConversationModal("dm"));
     return;
   }
@@ -142,21 +143,21 @@ export function renderMain() {
         <div class="t" id="topbar-title"></div>
         ${c && c.topic ? `<div class="topic">${escapeHtml(c.topic)}</div>` : ""}
       </div>
-      <button class="iconbtn ${state.detailsOpen ? "on" : ""}" id="btn-details" aria-label="Szczegóły rozmowy"
-        aria-expanded="${state.detailsOpen}" aria-controls="details-slot" title="Szczegóły rozmowy">${iconInfo()}</button>
+      <button class="iconbtn ${state.detailsOpen ? "on" : ""}" id="btn-details" aria-label="${t("Conversation details")}"
+        aria-expanded="${state.detailsOpen}" aria-controls="details-slot" title="${t("Conversation details")}">${iconInfo()}</button>
     </div>
     ${offlineBarHtml()}
-    <div class="messages viewfade" id="messages" role="log" aria-label="Wiadomości"></div>
+    <div class="messages viewfade" id="messages" role="log" aria-label="${t("Messages")}"></div>
     <div class="dock">
-      <button class="jump-newest" id="jump-newest" aria-label="Przewiń do najnowszej wiadomości" title="Przewiń do najnowszej">
-        <span class="jn-label">Najnowsze</span>${iconArrowDown()}
+      <button class="jump-newest" id="jump-newest" aria-label="${t("Scroll to the newest message")}" title="${t("Scroll to the newest")}">
+        <span class="jn-label">${t("Latest")}</span>${iconArrowDown()}
       </button>
       <div class="presence-bar" id="presence-bar"></div>
       ${isMember
         ? `<div class="composer" id="composer"></div>`
         : `<div class="joinbar" id="joinbar">
-             <span>Czytasz podgląd <b>#${escapeHtml(c?.slug ?? "")}</b> - dołącz, żeby pisać.</span>
-             <button class="joinbtn" id="btn-join">Dołącz</button>
+             <span>${t("You are previewing <b>#{slug}</b> - join to write.", { slug: escapeHtml(c?.slug ?? "") })}</span>
+             <button class="joinbtn" id="btn-join">${t("Join")}</button>
            </div>`}
     </div>
     ${state.threadOpen ? `<div id="thread-slot"></div>` : ""}
@@ -229,18 +230,18 @@ export function renderDetails() {
       <div class="dm-row">
         ${avatarHtml(handle, 26)}
         <span class="dm-name">@${escapeHtml(handle)}</span>
-        <span class="kindtag ${a.kind || "agent"}">${a.kind === "human" ? "człowiek" : "agent"}</span>
+        <span class="kindtag ${a.kind || "agent"}">${a.kind === "human" ? t("human") : t("agent")}</span>
         ${m.role === "admin" ? `<span class="roletag">admin</span>` : ""}
         <span class="ppresence ${online ? "on" : ""}"></span>
         ${removable ? `<button class="dm-kick" data-kick="${escapeHtml(handle)}"
-          aria-label="${m.actorId === state.actor.id ? "Opuść rozmowę" : `Usuń @${escapeHtml(handle)} z rozmowy`}"
-          title="${m.actorId === state.actor.id ? "Opuść" : "Usuń z rozmowy"}"><span aria-hidden="true">&times;</span></button>` : ""}
+          aria-label="${m.actorId === state.actor.id ? t("Leave the conversation") : t("Remove @{handle} from the conversation", { handle: escapeHtml(handle) })}"
+          title="${m.actorId === state.actor.id ? t("Leave") : t("Remove from the conversation")}"><span aria-hidden="true">&times;</span></button>` : ""}
       </div>`;
   };
   const pinRow = (p) => {
     const msg = findMsgById(p.messageId);
     const who = msg ? actorHandle(msg.actorId) : p.by;
-    const excerpt = msg ? String(msg.body || "").slice(0, 80) : `wiadomość #${p.messageId}`;
+    const excerpt = msg ? String(msg.body || "").slice(0, 80) : t("message #{id}", { id: p.messageId });
     return `
       <button class="pin-row" data-jump="${p.messageId}">
         ${iconPin()}<span class="pin-txt"><b>@${escapeHtml(who)}</b> ${escapeHtml(excerpt)}</span>
@@ -248,49 +249,48 @@ export function renderDetails() {
   };
   host.innerHTML = `
     <div class="thread details">
-      <div class="th-head">${iconInfo()} Szczegóły
-        <button class="iconbtn close" id="dt-close" aria-label="Zamknij szczegóły rozmowy" title="Zamknij"><span aria-hidden="true">&times;</span></button></div>
+      <div class="th-head">${iconInfo()} ${t("Details")}
+        <button class="iconbtn close" id="dt-close" aria-label="${t("Close conversation details")}" title="${t("Close")}"><span aria-hidden="true">&times;</span></button></div>
       <div class="dt-body">
         ${isChannel ? `
         <div class="dt-sec">
-          <h4>Kanał</h4>
+          <h4>${t("Channel")}</h4>
           <div class="dt-chan">
             <span class="dm-name">${c.kind === "private" ? iconLock(true) : "#"} ${escapeHtml(c.slug ?? "")}</span>
-            ${manage ? `<button class="pillbtn slim" id="dt-edit">${iconEdit()} Edytuj</button>` : ""}
+            ${manage ? `<button class="pillbtn slim" id="dt-edit">${iconEdit()} ${t("Edit")}</button>` : ""}
           </div>
           ${c.topic ? `<p class="dt-topic">${escapeHtml(c.topic)}</p>` : ""}
         </div>` : ""}
         <div class="dt-sec">
-          <h4>Uczestnicy (${state.convMembers.length})</h4>
-          ${state.convMembers.map(memberRow).join("") || `<p class="sb-empty">brak</p>`}
+          <h4>${t("Members")} (${state.convMembers.length})</h4>
+          ${state.convMembers.map(memberRow).join("") || `<p class="sb-empty">${t("none")}</p>`}
           ${c.kind === "private" ? `
           <div class="dt-add">
-            <label class="sr-only" for="dt-add-input">Kogo dodać do rozmowy</label>
-            <input id="dt-add-input" placeholder="@handle do dodania">
-            <button class="pillbtn slim" id="dt-add-btn">Dodaj</button>
+            <label class="sr-only" for="dt-add-input">${t("Who to add to the conversation")}</label>
+            <input id="dt-add-input" placeholder="${t("@handle to add")}">
+            <button class="pillbtn slim" id="dt-add-btn">${t("Add")}</button>
           </div>` : ""}
         </div>
         ${my ? `
         <div class="dt-sec">
-          <h4 id="dt-notify-label">Powiadomienia</h4>
+          <h4 id="dt-notify-label">${t("Notifications")}</h4>
           <div class="seg small" id="dt-notify" role="radiogroup" aria-labelledby="dt-notify-label">
-            <button role="radio" aria-checked="${notify === "all"}" data-notify="all" class="${notify === "all" ? "on" : ""}">Każda wiadomość</button>
-            <button role="radio" aria-checked="${notify === "mentions"}" data-notify="mentions" class="${notify === "mentions" ? "on" : ""}">Wzmianki</button>
-            <button role="radio" aria-checked="${notify === "none"}" data-notify="none" class="${notify === "none" ? "on" : ""}">Nic</button>
+            <button role="radio" aria-checked="${notify === "all"}" data-notify="all" class="${notify === "all" ? "on" : ""}">${t("Every message")}</button>
+            <button role="radio" aria-checked="${notify === "mentions"}" data-notify="mentions" class="${notify === "mentions" ? "on" : ""}">${t("Mentions")}</button>
+            <button role="radio" aria-checked="${notify === "none"}" data-notify="none" class="${notify === "none" ? "on" : ""}">${t("Nothing")}</button>
           </div>
-          <p class="dt-hint">Kiedy ta rozmowa może Cię zawołać (push / budzenie agenta):
-            każda wiadomość, tylko wzmianki i DM, albo wcale.</p>
+          <p class="dt-hint">${t("When this conversation may call you (push / waking an agent): every message, mentions and DMs only, or never.")}</p>
         </div>` : ""}
         ${state.convPins.length ? `
         <div class="dt-sec">
-          <h4>Przypięte (${state.convPins.length})</h4>
+          <h4>${t("Pinned")} (${state.convPins.length})</h4>
           ${state.convPins.map(pinRow).join("")}
         </div>` : ""}
         ${isChannel && my ? `
         <div class="dt-sec dt-danger">
-          <h4>Akcje</h4>
-          <button class="dt-action" id="dt-leave">Opuść kanał</button>
-          ${manage ? `<button class="dt-action danger" id="dt-archive">Zarchiwizuj kanał (znika z list, historia zostaje)</button>` : ""}
+          <h4>${t("Actions")}</h4>
+          <button class="dt-action" id="dt-leave">${t("Leave the channel")}</button>
+          ${manage ? `<button class="dt-action danger" id="dt-archive">${t("Archive the channel (disappears from lists, history stays)")}</button>` : ""}
         </div>` : ""}
       </div>
     </div>`;
@@ -302,8 +302,8 @@ export function renderDetails() {
       const h = b.dataset.kick;
       const self = h === state.actor.handle;
       const zgoda = await confirmModal(self
-        ? { title: "Opuścić tę rozmowę?", body: "Przestaniesz dostawać z niej wiadomości. Historia zostaje.", ok: "Opuść rozmowę", danger: true }
-        : { title: `Usunąć @${h} z rozmowy?`, body: "Ta osoba przestanie widzieć nowe wiadomości. To, co już przeczytała, zostaje u niej.", ok: `Usuń @${h}`, danger: true });
+        ? { title: t("Leave this conversation?"), body: t("You stop receiving messages from it. The history stays."), ok: t("Leave the conversation"), danger: true }
+        : { title: t("Remove @{handle} from the conversation?", { handle: h }), body: t("This person stops seeing new messages. What they have already read stays with them."), ok: t("Remove @{handle}", { handle: h }), danger: true });
       if (!zgoda) return;
       try {
         await api("DELETE", `/api/conversations/${c.id}/members/${encodeURIComponent(h)}`);
@@ -338,9 +338,9 @@ export function renderDetails() {
   const leaveBtn = document.getElementById("dt-leave");
   if (leaveBtn) leaveBtn.addEventListener("click", async () => {
     if (!await confirmModal({
-      title: `Opuścić #${c.slug ?? ""}?`,
-      body: "Kanał zniknie z Twojej listy i przestaniesz dostawać z niego powiadomienia. Możesz dołączyć ponownie.",
-      ok: "Opuść kanał", danger: true,
+      title: t("Leave #{slug}?", { slug: c.slug ?? "" }),
+      body: t("The channel disappears from your list and you stop getting notifications from it. You can join again."),
+      ok: t("Leave the channel"), danger: true,
     })) return;
     try {
       await api("POST", `/api/conversations/${c.id}/leave`, {});
@@ -351,14 +351,14 @@ export function renderDetails() {
   const arch = document.getElementById("dt-archive");
   if (arch) arch.addEventListener("click", async () => {
     if (!await confirmModal({
-      title: `Zarchiwizować #${c.slug ?? ""}?`,
-      body: "Kanał zniknie z list wszystkim i przestanie przyjmować wiadomości. Historia zostaje i da się ją odczytać.",
-      ok: "Zarchiwizuj kanał", danger: true,
+      title: t("Archive #{slug}?", { slug: c.slug ?? "" }),
+      body: t("The channel disappears from everybody's lists and stops accepting messages. The history stays and can be read."),
+      ok: t("Archive the channel"), danger: true,
     })) return;
     try {
       await api("DELETE", `/api/conversations/${c.id}`);
       state.detailsOpen = false;
-      showToast("Kanał zarchiwizowany");
+      showToast(t("Channel archived"));
       await loadConversationsList();
       const next = state.conversations.find((x) => state.memberships[x.id]);
       state.activeId = null;
@@ -368,15 +368,15 @@ export function renderDetails() {
   });
 }
 
-/** Modal edycji kanalu: temat + slug (nazwa). */
+/** The channel edit modal: topic + slug (name). */
 function editChannelModal(c) {
   const { modal, close } = openModal(`
-      <h2 id="m-title">Edytuj kanał</h2>
-      <div class="field"><label for="ec-slug">Nazwa kanału</label><input id="ec-slug" value="${escapeHtml(c.slug ?? "")}">
-        <span class="fhint">Małe litery, cyfry i myślniki - to ona pojawia się po znaku # na liście.</span></div>
-      <div class="field"><label for="ec-topic">Temat</label><input id="ec-topic" value="${escapeHtml(c.topic ?? "")}">
-        <span class="fhint">Jedno zdanie o tym, po co ten kanał istnieje.</span></div>
-      <div class="row"><button class="btn ghost" id="ec-cancel">Anuluj</button><button class="btn" id="ec-save">Zapisz</button></div>`);
+      <h2 id="m-title">${t("Edit the channel")}</h2>
+      <div class="field"><label for="ec-slug">${t("Channel name")}</label><input id="ec-slug" value="${escapeHtml(c.slug ?? "")}">
+        <span class="fhint">${t("Lower-case letters, digits and hyphens - this is what appears after the # on the list.")}</span></div>
+      <div class="field"><label for="ec-topic">${t("Topic")}</label><input id="ec-topic" value="${escapeHtml(c.topic ?? "")}">
+        <span class="fhint">${t("One sentence about why this channel exists.")}</span></div>
+      <div class="row"><button class="btn ghost" id="ec-cancel">${t("Cancel")}</button><button class="btn" id="ec-save">${t("Save")}</button></div>`);
   modal.querySelector("#ec-cancel").addEventListener("click", close);
   modal.querySelector("#ec-save").addEventListener("click", async () => {
     const slug = modal.querySelector("#ec-slug").value.trim().replace(/^#/, "");
@@ -386,14 +386,14 @@ function editChannelModal(c) {
       close();
       await loadConversationsList();
       widok.sidebar(); renderMain();
-      showToast("Kanał zaktualizowany");
+      showToast(t("Channel updated"));
     } catch (e) { showError(e); }
   });
 }
 
 export function renderTopbar() {
-  const t = document.getElementById("topbar-title");
-  if (!t) return;
+  const bar = document.getElementById("topbar-title");
+  if (!bar) return;
   const c = state.conversations.find((x) => x.id === state.activeId);
   if (!c || state.view !== "chat") return;
   const isDirect = c.kind === "dm" || c.kind === "group";
@@ -402,10 +402,10 @@ export function renderTopbar() {
     // ma nazwe i kropke obecnosci jeszcze zanim przyjdzie pierwsza wiadomosc.
     const inni = dmOthers(c);
     const online = inni.length > 0 && inni.some((o) => handleOnline(o.handle));
-    t.innerHTML = `<span class="ppresence big ${online ? "on" : ""}"></span> ${escapeHtml(dmLabel(c))}`;
+    bar.innerHTML = `<span class="ppresence big ${online ? "on" : ""}"></span> ${escapeHtml(dmLabel(c))}`;
   } else {
     const pre = c.kind === "private" ? `${iconLock(true)} ` : "# ";
-    t.innerHTML = `${pre}${escapeHtml(c.slug || "bez-nazwy")}`;
+    bar.innerHTML = `${pre}${escapeHtml(c.slug || t("unnamed"))}`;
   }
 }
 
@@ -432,10 +432,10 @@ function typersAt(loc) {
 export function typingFacesHtml(loc) {
   const typers = typersAt(loc);
   if (!typers.length) return "";
-  return `<span class="typing-faces" title="${escapeHtml(typers.map((p) => "@" + p.handle).join(", "))} pisze...">
+  return `<span class="typing-faces" title="${t("{who} is typing...", { who: escapeHtml(typers.map((p) => "@" + p.handle).join(", ")) })}">
     ${typers.slice(0, 6).map((p, i) =>
       `<span class="tf" style="animation-delay:${i * 0.14}s">${avatarHtml(p.handle, 20)}</span>`).join("")}
-    <span class="tf-label">${typers.length === 1 ? "pisze" : "piszą"}...</span>
+    <span class="tf-label">${t("typing", { n: typers.length })}...</span>
   </span>`;
 }
 
@@ -450,7 +450,7 @@ export function renderPresenceBar() {
     if (p.actorId === state.actor.id || seen.has(p.actorId)) continue;
     if (p.busy && !p.typing) {
       seen.add(p.actorId);
-      parts.push(`<span class="pres busy">${iconGear()} @${escapeHtml(p.handle)} pracuje${p.doing ? `: <i>${escapeHtml(p.doing)}</i>` : ""}</span>`);
+      parts.push(`<span class="pres busy">${iconGear()} ${t("@{handle} is working", { handle: escapeHtml(p.handle) })}${p.doing ? `: <i>${escapeHtml(p.doing)}</i>` : ""}</span>`);
     }
     if (parts.length >= 4) break;
   }
@@ -515,8 +515,8 @@ export function renderMessages() {
   const scrollTop = el.scrollTop;
   const list = widoczneWiadomosci(state.activeId);
   if (!list.length) {
-    el.innerHTML = emptyStateHtml(iconChat(2.2), "Na razie cicho",
-      "Nikt tu jeszcze nic nie napisał. Zacznij od pierwszego zdania - agenci i ludzie zobaczą je tak samo.");
+    el.innerHTML = emptyStateHtml(iconChat(2.2), t("Quiet so far"),
+      t("Nobody has written anything here yet. Start with the first sentence - agents and humans will see it the same way."));
     return;
   }
 
@@ -529,7 +529,7 @@ export function renderMessages() {
   // Starsze doczytuja sie same przy przewijaniu w gore; przycisk zostaje jako
   // droga awaryjna (np. gdy paczka nie wypelnila ekranu i nie ma czego scrollowac).
   let html = state.hasMore[state.activeId]
-    ? `<button class="loadmore" id="btn-loadmore">Starsze wiadomości</button>` : "";
+    ? `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>` : "";
   const idx = threadIndex(state.activeId);
   const mark = state.readMark[state.activeId] || 0;
   let kreska = false;
@@ -540,7 +540,7 @@ export function renderMessages() {
     // Kreska "nowe wiadomosci": jedno miejsce, ktore mowi "tu skonczyles czytac".
     // Serwer podaje lastReadMessageId od zawsze, a UI nie uzywal go ani razu.
     if (!kreska && mark && typeof m.id === "number" && m.id > mark && m.actorId !== state.actor.id) {
-      html += `<div class="newline"><span>Nowe wiadomości</span></div>`;
+      html += `<div class="newline"><span>${t("New messages")}</span></div>`;
       kreska = true;
       lastAuthor = null;
     }
@@ -639,14 +639,14 @@ function threadLinkHtml(m, index) {
   const more = seen.size > 4 ? `<span class="tl-more">+${seen.size - 4}</span>` : "";
   return `<button class="thread-link" data-thread="${m.id}">
     <span class="tl-faces">${faces.join("")}${more}</span>
-    <span class="tl-count">${replies.length} ${replies.length === 1 ? "odpowiedź" : "odpowiedzi"}</span>
-    <span class="tl-when">ostatnia ${timeAgo(last.ts)}</span>
+    <span class="tl-count">${t("{n} replies", { n: replies.length })}</span>
+    <span class="tl-when">${t("last {when}", { when: timeAgo(last.ts) })}</span>
   </button>`;
 }
 
 function attachmentHtml(m) {
   const meta = m.meta || {};
-  const name = escapeHtml(meta.name ?? "plik");
+  const name = escapeHtml(meta.name ?? t("file"));
   const size = formatBytes(meta.size);
   const fileUrl = `/api/files/${encodeURIComponent(meta.fileId ?? "")}`;
   if (IMG_RE.test(meta.name ?? "")) {
@@ -669,12 +669,12 @@ function deliveryHtml(m) {
   if (!d || d.conversationId !== m.conversationId || d.messageId !== m.id) return "";
   const parts = d.delivery.map((r) => {
     const kto = `@${escapeHtml(r.handle)}`;
-    if (r.online) return `<span class="ok">${kto} jest teraz online - przeczyta od razu</span>`;
+    if (r.online) return `<span class="ok">${t("{who} is online now - will read it right away", { who: kto })}</span>`;
     if (r.wakeable) {
-      const ile = timeAgo(r.lastSeenAt).replace(" temu", "");
-      return `<span class="warn">${kto} śpi od ${escapeHtml(ile)} - serwer obudzi go tą wiadomością</span>`;
+      const ile = timeAgo(r.lastSeenAt).replace(/ (ago|temu)$/, "");
+      return `<span class="warn">${t("{who} has been asleep for {how_long} - the server will wake them with this message", { who: kto, how_long: escapeHtml(ile) })}</span>`;
     }
-    return `<span class="off">${kto} jest offline - zobaczy to, gdy wróci</span>`;
+    return `<span class="off">${t("{who} is offline - will see it when they are back", { who: kto })}</span>`;
   });
   return `<div class="delivery">${parts.join(" · ")}</div>`;
 }
@@ -697,16 +697,16 @@ function messageHtml(m, cont, opts = {}) {
       <div class="body">
         <div class="head">
           <span class="author">@${escapeHtml(handle)}</span>
-          <span class="time">${m.failed ? "nie wysłano" : "wysyłanie..."}</span>
+          <span class="time">${m.failed ? t("not sent") : t("sending...")}</span>
         </div>
         <div class="text">${renderBody(m.body, state.actor.handle)}</div>
         ${m.failed ? `
         <div class="failbar">
-          <span class="failwhy">${escapeHtml(m.error || "Nie udało się wysłać")}</span>
-          <button data-retry="${escapeHtml(m.clientMsgId)}">Wyślij ponownie</button>
-          <button data-copytext="${escapeHtml(m.clientMsgId)}">Kopiuj treść</button>
+          <span class="failwhy">${escapeHtml(m.error || t("Could not send"))}</span>
+          <button data-retry="${escapeHtml(m.clientMsgId)}">${t("Send again")}</button>
+          <button data-copytext="${escapeHtml(m.clientMsgId)}">${t("Copy the text")}</button>
           <button data-droppending="${escapeHtml(m.clientMsgId)}"
-            title="Tekst wróci do pola pisania - stamtąd możesz go poprawić albo skasować">Przenieś z powrotem do pola</button>
+            title="${t("The text goes back to the writing field - from there you can fix it or delete it")}">${t("Move it back to the field")}</button>
         </div>` : ""}
       </div>
     </div>`;
@@ -744,22 +744,22 @@ function messageHtml(m, cont, opts = {}) {
       <div class="body">
         <div class="head">
           <span class="author">@${escapeHtml(handle)}</span>
-          <span class="kindtag ${kind}">${kind === "human" ? "człowiek" : "agent"}</span>
+          <span class="kindtag ${kind}">${kind === "human" ? t("human") : t("agent")}</span>
           <span class="time">${fmtTime(m.ts)}</span>
-          ${m.editedAt ? `<span class="edited">(edytowano)</span>` : ""}
-          ${resolved ? `<span class="qbadge done" title="Potwierdzone przez @${escapeHtml(actorHandle(m.resolvedBy))}${m.fixedAt ? `, naprawił(a) @${escapeHtml(actorHandle(m.fixedBy))}` : ""}">${iconCheck(true)} Potwierdzone</span>` : ""}
-          ${fixed ? `<span class="qbadge fixed" title="@${escapeHtml(actorHandle(m.fixedBy))} zmienił(a) kod. Czeka na potwierdzenie zgłaszającego, że objaw zniknął.">${iconWrench()} Naprawione · czeka na potwierdzenie</span>` : ""}
+          ${m.editedAt ? `<span class="edited">${t("(edited)")}</span>` : ""}
+          ${resolved ? `<span class="qbadge done" title="${t("Confirmed by @{who}", { who: escapeHtml(actorHandle(m.resolvedBy)) })}${m.fixedAt ? t(", fixed by @{who}", { who: escapeHtml(actorHandle(m.fixedBy)) }) : ""}">${iconCheck(true)} ${t("Confirmed")}</span>` : ""}
+          ${fixed ? `<span class="qbadge fixed" title="${t("@{who} changed the code. Waiting for the reporter to confirm the symptom is gone.", { who: escapeHtml(actorHandle(m.fixedBy)) })}">${iconWrench()} ${t("Fixed · waiting for confirmation")}</span>` : ""}
           ${isAsk ? (askOpen
-            ? `<span class="qbadge open"><span class="qdot"></span>Otwarte pytanie</span>`
-            : `<span class="qbadge done">${iconCheck(true)} Odpowiedziane</span>`) : ""}
-          ${m.kind === "answer" ? `<span class="qbadge done">${iconCheck(true)} odpowiedź</span>` : ""}
+            ? `<span class="qbadge open"><span class="qdot"></span>${t("Open question")}</span>`
+            : `<span class="qbadge done">${iconCheck(true)} ${t("Answered")}</span>`) : ""}
+          ${m.kind === "answer" ? `<span class="qbadge done">${iconCheck(true)} ${t("answer")}</span>` : ""}
         </div>
-        ${m.deletedAt ? `<div class="text">wiadomość usunięta</div>`
+        ${m.deletedAt ? `<div class="text">${t("message deleted")}</div>`
           : m.kind === "file" ? attachmentHtml(m)
           : `<div class="text" data-text="${m.id}">${renderBody(m.body, state.actor.handle)}</div>`}
         ${askOpen && !m.deletedAt ? `
         <div class="answer-cta" data-answer-cta="${m.id}">
-          <button class="answerbtn" data-answer="${qid}" data-msg-ref="${m.id}">${iconReply()} Odpowiedz</button>
+          <button class="answerbtn" data-answer="${qid}" data-msg-ref="${m.id}">${iconReply()} ${t("Answer")}</button>
         </div>` : ""}
         ${(() => {
           // Jeden staly wiersz pod wpisem, jak w Slacku: chipy reakcji,
@@ -767,19 +767,19 @@ function messageHtml(m, cont, opts = {}) {
           if (m.deletedAt) return "";
           const tlink = !m.threadId && !opts.noThreadLink ? threadLinkHtml(m, opts.threads) : "";
           return `<div class="reacts">${chips}
-            <button class="react addreact" data-addreact="${m.id}" aria-label="Dodaj reakcję" title="Dodaj reakcję">${iconAddReaction()}</button>
+            <button class="react addreact" data-addreact="${m.id}" aria-label="${t("Add a reaction")}" title="${t("Add a reaction")}">${iconAddReaction()}</button>
             ${tlink}</div>`;
         })()}
         ${mine ? deliveryHtml(m) : ""}
       </div>
       ${!m.deletedAt ? `
-      <div class="actions" role="group" aria-label="Akcje wiadomości od @${escapeHtml(handle)}">
-        ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? "Cofnij potwierdzenie" : "Potwierdź: objaw zniknął"}" title="${resolved ? "Cofnij potwierdzenie" : "Potwierdź: objaw zniknął"}">${iconCheck(true)}</button>` : ""}
-        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? "Cofnij oznaczenie „naprawione”" : "Oznacz jako naprawione"}" title="${m.fixedAt ? "Cofnij „naprawione”" : "Oznacz: naprawiłem, czeka na potwierdzenie"}">${iconWrench()}</button>` : ""}
-        <button data-reply="${m.id}" aria-label="Odpowiedz w wątku" title="Odpowiedz w wątku">${iconThread()}</button>
-        ${mine && m.kind === "text" ? `<button data-edit="${m.id}" aria-label="Edytuj wiadomość" title="Edytuj">${iconEdit()}</button>` : ""}
+      <div class="actions" role="group" aria-label="${t("Actions for the message from @{handle}", { handle: escapeHtml(handle) })}">
+        ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}" title="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}">${iconCheck(true)}</button>` : ""}
+        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark as fixed")}" title="${m.fixedAt ? t("Take back “fixed”") : t("Mark: I fixed it, waiting for confirmation")}">${iconWrench()}</button>` : ""}
+        <button data-reply="${m.id}" aria-label="${t("Reply in a thread")}" title="${t("Reply in a thread")}">${iconThread()}</button>
+        ${mine && m.kind === "text" ? `<button data-edit="${m.id}" aria-label="${t("Edit the message")}" title="${t("Edit")}">${iconEdit()}</button>` : ""}
         <button data-more="${m.id}" data-pinned="${przypieta ? "1" : ""}" data-zgl="${zgloszenie ? "1" : ""}"
-          aria-label="Więcej działań" aria-haspopup="menu" title="Więcej">${iconMore()}</button>
+          aria-label="${t("More actions")}" aria-haspopup="menu" title="${t("More")}">${iconMore()}</button>
       </div>` : ""}
     </div>`;
 }
@@ -806,9 +806,9 @@ export function bindMessageEvents(scope) {
     if ((b = wez("[data-delete]"))) {
       const id = Number(b.dataset.delete);
       if (await confirmModal({
-        title: "Usunąć tę wiadomość?",
-        body: "Treść zniknie z rozmowy u wszystkich. W jej miejscu zostanie ślad „wiadomość usunięta”.",
-        ok: "Usuń wiadomość", danger: true,
+        title: t("Delete this message?"),
+        body: t("The content disappears from the conversation for everybody. A “message deleted” trace stays in its place."),
+        ok: t("Delete the message"), danger: true,
       })) deleteMsg(id);
       return;
     }
@@ -818,8 +818,8 @@ export function bindMessageEvents(scope) {
     if ((b = wez("[data-droppending]"))) { dropPending(state.activeId, b.dataset.droppending); return; }
     if ((b = wez("[data-copytext]"))) {
       const rec = (state.pending[state.activeId] || []).find((p) => p.clientMsgId === b.dataset.copytext);
-      try { await navigator.clipboard.writeText(rec?.body ?? ""); showToast("Skopiowane do schowka"); }
-      catch { showToast("Nie udało się skopiować", { alert: true }); }
+      try { await navigator.clipboard.writeText(rec?.body ?? ""); showToast(t("Copied to the clipboard")); }
+      catch { showToast(t("Could not copy"), { alert: true }); }
       return;
     }
     if ((b = wez("[data-lightbox]"))) { openLightbox(b.dataset.lightbox); return; }
@@ -829,7 +829,7 @@ export function bindMessageEvents(scope) {
         await navigator.clipboard.writeText(code.textContent);
         b.classList.add("copied"); b.innerHTML = iconCheck(true);
         setTimeout(() => { b.classList.remove("copied"); b.innerHTML = iconCopy(); }, 1400);
-      } catch { showToast("Nie udało się skopiować", { alert: true }); }
+      } catch { showToast(t("Could not copy"), { alert: true }); }
       return;
     }
     if ((b = wez("[data-wikilink]"))) {
@@ -882,14 +882,14 @@ function openMessageMenu(messageId, anchor) {
   const przypieta = state.convPins.some((p) => p.messageId === messageId);
   const zgloszenie = czyZgloszenie(m);
   const pozycje = [
-    { akcja: "pin", label: przypieta ? "Odepnij z rozmowy" : "Przypnij w rozmowie",
-      opis: przypieta ? "Zniknie z listy przypiętych." : "Trafi do „Przypięte” w szczegółach rozmowy - dla wszystkich." },
+    { akcja: "pin", label: przypieta ? t("Unpin from the conversation") : t("Pin in the conversation"),
+      opis: przypieta ? t("It disappears from the pinned list.") : t("It goes to “Pinned” in the conversation details - for everybody.") },
     ...(!zgloszenie && m.kind === "text" && !m.deletedAt
-      ? [{ akcja: "zgloszenie", label: "Potraktuj jako zgłoszenie",
-        opis: "Dopiero wtedy pokażą się przyciski „naprawiłem” i „potwierdzam, że zniknęło”." }]
+      ? [{ akcja: "zgloszenie", label: t("Treat as a report"),
+        opis: t("Only then do the “I fixed it” and “I confirm it is gone” buttons appear.") }]
       : []),
-    { akcja: "kopiuj", label: "Kopiuj treść", opis: "" },
-    ...(mine ? [{ akcja: "usun", label: "Usuń wiadomość", opis: "Nieodwracalne dla wszystkich.", danger: true }] : []),
+    { akcja: "kopiuj", label: t("Copy the text"), opis: "" },
+    ...(mine ? [{ akcja: "usun", label: t("Delete the message"), opis: t("Irreversible for everybody."), danger: true }] : []),
   ];
   const pop = document.createElement("div");
   pop.className = "msg-menu";
@@ -922,19 +922,19 @@ function openMessageMenu(messageId, anchor) {
     if (akcja === "zgloszenie") {
       zgloszenia.add(messageId);
       widok.wiadomosc(findMsgById(messageId));
-      showToast("Traktuję to jako zgłoszenie. Przy wiadomości są teraz „naprawiłem” i „potwierdzam”.");
+      showToast(t("Treating this as a report. The message now carries “I fixed it” and “I confirm”."));
       return;
     }
     if (akcja === "kopiuj") {
-      try { await navigator.clipboard.writeText(m.body ?? ""); showToast("Skopiowane do schowka."); }
-      catch { showToast("Nie udało się skopiować.", { alert: true }); }
+      try { await navigator.clipboard.writeText(m.body ?? ""); showToast(t("Copied to the clipboard.")); }
+      catch { showToast(t("Could not copy."), { alert: true }); }
       return;
     }
     if (akcja === "usun") {
       if (await confirmModal({
-        title: "Usunąć tę wiadomość?",
-        body: "Treść zniknie z rozmowy u wszystkich. W jej miejscu zostanie ślad „wiadomość usunięta”.",
-        ok: "Usuń wiadomość", danger: true,
+        title: t("Delete this message?"),
+        body: t("The content disappears from the conversation for everybody. A “message deleted” trace stays in its place."),
+        ok: t("Delete the message"), danger: true,
       })) deleteMsg(messageId);
     }
   });
@@ -957,7 +957,7 @@ function startInlineEdit(messageId, scope) {
   holder.innerHTML = `
     <div class="inline-edit">
       <textarea rows="1"></textarea>
-      <div class="hint">Enter zapisz · Escape anuluj</div>
+      <div class="hint">${t("Enter to save · Escape to cancel")}</div>
     </div>`;
   const ta = holder.querySelector("textarea");
   ta.value = msg.body;
@@ -981,8 +981,8 @@ function startInlineAnswer(questionId, messageId, scope) {
   if (!cta) return;
   cta.innerHTML = `
     <div class="inline-edit answerbox">
-      <textarea rows="1" placeholder="Twoja odpowiedź..."></textarea>
-      <div class="hint">Enter wyślij · Escape anuluj</div>
+      <textarea rows="1" placeholder="${t("Your answer...")}"></textarea>
+      <div class="hint">${t("Enter to send · Escape to cancel")}</div>
     </div>`;
   const ta = cta.querySelector("textarea");
   const autos = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 300) + "px"; };
@@ -992,7 +992,7 @@ function startInlineAnswer(questionId, messageId, scope) {
       e.preventDefault();
       const v = ta.value.trim();
       if (!v) return;
-      try { await answerQuestion(questionId, v); showToast("Pytanie domknięte - dzięki!"); }
+      try { await answerQuestion(questionId, v); showToast(t("Question closed - thank you!")); }
       catch (err) { showError(err); renderMessages(); }
     }
     if (e.key === "Escape") renderMessages();
@@ -1006,8 +1006,8 @@ function openLightbox(url) {
   overlay.className = "overlay lightbox";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-label", "Podgląd obrazu - Escape zamyka");
-  overlay.innerHTML = `<img src="${url}" alt="Powiększony załącznik">`;
+  overlay.setAttribute("aria-label", t("Image preview - Escape closes it"));
+  overlay.innerHTML = `<img src="${url}" alt="${t("Enlarged attachment")}">`;
   document.body.appendChild(overlay);
   const wrocDo = document.activeElement;
   // Sluchacz zdejmowany w JEDNYM miejscu: wczesniej wychodzilo tylko galezia
@@ -1123,21 +1123,21 @@ export function renderComposer() {
   const kanal = !!c && (c.kind === "public" || c.kind === "private");
   const ask = kanal && state.askMode;
   el.innerHTML = `
-    ${replyMsg ? `<div class="replying">Odpowiadasz w wątku <b>@${escapeHtml(actorHandle(replyMsg.actorId))}</b>
-      <button id="cancel-reply" aria-label="Anuluj odpowiadanie w wątku" title="Anuluj"><span aria-hidden="true">&times;</span></button></div>` : ""}
-    ${ask ? `<div class="asking">${iconQuestion()} To pójdzie jako <b>pytanie do kanału</b> - zostanie otwarte, dopóki ktoś nie odpowie.
-      <button id="cancel-ask" aria-label="Wróć do zwykłej wiadomości" title="Wróć do zwykłej wiadomości"><span aria-hidden="true">&times;</span></button></div>` : ""}
+    ${replyMsg ? `<div class="replying">${t("Replying in the thread of <b>@{handle}</b>", { handle: escapeHtml(actorHandle(replyMsg.actorId)) })}
+      <button id="cancel-reply" aria-label="${t("Cancel replying in the thread")}" title="${t("Cancel")}"><span aria-hidden="true">&times;</span></button></div>` : ""}
+    ${ask ? `<div class="asking">${iconQuestion()} ${t("This goes as a <b>question to the channel</b> - it stays open until somebody answers.")}
+      <button id="cancel-ask" aria-label="${t("Back to a normal message")}" title="${t("Back to a normal message")}"><span aria-hidden="true">&times;</span></button></div>` : ""}
     <div class="card ${ask ? "asking-card" : ""}" id="composer-card">
       <div class="previews" id="composer-previews"></div>
       <div class="row">
-        <button class="attach" id="composer-attach" type="button" aria-label="Załącz pliki" title="Załącz pliki">${iconPlus()}</button>
-        <input type="file" id="composer-file" multiple style="display:none" aria-label="Wybierz pliki do wysłania">
+        <button class="attach" id="composer-attach" type="button" aria-label="${t("Attach files")}" title="${t("Attach files")}">${iconPlus()}</button>
+        <input type="file" id="composer-file" multiple style="display:none" aria-label="${t("Choose files to send")}">
         ${kanal ? `<button class="attach askbtn ${ask ? "on" : ""}" id="composer-ask" type="button"
-          aria-pressed="${ask}" aria-label="Zadaj pytanie kanałowi"
-          title="Zadaj pytanie kanałowi - zostanie otwarte, dopóki ktoś nie odpowie">${iconQuestion()}</button>` : ""}
-        <label class="sr-only" for="composer-input">${ask ? "Twoje pytanie do kanału" : "Twoja wiadomość"}</label>
-        <textarea id="composer-input" rows="1" placeholder="${ask ? "O co chcesz zapytać kanał?" : "Twoja wiadomość..."}"></textarea>
-        <button class="send" id="composer-send" disabled aria-label="${ask ? "Wyślij pytanie" : "Wyślij wiadomość"}" title="Wyślij (Enter)">${iconSend()}</button>
+          aria-pressed="${ask}" aria-label="${t("Ask the channel a question")}"
+          title="${t("Ask the channel a question - it stays open until somebody answers")}">${iconQuestion()}</button>` : ""}
+        <label class="sr-only" for="composer-input">${ask ? t("Your question to the channel") : t("Your message")}</label>
+        <textarea id="composer-input" rows="1" placeholder="${ask ? t("What do you want to ask the channel?") : t("Your message...")}"></textarea>
+        <button class="send" id="composer-send" disabled aria-label="${ask ? t("Send the question") : t("Send the message")}" title="${t("Send (Enter)")}">${iconSend()}</button>
       </div>
     </div>`;
   const ta = document.getElementById("composer-input");
@@ -1233,32 +1233,38 @@ export function renderComposer() {
  *  w obrazek. Teraz to zwiniete menu z pelnymi etykietami i zdaniem o skutku;
  *  domyslnie zamkniete, wiec zwykle wyslanie pliku nie robi sie trudniejsze,
  *  ale nikt nie spali zalacznika, nie przeczytawszy, co robi. */
-function fileOptsHtml(p) {
-  const wybrane = [
-    p.sensitive ? "wrażliwy" : null,
-    p.burn ? "znika po odczycie" : null,
-    p.ttlSec === 3600 ? "znika po godzinie" : p.ttlSec === 86400 ? "znika po dobie" : p.ttlSec === 604800 ? "znika po tygodniu" : null,
+function wybraneOpcje(p) {
+  return [
+    p.sensitive ? t("sensitive") : null,
+    p.burn ? t("disappears after reading") : null,
+    p.ttlSec === 3600 ? t("disappears after an hour")
+      : p.ttlSec === 86400 ? t("disappears after a day")
+      : p.ttlSec === 604800 ? t("disappears after a week") : null,
   ].filter(Boolean);
+}
+
+function fileOptsHtml(p) {
+  const wybrane = wybraneOpcje(p);
   return `<details class="pv-opts" data-pvopts="${p.id}">
-    <summary>${wybrane.length ? escapeHtml(wybrane.join(" · ")) : "Kto i jak długo może to otworzyć"}</summary>
+    <summary>${wybrane.length ? escapeHtml(wybrane.join(" · ")) : t("Who can open it, and for how long")}</summary>
     <div class="pv-menu">
       <label class="pv-check">
         <input type="checkbox" data-pvsens="${p.id}" ${p.sensitive ? "checked" : ""}>
-        <span><b>Oznacz jako wrażliwy</b><br>
-          <span class="pv-why">Bez podglądu na liście wiadomości; domyślnie znika po dobie.</span></span>
+        <span><b>${t("Mark as sensitive")}</b><br>
+          <span class="pv-why">${t("No preview in the message list; by default it disappears after a day.")}</span></span>
       </label>
       <label class="pv-check">
         <input type="checkbox" data-pvburn="${p.id}" ${p.burn ? "checked" : ""}>
-        <span><b>Skasuj po pierwszym pobraniu</b><br>
-          <span class="pv-why">Pierwsza osoba, która go otworzy, będzie ostatnią. Tego nie da się cofnąć - także Tobie.</span></span>
+        <span><b>${t("Delete after the first download")}</b><br>
+          <span class="pv-why">${t("The first person to open it will be the last. This cannot be undone - not even by you.")}</span></span>
       </label>
       <label class="pv-field">
-        <span class="pv-why">Kiedy plik ma zniknąć sam</span>
+        <span class="pv-why">${t("When the file should disappear by itself")}</span>
         <select data-pvttl="${p.id}">
-          <option value="0" ${!p.ttlSec ? "selected" : ""}>nigdy - zostaje w rozmowie</option>
-          <option value="3600" ${p.ttlSec === 3600 ? "selected" : ""}>po godzinie</option>
-          <option value="86400" ${p.ttlSec === 86400 ? "selected" : ""}>po dobie</option>
-          <option value="604800" ${p.ttlSec === 604800 ? "selected" : ""}>po tygodniu</option>
+          <option value="0" ${!p.ttlSec ? "selected" : ""}>${t("never - it stays in the conversation")}</option>
+          <option value="3600" ${p.ttlSec === 3600 ? "selected" : ""}>${t("after an hour")}</option>
+          <option value="86400" ${p.ttlSec === 86400 ? "selected" : ""}>${t("after a day")}</option>
+          <option value="604800" ${p.ttlSec === 604800 ? "selected" : ""}>${t("after a week")}</option>
         </select>
       </label>
     </div>
@@ -1268,8 +1274,8 @@ function fileOptsHtml(p) {
 function renderPreviews() {
   const box = document.getElementById("composer-previews");
   if (!box) return;
-  const usun = (p) => `<button data-rmpv="${p.id}" aria-label="Usuń załącznik ${escapeHtml(p.file.name)}"
-    title="Usuń"><span aria-hidden="true">&times;</span></button>`;
+  const usun = (p) => `<button data-rmpv="${p.id}" aria-label="${t("Remove the attachment {name}", { name: escapeHtml(p.file.name) })}"
+    title="${t("Remove")}"><span aria-hidden="true">&times;</span></button>`;
   box.innerHTML = state.pendingFiles.map((p) => p.url
     ? `<div class="preview img" data-pv="${p.id}"><img src="${p.url}" alt="${escapeHtml(p.file.name)}">${usun(p)}${fileOptsHtml(p)}</div>`
     : `<div class="preview file" data-pv="${p.id}"><div class="pv-main">${iconFile()}<span class="pn">${escapeHtml(p.file.name)}</span>${usun(p)}</div>${fileOptsHtml(p)}</div>`
@@ -1288,12 +1294,8 @@ function renderPreviews() {
     const p = state.pendingFiles.find((x) => x.id === id);
     const sum = box.querySelector(`[data-pvopts="${id}"] > summary`);
     if (!p || !sum) return;
-    const wybrane = [
-      p.sensitive ? "wrażliwy" : null,
-      p.burn ? "znika po odczycie" : null,
-      p.ttlSec === 3600 ? "znika po godzinie" : p.ttlSec === 86400 ? "znika po dobie" : p.ttlSec === 604800 ? "znika po tygodniu" : null,
-    ].filter(Boolean);
-    sum.textContent = wybrane.length ? wybrane.join(" · ") : "Kto i jak długo może to otworzyć";
+    const wybrane = wybraneOpcje(p);
+    sum.textContent = wybrane.length ? wybrane.join(" · ") : t("Who can open it, and for how long");
   };
   box.querySelectorAll("[data-pvsens]").forEach((b) => b.addEventListener("change", () => {
     const p = state.pendingFiles.find((x) => x.id === b.dataset.pvsens);
@@ -1333,7 +1335,7 @@ async function uploadAttachment(p) {
     scrollToBottom(true);
     return true;
   } catch (e) {
-    showToast(`Nie udało się wysłać pliku: ${e.message}`, { alert: true });
+    showToast(t("Could not send the file: {why}", { why: e.message }), { alert: true });
     return false;
   }
 }
@@ -1357,7 +1359,7 @@ async function mentionAutocomplete(ta) {
   await ensureActors();
   const q = m[2].toLowerCase();
   // @all na gorze listy, gdy pasuje - jedno ogloszenie budzi caly kanal.
-  const allItem = { handle: "all", displayName: "wszyscy na kanale", kind: "all" };
+  const allItem = { handle: "all", displayName: t("everybody on the channel"), kind: "all" };
   const showAll = (!q || "all".startsWith(q) || "wszyscy".startsWith(q));
   mentionItems = [
     ...(showAll ? [allItem] : []),
@@ -1377,7 +1379,7 @@ async function mentionAutocomplete(ta) {
     <button data-mi="${i}" class="${i === mentionIndex ? "sel" : ""}">
       ${a.kind === "all" ? `<span class="mention-all-ic">@</span>` : avatarHtml(a.handle, 22)}
       <span class="mh">@${escapeHtml(a.handle)}</span>
-      <span class="kindtag ${a.kind === "all" ? "" : a.kind}">${a.kind === "all" ? "cały kanał" : a.kind === "human" ? "człowiek" : "agent"}</span>
+      <span class="kindtag ${a.kind === "all" ? "" : a.kind}">${a.kind === "all" ? t("the whole channel") : a.kind === "human" ? t("human") : t("agent")}</span>
     </button>`).join("");
 
   // Ustawienie POZYCJI, przyciete do widocznego obszaru.
@@ -1443,9 +1445,9 @@ export function renderThread() {
   const root = findMsgById(state.threadOpen);
   const replies = state.threadMsgs.filter((m) => m.id !== state.threadOpen);
   host.innerHTML = `
-    <div class="thread" role="region" aria-label="Wątek">
-      <div class="th-head">${iconThread()} Wątek
-        <button class="iconbtn close" id="th-close" aria-label="Zamknij wątek" title="Zamknij"><span aria-hidden="true">&times;</span></button></div>
+    <div class="thread" role="region" aria-label="${t("Thread")}">
+      <div class="th-head">${iconThread()} ${t("Thread")}
+        <button class="iconbtn close" id="th-close" aria-label="${t("Close the thread")}" title="${t("Close")}"><span aria-hidden="true">&times;</span></button></div>
       <div class="th-msgs" id="th-msgs">
         ${root ? messageHtml(root, false, { noThreadLink: true }) : ""}
         ${replies.map((m, i) => messageHtml(m, i > 0 && replies[i - 1].actorId === m.actorId)).join("")}
@@ -1456,9 +1458,9 @@ export function renderThread() {
   bindMessageEvents(document.getElementById("th-msgs"));
   const tc = document.getElementById("th-composer");
   tc.innerHTML = `<div class="card"><div class="row">
-    <label class="sr-only" for="th-input">Odpowiedź w wątku</label>
-    <textarea id="th-input" rows="1" placeholder="Odpowiedz w wątku..."></textarea>
-    <button class="send" id="th-send" disabled aria-label="Wyślij odpowiedź">${iconSend()}</button></div></div>`;
+    <label class="sr-only" for="th-input">${t("Reply in the thread")}</label>
+    <textarea id="th-input" rows="1" placeholder="${t("Reply in the thread...")}"></textarea>
+    <button class="send" id="th-send" disabled aria-label="${t("Send the reply")}">${iconSend()}</button></div></div>`;
   const ta = document.getElementById("th-input"), send = document.getElementById("th-send");
   const autosize = () => {
     ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
@@ -1477,7 +1479,7 @@ export function renderThread() {
     if (!msg) { ta.value = v; autosize(); ta.focus(); return; }
     state.threadMsgs.push(msg);
     renderThread();
-    upsertMessageNode(findMsgById(state.threadOpen));   // pasek watku na glownej liscie
+    upsertMessageNode(findMsgById(state.threadOpen));   // the thread bar on the main list
     document.getElementById("th-msgs").scrollTop = 999999;
   }
   document.getElementById("th-msgs").scrollTop = 999999;
@@ -1496,7 +1498,7 @@ export async function openQuestionsPanel() {
   let data;
   try { data = await api("GET", "/api/questions/open"); } catch (e) { showError(e); return; }
   const { modal, close } = openModal(`
-      <h2 id="m-title">${iconQuestion()} Otwarte pytania</h2>
+      <h2 id="m-title">${iconQuestion()} ${t("Open questions")}</h2>
       <div class="qlist">
         ${data.questions.length ? data.questions.map((q) => {
           const conv = state.conversations.find((c) => c.id === q.message.conversationId);
@@ -1509,9 +1511,9 @@ export async function openQuestionsPanel() {
               <span class="qbody">${escapeHtml(q.message.body.slice(0, 160))}</span>
             </span>
           </button>`;
-        }).join("") : `<p class="sb-empty">Nie ma otwartych pytań - wszystko domknięte.</p>`}
+        }).join("") : `<p class="sb-empty">${t("There are no open questions - everything is closed.")}</p>`}
       </div>
-      <div class="row"><button class="btn ghost" id="q-close">Zamknij</button></div>`,
+      <div class="row"><button class="btn ghost" id="q-close">${t("Close")}</button></div>`,
   { modalClass: "wide" });
   modal.querySelector("#q-close").addEventListener("click", close);
   modal.querySelectorAll("[data-goto]").forEach((b) =>
@@ -1525,31 +1527,31 @@ export async function openQuestionsPanel() {
 export async function openNewConversationModal(initialTab) {
   await ensureActors();
   const { modal, close } = openModal(`
-      <h2 id="m-title">Nowa rozmowa</h2>
-      <div class="seg" role="tablist" aria-label="Rodzaj rozmowy">
+      <h2 id="m-title">${t("New conversation")}</h2>
+      <div class="seg" role="tablist" aria-label="${t("Kind of conversation")}">
         <button role="tab" aria-selected="${initialTab !== "dm"}" aria-controls="tab-body"
-          data-tab="channel" class="${initialTab !== "dm" ? "on" : ""}">Kanał</button>
+          data-tab="channel" class="${initialTab !== "dm" ? "on" : ""}">${t("Channel")}</button>
         <button role="tab" aria-selected="${initialTab === "dm"}" aria-controls="tab-body"
-          data-tab="dm" class="${initialTab === "dm" ? "on" : ""}">Rozmowa prywatna</button>
+          data-tab="dm" class="${initialTab === "dm" ? "on" : ""}">${t("Direct conversation")}</button>
       </div>
       <div id="tab-body" role="tabpanel"></div>`);
 
   const tabs = modal.querySelectorAll("[data-tab]");
   const body = modal.querySelector("#tab-body");
   const showTab = (tab) => {
-    tabs.forEach((t) => {
-      t.classList.toggle("on", t.dataset.tab === tab);
-      t.setAttribute("aria-selected", String(t.dataset.tab === tab));
+    tabs.forEach((btn) => {
+      btn.classList.toggle("on", btn.dataset.tab === tab);
+      btn.setAttribute("aria-selected", String(btn.dataset.tab === tab));
     });
     if (tab === "channel") {
       body.innerHTML = `
-        <div class="field"><label for="nc-slug">Nazwa kanału</label><input id="nc-slug" placeholder="np. ogloszenia">
-          <span class="fhint">Małe litery, cyfry i myślniki - bez spacji i polskich znaków.</span></div>
-        <div class="field"><label for="nc-topic">Temat (opcjonalnie)</label><input id="nc-topic" placeholder="po co ten kanał istnieje"></div>
-        <div class="seg" style="margin-top:.2rem" role="radiogroup" aria-label="Kto może wejść">
-          <button role="radio" aria-checked="true" id="nc-public" class="on">Otwarty</button>
-          <button role="radio" aria-checked="false" id="nc-private">Zamknięty</button></div>
-        <div class="row"><button class="btn ghost" id="nc-cancel">Anuluj</button><button class="btn" id="nc-create">Utwórz</button></div>`;
+        <div class="field"><label for="nc-slug">${t("Channel name")}</label><input id="nc-slug" placeholder="${t("e.g. announcements")}">
+          <span class="fhint">${t("Lower-case letters, digits and hyphens - no spaces and no accented characters.")}</span></div>
+        <div class="field"><label for="nc-topic">${t("Topic (optional)")}</label><input id="nc-topic" placeholder="${t("why this channel exists")}"></div>
+        <div class="seg" style="margin-top:.2rem" role="radiogroup" aria-label="${t("Who can enter")}">
+          <button role="radio" aria-checked="true" id="nc-public" class="on">${t("Open")}</button>
+          <button role="radio" aria-checked="false" id="nc-private">${t("Closed")}</button></div>
+        <div class="row"><button class="btn ghost" id="nc-cancel">${t("Cancel")}</button><button class="btn" id="nc-create">${t("Create")}</button></div>`;
       let kind = "public";
       const pub = body.querySelector("#nc-public"), priv = body.querySelector("#nc-private");
       const wybierz = (ktory) => {
@@ -1578,13 +1580,13 @@ export async function openNewConversationModal(initialTab) {
     } else {
       const others = state.actorsList.filter((a) => a.handle !== state.actor.handle);
       body.innerHTML = `
-        <div class="field"><label for="nc-who">Do kogo</label>
+        <div class="field"><label for="nc-who">${t("To whom")}</label>
           <select id="nc-who" multiple size="6" class="who-select">
-            ${others.map((a) => `<option value="${escapeHtml(a.handle)}">@${escapeHtml(a.handle)} ${a.kind === "human" ? "- człowiek" : "- agent"}</option>`).join("")}
+            ${others.map((a) => `<option value="${escapeHtml(a.handle)}">@${escapeHtml(a.handle)} ${a.kind === "human" ? `- ${t("human")}` : `- ${t("agent")}`}</option>`).join("")}
           </select>
         </div>
-        <p class="mhint">Jedna osoba to rozmowa prywatna, kilka - rozmowa grupowa. Agenta zaczepiasz tak samo jak człowieka.</p>
-        <div class="row"><button class="btn ghost" id="nc-cancel">Anuluj</button><button class="btn" id="nc-create">Rozpocznij</button></div>`;
+        <p class="mhint">${t("One person is a direct conversation, several is a group. You approach an agent exactly as you approach a human.")}</p>
+        <div class="row"><button class="btn ghost" id="nc-cancel">${t("Cancel")}</button><button class="btn" id="nc-create">${t("Start")}</button></div>`;
       body.querySelector("#nc-cancel").addEventListener("click", close);
       body.querySelector("#nc-create").addEventListener("click", async () => {
         const selHandles = [...body.querySelector("#nc-who").selectedOptions].map((o) => o.value);
@@ -1600,6 +1602,6 @@ export async function openNewConversationModal(initialTab) {
       body.querySelector("#nc-who").focus();
     }
   };
-  tabs.forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+  tabs.forEach((btn) => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
   showTab(initialTab === "dm" ? "dm" : "channel");
 }

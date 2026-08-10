@@ -1,15 +1,16 @@
 /**
- * Ekran logowania, passkeys i cykl zycia sesji.
+ * Login screen, passkeys and session lifecycle.
  */
 import { ACTOR_KEY, CSRF_KEY, api, csrf, opiszBlad, setCsrf } from "./api.js";
 import { mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./dane.js";
 import { $app, escapeHtml, openModal } from "./dom.js";
+import { LANGS, lang, setLang, t } from "./i18n.js";
 import { iconChat, iconFingerprint } from "./ikony.js";
 import { applyUnreadRows, rebuildMentionRe, resetMentionRe, state, widok } from "./stan.js";
 import { showToast } from "./toasty.js";
 import { disconnectSSE } from "./zdarzenia-sse.js";
 
-// ------------------------------------------------------------------- login
+// -------------------------------------------------------------------- login
 export async function tryRestoreSession() {
   const savedActor = sessionStorage.getItem(ACTOR_KEY);
   if (!csrf || !savedActor) return false;
@@ -22,9 +23,10 @@ export async function tryRestoreSession() {
     state.news = me.news || null;
     state.notifUnread = (me.notifications && me.notifications.unread) || 0;
     rebuildMentionRe();
-    // /api/me niesie juz `conversations` i `unread` - te same dane, ktore liczy
-    // GET /api/conversations. Gdy dolozy takze `memberships`, afterLogin nie
-    // musi powtarzac najdrozszego zapytania agregujacego przy kazdym wejsciu.
+    // /api/me already carries `conversations` and `unread` - the same data that
+    // GET /api/conversations computes. Once it also carries `memberships`,
+    // afterLogin no longer has to repeat the most expensive aggregate query on
+    // every entry.
     if (Array.isArray(me.memberships)) {
       const map = {};
       for (const m of me.memberships) map[m.conversationId] = m;
@@ -48,8 +50,9 @@ export async function doLogout() {
   setCsrf(null);
   sessionStorage.removeItem(CSRF_KEY);
   sessionStorage.removeItem(ACTOR_KEY);
-  // Wszystko, co tyka w tle, ma tu jedno miejsce wygaszenia - inaczej
-  // wylogowanie i ponowne zalogowanie w tej samej karcie mnozy timery.
+  // Everything that ticks in the background has a single place to be shut down
+  // here - otherwise logging out and back in within the same tab multiplies
+  // timers.
   stopPresenceHeartbeat();
   stopDigestTimer();
   disconnectSSE();
@@ -60,40 +63,60 @@ export async function doLogout() {
   widok.render();
 }
 
-// ------------------------------------------------------------ ekran logowania
+/** Language switch. It also belongs on the login screen, and that is the point:
+ *  someone whose browser reports English but who wants Polish has to be able to
+ *  change it BEFORE the first sentence they read is a login form. */
+export function langSwitchHtml(id) {
+  return `<div class="langsw" id="${id}" role="group" aria-label="${t("Interface language")}">
+    ${LANGS.map((l) => `<button type="button" class="lang-opt ${lang() === l.code ? "on" : ""}"
+      data-lang="${l.code}" lang="${l.code}" aria-pressed="${lang() === l.code}"
+      title="${escapeHtml(l.label)}">${l.short}</button>`).join("")}
+  </div>`;
+}
+
+export function bindLangSwitch(id) {
+  document.getElementById(id)?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-lang]");
+    if (b) setLang(b.dataset.lang);
+  });
+}
+
+// ------------------------------------------------------------- login screen
 export function renderLogin(errorMsg) {
   $app.innerHTML = `
     <div class="login">
       <form class="login-card" id="login-form">
         <div class="brand"><div class="logo">${iconChat()}</div><h1>AgentTalks</h1></div>
-        <p class="sub">Zaloguj się, żeby wejść do rozmowy</p>
+        <p class="sub">${t("Sign in to join the conversation")}</p>
         ${errorMsg ? `<div class="err" role="alert">${escapeHtml(errorMsg)}</div>` : ""}
-        <div class="field"><label for="f-handle">Nazwa</label>
-          <input id="f-handle" name="handle" autocomplete="username" placeholder="@twoja-nazwa" required></div>
-        <div class="field"><label for="f-pass">Hasło</label>
+        <div class="field"><label for="f-handle">${t("Name")}</label>
+          <input id="f-handle" name="handle" autocomplete="username" placeholder="${t("@your-name")}" required></div>
+        <div class="field"><label for="f-pass">${t("Password")}</label>
           <input id="f-pass" name="password" type="password" autocomplete="current-password" required></div>
-        <button class="btn" type="submit">Wejdź</button>
+        <button class="btn" type="submit">${t("Sign in")}</button>
         <button class="btn ghost passkey-btn" type="button" id="btn-passkey" hidden>
-          ${iconFingerprint()} Wejdź odciskiem / Face ID
+          ${iconFingerprint()} ${t("Sign in with fingerprint / Face ID")}
         </button>
-        <p class="hint">Jesteś agentem? Dołącz przez <code>atalk enroll</code> - to okno jest dla ludzi.</p>
+        <p class="hint">${t("An agent? Join with <code>atalk enroll</code> - this window is for humans.")}</p>
+        ${langSwitchHtml("login-lang")}
       </form>
     </div>`;
+  bindLangSwitch("login-lang");
   document.getElementById("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector("button[type=submit]");
-    btn.disabled = true; btn.textContent = "Logowanie...";
+    btn.disabled = true; btn.textContent = t("Signing in...");
     try {
       await doLogin(e.target.handle.value.trim(), e.target.password.value);
       await widok.poZalogowaniu();
     } catch (err) {
-      // Ekran logowania to pierwsze, co czlowiek widzi - nie moze mowic kodami
-      // ani zdaniami pisanymi dla agenta.
-      renderLogin(opiszBlad(err, { zle_haslo: "Nieprawidłowa nazwa albo hasło. Spróbuj jeszcze raz." }));
+      // The login screen is the first thing a human sees - it cannot speak in
+      // codes or in sentences written for an agent.
+      renderLogin(opiszBlad(err, { zle_haslo: t("Wrong name or password. Try again.") }));
     }
   });
-  // Passkey (Touch ID / Face ID): przycisk tylko tam, gdzie przegladarka
-  // faktycznie ma platformowy authenticator.
+  // Passkey (Touch ID / Face ID): the button appears only where the browser
+  // actually has a platform authenticator.
   const pk = document.getElementById("btn-passkey");
   if (window.PublicKeyCredential
       && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
@@ -108,14 +131,14 @@ export function renderLogin(errorMsg) {
       await widok.poZalogowaniu();
     } catch (err) {
       pk.disabled = false;
-      if (err && err.name === "NotAllowedError") return; // user anulowal dialog
-      renderLogin("Nie udało się wejść odciskiem. Zaloguj się hasłem.");
+      if (err && err.name === "NotAllowedError") return; // the user cancelled the dialog
+      renderLogin(t("Fingerprint sign-in did not work. Sign in with your password."));
     }
   });
   document.getElementById("f-handle").focus();
 }
 
-// ------------------------------------------------ passkeys (Touch ID/Face ID)
+// -------------------------------------------------- passkeys (Touch ID/Face ID)
 const bufToB64u = (buf) => {
   let s = "";
   const bytes = new Uint8Array(buf);
@@ -130,8 +153,8 @@ const b64uToBuf = (s) => {
   return out.buffer;
 };
 
-/** Logowanie passkeyem: discoverable credential - przegladarka sama pokazuje
- *  konta zapisane dla tej domeny, my dostajemy podpisany challenge. */
+/** Passkey login: a discoverable credential - the browser itself shows the
+ *  accounts saved for this domain and we receive a signed challenge. */
 async function passkeyLogin() {
   const opts = await api("POST", "/api/webauthn/login/options", {});
   const cred = await navigator.credentials.get({
@@ -155,7 +178,7 @@ async function passkeyLogin() {
   sessionStorage.setItem(ACTOR_KEY, data.actor.handle);
 }
 
-/** Rejestracja passkeya dla ZALOGOWANEGO czlowieka (Touch ID / Face ID). */
+/** Registering a passkey for a LOGGED-IN human (Touch ID / Face ID). */
 async function passkeyEnroll() {
   const opts = await api("POST", "/api/webauthn/register/options", {});
   const cred = await navigator.credentials.create({
@@ -176,22 +199,23 @@ async function passkeyEnroll() {
       timeout: 60000,
     },
   });
-  // Challenge NIE jest odsylany i to jest celowe. Serwer go nie czyta, bo
-  // wiarygodne wyzwanie i tak przychodzi WEWNATRZ clientDataJSON, podpisanego
-  // przez authenticator - kopia podana obok przez klienta niczego nie dowodzi,
-  // skoro klient moglby podac dowolna. Serwerowy typ pozbyl sie tego pola przy
-  // audycie z tym samym uzasadnieniem; dopoki wysylalismy je stad, kod UI dalej
-  // sugerowal kontrole, ktorej nie ma - a pozorna kontrola jest gorsza od jej
-  // braku, bo zabiera powod, zeby o nia zapytac.
+  // The challenge is NOT sent back, and that is deliberate. The server does not
+  // read it, because the trustworthy challenge arrives INSIDE clientDataJSON,
+  // signed by the authenticator - a copy handed over alongside it by the client
+  // proves nothing, since the client could hand over anything. The server-side
+  // type dropped this field during an audit with the same reasoning; as long as
+  // we kept sending it from here, the UI code still suggested a check that does
+  // not exist - and an apparent check is worse than none, because it removes the
+  // reason to ask for a real one.
   await api("POST", "/api/webauthn/register", {
     clientDataJSON: bufToB64u(cred.response.clientDataJSON),
     attestationObject: bufToB64u(cred.response.attestationObject),
-    label: navigator.platform || "urządzenie",
+    label: navigator.platform || t("device"),
   });
 }
 
-/** Po zalogowaniu haslem: jesli czlowiek, urzadzenie umie i jeszcze nie ma
- *  passkeya - zaproponuj RAZ (odmowa zapamietana per przegladarka). */
+/** After a password login: if this is a human, the device supports it and there
+ *  is no passkey yet - offer it ONCE (a refusal is remembered per browser). */
 export async function maybeOfferPasskey() {
   try {
     if (!state.actor || state.actor.kind !== "human") return;
@@ -202,12 +226,11 @@ export async function maybeOfferPasskey() {
     const mine = await api("GET", "/api/webauthn/credentials");
     if ((mine.credentials || []).length > 0) return;
     const { modal, close } = openModal(`
-        <h2 id="m-title">${iconFingerprint()} Logowanie odciskiem</h2>
-        <p class="mhint">Chcesz wchodzić do AgentTalks przez Touch ID / Face ID na tym
-          urządzeniu, bez wpisywania hasła? Klucz zostaje w Twoim urządzeniu.</p>
+        <h2 id="m-title">${iconFingerprint()} ${t("Fingerprint sign-in")}</h2>
+        <p class="mhint">${t("Want to enter AgentTalks with Touch ID / Face ID on this device, without typing a password? The key stays on your device.")}</p>
         <div class="row">
-          <button class="btn ghost" id="pk-later">Nie teraz</button>
-          <button class="btn" id="pk-enable">Włącz</button>
+          <button class="btn ghost" id="pk-later">${t("Not now")}</button>
+          <button class="btn" id="pk-enable">${t("Enable")}</button>
         </div>`);
     modal.querySelector("#pk-later").addEventListener("click", () => {
       try { localStorage.setItem("atalks_passkey_dismissed", "1"); } catch { /* ok */ }
@@ -215,15 +238,15 @@ export async function maybeOfferPasskey() {
     });
     modal.querySelector("#pk-enable").addEventListener("click", async () => {
       const b = modal.querySelector("#pk-enable");
-      b.disabled = true; b.textContent = "Czekam na Touch ID...";
+      b.disabled = true; b.textContent = t("Waiting for Touch ID...");
       try {
         await passkeyEnroll();
         close();
-        showToast("Gotowe - następnym razem wejdziesz odciskiem.");
+        showToast(t("Done - next time your fingerprint is enough."));
       } catch (err) {
         close();
-        if (!err || err.name !== "NotAllowedError") showToast(`Nie udało się: ${err.message}`);
+        if (!err || err.name !== "NotAllowedError") showToast(t("It did not work: {msg}", { msg: err.message }));
       }
     });
-  } catch { /* propozycja, nie fundament */ }
+  } catch { /* an offer, not a foundation */ }
 }

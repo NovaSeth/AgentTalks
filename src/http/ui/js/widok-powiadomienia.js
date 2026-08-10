@@ -1,47 +1,50 @@
 /**
- * Centrum powiadomien i zgoda na powiadomienia systemowe.
+ * The notification centre and the permission prompt for system notifications.
  */
 import { api } from "./api.js";
 import { refreshNotifications } from "./dane.js";
 import { emptyStateHtml, escapeHtml, fmtDateTime, hamburgerHtml, openModal, toggleDrawerClass } from "./dom.js";
 import { iconBell, iconChat, iconDoc, iconWrench } from "./ikony.js";
+import { msg, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
 import { dmLabel, state, widok } from "./stan.js";
 import { showError, showToast } from "./toasty.js";
 import { openWikiPage } from "./widok-wiki.js";
 
-/** Prosba o zgode na powiadomienia. Wolana z centrum powiadomien - czyli w
- *  miejscu, w ktorym uzytkownik sam mysli o tym, jak chce byc wolany. */
-// Jedno miejsce na "co mnie dotyczy": zawolania po nazwie, wiadomosci prywatne,
-// reakcje na moje wpisy i zmiany stron, ktore wspoltworzylem. Kazdy wiersz ma
-// CEL - klikniecie prowadzi tam, gdzie rzecz sie stala, a nie w okolice.
+/** The permission request for notifications. Called from the notification centre
+ *  - that is, from the place where the user is already thinking about how they
+ *  want to be called. */
+// One place for "what concerns me": mentions by name, direct messages, reactions
+// to my posts and changes to pages I co-author. Every row has a DESTINATION -
+// a click leads to where the thing happened, not to its neighbourhood.
 async function askNotificationPermission() {
-  if (!("Notification" in window)) { showToast("Ta przeglądarka nie umie powiadomień systemowych."); return; }
-  if (Notification.permission === "granted") { showToast("Powiadomienia są już włączone."); return; }
+  if (!("Notification" in window)) { showToast(t("This browser cannot do system notifications.")); return; }
+  if (Notification.permission === "granted") { showToast(t("Notifications are already on.")); return; }
   if (Notification.permission === "denied") {
-    showToast("Powiadomienia są zablokowane w ustawieniach przeglądarki dla tej strony.", { alert: true });
+    showToast(t("Notifications are blocked in the browser settings for this site."), { alert: true });
     return;
   }
   const perm = await Notification.requestPermission();
-  showToast(perm === "granted" ? "Powiadomienia włączone." : "Bez powiadomień - licznik zostaje w tytule karty.");
+  showToast(perm === "granted" ? t("Notifications are on.") : t("No notifications - the counter stays in the tab title."));
   renderNotificationsMain();
 }
 
-/** Modal "Co nowego": lista swiezych mozliwosci, pokazywana raz po zmianie.
- *  Tresc przychodzi z serwera (NEWS.md) i jest juz oznaczona jako dostarczona.
- *  @param poZamknieciu wolane, gdy okno zniknie - powitania stoja w kolejce,
- *         wiec kolejne moze ruszyc dopiero, gdy to zwolni ekran. */
+/** The "What's new" modal: a list of fresh capabilities, shown once after a
+ *  change. The content comes from the server (NEWS.md) and is already marked as
+ *  delivered.
+ *  @param poZamknieciu called when the window disappears - the greetings are a
+ *         queue, so the next one can only start once this one frees the screen. */
 export function showNewsModal(news, poZamknieciu) {
   const { modal, close } = openModal(`
-      <h2 id="m-title">Co nowego</h2>
+      <h2 id="m-title">${t("What's new")}</h2>
       <div class="md news-body">${mdToHtml(news.text, "page", state.actor.handle)}</div>
-      <div class="row"><button class="btn" id="news-ok">Jasne, dzięki</button></div>`,
+      <div class="row"><button class="btn" id="news-ok">${t("Got it, thanks")}</button></div>`,
   { modalClass: "wide news-modal" });
   let zamkniete = false;
   const koniec = () => { if (zamkniete) return; zamkniete = true; poZamknieciu?.(); };
   modal.querySelector("#news-ok").addEventListener("click", () => { close(); koniec(); });
-  // Escape i klik w tlo zamykaja okno z pominieciem naszego przycisku - bez tego
-  // kolejka powitan zatrzymywalaby sie na zawsze.
+  // Escape and a backdrop click close the window without going through our
+  // button - without this the greeting queue would stall forever.
   modal.closest(".overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) koniec(); });
   document.addEventListener("keydown", function esc(e) {
     if (e.key !== "Escape") return;
@@ -60,16 +63,16 @@ export async function openNotificationsView() {
   renderNotificationsMain();
 }
 
-// Kazdy rodzaj ma WLASNE zdanie. Zgloszenie domkniete przez kogos innego
-// przychodzilo dotad jako `mention` i mowilo "zawołał(a) Cię" - czyli
-// powiadomienie klamalo o tym, co sie stalo, i kazalo szukac wzmianki, ktorej
-// nie bylo. Serwer wysyla je teraz jako `fix`.
-const NOTIF_OPIS = {
-  mention: "zawołał(a) Cię",
-  dm: "napisał(a) prywatnie",
-  reaction: "zareagował(a) na Twój wpis",
-  wiki: "zmienił(a) stronę, którą współtworzysz",
-  fix: "naprawił(a) to, co zgłosiłeś - potwierdź, czy objaw zniknął",
+// Every kind gets its OWN sentence. A report closed by somebody else used to
+// arrive as a `mention` and said "mentioned you" - so the notification lied about
+// what had happened and sent you looking for a mention that was not there. The
+// server now sends those as `fix`.
+const NOTIF_TEXT = {
+  mention: msg("mentioned you"),
+  dm: msg("sent you a direct message"),
+  reaction: msg("reacted to your post"),
+  wiki: msg("changed a page you co-author"),
+  fix: msg("fixed what you reported - confirm the symptom is gone"),
 };
 
 function notifIcon(kind) {
@@ -80,8 +83,8 @@ function notifIcon(kind) {
   return "@";
 }
 
-/** Nazwa miejsca, do ktorego prowadzi powiadomienie - zeby wiersz dalo sie
- *  zrozumiec bez klikania ("#bugs" mowi wiecej niz "rozmowa 2"). */
+/** The name of the place a notification leads to - so a row can be understood
+ *  without clicking ("#bugs" says more than "conversation 2"). */
 function notifTarget(n) {
   if (n.wikiSlug) {
     const page = state.wiki.pages.find((p) => p.slug === n.wikiSlug);
@@ -99,11 +102,11 @@ export function renderNotificationsMain() {
   el.innerHTML = `
     <div class="topbar">
       ${hamburgerHtml()}
-      <div class="title"><div class="t">${iconBell()} Powiadomienia</div>
-        <div class="topic">${state.notifUnread ? `${state.notifUnread} nowych` : "nic nieprzeczytanego"}</div></div>
+      <div class="title"><div class="t">${iconBell()} ${t("Notifications")}</div>
+        <div class="topic">${state.notifUnread ? t("{n} new", { n: state.notifUnread }) : t("nothing unread")}</div></div>
       ${("Notification" in window) && Notification.permission !== "granted"
-        ? `<button class="pillbtn" id="btn-notif-perm">Włącz powiadomienia systemowe</button>` : ""}
-      <button class="btn ghost" id="btn-notif-read" ${state.notifUnread ? "" : "disabled"}>Oznacz wszystkie jako przeczytane</button>
+        ? `<button class="pillbtn" id="btn-notif-perm">${t("Turn on system notifications")}</button>` : ""}
+      <button class="btn ghost" id="btn-notif-read" ${state.notifUnread ? "" : "disabled"}>${t("Mark all as read")}</button>
     </div>
     <div class="notif-list viewfade" id="notif-list">
       ${list.length
@@ -111,22 +114,23 @@ export function renderNotificationsMain() {
         <button class="notif ${n.readAt ? "" : "fresh"}" data-notif="${n.id}">
           <span class="ni">${notifIcon(n.kind)}</span>
           <span class="nb">
-            <span class="nh"><b>@${escapeHtml(n.from ?? "?")}</b> ${NOTIF_OPIS[n.kind] || "zrobił(a) coś, co Cię dotyczy - otwórz, żeby zobaczyć"}
+            <span class="nh"><b>@${escapeHtml(n.from ?? "?")}</b> ${t(NOTIF_TEXT[n.kind] || msg("did something that concerns you - open it to see"))}
               ${notifTarget(n) ? `<span class="nw">${escapeHtml(notifTarget(n))}</span>` : ""}</span>
             ${n.excerpt ? `<span class="nx">${escapeHtml(n.excerpt)}</span>` : ""}
           </span>
           <span class="nt">${fmtDateTime(n.createdAt)}</span>
         </button>`).join("")
-        : emptyStateHtml(iconBell(2.4), "Nic nowego",
-          "Tu trafia to, co dotyczy Ciebie osobiście: zawołania po nazwie, rozmowy prywatne, reakcje na Twoje wpisy i zmiany stron wiki, które współtworzysz.",
-          { id: "notif-go-chat", label: "Wróć do rozmów" })}
+        : emptyStateHtml(iconBell(2.4), t("Nothing new"),
+          t("This is where what concerns you personally lands: mentions by name, direct conversations, reactions to your posts and changes to wiki pages you co-author."),
+          { id: "notif-go-chat", label: t("Back to conversations") })}
     </div>`;
   document.getElementById("btn-menu").addEventListener("click", () => {
     state.drawerOpen = !state.drawerOpen; toggleDrawerClass();
   });
   const perm = document.getElementById("btn-notif-perm");
-  // O zgode pytamy TUTAJ, czyli w miejscu, w ktorym uzytkownik sam mysli o tym,
-  // jak chce byc wolany - a nie odruchowo na starcie, gdzie odmowa jest trwala.
+  // We ask for permission HERE, in the place where the user is already thinking
+  // about how they want to be called - not reflexively at startup, where a
+  // refusal is permanent.
   if (perm) perm.addEventListener("click", askNotificationPermission);
   const rb = document.getElementById("btn-notif-read");
   if (rb) rb.addEventListener("click", async () => {
@@ -143,7 +147,7 @@ export function renderNotificationsMain() {
     b.addEventListener("click", () => openNotification(Number(b.dataset.notif))));
 }
 
-/** Klikniecie: odhacz TO powiadomienie i przejdz do miejsca zdarzenia. */
+/** A click: tick off THIS notification and go to where the event happened. */
 async function openNotification(id) {
   const n = state.notifications.find((x) => x.id === id);
   if (!n) return;

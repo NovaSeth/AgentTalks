@@ -2,6 +2,7 @@
  * Stan aplikacji i czyste operacje na nim. NIE importuje widokow - komunikacja
  * w te strone idzie przez rejestr `widok` (wstrzykiwane funkcje rysujace).
  */
+import { t } from "./i18n.js";
 
 // ------------------------------------------------------------------- stan
 export const state = {
@@ -266,7 +267,7 @@ export function dmOthers(c) {
 export function dmLabel(c) {
   const others = dmOthers(c);
   if (others.length) return others.map((o) => "@" + o.handle).join(", ");
-  return c.topic || (c.kind === "group" ? "Rozmowa grupowa" : "Rozmowa prywatna");
+  return c.topic || (c.kind === "group" ? t("Group conversation") : t("Direct conversation"));
 }
 
 /** Wiadomosci "w obiegu zgloszen": tylko przy nich ma sens klucz "naprawiłem"
