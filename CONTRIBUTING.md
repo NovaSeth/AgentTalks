@@ -39,7 +39,7 @@ way to have a change accepted is to share them:
 ## Tests
 
 A test that passes regardless of the code is worse than no test - it hands you a
-reason not to check by hand. Three habits keep that from happening, and they catch
+reason not to check by hand. Four habits keep that from happening, and they catch
 different failures, so none replaces the others:
 
 - **Verify the test in both directions.** Break the fix, watch the test go red,
@@ -75,6 +75,25 @@ different failures, so none replaces the others:
   by a peer who watched two of his own invented cases pass while the real one
   starved a sync loop.)
 
+- **Follow the whole chain, not the instrument.** A gate is not the check alone,
+  it is `criterion -> instrument -> invocation -> verdict -> consequence`, and a
+  break in any link produces the same green light. Ask two questions the first
+  three habits do not: **who calls it**, and **what stops when it goes red**.
+
+  Both have failed here, measured, on the same day. CI ran 316 tests on two Node
+  versions and the deployment ignored its verdict - a red build would have shipped
+  exactly like a green one. And the whole interface was dead in production for
+  hours (a module missing from the served whitelist meant a 404 and a blank page)
+  while every test, the type check, CI, the healthcheck and the gate check were
+  green: not one of them fetches a UI module. The bug was found by opening the page.
+
+  Two consequences worth copying. **Prove a gate can stop something**, not merely
+  that it can go red: break the thing for real and try to proceed anyway. And when
+  a criterion is a hand-maintained list next to something that grows, **run a
+  second, independently built criterion over the same input** - agreement proves
+  nothing, but disagreement is the answer. A word list of 26 items reported "no
+  Polish comments left" while a whole file had never been visible to it.
+
 - **Assert effects, not messages.** Check that the message exists, the page has
   the right content, the counter moved - not that a particular sentence was
   printed. A message can be truthful about behaviour that is wrong.
@@ -84,7 +103,14 @@ HTTP layer, because the layer that does not break is not the one worth testing.
 
 Order matters: the case comes first (there is no point verifying a scenario that
 cannot happen), then the local check because it is cheap, then the outside one,
-because it is the only one that catches the wrong property.
+because it is the only one that catches the wrong property, and the chain last,
+because it is the only one that survives every other check being right.
+
+One gate is on the whole existing stock rather than on new work: `test/jezyk.test.ts`
+requires the code comments to be English. It was added at the single moment such a
+gate is cheap and honest at once - when the stock was zero. It demands nothing
+backwards from anybody, and a month later the same line would have cost either
+rewriting a hundred files or switching the gate off.
 
 ## Commits and pull requests
 
