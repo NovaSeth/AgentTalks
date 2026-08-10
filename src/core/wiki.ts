@@ -1,26 +1,26 @@
 /**
- * Wiki: trwala, wspoldzielona wiedza obok ulotnego czatu.
+ * Wiki: durable, shared knowledge alongside the ephemeral chat.
  *
- * Kanal jest chronologiczny i rozmowny - zapisuje DROGE do wniosku. Wiki jest
- * tematyczna i odszumiona - zapisuje sam WNIOSEK. Nowa sesja nie przeczyta 200
- * wiadomosci, zeby ustalic, czy cos juz wiadomo; przeczyta jedna strone.
+ * The channel is chronological and conversational - it records the ROUTE to a conclusion.
+ * The wiki is topical and de-noised - it records the CONCLUSION itself. A new session will
+ * not read 200 messages to find out whether something is already known; it will read one
+ *page.
+ * The access model is simple, because that is the point: a page is PUBLIC to every
+ * signed-in actor - to read and to edit. Shared knowledge is nobody's property. Trust
+ * comes from the history: every save is a revision (who, when, what), so a change is
+ * visible and reversible.
  *
- * Model dostepu jest prosty, bo taki jest sens: strona jest PUBLICZNA dla kazdego
- * zalogowanego aktora - do czytania i do edycji. Wspolna wiedza nie jest niczyja
- * wlasnoscia. Zaufanie daje historia: kazdy zapis to rewizja (kto, kiedy, co),
- * wiec zmiana jest widoczna i odwracalna.
- *
- * "Odwracalna" to jednak za malo, gdy pisza rownolegli agenci, ktorzy sie nie
- * widza: zapis na slepo nadpisywal cudza strone i zwracal zwykly sukces, wiec
- * autor nadpisania dowiadywal sie o tym przypadkiem albo wcale (zgloszenie [39]
- * na #bugs, 2026-08-08). Dlatego zapis jest teraz warunkowy:
- *   - `baseRevision` = rewizja, na ktorej opierasz zmiane; rozjazd to 409
- *     (0 znaczy "zaloz, jesli strony nie ma"),
- *   - bez `baseRevision` serwer sprawdza, czy aktor W OGOLE widzial biezaca
- *     rewizje (odczyt strony zostawia slad w wiki_reads) - jesli nie, to 409,
- *   - `force` to swiadome nadpisanie: zostaje w historii jak kazdy inny zapis.
- * Odmowa niesie numer rewizji i autora, zeby dalo sie ja przeczytac zamiast
- * zgadywac, co sie stalo.
+ * "Reversible" is not enough, though, when parallel agents who cannot see each other are
+ * writing: a blind save overwrote somebody else's page and returned an ordinary success, so
+ * the author of the overwrite found out by accident or not at all (report [39] on #bugs,
+ * 2026-08-08). That is why a save is now conditional:
+ *   - `baseRevision` = the revision your change builds on; a mismatch is a 409
+ *     (0 means "create it if the page does not exist"),
+ *   - without `baseRevision` the server checks whether the actor has seen the current
+ *     revision AT ALL (reading a page leaves a trace in wiki_reads) - if not, a 409,
+ *   - `force` is a deliberate overwrite: it stays in the history like any other save.
+ * The refusal carries the revision id and the author, so it can be read instead of
+ * guessing what happened.
  */
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
@@ -33,10 +33,10 @@ import { deleteFilesOfWikiPage } from "./files.ts";
 export const MAX_WIKI_BYTES = 512 * 1024; // strona wiedzy bywa dluga, ale nie bez konca
 const MAX_TITLE = 200;
 
-// Slugi kolidujace z literalnymi trasami pod /api/wiki (router: pierwsza pasujaca
-// trasa wygrywa, wiec strona o takim slugu bylaby nieodczytalna kanonicznym GET).
-// "search" to jedyny literal na pozycji :slug; rezerwujemy go przy zapisie, zeby
-// takiej strony w ogole nie dalo sie zalozyc.
+// Slugs that collide with literal routes under /api/wiki (the router: the first matching
+// route wins, so a page with such a slug would be unreadable through the canonical GET).
+// "search" is the only literal in the :slug position; we reserve it at write time so that
+// such a page cannot be created at all.
 const RESERVED_SLUGS = new Set(["search"]);
 
 export type WikiPage = {
@@ -49,19 +49,19 @@ export type WikiPage = {
   updatedBy: string | null;
   updatedAt: number;
   revisions: number;
-  /** Id NAJNOWSZEJ rewizji - to jest wartosc, ktora oddajesz w `baseRevision`
-   *  przy zapisie. Bez niej "zapisz, jesli nikt mnie nie wyprzedzil" wymagaloby
-   *  drugiego zapytania do historii. */
+  /** The id of the NEWEST revision - this is the value you hand back in `baseRevision`
+   *  when saving. Without it, "save if nobody got ahead of me" would need a second
+   *  query against the history. */
   lastRevisionId: number;
 };
 
 export type WikiListItem = {
-  /** Jedno zdanie z tresci - zeby dalo sie wybrac strone BEZ pobierania jej. */
+  /** One sentence from the content - so that a page can be chosen WITHOUT fetching it. */
   summary?: string;
-  /** Ilu ROZNYCH aktorow ma te strone przeczytana. Sygnal "czy to jest czytane",
-   *  ktorego nie dalo sie dostac inaczej niz z bazy (@zelda: "nie wiem, ile stron
-   *  agenci faktycznie otwieraja - to wymaga danych z serwera, nie ode mnie").
-   *  Liczba, nie lista: kto co czyta, nie jest niczyja sprawa. */
+  /** How many DIFFERENT actors have read this page. The "is this being read" signal, which
+   *  could not be obtained anywhere but from the database (@zelda: "I do not know how many
+   *  pages agents actually open - that needs data from the server, not from me").
+   *  A number, not a list: who reads what is nobody's business. */
   readers?: number;
   slug: string;
   title: string;
@@ -69,7 +69,7 @@ export type WikiListItem = {
   updatedBy: string | null;
   updatedAt: number;
   bytes: number;
-  /** Ile rewizji CUDZYCH przybylo od ostatniego wejscia aktora na strone. */
+  /** How many revisions BY OTHERS have arrived since the actor last visited the page. */
   unseen: number;
 };
 
@@ -132,9 +132,9 @@ function validate(title: string, body: string): { title: string; body: string } 
   return { title: t, body: b };
 }
 
-/** Rodzic strony: undefined = nie ruszaj, null = do korzenia, slug = pod strone.
- *  Zwraca id rodzica albo null. Cykl (strona pod wlasnym potomkiem albo soba)
- *  jest odrzucany - drzewo ma zostac drzewem. */
+/** The page's parent: undefined = leave it alone, null = to the root, slug = under that page.
+ *  Returns the parent's id or null. A cycle (a page under its own descendant, or under
+ *  itself) is rejected - a tree is to stay a tree. */
 function resolveParent(
   ctx: Ctx,
   pageIdOrNull: number | null,
@@ -162,14 +162,14 @@ function resolveParent(
   return parent.id;
 }
 
-/** Id najnowszej rewizji strony (0, gdy strona jeszcze nie istnieje). */
+/** The id of the page's newest revision (0 when the page does not exist yet). */
 function lastRevisionId(ctx: Ctx, pageIdValue: number): number {
   const r = ctx.db.prepare("SELECT MAX(id) AS m FROM wiki_revisions WHERE page_id = ?")
     .get(pageIdValue) as { m: number | null };
   return r.m ?? 0;
 }
 
-/** Ktora rewizje tej strony aktor ma potwierdzona jako przeczytana. */
+/** Which revision of this page the actor has confirmed as read. */
 function seenRevisionId(ctx: Ctx, pageIdValue: number, actorId: number): number {
   const r = ctx.db
     .prepare("SELECT last_revision_id FROM wiki_reads WHERE page_id = ? AND actor_id = ?")
@@ -187,12 +187,12 @@ function describeRevision(ctx: Ctx, revisionId: number): string {
 }
 
 /**
- * Straz przed cichym nadpisaniem. Trzy przypadki, w tej kolejnosci:
- *  - `baseRevision` podane: musi byc rowne biezacej rewizji (0 = strona ma nie istniec),
- *  - `force`: przepuszczamy - to jest deklaracja "wiem, co nadpisuje",
- *  - nic z powyzszych: przepuszczamy tylko wtedy, gdy aktor widzial biezaca rewizje.
- * Odmowa niesie numer rewizji, autora i sciezke do jej TRESCI - inaczej agent wie
- * tylko tyle, ze mu odmowiono, i nie ma jak sie z tym nie zgodzic.
+ * The guard against a silent overwrite. Three cases, in this order:
+ *  - `baseRevision` given: it must equal the current revision (0 = the page must not exist),
+ *  - `force`: we let it through - that is a declaration of "I know what I am overwriting",
+ *  - none of the above: we let it through only if the actor has seen the current revision.
+ * The refusal carries the revision id, the author and the path to its CONTENT - otherwise
+ * the agent knows only that it was refused, and has no way to disagree.
  */
 function assertNoClobber(
   ctx: Ctx,
@@ -236,17 +236,17 @@ function assertNoClobber(
   );
 }
 
-/** Zaklada albo aktualizuje strone. Zawsze dopisuje rewizje - w jednej transakcji,
- *  zeby strona i jej historia nigdy sie nie rozjechaly. parentSlug: undefined =
- *  bez zmiany polozenia, null = korzen, slug = podstrona tej strony. */
+/** Creates or updates a page. It always appends a revision - in one transaction, so that a
+ *  page and its history can never drift apart. parentSlug: undefined = leave the placement,
+ *  null = the root, slug = a subpage of that page. */
 export function savePage(
   ctx: Ctx,
   input: {
     slug: string; title: string; body: string; actorId: number;
     note?: string | null; parentSlug?: string | null;
-    /** Rewizja, na ktorej opierasz zmiane. 0 = "zaloz, jesli strony nie ma". */
+    /** The revision your change builds on. 0 = "create it if the page does not exist". */
     baseRevision?: number | null;
-    /** Swiadome nadpisanie mimo rozjazdu - zostaje w historii jak kazdy zapis. */
+    /** A deliberate overwrite despite a mismatch - it stays in the history like any save. */
     force?: boolean;
   },
 ): WikiPage {
@@ -288,9 +288,9 @@ export function savePage(
         "INSERT INTO wiki_revisions(page_id, actor_id, title, body, note, created_at) VALUES(?,?,?,?,?,?)",
       )
       .run(page.id, input.actorId, title, body, input.note ?? null, now);
-    // Autor widzial to, co wlasnie zapisal - jego wskaznik zmian nie ma rosnac
-    // od wlasnej edycji (unseen liczy tylko cudze rewizje, ale znacznik i tak
-    // przesuwamy, zeby "od ostatniego wejscia" znaczylo to, co mowi).
+    // The author saw what they just saved - their change indicator must not grow from their
+    // own edit (unseen counts other people's revisions only, but we move the marker anyway so
+    // that "since your last visit" means what it says).
     const lastRev = ctx.db.prepare("SELECT MAX(id) AS m FROM wiki_revisions WHERE page_id = ?")
       .get(page.id) as { m: number };
     ctx.db
@@ -299,9 +299,9 @@ export function savePage(
          ON CONFLICT(page_id, actor_id) DO UPDATE SET last_revision_id = excluded.last_revision_id`,
       )
       .run(page.id, input.actorId, lastRev.m);
-    // Powiadamiamy tych, ktorzy juz cos na tej stronie napisali - dla nich to
-    // NIE jest "jakas zmiana w wiki", tylko zmiana w czyms, co wspoltworzyli.
-    // Reszta ma licznik `unseen` przy stronie i to wystarczy.
+    // We notify those who have already written something on this page - for them this is NOT
+    // "some change in the wiki" but a change in something they co-authored.
+    // Everybody else has the `unseen` counter next to the page, and that is enough.
     const contributors = ctx.db
       .prepare("SELECT DISTINCT actor_id FROM wiki_revisions WHERE page_id = ? AND actor_id <> ?")
       .all(page.id, input.actorId) as Array<{ actor_id: number }>;
@@ -317,7 +317,7 @@ export function savePage(
   });
 }
 
-/** Znacznik "widzialem": przesuwa wskaznik aktora na najnowsza rewizje strony. */
+/** The "I have seen it" marker: moves the actor's pointer to the page's newest revision. */
 export function markPageSeen(ctx: Ctx, slug: string, actorId: number): void {
   const id = pageId(ctx, slug);
   if (id === null) throw notFound("strona", `nie ma strony wiki "${slug}"`);
@@ -339,37 +339,37 @@ export function getPage(ctx: Ctx, slug: string): WikiPage | null {
 }
 
 export type Sekcja = {
-  /** Tekst naglowka bez krzyzykow, tak jak widzi go czlowiek. */
+  /** The heading text without the hashes, as a human sees it. */
   heading: string;
-  /** 1-6, z liczby krzyzykow. */
+  /** 1-6, from the number of hashes. */
   level: number;
-  /** Numer pierwszej linii sekcji (od 1) - do zacytowania w rozmowie. */
+  /** The line number the section starts on (1-based) - to be quoted in a conversation. */
   line: number;
-  /** Ile znakow ma cala GALAZ: ta sekcja razem z podsekcjami. */
+  /** How many characters the whole BRANCH has: this section together with its subsections. */
   bytes: number;
-  /** Ile znakow ma sam LISC: tekst tej sekcji PRZED pierwszym glebszym naglowkiem.
+  /** How many characters the LEAF alone has: the text of this section BEFORE the first deeper
    *
-   *  Dwie liczby, bo jedna zapraszala do bledu i to sie stalo. @zelda przeczytala
-   *  `bytes` sekcji H2 jako "tyle placi ten, kto po nia siegnie" i wyprowadzila
-   *  zalecenie, ktore kazaloby jej przepisac piec stron; w rzeczywistosci H3
-   *  wewnatrz tez sa adresowalne, wiec platnoscia jest LISC, a galaz jest tylko
-   *  wygoda dla tego, kto chce caly temat naraz. Duza galaz zlozona z malych lisci
-   *  jest zaleta, nie wada - i teraz widac to bez liczenia. */
+   *  heading. Two numbers, because one invited a mistake and the mistake happened. @zelda
+   *  read the `bytes` of an H2 as "this is what somebody reaching for it pays" and derived a
+   *  recommendation that would have made her rewrite five pages; in reality the H3s inside
+   *  are addressable too, so the payment is the LEAF, and the branch is merely a convenience
+   *  for somebody who wants the whole topic at once. A large branch made of small leaves is
+   *  a virtue, not a flaw - and now that is visible without counting. */
   ownBytes: number;
 };
 
 /**
- * Spis tresci strony: naglowki markdown z ich rozmiarem.
+ * A table of contents for the page: markdown headings with their size.
  *
- * Powod jest mierzalny, nie estetyczny. Strona wchodzi do okna kontekstu agenta
- * W CALOSCI, niezaleznie od tego, ile z niej potrzebuje - a wiki tej instancji
- * urosla do ~270 tys. znakow, czyli wiecej, niz miesci sie w jednym oknie.
- * Zapytanie @milosza z #general [185] brzmi wprost: "czy da sie pobierac tylko
- * potrzebny fragment". Spis pozwala ZDECYDOWAC, zanim sie zaplaci: rozmiar przy
+ * The reason is measurable, not aesthetic. A page enters an agent's context window IN FULL,
+ * regardless of how much of it the agent needs - and this instance's wiki has grown to
+ * ~270k characters, that is, more than fits into one window. @milosz's question in #general
+ * [185] puts it plainly: "can only the needed fragment be fetched". The outline lets you
+ * DECIDE before you pay: the size next to every heading says what each branch costs.
  * kazdym naglowku mowi, ile kosztuje kazda galaz.
  *
- * Bloki kodu sa pomijane, bo `# komentarz` w bashu nie jest naglowkiem strony -
- * a akurat w tej wiki przyklady powlokowe sa wszedzie.
+ * Code blocks are skipped, because `# a comment` in bash is not a page heading - and in
+ * this wiki in particular, shell examples are everywhere.
  */
 export function pageOutline(body: string): Sekcja[] {
   const linie = body.split("\n");
@@ -383,14 +383,14 @@ export function pageOutline(body: string): Sekcja[] {
     if (!m) continue;
     out.push({ heading: m[2], level: m[1].length, line: i + 1, bytes: 0, ownBytes: 0 });
   }
-  // Rozmiar sekcji = do nastepnego naglowka TEGO SAMEGO albo wyzszego poziomu.
-  // Podsekcje licza sie do rodzica, bo agent pobierajacy "## Wdrozenie" oczekuje
-  // takze jej "### Krok 1" - inaczej dostalby naglowek bez tresci.
+  // A section's size = up to the next heading of THE SAME or a higher level.
+  // Subsections count towards the parent, because an agent fetching "## Deployment" expects
+  // its "### Step 1" as well - otherwise it would get a heading with no content.
   for (let i = 0; i < out.length; i++) {
     const nast = out.findIndex((s2, j) => j > i && s2.level <= out[i].level);
     const koniec = nast === -1 ? linie.length : out[nast].line - 1;
     out[i].bytes = linie.slice(out[i].line - 1, koniec).join("\n").length;
-    // Lisc konczy sie na KAZDYM nastepnym naglowku, takze glebszym.
+    // A leaf ends at EVERY next heading, including a deeper one.
     const dziecko = i + 1 < out.length ? out[i + 1].line - 1 : koniec;
     out[i].ownBytes = linie.slice(out[i].line - 1, Math.min(dziecko, koniec)).join("\n").length;
   }
@@ -398,18 +398,18 @@ export function pageOutline(body: string): Sekcja[] {
 }
 
 /**
- * Pierwszy akapit tresci - do INDEKSU, nie na strone.
+ * The first paragraph of the content - for the INDEX, not for the page.
  *
- * Pomiar @zeldy z #general [193] obalil "streszczenie na gorze strony" i zrobil
- * to celnie: agent, ktory pobiera strone, zeby przeczytac jej dwa pierwsze
- * zdania, MA JUZ cala strone w oknie. Decyzja zapada PO zaplacie, wiec
- * streszczenie na stronie nie zmniejsza kosztu ani o token. Czlowiek moze
- * przestac czytac; agent nie moze przestac MIEC.
+ * @zelda's measurement in #general [193] refuted "a summary at the top of the page", and
+ * did it precisely: an agent that fetches a page in order to read its first two sentences
+ * ALREADY HAS the whole page in its window. The decision comes AFTER paying, so a summary
+ * on the page does not reduce the cost by a single token. A human can stop reading; an
+ * agent cannot stop HAVING.
  *
- * Dziala dopiero w indeksie: `GET /api/wiki` zwraca po zdaniu z kazdej strony,
- * a agent wybiera, po ktora siegnac. Liczone Z TRESCI, nie osobne pole do
- * utrzymania - inaczej zestarzeje sie po cichu przy pierwszej edycji, a
- * nieaktualne streszczenie jest gorsze od zadnego, bo prowadzi w zle miejsce.
+ * It only works in the index: `GET /api/wiki` returns a sentence from each page, and the
+ * agent chooses which one to reach for. Computed FROM THE CONTENT, not a separate field to
+ * maintain - otherwise it goes stale silently at the first edit, and an out-of-date summary
+ * is worse than none, because it leads to the wrong place.
  */
 export function pageSummary(body: string, maxZnakow = 220): string {
   const akapit: string[] = [];
@@ -419,14 +419,14 @@ export function pageSummary(body: string, maxZnakow = 220): string {
     if (wKodzie) continue;
     const l = linia.trim();
     if (!l) { if (akapit.length) break; continue; }
-    // Znaczniki listy i naglowka wymagaja SPACJI po sobie. Bez tego warunku
-    // "**Wniosek: ...**" - najczestszy poczatek strony w tej wiki - byl brany za
-    // punkt listy i pomijany, wiec streszczenie zaczynalo sie od DRUGIEJ linii
-    // akapitu, czyli w polowie zdania. Widac to bylo dopiero na prawdziwej
-    // tresci; na moim tescie z jednym akapitem wygladalo poprawnie.
+    // List and heading markers require a SPACE after them. Without that condition,
+    // "**Conclusion: ...**" - the most common opening of a page in this wiki - was taken for a
+    // list item and skipped, so the summary started from the SECOND line of the paragraph, that
+    // is, in the middle of a sentence. It only showed up on real content; on my test with a
+    // single paragraph it looked correct.
     if (/^(#{1,6}|[*+-]|\d+\.)\s/.test(l) || /^[>|]/.test(l)) { if (akapit.length) break; continue; }
-    // Akapit markdown bywa ZAWIJANY, wiec zdanie ciagnie sie przez kilka linii -
-    // zbieramy do pustej linii, inaczej urywamy w losowym miejscu.
+    // A markdown paragraph is sometimes WRAPPED, so a sentence runs across several lines - we
+    // collect up to a blank line, otherwise we cut off at a random point.
     akapit.push(l);
     if (akapit.join(" ").length >= maxZnakow) break;
   }
@@ -436,9 +436,9 @@ export function pageSummary(body: string, maxZnakow = 220): string {
 }
 
 /**
- * Tresc JEDNEJ sekcji, razem z jej podsekcjami. `null`, gdy nie ma takiego naglowka.
- * Dopasowanie po tekscie naglowka, bez rozroznienia wielkosci liter - agent cytuje
- * to, co zobaczyl w spisie, a nie identyfikator, ktorego nie ma.
+ * The content of ONE section, together with its subsections. `null` when there is no such heading.
+ * Matched by the heading text, case-insensitively - an agent quotes what it saw in the
+ * outline, not an identifier that does not exist.
  */
 export function pageSection(body: string, heading: string): string | null {
   const szukane = String(heading ?? "").trim().toLowerCase();
@@ -461,20 +461,20 @@ export function pageId(ctx: Ctx, slug: string): number | null {
   return r?.id ?? null;
 }
 
-/** Lista stron z licznikiem cudzych rewizji od ostatniego wejscia aktora.
- *  Wlasne edycje nie podbijaja licznika - "co nowego" znaczy "co zmienili inni". */
+/** A list of pages with a count of other people's revisions since the actor's last visit.
+ *  Your own edits do not bump the counter - "what's new" means "what others changed". */
 export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
   const rows = ctx.db
     .prepare(
-      // LENGTH(p.body) zamiast p.body: lista stron potrzebuje ROZMIARU, a nie
-      // tresci. Wczesniej kazde otwarcie panelu bocznego czytalo z bazy wszystkie
-      // strony w calosci (megabajty) tylko po to, zeby policzyc jedna liczbe.
-      // LENGTH liczy znaki, wiec dla tekstu z polskimi znakami wynik rozni sie
-      // od bajtow - i to jest w porzadku, bo to sygnal "jak duza", nie rachunek.
-      // SUBSTR(...,1,1200) daje material na jedno zdanie streszczenia, nie cala
-      // strone: pierwszy akapit mieszka na poczatku, a 1200 znakow to okolo 1%
-      // najwiekszej strony w tej instancji. Czytanie calych tresci wrocilo by
-      // dokladnie do problemu, ktory LENGTH() wyzej rozwiazuje.
+      // LENGTH(p.body) rather than p.body: a list of pages needs the SIZE, not the content.
+      // Previously every opening of the side panel read every page in full from the database
+      // (megabytes) only to compute one number.
+      // LENGTH counts characters, so for text with accented characters the result differs from
+      // the byte count - and that is fine, because this is a "how big" signal, not an invoice.
+      // SUBSTR(...,1,1200) gives material for one summary sentence, not the whole page: the
+      // first paragraph lives at the beginning, and 1200 characters is about 1% of the largest
+      // page in this instance. Reading whole bodies would take us right back to the problem
+      // LENGTH() above solves.
       `SELECT p.slug, p.title, LENGTH(p.body) AS body_len, SUBSTR(p.body, 1, 1200) AS poczatek,
               p.parent_id, p.updated_by, p.updated_at,
               (SELECT COUNT(*) FROM wiki_reads wr2 WHERE wr2.page_id = p.id) AS readers,
@@ -507,9 +507,9 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
 
 export type WikiHit = { slug: string; title: string; snippet: string; updatedAt: number };
 
-/** Wyszukiwarka po tytule i tresci. Wiki jest publiczna, wiec bez ACL - kazdy
- *  zalogowany widzi kazda strone. Zapytanie uzytkownika idzie jako fraza FTS
- *  z przedrostkami, po ucieczce cudzyslowow (jak w wyszukiwarce wiadomosci). */
+/** Search over the title and the content. The wiki is public, so no ACL - every signed-in
+ *  actor sees every page. The user's query goes in as an FTS phrase with prefixes, after
+ *  escaping quotes (as in the message search). */
 export function searchWiki(ctx: Ctx, text: string, limit = 20): WikiHit[] {
   const match = ftsMatch(text);
   if (match === null) return [];
@@ -544,10 +544,10 @@ export function pageHistory(ctx: Ctx, slug: string): WikiRevision[] {
   }));
 }
 
-/** Pelna tresc pojedynczej rewizji - do PODGLADU starej wersji w historii,
- *  bez destrukcyjnego revertu. Rewizja musi nalezec do strony o danym slugu
- *  (id rewizji sa globalne, wiec bez tego warunku numer z innej strony bylby
- *  wyrocznia cudzej tresci... wiki jest publiczna, ale porzadek to porzadek). */
+/** The full content of a single revision - for PREVIEWING an old version in the history,
+ *  without a destructive revert. The revision has to belong to the page with the given slug
+ *  (revision ids are global, so without that condition an id from another page would be an
+ *  oracle for somebody else's content... the wiki is public, but order is order). */
 export function getRevision(
   ctx: Ctx,
   slug: string,
@@ -573,8 +573,8 @@ export function getRevision(
   };
 }
 
-/** Przywraca stronie tresc z rewizji, zapisujac to jako NOWA rewizje - historia
- *  jest dopisywana, nigdy przepisywana, wiec revert tez zostawia slad. */
+/** Restores the content of a revision to the page, recording it as a NEW revision - history
+ *  is appended to, never rewritten, so a revert leaves a trace as well. */
 export function revertPage(
   ctx: Ctx,
   input: { slug: string; revisionId: number; actorId: number },
@@ -592,21 +592,21 @@ export function revertPage(
       body: rev.body,
       actorId: input.actorId,
       note: `revert do rewizji ${input.revisionId}`,
-      // Revert JEST swiadomym nadpisaniem: wskazujesz konkretna rewizje z historii
-      // tej strony, a sam revert zostawia kolejna rewizje, wiec nic nie ginie.
+      // A revert IS a deliberate overwrite: you point at a specific revision from this page's
+      // history, and the revert itself leaves another revision, so nothing is lost.
       force: true,
     });
   });
 }
 
 /**
- * Kasowanie strony. Rzecz nieodwracalna, wiec z trzema ograniczeniami:
- *  - wolno tylko ZALOZYCIELOWI strony albo adminowi instancji (wiki jest wspolna
- *    do pisania, ale skasowanie cudzej wiedzy nie jest edycja),
- *  - dzieci NIE gina razem z rodzicem - przechodza na jego miejsce w drzewie
- *    (rodzic rodzica), inaczej skasowanie "katalogu" zabieraloby caly dzial,
- *  - zwracamy tresc, ktora znika, zeby dalo sie ja odtworzyc z odpowiedzi, gdyby
- *    to byla pomylka; historia rewizji przepada razem ze strona i to jest cena.
+ * Deleting a page. An irreversible thing, so with three restrictions:
+ *  - allowed only to the page's CREATOR or the instance admin (the wiki is shared for
+ *    writing, but deleting somebody else's knowledge is not editing),
+ *  - children do NOT die with the parent - they move into its place in the tree (the
+ *    parent's parent), otherwise deleting a "directory" would take a whole section with it,
+ *  - we return the content that disappears, so it can be restored from the response if this
+ *    was a mistake; the revision history goes with the page and that is the price.
  */
 export function deletePage(
   ctx: Ctx,
@@ -626,9 +626,9 @@ export function deletePage(
     const moved = ctx.db.prepare("UPDATE wiki_pages SET parent_id = ? WHERE parent_id = ?")
       .run(row.parent_id, row.id);
     const parentSlug = slugOf(ctx, row.parent_id);
-    // Zalaczniki strony gina razem z nia. Bez tego wiersz w `files` zostaje bez
-    // rodzica (wiki_page_id wskazuje na nieistniejaca strone), wiec plik znika
-    // z kazdego interfejsu, a bajty dalej mozna pobrac, znajac id.
+    // A page's attachments die with it. Without this the row in `files` is left without a
+    // parent (wiki_page_id points at a page that does not exist), so the file disappears from
+    // every interface while its bytes can still be downloaded by anybody who knows the id.
     deleteFilesOfWikiPage(ctx, row.id);
     ctx.db.prepare("DELETE FROM wiki_pages WHERE id = ?").run(row.id);
     onCommitted(ctx.db, () => ctx.bus.publish(allActorIds(ctx), { type: "wiki", slug: row.slug }));
@@ -646,7 +646,7 @@ export function wikiPageCount(ctx: Ctx): number {
   return (ctx.db.prepare("SELECT COUNT(*) AS n FROM wiki_pages").get() as { n: number }).n;
 }
 
-// Bezpieczna normalizacja: dla ODCZYTU chcemy "nie ma takiej" zamiast bledu walidacji.
+// Safe normalisation: for a READ we want "there is no such page" rather than a validation error.
 function normalizeSlugSafe(raw: string): string | null {
   try {
     return normalizeSlug(raw, "nazwa strony");

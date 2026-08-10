@@ -1,18 +1,18 @@
 /**
- * Wiadomosci.
+ * Messages.
  *
- * Trzy rzeczy warte uwagi przy czytaniu tego pliku:
+ * Three things worth noticing while reading this file:
  *
- * 1. `id` jest AUTOINCREMENT, wiec zapis nie musi niczego skanowac. Prototyp liczyl
- *    kolejny `mid` przechodzac caly plik pod globalnym lockiem - O(n) na kazda
- *    wiadomosc, dla wszystkich kanalow naraz.
+ * 1. `id` is AUTOINCREMENT, so a write does not have to scan anything. The prototype
+ *    computed the next `mid` by walking the whole file under a global lock - O(n) per
+ *    message, for every channel at once.
  *
- * 2. Watki sa splaszczone do jednego poziomu: odpowiedz na odpowiedz laduje w tym
- *    samym watku, co korzen. Drzewo o dowolnej glebokosci wyglada madrze i nie daje
- *    sie ani czytac, ani renderowac; Slack ma z tego samego powodu jeden poziom.
+ * 2. Threads are flattened to one level: a reply to a reply lands in the same thread as
+ *    the root. A tree of arbitrary depth looks clever and is neither readable nor
+ *    renderable; Slack has one level for the same reason.
  *
- * 3. Zdarzenie na szyne idzie PO zatwierdzeniu transakcji. Odwrotna kolejnosc
- *    znaczylaby, ze subskrybent moze zapytac o dane, ktorych jeszcze nie ma w bazie.
+ * 3. The event goes onto the bus AFTER the transaction commits. The other order would mean
+ *    a subscriber can ask for data that is not in the database yet.
  */
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
@@ -42,14 +42,14 @@ export type Message = {
   deletedAt: number | null;
   resolvedAt: number | null;
   resolvedBy: number | null;   // actorId; UI mapuje na handle
-  /** "Kod zmieniony" - twierdzenie NAPRAWIAJACEGO. Slabsze niz resolvedAt
-   *  ("objaw zniknal"), ktore moze postawic tylko autor zgloszenia albo admin. */
+  /** "The code was changed" - the FIXER's claim. Weaker than resolvedAt ("the symptom is
+   *  gone"), which only the report's author or an admin can assert. */
   fixedAt: number | null;
   fixedBy: number | null;
   meta: Record<string, unknown> | null;
-  /** Handle autora - doklejany na granicy HTTP/SSE, nie czytany z bazy przy
-   *  kazdym wierszu. Patrz `zHandlem` w http/respond.ts: kasuje pulapke
-   *  "klucz mapy actors jest stringiem, a actorId liczba". */
+  /** The author's handle - attached at the HTTP/SSE boundary rather than read from the
+   *  database for every row. See `zHandlem` in http/respond.ts: it removes the trap of
+   *  "the key of the actors map is a string, and actorId is a number". */
   actorHandle?: string;
 };
 
@@ -71,9 +71,9 @@ export type MsgRow = {
   meta: string | null;
 };
 
-/** Skasowana wiadomosc zostaje w kolejnosci (inaczej rozjechalyby sie kursory
- *  i znaczniki odczytu), ale traci tresc. Eksportowane, zeby digest i wzmianki
- *  nie utrzymywaly wlasnych kopii tego mapowania. */
+/** A deleted message keeps its place in the order (otherwise cursors and read markers would
+ *  drift), but loses its content. Exported so that the digest and mentions do not maintain
+ *  their own copies of this mapping. */
 export const messageFromRow = (r: MsgRow): Message => ({
   id: r.id,
   conversationId: r.conversation_id,
@@ -97,10 +97,10 @@ function validateBody(body: string, maxBytes: number): string {
   if (!text) throw badRequest("puste_cialo", "wiadomosc nie moze byc pusta");
   const bajty = Buffer.byteLength(text, "utf8");
   if (bajty > maxBytes) {
-    // Komunikat mowi, O ILE za duzo i w czym mierzymy. "limit 65536 B" nie
-    // pomaga komus, kto liczy znaki - a polska litera to dwa bajty, wiec sam
-    // limit w bajtach jest dla czlowieka nieprzewidywalny. Klient dostaje takze
-    // `maxMessageBytes` w /api/me, wiec moze pokazac licznik ZANIM ktos wysle.
+    // The message says BY HOW MUCH it is too big and in what unit. "limit 65536 B" does not
+    // help somebody counting characters - and an accented letter is two bytes, so a limit in
+    // bytes is unpredictable for a human. The client also receives `maxMessageBytes` in
+    // /api/me, so it can show a counter BEFORE anybody sends.
     throw tooLarge(
       "cialo_za_dlugie",
       `wiadomosc jest o ${bajty - maxBytes} B za dluga (masz ${bajty} B, limit ${maxBytes} B - ` +
@@ -121,11 +121,11 @@ export function postMessage(
     threadId?: number | null;
     meta?: Record<string, unknown> | null;
     importKey?: string | null;
-    /** Idempotencja: przy retry ten sam clientMsgId zwraca istniejaca wiadomosc,
-     *  zamiast tworzyc nowa. Kluczowany per aktor, wiec dwoch aktorow moze uzyc
-     *  tego samego id bez kolizji. */
+    /** Idempotency: on a retry the same clientMsgId returns the existing message instead of
+     *  creating a new one. Keyed per actor, so two actors can use the same id without a
+     *  collision. */
     clientMsgId?: string | null;
-    /** Limit z konfiguracji instancji; bez podania obowiazuje MAX_BODY_BYTES. */
+    /** The limit from the instance configuration; MAX_BODY_BYTES applies when none is given. */
     maxBytes?: number;
   },
 ): Message {
@@ -136,9 +136,9 @@ export function postMessage(
   let created = true;
   let notified: number[] = [];
   const message = tx(ctx.db, () => {
-    // Idempotencja: przy retry (SSE/long-poll/webhook potrafia dostarczyc dwa razy)
-    // powtorzony clientMsgId nie moze zdublowac wiadomosci. SELECT-then-INSERT jest
-    // bezpieczne, bo transakcja zewnetrzna to BEGIN IMMEDIATE - procesy sie szereguja.
+    // Idempotency: on a retry (SSE/long-poll/webhook can each deliver twice) a repeated
+    // clientMsgId must not duplicate a message. SELECT-then-INSERT is safe here, because the
+    // outer transaction is BEGIN IMMEDIATE - the processes serialise.
     if (dedupKey) {
       const dup = ctx.db.prepare("SELECT * FROM messages WHERE dedup_key = ?")
         .get(dedupKey) as MsgRow | undefined;
@@ -173,29 +173,29 @@ export function postMessage(
     const stmt = ctx.db.prepare(
       "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?,?)",
     );
-    // conversationId pozwala rozwinac @all na wszystkich czlonkow kanalu.
-    // Autor nie wspomina sam siebie - inaczej @all budzilby tez nadawce.
+    // conversationId lets @all be expanded to every member of the channel.
+    // An author does not mention themselves - otherwise @all would wake the sender too.
     //
-    // canRead na koncu nie jest ostroznoscia, tylko poprawka bledu: wzmianka
-    // niesie ze soba TRESC (przez /api/mentions i przez wyimek w powiadomieniu),
-    // wiec bez tego filtra napisanie "@obcy" na kanale PRYWATNYM dostarczalo
-    // fragment rozmowy komus, kto nie ma do niej wstepu. Dla kanalu publicznego
-    // canRead przepuszcza kazdego, wiec wciaganie ludzi zawolaniem dziala jak
-    // dotad; blokowane sa wylacznie private, dm i grupy.
+    // The canRead at the end is not caution but a bug fix: a mention carries CONTENT with it
+    // (through /api/mentions and through the excerpt in the notification), so without this
+    // filter writing "@stranger" on a PRIVATE channel delivered a fragment of the conversation
+    // to somebody with no access to it. For a public channel canRead lets everybody through,
+    // so pulling people in by calling them works as before; only private, dm and groups are
+    // blocked.
     const mentioned = resolveMentions(ctx, body, input.conversationId)
       .filter((actorId) => actorId !== input.actorId)
       .filter((actorId) => canRead(ctx, input.conversationId, actorId));
     for (const actorId of mentioned) stmt.run(row.id, actorId);
 
-    // Powiadomienia. W DM-ie i grupie liczy sie KAZDA wiadomosc (po to sa), na
-    // kanale tylko zawolanie po nazwie - inaczej "powiadomienia" byly by drugim
-    // licznikiem nieprzeczytanych i nauczyloby sie je ignorowac.
+    // Notifications. In a DM and a group EVERY message counts (that is what they are for); on
+    // a channel only a mention by name - otherwise "notifications" would be a second unread
+    // counter and people would learn to ignore them.
     const conv = ctx.db.prepare("SELECT kind FROM conversations WHERE id = ?")
       .get(input.conversationId) as { kind: string } | undefined;
     const direct = conv?.kind === "dm" || conv?.kind === "group";
-    // Wyciszenie rozmowy (notify='none') ma cos znaczyc. Wczesniej przelacznik
-    // w UI nie wplywal na nic: powiadomienie powstawalo tak samo, wiec jedyna
-    // roznica byla ta, ze uzytkownik uwierzyl, ze go wyciszyl.
+    // Muting a conversation (notify='none') has to mean something. Previously the switch in
+    // the UI affected nothing: the notification was created all the same, so the only
+    // difference was that the user believed they had muted it.
     const wyciszeni = new Set(
       (ctx.db.prepare("SELECT actor_id FROM members WHERE conversation_id = ? AND notify = 'none'")
         .all(input.conversationId) as Array<{ actor_id: number }>).map((r) => r.actor_id),
@@ -209,18 +209,18 @@ export function postMessage(
       conversationId: input.conversationId,
       messageId: row.id,
       excerpt: excerptOf(body),
-      // Ogloszenie idzie nizej, PO zdarzeniu "message": klient, ktory na
-      // powiadomienie reaguje skokiem do wiadomosci, ma ja juz miec.
+      // The announcement goes out later, AFTER the "message" event: a client that reacts to a
+      // notification by jumping to the message has to have it already.
       announce: false,
     });
     return messageFromRow(row);
   });
 
-  // Zdarzenie WYLACZNIE dla nowo utworzonej wiadomosci: powtorka (dedup) nie
-  // moze wygenerowac drugiego pusha, bo to bylby dokladnie ten zdublowany wake,
-  // przed ktorym idempotencja ma chronic.
+  // The event fires ONLY for a newly created message: a repeat (dedup) must not generate a
+  // second push, because that would be exactly the duplicated wake that idempotency is
+  // supposed to prevent.
   if (created) {
-    // Wyslana wiadomosc konczy pisanie - kuleczka "pisze" znika natychmiast.
+    // A sent message ends typing - the "typing" bubble disappears immediately.
     if (input.sessionId) clearTyping(ctx, input.sessionId);
     onCommitted(ctx.db, () => {
       ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
@@ -234,7 +234,7 @@ export function postMessage(
   return message;
 }
 
-/** Watek jest jednopoziomowy: wskazanie odpowiedzi jako rodzica prowadzi do jej korzenia. */
+/** A thread is one level deep: pointing at a reply as the parent leads to its root. */
 function rootOfThread(ctx: Ctx, threadId: number | null, convId: number): number | null {
   if (!threadId) return null;
   const parent = ctx.db
@@ -253,8 +253,8 @@ export function getMessage(ctx: Ctx, id: number): Message | null {
 }
 
 /**
- * Strona wiadomosci konwersacji, zawsze rosnaco po id.
- * `after` doczytuje nowsze (kursor SSE i long-polla), `before` starsze (przewijanie w gore).
+ * A page of a conversation's messages, always ascending by id.
+ * `after` fetches newer ones (the SSE and long-poll cursor), `before` older ones (scrolling up).
  */
 export function listMessages(
   ctx: Ctx,
@@ -269,8 +269,8 @@ export function listMessages(
       .all(q.conversationId, q.after, limit) as MsgRow[];
     return rows.map(messageFromRow);
   }
-  // Bez `after` chcemy OSTATNIE `limit` wiadomosci, ale oddane rosnaco - stad
-  // pobranie malejaco i odwrocenie.
+  // Without `after` we want the LAST `limit` messages, but returned ascending - hence
+  // fetching descending and reversing.
   const rows = ctx.db
     .prepare(
       `SELECT * FROM messages
@@ -295,8 +295,8 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
   if (row.deleted_at) throw badRequest("skasowana", "nie da sie edytowac skasowanej wiadomosci");
   const text = validateBody(body, MAX_BODY_BYTES);
 
-  // Kto byl wspomniany PRZED edycja - zeby powiadomic wylacznie tych, ktorzy
-  // doszli, a nie zasypywac powtorka kazdego przy poprawce literowki.
+  // Who was mentioned BEFORE the edit - so that we notify only those who were added, rather
+  // than burying everybody in a repeat over a fixed typo.
   const mialiWzmianke = new Set(
     (ctx.db.prepare("SELECT actor_id FROM mentions WHERE message_id = ?").all(id) as
       Array<{ actor_id: number }>).map((r) => r.actor_id),
@@ -310,15 +310,15 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
     const stmt = ctx.db.prepare(
       "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?,?)",
     );
-    // Ten sam filtr co przy wysylce: wzmianka niesie tresc, wiec nie moze
-    // dotrzec do kogos, kto nie ma dostepu do rozmowy (patrz postMessage).
+    // The same filter as on send: a mention carries content, so it must not reach somebody who
+    // has no access to the conversation (see postMessage).
     const wspomniani = resolveMentions(ctx, text, row.conversation_id)
       .filter((a) => a !== actorId)
       .filter((a) => canRead(ctx, row.conversation_id, a));
     for (const a of wspomniani) stmt.run(id, a);
-    // Edycja, ktora DODAJE zawolanie, musi powiadomic - inaczej "@michal, jednak
-    // zrob to" dopisane do wlasnej wiadomosci nie dociera do nikogo, a autor jest
-    // przekonany, ze zawolal. Powiadamiamy tylko NOWO wspomnianych.
+    // An edit that ADDS a call has to notify - otherwise "@michal, do it after all" appended to
+    // your own message reaches nobody while the author is convinced they called somebody. We
+    // notify only the NEWLY mentioned.
     nowoWspomniani = wspomniani.filter((a) => !mialiWzmianke.has(a));
     return messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
   });
@@ -347,14 +347,14 @@ export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
   if (row.actor_id !== actorId) throw forbidden("nie_autor", "nie jestes autorem tej wiadomosci");
 
   const message = tx(ctx.db, () => {
-    // Tresc znika naprawde, zeby "skasuj" znaczylo skasuj, a nie "ukryj w UI".
-    // Wiersz zostaje, bo id jest kursorem i znacznikiem odczytu.
+    // The content really disappears, so that "delete" means delete rather than "hide in the UI".
+    // The row stays, because the id is a cursor and a read marker.
     //
-    // "Naprawde" musi obejmowac WSZYSTKIE kopie tresci, inaczej to zdanie jest
-    // nieprawdziwe, a nieprawdziwe zdanie o kasowaniu jest gorsze niz jego brak:
-    //  - meta wiadomosci-zalacznika trzyma nazwe pliku i typ,
-    //  - powiadomienia trzymaja wyimek tresci (excerpt),
-    //  - same bajty zalacznika leza w katalogu plikow i sa pobieralne po id.
+    // "Really" has to cover ALL copies of the content, otherwise that sentence is untrue, and
+    // an untrue sentence about deletion is worse than none at all:
+    //  - the meta of an attachment message holds the file name and type,
+    //  - notifications hold an excerpt of the content,
+    //  - the attachment's bytes themselves sit in the file directory and are fetchable by id.
     ctx.db.prepare("UPDATE messages SET body = '', meta = NULL, deleted_at = ? WHERE id = ?")
       .run(ctx.now(), id);
     ctx.db.prepare("DELETE FROM mentions WHERE message_id = ?").run(id);
@@ -372,12 +372,12 @@ export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
 }
 
 /**
- * "NAPRAWIONE": twierdzenie naprawiajacego, ze zmienil kod. Moze je postawic
- * kazdy, kto ma dostep do rozmowy - bo to nie jest domkniecie sprawy, tylko
- * informacja "z mojej strony zrobione, sprawdzcie". Domkniecie
- * (`resolveMessage`) zostaje przy autorze zgloszenia i adminie, i to jest cala
- * roznica: naprawiajacy i tak WIE, ze naprawil, wiec jego wlasny check nie
- * niesie nowej informacji. Wartosc ma dopiero potwierdzenie kogos innego.
+ * "FIXED": the fixer's claim that they changed the code. Anybody with access to the
+ * conversation can assert it - because this is not closing the case, only the information
+ * "done on my side, please check". Closing it (`resolveMessage`) stays with the report's
+ * author and an admin, and that is the whole difference: the fixer KNOWS they fixed it
+ * anyway, so their own check carries no new information. Only somebody else's confirmation
+ * has value.
  */
 export function markFixed(
   ctx: Ctx,
@@ -387,17 +387,17 @@ export function markFixed(
   if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${input.id}`);
   if (row.deleted_at) throw badRequest("skasowana", "skasowanej wiadomosci nie da sie oznaczyc");
   assertCanRead(ctx, row.conversation_id, input.actorId);
-  // Jedna transakcja: zmiana stanu i powiadomienie autora zgloszenia to jedno
-  // zdarzenie. Rozdzielone, przy padzie miedzy nimi zostawialy zgloszenie
-  // oznaczone jako naprawione, o czym autor nigdy by sie nie dowiedzial.
+  // One transaction: the state change and notifying the report's author are one event. Split
+  // apart, a crash between them left the report marked as fixed, which its author would
+  // never have found out about.
   const message = tx(ctx.db, () => {
     ctx.db.prepare("UPDATE messages SET fixed_at = ?, fixed_by = ? WHERE id = ?")
       .run(input.fixed ? ctx.now() : null, input.fixed ? input.actorId : null, input.id);
     if (input.fixed) {
-      // Wlasny rodzaj, nie "mention": lista powiadomien pisze zdanie na podstawie
-      // rodzaju, wiec oznaczenie naprawy jako wzmianki kazalo uzytkownikowi szukac
-      // w kanale zawolania, ktorego tam nie ma. Wyimek to sama tresc zgloszenia -
-      // opis akcji dokleja interfejs, wiec powielanie go tutaj bylo szumem.
+      // Its own kind, not "mention": the notification list writes its sentence from the kind, so
+      // marking a fix as a mention sent the user looking in the channel for a call that is not
+      // there. The excerpt is the report's content alone - the description of the action is added
+      // by the interface, so duplicating it here was noise.
       notify(ctx, {
         actorIds: [row.actor_id],
         kind: "fix",
@@ -419,9 +419,9 @@ export function markFixed(
   return message;
 }
 
-/** Oznacz wiadomosc jako rozwiazana / cofnij (np. zgloszenie na #bug domkniete).
- *  Moze: autor wiadomosci, admin instancji, albo admin kanalu. Generyczne -
- *  na dowolnym kanale. Zdarzenie message_updated odswieza check u wszystkich. */
+/** Mark a message as resolved / take it back (for instance a report on #bug being closed).
+ *  Allowed to: the message's author, the instance admin, or a channel admin. Generic - on
+ *  any channel. The message_updated event refreshes the check for everybody. */
 export function resolveMessage(
   ctx: Ctx,
   input: { id: number; actorId: number; resolved: boolean; isInstanceAdmin: boolean },
@@ -447,10 +447,10 @@ export function resolveMessage(
   return message;
 }
 
-/** Wszystko nowsze niz `afterId` ze wszystkich konwersacji, ktorych aktor jest czlonkiem.
- *  To jest zrodlo dla long-polla i dla wznowienia SSE po zerwaniu.
- *  includeOwn: zywy strumien SSE dostarcza takze wlasne wiadomosci (drugie
- *  urzadzenie tego samego aktora musi je widziec), wiec wznowienie tez musi. */
+/** Everything newer than `afterId` from every conversation the actor is a member of.
+ *  This is the source for the long-poll and for resuming SSE after a break.
+ *  includeOwn: a live SSE stream also delivers your own messages (a second device of the
+ *  same actor has to see them), so a resumption has to as well. */
 export function inboxAfter(
   ctx: Ctx,
   actorId: number,
@@ -471,11 +471,11 @@ export function inboxAfter(
 }
 
 /**
- * Wiadomosci sprzed kursora, ktore ZMIENILY SIE (edycja/kasowanie) od `sinceTs` -
- * do wznowienia SSE. Kursor id nie niesie informacji o zmianach starych wiadomosci,
- * wiec po zerwaniu klient dostalby nowe, ale nie dowiedzialby sie o edycjach.
- * Okno czasowe jest ograniczone, bo "wszystkie edycje w historii" to pelny skan,
- * a realne zerwania mierzy sie w minutach.
+ * Messages from before the cursor that HAVE CHANGED (edited/deleted) since `sinceTs` - for
+ * resuming SSE. An id cursor carries no information about changes to old messages, so after
+ * a break a client would get the new ones but never learn about the edits.
+ * The time window is bounded, because "every edit in history" is a full scan, while real
+ * disconnections are measured in minutes.
  */
 export function updatedBefore(
   ctx: Ctx,
@@ -500,7 +500,7 @@ export function updatedBefore(
   return rows.map(messageFromRow);
 }
 
-/** Najwyzsze id w systemie. Klient bierze je jako punkt startowy kursora. */
+/** The highest id in the system. A client takes it as the starting point of its cursor. */
 export function lastMessageId(ctx: Ctx): number {
   const row = ctx.db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM messages").get() as {
     id: number;
