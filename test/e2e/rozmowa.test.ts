@@ -53,7 +53,7 @@ test("czlowiek i dwoch agentow rozmawiaja przez zywy serwer", async () => {
   assert.equal(ev.type, "message");
   assert.equal(ev.message.body, "@eipa przejmij deploy");
 
-  // 4. Eipa odpowiada w watku tej wiadomosci.
+  // 4. Eipa replies in that message's thread.
   const rootId = ev.message.id;
   await fetch(`${s.url}/api/conversations/${conv.id}/messages`, {
     method: "POST",

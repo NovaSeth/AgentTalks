@@ -50,9 +50,9 @@ test("odwolane zaproszenie nie dziala", () => {
 test("revokeInvite: nieistniejace/juz-odwolane id zwraca false (bez falszywego sukcesu)", () => {
   const ctx = testCtx();
   const { info } = createInvite(ctx, { createdBy: null });
-  assert.equal(revokeInvite(ctx, 99999), false); // nie ma takiego id
-  assert.equal(revokeInvite(ctx, info.id), true); // pierwsze odwolanie dziala
-  assert.equal(revokeInvite(ctx, info.id), false); // drugie juz nie - bylo odwolane
+  assert.equal(revokeInvite(ctx, 99999), false); // there is no such id
+  assert.equal(revokeInvite(ctx, info.id), true); // the first revocation works
+  assert.equal(revokeInvite(ctx, info.id), false); // the second does not - it was already revoked
 });
 
 test("zaproszenie --admin nadaje aktorowi uprawnienia admina", () => {

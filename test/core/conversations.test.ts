@@ -209,10 +209,10 @@ test("removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie", async
     () => removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: c3.id, isInstanceAdmin: false }),
     /zarzadza/,
   );
-  // sam siebie - wolno
+  // yourself - allowed
   removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: b.id, isInstanceAdmin: false });
   assert.equal(isMember(ctx, c.id, b.id), false);
-  // admin kanalu wyrzuca innych
+  // a channel admin throws others out
   removeMember(ctx, { convId: c.id, actorId: a.id, targetActorId: c3.id, isInstanceAdmin: false });
   assert.equal(isMember(ctx, c.id, c3.id), false);
   const grp = ensureDirect(ctx, [a.id, b.id, c3.id]);

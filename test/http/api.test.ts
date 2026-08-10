@@ -29,7 +29,7 @@ test("readJson odrzuca niepoprawny JSON", async () => {
   await assert.rejects(() => readJson(req, 1000), /poprawnym JSON/);
 });
 
-// --- scena wspolna dla testow API -----------------------------------------
+// --- the shared scene for the API tests -------------------------------------
 
 function seed(s: TestServer) {
   const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
@@ -360,12 +360,12 @@ test("cookie sesji jest ODWOLYWALNE: zmiana hasla uniewaznia wydane wczesniej", 
   const cookie = makeCookie(s.ctx, s.config, michal.id, 3600, false).split(";")[0];
   assert.equal((await fetch(s.url + "/api/me", { headers: { cookie } })).status, 200);
 
-  // Zmiana hasla ma wyrzucic wszystkie wczesniejsze sesje - inaczej "zmienilem
-  // haslo po kradziezy laptopa" nie znaczy "zamknalem tamte drzwi".
+  // Changing a password has to throw out every earlier session - otherwise "I changed my
+  // password after the laptop was stolen" does not mean "I closed that door".
   setPassword(s.ctx, michal.id, "zupelnie-nowe-haslo");
   assert.equal((await fetch(s.url + "/api/me", { headers: { cookie } })).status, 401);
 
-  // Nowe logowanie dziala normalnie.
+  // A new login works normally.
   const swieze = makeCookie(s.ctx, s.config, michal.id, 3600, false).split(";")[0];
   assert.equal((await fetch(s.url + "/api/me", { headers: { cookie: swieze } })).status, 200);
   await s.close();
@@ -493,11 +493,11 @@ test("upload pliku przez API, pobranie przez czlonka, odmowa dla obcego", async 
 });
 
 /**
- * Nazwa pliku przyjezdza naglowkiem, wiec MUSI byc %-kodowana (naglowki HTTP nie
- * niosa polskich znakow). Zle kodowanie to nie jest przypadek egzotyczny: robi je
- * kazdy klient, ktory sklei naglowek recznie zamiast przez encodeURIComponent -
- * a "raport 50%.txt" wystarczy, zeby decodeURIComponent rzucil wyjatkiem.
- * Bez tego testu 400 z czytelnym komunikatem mogloby cicho stac sie 500.
+ * The file name arrives in a header, so it MUST be %-encoded (HTTP headers do not carry
+ * accented characters). Bad encoding is not an exotic case: every client that assembles the
+ * header by hand rather than through encodeURIComponent does it - and "report 50%.txt" is
+ * enough to make decodeURIComponent throw. Without this test a 400 with a readable message
+ * could quietly become a 500.
  */
 test("X-File-Name ze zlym %-kodowaniem daje 400 z instrukcja, nie 500", async () => {
   const s = await startTestServer();
@@ -516,8 +516,8 @@ test("X-File-Name ze zlym %-kodowaniem daje 400 z instrukcja, nie 500", async ()
   assert.equal(blad.code, "zla_nazwa");
   assert.match(blad.error, /encodeURIComponent/, "komunikat ma mowic, CO zrobic");
 
-  // Poprawnie zakodowana ta sama nazwa przechodzi i wraca w oryginalnej postaci -
-  // czyli odrzucenie dotyczy kodowania, a nie samego znaku procent.
+  // The same name, correctly encoded, goes through and comes back in its original form - that
+  // is, the rejection is about the encoding, not about the percent sign itself.
   const dobre = await wyslij(encodeURIComponent("raport 50%.txt"));
   assert.equal(dobre.status, 201);
   assert.equal((await dobre.json()).file.name, "raport 50%.txt");
@@ -630,7 +630,7 @@ test("enroll: zaproszenie zaklada aktora, token dziala; zly kod = 403", async ()
   const { code } = createInvite(s.ctx, { createdBy: null, uses: 2 });
   const r = await fetch(s.url + "/api/enroll", {
     method: "POST", headers: { "content-type": "application/json" },
-    // kind:"human" w ciele MUSI byc zignorowane - enroll tworzy tylko agenta.
+    // kind:"human" in the body MUST be ignored - enroll creates an agent only.
     body: JSON.stringify({ invite: code, handle: "swiezak", kind: "human" }),
   });
   assert.equal(r.status, 201);
@@ -654,10 +654,10 @@ test("wiki przez API: zapis, odczyt, szukanie, historia, revert", async () => {
     method: "POST", headers: bearer(tokenA),
     body: JSON.stringify({ title: "Projekt", body: "wersja jeden z frazą kanarek" }),
   });
-  // Wiki zapisuje sie PUT-em; POST na ten adres nie istnieje. Wczesniej stala
-  // tu asercja dopuszczajaca 404, 405 ALBO 200 - czyli warunek, ktorego nie
-  // dalo sie zlamac, z komentarzem "popraw". Test, ktory nie moze zawiesc,
-  // niczego nie chroni; ten sprawdza konkretna odpowiedz.
+  // The wiki is saved with PUT; there is no POST on that address. There used to be an assertion
+  // here admitting 404, 405 OR 200 - that is, a condition that could not be broken, with a
+  // comment saying "fix this". A test that cannot fail protects nothing; this one checks a
+  // specific response.
   assert.equal(put.status, 404);
   assert.equal((await put.json()).code, "nie_znaleziono");
   const put2 = await fetch(s.url + "/api/wiki/projekt", {
@@ -691,7 +691,7 @@ test("wiki: strona jest wspolna - inny aktor tez ja edytuje (po przeczytaniu)", 
   await fetch(s.url + "/api/wiki/wspolna", {
     method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "W", body: "od ali" }),
   });
-  // Bob najpierw czyta (GET oznacza "widzialem"), potem pisze - i to przechodzi.
+  // Bob reads first (a GET means "I have seen it"), then writes - and that goes through.
   await fetch(s.url + "/api/wiki/wspolna", { headers: bearer(tokenB) });
   const r = await fetch(s.url + "/api/wiki/wspolna", {
     method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "W", body: "od boba" }),
@@ -708,21 +708,21 @@ test("wiki: slepy zapis na cudza strone -> 409 z numerem rewizji, po przeczytani
   await fetch(s.url + "/api/wiki/korzen", {
     method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Ala ma strone", body: "tresc ali" }),
   });
-  // Bob nigdy tej strony nie widzial - PUT nadpisalby cudza prace po cichu.
+  // Bob has never seen this page - a PUT would silently overwrite somebody else's work.
   const blind = await fetch(s.url + "/api/wiki/korzen", {
     method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "Bob ma strone", body: "tresc boba" }),
   });
   assert.equal(blind.status, 409);
   const err = await blind.json();
   assert.equal(err.code, "konflikt_wiki");
-  // Blad ma prowadzic do tresci, ktora by zginela: numer rewizji i autor.
+  // The error has to lead to the content that would be lost: the revision id and the author.
   const page = await (await fetch(s.url + "/api/wiki/korzen", { headers: bearer(tokenB) })).json();
   assert.ok(page.page.lastRevisionId > 0);
   assert.match(err.error, new RegExp(String(page.page.lastRevisionId)));
   assert.match(err.error, /ala/);
-  // Tresc ali stoi nietknieta.
+  // Ala's content stands untouched.
   assert.equal(page.page.body, "tresc ali");
-  // Po przeczytaniu (GET wyzej) ten sam zapis przechodzi.
+  // After reading it (the GET above) the same write goes through.
   const after = await fetch(s.url + "/api/wiki/korzen", {
     method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "Bob ma strone", body: "tresc boba" }),
   });
@@ -738,13 +738,13 @@ test("wiki: baseRevision - zgodny przechodzi, rozjechany daje 409, 0 = tylko zal
   });
   const p1 = await (await fetch(s.url + "/api/wiki/plan", { headers: bearer(tokenA) })).json();
   const rev1 = p1.page.lastRevisionId;
-  // Zapis oparty na rewizji, ktora widzielismy - przechodzi.
+  // A write based on the revision we saw - goes through.
   const ok = await fetch(s.url + "/api/wiki/plan", {
     method: "PUT", headers: bearer(tokenA),
     body: JSON.stringify({ title: "Plan", body: "v2", baseRevision: rev1 }),
   });
   assert.equal(ok.status, 200);
-  // Bob czyta (jest "na biezaco"), Ala pisze, Bob zapisuje na starej podstawie.
+  // Bob reads (he is "up to date"), Ala writes, Bob saves on the old basis.
   const p2 = await (await fetch(s.url + "/api/wiki/plan", { headers: bearer(tokenB) })).json();
   await fetch(s.url + "/api/wiki/plan", {
     method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Plan", body: "v3" }),
@@ -760,13 +760,13 @@ test("wiki: baseRevision - zgodny przechodzi, rozjechany daje 409, 0 = tylko zal
     body: JSON.stringify({ title: "Plan", body: "moje", force: true }),
   });
   assert.equal(forced.status, 200);
-  // baseRevision=0 znaczy "zaloz, jesli nie ma" - na istniejacej stronie 409
+  // baseRevision=0 means "create it if it does not exist" - on an existing page, a 409
   const createOnly = await fetch(s.url + "/api/wiki/plan", {
     method: "PUT", headers: bearer(tokenA),
     body: JSON.stringify({ title: "Plan", body: "x", baseRevision: 0 }),
   });
   assert.equal(createOnly.status, 409);
-  // ...a na nowym slugu przechodzi
+  // ...and on a new slug it goes through
   const fresh = await fetch(s.url + "/api/wiki/zupelnie-nowa", {
     method: "PUT", headers: bearer(tokenA),
     body: JSON.stringify({ title: "Nowa", body: "x", baseRevision: 0 }),
@@ -809,7 +809,7 @@ test("wiki: podglad pojedynczej rewizji zwraca pelna tresc; cudza/nieistniejaca 
   const rev = await (await fetch(`${s.url}/api/wiki/notatki/revisions/${firstId}`, { headers: bearer(tokenA) })).json();
   assert.equal(rev.revision.body, "wersja pierwsza");
   assert.equal(rev.revision.actor, "ala");
-  // rewizja innej strony pod tym slugiem -> 404 (id sa globalne)
+  // a revision of another page under this slug -> 404 (ids are global)
   await fetch(s.url + "/api/wiki/inna", {
     method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "I", body: "x" }),
   });
@@ -825,14 +825,14 @@ test("wiki: podglad pojedynczej rewizji zwraca pelna tresc; cudza/nieistniejaca 
 test("panel admina: czlowiek-admin wchodzi, agent (nawet adminowski) nie", async () => {
   const s = await startTestServer();
   const { ala, tokenA } = seed(s);
-  // agent bez adminki
+  // an agent without admin
   const r1 = await fetch(s.url + "/api/admin/actors", { headers: bearer(tokenA) });
   assert.equal(r1.status, 403);
-  // agent Z adminka - nadal nie: panel jest dla czlowieka
+  // an agent WITH admin - still no: the panel is for a human
   s.ctx.db.prepare("UPDATE actors SET is_admin = 1 WHERE id = ?").run(ala.id);
   const r2 = await fetch(s.url + "/api/admin/actors", { headers: bearer(tokenA) });
   assert.equal(r2.status, 403);
-  // czlowiek-admin przez cookie: 200 + aktorzy z tokenami i zaproszenia
+  // a human admin through a cookie: 200 + actors with tokens and invites
   const login = await fetch(s.url + "/api/login", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ handle: "michal", password: "haslo1234" }),
@@ -868,7 +868,7 @@ test("panel admina: zaproszenie z UI dziala w enrollu, odwolane przestaje", asyn
     body: JSON.stringify({ invite: created.code, handle: "nowy-agent" }),
   });
   assert.equal(enr.status, 201);
-  // drugie zaproszenie: odwolane przed uzyciem nie dziala
+  // the second invite: one revoked before use does not work
   const c2 = await (await fetch(s.url + "/api/admin/invites", {
     method: "POST",
     headers: { "content-type": "application/json", cookie, "x-at-csrf": csrf },
@@ -919,7 +919,7 @@ test("powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeru
   const convId = conv.conversation.id;
   await fetch(`${s.url}/api/conversations/${convId}/join`, { method: "POST", headers: bearer(tokenB), body: "{}" });
 
-  // 1. Wzmianka na kanale - powiadomienie dla wolanego, nie dla autora.
+  // 1. A mention on a channel - a notification for the person called, not for the author.
   await fetch(`${s.url}/api/conversations/${convId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "@bob zerknij na deploy" }),
   });
@@ -932,7 +932,7 @@ test("powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeru
   const autor = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
   assert.equal(autor.unread, 0, "wlasna wzmianka nie jest zdarzeniem dla autora");
 
-  // 2. DM: liczy sie kazda wiadomosc, nie tylko zawolanie po nazwie.
+  // 2. A DM: every message counts, not only a mention by name.
   const dm = await (await fetch(s.url + "/api/conversations", {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ kind: "dm", members: ["@bob"] }),
   })).json();
@@ -943,7 +943,7 @@ test("powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeru
   assert.equal(mine.unread, 2);
   assert.equal(mine.notifications[0].kind, "dm");
 
-  // 3. Reakcja na CUDZY wpis powiadamia jego autora; zdjecie reakcji juz nie.
+  // 3. A reaction to SOMEBODY ELSE'S post notifies its author; removing a reaction does not.
   const post = await (await fetch(`${s.url}/api/conversations/${convId}/messages`, {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ body: "gotowe" }),
   })).json();
@@ -978,13 +978,13 @@ test("powiadomienia wiki: zmiana strony wola tych, ktorzy juz na niej pisali", a
   await fetch(s.url + "/api/wiki/wspolna-notatka", {
     method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "Notatka", body: "od ali" }),
   });
-  // Bob dopisuje sie do strony (czyta, potem pisze) - od tej pory jest wspolautorem.
+  // Bob appends to the page (reads, then writes) - from now on he is a co-author.
   await fetch(s.url + "/api/wiki/wspolna-notatka", { headers: bearer(tokenB) });
   await fetch(s.url + "/api/wiki/wspolna-notatka", {
     method: "PUT", headers: bearer(tokenB), body: JSON.stringify({ title: "Notatka", body: "od ali + boba" }),
   });
-  // Ala widzi powiadomienie o zmianie w czyms, co wspoltworzyla; Bob nie
-  // dostaje powiadomienia o wlasnej edycji.
+  // Ala sees a notification about a change in something she co-authored; Bob gets no
+  // notification about his own edit.
   const alowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
   assert.equal(alowe.notifications[0].kind, "wiki");
   assert.equal(alowe.notifications[0].wikiSlug, "wspolna-notatka");
@@ -992,7 +992,7 @@ test("powiadomienia wiki: zmiana strony wola tych, ktorzy juz na niej pisali", a
   const bobowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
   assert.equal(bobowe.unread, 0);
 
-  // Odhaczenie pojedynczego powiadomienia po id - lista nieprzeczytanych pusta.
+  // Ticking off a single notification by id - the unread list is empty.
   await fetch(s.url + "/api/notifications/read", {
     method: "POST", headers: bearer(tokenA),
     body: JSON.stringify({ ids: [alowe.notifications[0].id] }),
@@ -1013,11 +1013,11 @@ test("wiki: kasowanie strony - tylko zalozyciel albo admin; dzieci nie gina", as
     method: "PUT", headers: bearer(tokenA),
     body: JSON.stringify({ title: "Poddział", body: "dziecko", parentSlug: "dzial" }),
   });
-  // Obcy nie kasuje cudzej strony - wspolne pisanie to nie to samo co kasowanie.
+  // A stranger does not delete somebody else's page - writing together is not deleting.
   const obcy = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenB) });
   assert.equal(obcy.status, 403);
   assert.equal((await obcy.json()).code, "nie_twoja_strona");
-  // Zalozyciel kasuje; dziecko przechodzi na miejsce rodzica, nie znika.
+  // The creator deletes; the child moves into the parent's place rather than disappearing.
   const del = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenA) });
   assert.equal(del.status, 200);
   const body = await del.json();
@@ -1041,13 +1041,13 @@ test("zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/adm
   })).json();
   const id = zgl.message.id;
 
-  // Naprawiajacy NIE domyka zgloszenia (to twierdzenie o objawie, nie o kodzie)...
+  // The fixer does NOT close the report (that is a claim about the symptom, not about the code)...
   const proba = await fetch(`${s.url}/api/messages/${id}/resolve`, {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ resolved: true }),
   });
   assert.equal(proba.status, 403);
 
-  // ...ale moze powiedziec "z mojej strony zrobione".
+  // ...but they can say "done on my side".
   const fix = await fetch(`${s.url}/api/messages/${id}/fix`, {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ fixed: true }),
   });
@@ -1056,14 +1056,14 @@ test("zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/adm
   assert.ok(poNaprawie.fixedAt > 0);
   assert.equal(poNaprawie.resolvedAt, null, "naprawione to NIE to samo co potwierdzone");
 
-  // Autor zgloszenia dostaje powiadomienie WLASNEGO RODZAJU - nie "wzmianki",
-  // bo wtedy lista pisala "zawolal(a) Cie" i kazala szukac w kanale zawolania,
-  // ktorego tam nie ma. Wyimek to sama tresc zgloszenia; opis akcji dokleja klient.
+  // The report's author gets a notification OF ITS OWN KIND - not a "mention", because then the
+  // list said "called you" and sent them looking in the channel for a call that is not there.
+  // The excerpt is the report's content alone; the description of the action is added by the client.
   const powiadomienia = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
   assert.equal(powiadomienia.notifications[0].kind, "fix");
   assert.match(powiadomienia.notifications[0].excerpt, /wiki nadpisuje w ciemno/);
 
-  // Potwierdzenie zostaje przy autorze - i wtedy stan jest pelny.
+  // Confirmation stays with the author - and only then is the state complete.
   const res = await fetch(`${s.url}/api/messages/${id}/resolve`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ resolved: true }),
   });
@@ -1072,7 +1072,7 @@ test("zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/adm
   assert.ok(koniec.resolvedAt > 0);
   assert.ok(koniec.fixedAt > 0, "potwierdzenie nie kasuje sladu, kto naprawil");
 
-  // Cofniecie "naprawione" jest mozliwe (poprawka moze okazac sie zla).
+  // Taking back "fixed" is possible (a fix can turn out to be wrong).
   const cofniete = await (await fetch(`${s.url}/api/messages/${id}/fix`, {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ fixed: false }),
   })).json();
@@ -1083,9 +1083,9 @@ test("zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/adm
 test("dluga tresc przechodzi pelny obieg bez obciecia (zgloszenie [71])", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, kanalId } = seed(s);
-  // Znacznik na SAMYM KONCU: gdyby cokolwiek po drodze przycinalo tresc, zniknie
-  // wlasnie on, a dlugosc bedzie sie zgadzac "mniej wiecej" - co jest gorsze niz
-  // jawny blad, bo raport wyglada na kompletny.
+  // The marker at the VERY END: if anything along the way truncated the content, it is the
+  // marker that disappears, while the length still matches "roughly" - which is worse than an
+  // explicit error, because the report looks complete.
   const dlugi = `${"Raport z pomiarow. ".repeat(500)}ZNACZNIK-KONCA-9f3a`;
   const post = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: dlugi }),
@@ -1114,8 +1114,8 @@ test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => 
   assert.equal(r.status, 413);
   const err = await r.json();
   assert.equal(err.code, "cialo_za_dlugie");
-  // Komunikat ma niesc liczbe, o ktora chodzi - "za dluga" bez liczby zmusza
-  // do zgadywania, ile uciac.
+  // The message has to carry the number in question - "too long" without a number forces you to
+  // guess how much to cut.
   assert.match(err.error, /o 100 B za dluga/);
   await s.close();
 });
@@ -1124,11 +1124,11 @@ test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => 
 
 test("bramka: strona zamknieta bez ciasteczka, wlasciwe haslo wpuszcza, zle nie", async () => {
   const s = await startTestServer({ sitePassword: "tajne-haslo-bramki" });
-  // Interfejs jest zamkniety...
+  // The interface is closed...
   const zamknieta = await fetch(s.url + "/");
   assert.equal(zamknieta.status, 401);
-  // ...ale API i onboarding NIE, bo agent uwierzytelnia sie tokenem, a swiezy
-  // agent musi pobrac /install, zanim jakikolwiek token ma.
+  // ...but the API and onboarding are NOT, because an agent authenticates by token, and a fresh
+  // agent has to fetch /install before it has any token at all.
   assert.equal((await fetch(s.url + "/api/health")).status, 200);
   assert.equal((await fetch(s.url + "/install")).status, 200);
 
@@ -1144,8 +1144,8 @@ test("bramka: strona zamknieta bez ciasteczka, wlasciwe haslo wpuszcza, zle nie"
   });
   assert.equal(dobre.status, 200);
   const cookie = dobre.headers.get("set-cookie")!.split(";")[0];
-  // Samo 401 dowodzi tylko, ze cos jest odrzucane - dopiero to sprawdza, ze
-  // bramka wpuszcza wlascicieli.
+  // A 401 alone proves only that something is being rejected - only this checks that the gate
+  // lets the owners in.
   const po = await fetch(s.url + "/", { headers: { cookie } });
   assert.equal(po.status, 200);
   await s.close();
@@ -1184,8 +1184,8 @@ test("diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktor
   assert.equal(r.status, 401);
   const err = await r.json();
   assert.equal(err.code, "token_odwolany");
-  // Bez tego zdania agent bez pamieci sesji wyciaga najgorszy wniosek:
-  // "wykupie nowe zaproszenie" - i na kanale robi sie druga tozsamosc.
+  // Without that sentence an agent with no session memory draws the worst conclusion: "I will
+  // redeem a new invite" - and the channel gains a second identity.
   assert.match(err.error, /ala/);
   assert.match(err.error, /nie o nowe zaproszenie/);
   await s.close();
@@ -1194,9 +1194,9 @@ test("diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktor
 test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () => {
   const s = await startTestServer();
   const { tokenA, kanalId } = seed(s);
-  // "raport%zz.txt" rozbija decodeURIComponent (URIError). Nieobsluzony URIError
-  // to 500, czyli serwer meldujacy WLASNA awarie w odpowiedzi na cudzy smiec -
-  // komunikat mowiacy nieprawde o tym, kto zawinil.
+  // "report%zz.txt" breaks decodeURIComponent (a URIError). An unhandled URIError is a 500, that
+  // is, a server reporting ITS OWN failure in response to somebody else's junk - a message that
+  // lies about who was at fault.
   const r = await fetch(`${s.url}/api/conversations/${kanalId}/files`, {
     method: "POST",
     headers: {
@@ -1211,7 +1211,7 @@ test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () 
   assert.equal(err.code, "zla_nazwa");
   assert.match(err.error, /encodeURIComponent/);
 
-  // Poprawnie zakodowana nazwa (ze spacja i polskimi znakami) przechodzi.
+  // A correctly encoded name (with a space and accented characters) goes through.
   const ok = await fetch(`${s.url}/api/conversations/${kanalId}/files`, {
     method: "POST",
     headers: {
@@ -1227,14 +1227,13 @@ test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () 
 });
 
 /**
- * Odcisk ma byc skrotem ODPOWIEDZI, nie pliku na dysku.
+ * The fingerprint is to be a digest of the RESPONSE, not of the file on disk.
  *
- * Pierwsza wersja liczyla go z szablonu, PRZED podstawieniem {{BASE_URL}} - i przez
- * to lamala jedyna wlasnosc, dla ktorej istnieje. Dwoch agentow siegajacych po ten
- * sam skill innym adresem dostawalo rozna tresc pod TYM SAMYM odciskiem, wiec
- * kontrola "czy moja kopia jest aktualna" odpowiadala "tak" na kopie, ktora rozni
- * sie od zywej. Znalezione pomiarem @zeldy na #bugs [164]: ten sam odcisk,
- * rozmiary 14 402 B i 14 613 B.
+ *The first version computed it from the template, BEFORE {{BASE_URL}} substitution - and
+ *thereby broke the only property it exists for. Two agents reaching for the same skill through
+ *different addresses received different content under THE SAME fingerprint, so the check "is
+ *my copy current" answered "yes" for a copy that differs from the live one. Found by @zelda's
+ *measurement on #bugs [164]: the same fingerprint, sizes 14,402 B and 14,613 B.
  */
 test("odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje", async () => {
   const s = await startTestServer({ sitePassword: "haslo-bramki" });
@@ -1242,7 +1241,7 @@ test("odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje", async () => {
     const { createHash } = await import("node:crypto");
     const skrot = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 16);
 
-    // PUBLICZNY jak sam skill: agent musi moc sprawdzic aktualnosc, zanim ma token.
+    // PUBLIC like the skill itself: an agent has to be able to check freshness before it has a token.
     const r = await fetch(s.url + "/skill.version");
     assert.equal(r.status, 200);
     const odcisk = (await r.text()).trim();
@@ -1251,11 +1250,11 @@ test("odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje", async () => {
     const tresc = await (await fetch(s.url + "/skill.md")).text();
     assert.equal(odcisk, skrot(tresc), "odcisk nie odpowiada serwowanej tresci skilla");
 
-    // Ten sam serwer pod INNA nazwa hosta oddaje inna tresc (podstawiony adres),
-    // wiec MUSI oddac tez inny odcisk. Rowny odcisk przy roznej tresci to dokladnie
-    // ten falszywy spokoj, ktory ta trasa ma likwidowac. Naglowka `host` nie da sie
-    // ustawic przez fetch (nazwa zabroniona), a `x-forwarded-host` jest tu i tak
-    // pierwszy w kolejnosci - to ta sama sciezka kodu.
+    // The same server under a DIFFERENT host name returns different content (the substituted
+    // address), so it MUST return a different fingerprint too. An equal fingerprint with different
+    // content is exactly the false calm this route exists to remove. The `host` header cannot be
+    // set through fetch (a forbidden name), and `x-forwarded-host` comes first here anyway - it is
+    // the same code path.
     const inny = { "x-forwarded-host": "inna-nazwa.example" };
     const treschInna = await (await fetch(s.url + "/skill.md", { headers: inny })).text();
     const odciskInny = (await (await fetch(s.url + "/skill.version", { headers: inny })).text()).trim();
@@ -1270,8 +1269,8 @@ test("odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje", async () => {
 test("skill nie kaze juz wklejac tokenu do pliku, ktory idzie do repozytorium", async () => {
   const s = await startTestServer();
   const skill = await (await fetch(s.url + "/skill.md")).text();
-  // .mcp.json istnieje po to, zeby byc dzielony przez repo - token w nim to
-  // sekret w gicie. Instrukcja ma prowadzic do rejestracji lokalnej.
+  // .mcp.json exists in order to be shared through the repository - a token in it is a secret in
+  // git. The instruction has to lead to a local registration.
   assert.ok(
     !/mcpServers[\s\S]{0,400}Bearer atk_/.test(skill),
     "skill nadal pokazuje token w konfiguracji MCP",
@@ -1297,18 +1296,18 @@ test("panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)", asyn
   assert.equal(r.status, 201);
   const { token } = await r.json();
   assert.match(token, /^atk_/);
-  // Token ma realnie dzialac dla TEGO aktora - inaczej panel tylko udaje rotacje.
+  // The token has to really work for THAT actor - otherwise the panel only pretends to rotate.
   const me = await (await fetch(s.url + "/api/me", { headers: bearer(token) })).json();
   assert.equal(me.actor.handle, "ala");
 
-  // Ten sam prog co w konsoli: krotki TTL tylko swiadomie.
+  // The same threshold as in the console: a short TTL only deliberately.
   const krotki = await fetch(s.url + "/api/admin/tokens", {
     method: "POST", headers: auth, body: JSON.stringify({ actorId: ala.id, ttlSec: 600 }),
   });
   assert.equal(krotki.status, 400);
   assert.equal((await krotki.json()).code, "ttl_za_krotki");
 
-  // Agent (nawet z tokenem) nie wystawia tokenow - panel jest dla czlowieka.
+  // An agent (even with a token) does not issue tokens - the panel is for a human.
   const agent = await fetch(s.url + "/api/admin/tokens", {
     method: "POST", headers: bearer(token), body: JSON.stringify({ actorId: ala.id }),
   });
@@ -1317,16 +1316,16 @@ test("panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)", asyn
 });
 
 /**
- * Rejestracja sesji przyjmuje `doing` ORAZ `workingOn`.
+ * Session registration accepts `doing` AND `workingOn`.
  *
- * Skill przez dlugi czas dokumentowal `workingOn`, a serwer czytal wylacznie
- * `doing` - pole po prostu znikalo, bez bledu i bez sladu, wiec sesja
- * rejestrowala sie "pusta". Skill jest dystrybuowany przez SKOPIOWANIE pliku,
- * wiec kopie z bledna nazwa juz krąża i beda ja wysylac takze po poprawieniu
- * zrodla. Alias jest dla nich; kanoniczne zostaje `doing`.
+ *For a long time the skill documented `workingOn` while the server read only `doing` - the
+ *field simply disappeared, with no error and no trace, so a session registered itself
+ *"empty". The skill is distributed by COPYING the file, so copies with the wrong name are
+ *already circulating and will keep sending it even after the source is fixed. The alias is
+ *for them; the canonical name stays `doing`.
  *
- * Znalezione przez odpalenie kazdej komendy z ZYWEGO skilla doslownie, tak jak
- * zrobi to nowy agent - a nie przez czytanie kodu.
+ *Found by running every command from the LIVE skill literally, the way a new agent will - not
+ *by reading the code.
  */
 test("POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa", async () => {
   const s = await startTestServer();
@@ -1347,12 +1346,12 @@ test("POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa"
     assert.equal((await wyslij({ doing: "kanoniczne" })).status, 200);
     assert.equal(doing(), "kanoniczne");
 
-    // Oba naraz: wygrywa kanoniczne, zeby zachowanie nie zalezalo od kolejnosci
-    // pol w JSON-ie.
+    // Both at once: the canonical one wins, so that behaviour does not depend on the order of
+    // fields in the JSON.
     assert.equal((await wyslij({ doing: "kanoniczne", workingOn: "alias" })).status, 200);
     assert.equal(doing(), "kanoniczne");
 
-    // Sam heartbeat (bez zadnego z pol) NIE kasuje tego, co juz ustawione.
+    // A bare heartbeat (with neither field) does NOT erase what is already set.
     assert.equal((await wyslij({})).status, 200);
     assert.equal(doing(), "kanoniczne");
   } finally {
@@ -1361,17 +1360,16 @@ test("POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa"
 });
 
 /**
- * Spis tresci i pobranie jednej sekcji strony wiki.
+ * The table of contents and fetching one section of a wiki page.
  *
- * Powod jest zmierzony, nie estetyczny: strona wchodzi do okna kontekstu agenta
- * W CALOSCI, a wiki tej instancji urosla do ~270 tys. znakow - wiecej, niz miesci
- * sie w jednym oknie. "Przeczytaj wiki, zanim zapytasz" stalo sie fizycznie
- * niewykonalne, i nikt tego nie zauwazyl, bo nic sie nie psulo (pytanie @milosza
- * z #general [185]).
+ *The reason is measured, not aesthetic: a page enters an agent's context window IN FULL, and
+ *this instance's wiki has grown to ~270k characters - more than fits into one window. "Read
+ *the wiki before you ask" became physically impossible, and nobody noticed, because nothing
+ *broke (@milosz's question in #general [185]).
  *
- * Najwazniejsza asercja jest ostatnia: fragment NIE odblokowuje zapisu. Odczyt
- * jest dowodem "wiem, co nadpisuje", a zapis podmienia CALA tresc - kto widzial
- * jedna sekcje, skasowalby reszte, nie wiedzac o tym.
+ *The most important assertion is the last one: a fragment does NOT unlock writing. A read is
+ *the proof of "I know what I am overwriting", and a write replaces the WHOLE content -
+ *somebody who saw one section would delete the rest without knowing it.
  */
 test("wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu", async () => {
   const s = await startTestServer();
@@ -1400,22 +1398,21 @@ test("wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu", async (
     assert.match(sekcja.body, /### Krok 1/, "sekcja ma zawierac swoje podsekcje");
     assert.doesNotMatch(sekcja.body, /Bezpieczenstwo/, "sekcja nie moze siegac za nastepny naglowek");
 
-    // Dopasowanie po tekscie naglowka, bez wielkosci liter - agent cytuje to,
-    // co zobaczyl w spisie.
+    // Matched by the heading text, case-insensitively - an agent quotes what it saw in the outline.
     assert.ok(((await daj("?section=wdrozenie")).section as { body: string }).body.length > 0);
 
     const brak = await (await fetch(`${s.url}/api/wiki/duza?section=Nie%20ma`, { headers: bearer(tokenB) }));
     assert.equal(brak.status, 404);
     assert.match((await brak.json()).error, /outline=1/, "blad ma podac, gdzie szukac nazw sekcji");
 
-    // Sedno: po spisie i fragmencie zapis MA sie odbic o ochrone przed nadpisaniem.
+    // The crux: after an outline and a fragment, a write MUST bounce off the overwrite protection.
     const zapis = await fetch(`${s.url}/api/wiki/duza`, {
       method: "PUT", headers: bearer(tokenB),
       body: JSON.stringify({ title: "Duza", body: "tylko moj akapit" }),
     });
     assert.equal(zapis.status, 409, "fragment odblokowal zapis - to cicha kasacja reszty strony");
 
-    // A pelny odczyt - odblokowuje, bo wtedy autor wie, co nadpisuje.
+    // And a full read unlocks it, because then the author knows what they are overwriting.
     await daj("");
     const poCalosci = await fetch(`${s.url}/api/wiki/duza`, {
       method: "PUT", headers: bearer(tokenB),
@@ -1429,13 +1426,13 @@ test("wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu", async (
 });
 
 /**
- * Streszczenie w INDEKSIE, nie na stronie.
+ * The summary in the INDEX, not on the page.
  *
- * Pomiar @zeldy (#general [193]) obalil "dwa zdania na gorze strony" i zrobil to
- * celnie: agent, ktory pobiera strone, zeby przeczytac jej poczatek, MA JUZ cala
- * strone w oknie - decyzja zapada PO zaplacie. Czlowiek moze przestac czytac,
- * agent nie moze przestac MIEC. Dziala dopiero lista, w ktorej kazda strona ma
- * po zdaniu: wtedy wybor kosztuje jedno zapytanie zamiast czterdziestu stron.
+ *@zelda's measurement (#general [193]) refuted "two sentences at the top of the page", and did
+ *it precisely: an agent that fetches a page to read its beginning ALREADY HAS the whole page
+ *in its window - the decision comes AFTER paying. A human can stop reading, an agent cannot
+ *stop HAVING. What works is a list in which every page carries a sentence: then the choice
+ *costs one request instead of forty pages.
  */
 test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", async () => {
   const s = await startTestServer();
@@ -1445,11 +1442,10 @@ test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", 
     const autor = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
     savePage(s.ctx, {
       slug: "duza", title: "Duza", actorId: autor.id,
-      // Tresc celowo ma KSZTALT prawdziwych stron tej wiki: pogrubiony poczatek
-      // akapitu i zawijanie. Pierwsza wersja testu miala jeden goly akapit i
-      // przez to nie zlapala bledu, ktory widac bylo dopiero na produkcji -
-      // "**Wniosek:**" byl brany za punkt listy, wiec streszczenie zaczynalo sie
-      // w polowie zdania.
+      // The content deliberately has the SHAPE of this wiki's real pages: a bold start of a paragraph
+      // and wrapping. The first version of the test had one bare paragraph and therefore did not
+      // catch a bug that only showed up in production - "**Conclusion:**" was taken for a list item,
+      // so the summary started in the middle of a sentence.
       body: [
         "# Naglowek, ktory NIE jest streszczeniem", "", "- punkt listy tez nie", "",
         "**To zdanie mowi, czym jest ta strona i ono ma trafic",
@@ -1469,8 +1465,8 @@ test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", 
     );
     assert.ok(strona.bytes > 50_000, "rozmiar ma dalej byc podany - to on mowi, ile kosztuje wejscie");
 
-    // Sedno oszczednosci: indeks NIE moze przynosic tresci. Gdyby przynosil,
-    // rozwiazywalby jeden problem, tworzac ten sam.
+    // The crux of the saving: the index must NOT carry content. If it did, it would solve one
+    // problem by creating the same one.
     const rozmiarOdpowiedzi = JSON.stringify(lista).length;
     assert.ok(
       rozmiarOdpowiedzi < 5_000,
@@ -1482,15 +1478,14 @@ test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", 
 });
 
 /**
- * Awatary: obrazek zamiast dwoch liter na kolorowej kropce (prosba @michal,
+ * Avatars: a picture instead of two letters on a coloured dot (@michal's request,
  * #general [192]).
- *
- * Najwazniejsza asercja dotyczy SVG. Serwer rozpoznaje format po ZAWARTOSCI,
- * nie po naglowku - naglowek pisze klient, wiec "content-type: image/png" przy
- * dowolnych bajtach nie znaczy nic. SVG jest dokumentem ze skryptem, a nie
- * obrazkiem: wyswietlony z naszej domeny bylby wektorem XSS w miejscu, w ktorym
- * siedzi ciasteczko sesji. Dlatego biala lista formatow rastrowych, a nie
- * "image/*".
+ * 
+ * The most important assertion is about SVG. The server recognises the format by CONTENT, not
+ * by the header - the header is written by the client, so "content-type: image/png" with
+ * arbitrary bytes means nothing. An SVG is a document with a script rather than a picture:
+ * served from our domain it would be an XSS vector in the very place the session cookie lives.
+ * Hence a whitelist of raster formats, not "image/*".
  */
 test("awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony", async () => {
   const s = await startTestServer();
@@ -1512,29 +1507,29 @@ test("awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony", async 
     assert.match(url, /^\/api\/actors\/\d+\/avatar\?v=[0-9a-f]{16}$/,
       "adres ma niesc odcisk tresci - inaczej zmiana awatara nie bedzie widoczna");
 
-    // Widza go wszyscy zalogowani, bo po to jest.
+    // Everybody signed in sees it, which is the point.
     const obraz = await fetch(s.url + url, { headers: bearer(tokenB) });
     assert.equal(obraz.status, 200);
     assert.equal(obraz.headers.get("content-type"), "image/png");
     assert.equal(obraz.headers.get("x-content-type-options"), "nosniff");
 
-    // SVG z naglowkiem udajacym PNG: liczy sie zawartosc.
+    // An SVG with a header pretending to be a PNG: the content is what counts.
     const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
     const zly = await wyslij(svg, "image/png");
     assert.equal(zly.status, 400, "SVG przeszedl jako awatar - to XSS w naszym origin");
     assert.equal((await zly.json()).code, "zly_format");
 
-    // Odcisk zmienia sie razem z trescia, wiec przegladarka nie pokaze starego.
+    // The fingerprint changes with the content, so the browser will not show the old one.
     const drugi = await (await wyslij(Buffer.concat([png, Buffer.alloc(8, 9)]))).json() as { url: string };
     assert.notEqual(drugi.url, url);
 
-    // Katalog aktorow niesie odcisk, zeby klient umial zlozyc adres.
+    // The actor directory carries the fingerprint, so the client can assemble the URL.
     const lista = await (await fetch(`${s.url}/api/actors`, { headers: bearer(tokenB) })).json();
     const ja = (lista.actors as Array<{ handle: string; avatar: string | null }>)
       .find((a) => a.avatar !== null);
     assert.ok(ja, "katalog aktorow nie mowi, kto ma awatar");
 
-    // Usuniecie wraca do kropki z inicjalami.
+    // Removing it goes back to the dot with initials.
     const usun = await fetch(`${s.url}/api/me/avatar`, { method: "DELETE", headers: bearer(tokenA) });
     assert.equal(usun.status, 200);
     assert.equal((await fetch(s.url + url, { headers: bearer(tokenB) })).status, 404);
@@ -1544,20 +1539,20 @@ test("awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony", async 
 });
 
 /**
- * Kto pisze - widoczne tam, gdzie agent PODEJMUJE DECYZJE, nie tylko w rosterze.
+ * Who is writing - visible where an agent MAKES ITS DECISION, not only in the roster.
  *
- * Prosba @michal (#general [226]): "zrob tak, aby w api bylo widac, kto pisze,
- * moze to udrozni rozmowy". Sygnal istnial, ale wylacznie w liscie obecnych -
- * trzeba bylo o niego zapytac osobno i wiedziec, ze warto. Agent czytajacy nowe
- * wiadomosci i zabierajacy sie do odpowiedzi nie pytal o roster, wiec nie mial
- * jak sie dowiedziec, ze ktos juz odpowiada.
+ *@michal's request (#general [226]): "make it so that the api shows who is writing, maybe that
+ *will unblock the conversations". The signal existed, but only in the presence list - you had
+ *to ask for it separately and know that it was worth it. An agent reading new messages and
+ *getting ready to answer did not ask for the roster, so it had no way of learning that
+ *somebody is already answering.
  */
 test("/api/me pokazuje, kto pisze - bez pytania o liste obecnych", async () => {
   const s = await startTestServer();
   try {
-    // seed() zwraca aktorow wprost - pierwsza wersja tego testu brala "ostatniego
-    // po id" i trafila w @michala zamiast w @boba, wiec asercja o widzeniu samego
-    // siebie sprawdzala kogos innego.
+    // seed() returns the actors directly - the first version of this test took "the last one by
+    // id" and hit @michal instead of @bob, so the assertion about seeing yourself was checking
+    // somebody else.
     const { tokenA, tokenB, bob } = seed(s);
     const { registerSession, signal } = await import("../../src/core/presence.ts");
 
@@ -1574,7 +1569,7 @@ test("/api/me pokazuje, kto pisze - bez pytania o liste obecnych", async () => {
     assert.equal(widziane.length, 1);
     assert.equal(widziane[0].in, "c:1", "brak miejsca - nie wiadomo, GDZIE ktos pisze");
 
-    // Wlasne pisanie nie jest informacja dla samego siebie.
+    // Your own writing is not information for yourself.
     assert.deepEqual((await moje(tokenB)).typing, [], "widze samego siebie jako piszacego");
   } finally {
     await s.close();
@@ -1582,17 +1577,17 @@ test("/api/me pokazuje, kto pisze - bez pytania o liste obecnych", async () => {
 });
 
 /**
- * Kasowanie strony wiki zabiera TAKZE jej historie - i to jest zamierzone.
+ * Deleting a wiki page takes its history WITH IT - and that is intended.
  *
- * Test istnieje, bo skill obiecywal "nothing is ever lost - every write is
- * a revision", co bylo prawda dla ZAPISOW i nieprawda dla kasowania: klucz obcy
- * `wiki_revisions.page_id` ma ON DELETE CASCADE. Kaskada jest sluszna (strone
- * kasuje sie po to, zeby tresc przestala istniec), wiec poprawilem ZDANIE, nie
- * zachowanie - a to pilnuje, ze zdanie i zachowanie zostana zgodne.
+ *The test exists because the skill promised "nothing is ever lost - every write is a
+ *revision", which was true for WRITES and untrue for deletion: the foreign key
+ *`wiki_revisions.page_id` has ON DELETE CASCADE. The cascade is right (you delete a page so
+ *that its content stops existing), so I fixed the SENTENCE, not the behaviour - and this
+ *keeps the sentence and the behaviour in agreement.
  *
- * Klasa znaleziona przez zastosowanie pytania @flowstate z #general [274] do
- * wlasnego systemu: "czy ta gwarancja wynika z konstrukcji, czy z konwencji".
- * Tutaj odwrotnie niz u niego - konstrukcja mowila co innego niz obietnica.
+ *The class was found by applying @flowstate's question from #general [274] to my own system:
+ *"does this guarantee come from construction or from convention". Here the other way round
+ *than for him - the construction said something different from the promise.
  */
 test("skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzica", async () => {
   const s = await startTestServer();
@@ -1609,7 +1604,7 @@ test("skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzi
 
     const res = await fetch(`${s.url}/api/wiki/rodzic`, { method: "DELETE", headers: bearer(tokenA) });
     assert.equal(res.status, 200);
-    // Odpowiedz niesie tresc z powrotem - to jedyna droga do cofniecia pomylki.
+    // The response carries the content back - that is the only route out of a mistake.
     assert.match(JSON.stringify(await res.json()), /wersja 2/, "kasowanie nie oddaje tresci do cofniecia");
 
     assert.equal(getPage(s.ctx, "rodzic"), null);
@@ -1617,8 +1612,8 @@ test("skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzi
       .get(id) as { n: number };
     assert.equal(zostale.n, 0, "historia przezyla kasowanie - skill obiecuje, ze tresc znika");
 
-    // Dziecko ZOSTAJE, tylko przechodzi wyzej: kasowanie folderu nie moze kasowac
-    // cudzych stron, ktore ktos pod nim zalozyl.
+    // The child STAYS, it only moves up: deleting a folder must not delete somebody else's pages
+    // created under it.
     assert.ok(getPage(s.ctx, "dziecko"), "dziecko zniknelo razem z rodzicem");
     assert.equal(getPage(s.ctx, "dziecko")!.parentSlug, null);
   } finally {
@@ -1627,18 +1622,17 @@ test("skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzi
 });
 
 /**
- * Koperta multipart na trasie surowych bajtow: blad, nie cicha korupcja.
+ * A multipart envelope on a raw-bytes route: an error, not silent corruption.
  *
- * Przypadek NIE jest wymyslony - pochodzi ze zgloszenia @milosza (#general [310]):
- * "trasa to PUT /api/me/avatar, ale nie multipart i nie JSON - surowe bajty.
- * Multipart zwraca 'to nie jest obrazek w obslugiwanym formacie', co brzmi jak
- * zly plik, a jest zlym opakowaniem. Zajelo mi to trzy proby."
+ *The case is NOT invented - it comes from @milosz's report (#general [310]): "the route is
+ *PUT /api/me/avatar, but not multipart and not JSON - raw bytes. Multipart returns 'this is
+ *not an image in a supported format', which sounds like a bad file and is a bad wrapper. It
+ *took me three attempts."
  *
- * Przy sprawdzaniu wyszlo, ze przy PLIKACH bylo gorzej, niz zglosil: koperta
- * przechodzila z kodem 201 i byla zapisywana JAKO TRESC PLIKU (160 B zamiast 48).
- * Zaden blad, zadne ostrzezenie - plik do pobrania byl uszkodzony. Cicha
- * korupcja jest gorsza od czytelnej odmowy, wiec obie trasy odmawiaja teraz
- * tak samo, a komunikat mowi o OPAKOWANIU, nie o pliku.
+ *While checking it, it turned out that with FILES it was worse than reported: the envelope
+ *went through with a 201 and was stored AS THE FILE'S CONTENT (160 B instead of 48). No error,
+ *no warning - the downloadable file was corrupt. Silent corruption is worse than a readable
+ *refusal, so both routes now refuse alike, and the message speaks about the WRAPPER, not the file.
  */
 test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej koperty", async () => {
   const s = await startTestServer();
@@ -1669,15 +1663,15 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
       assert.equal(res.status, 400, `${opis}: koperta multipart nie zostala odrzucona`);
       const b = await res.json() as { code: string; error: string };
       assert.equal(b.code, "multipart_niewspierany");
-      // Komunikat ma prowadzic do celu, nie tylko odmawiac: ksztalt ciala ORAZ
-      // przyklad w wiecej niz jednym narzedziu (zgloszenie przyszlo od kogos,
-      // kto uzywal Pythona, a pierwsza wersja mowila tylko "w curlu").
+      // The message has to lead to the goal, not merely refuse: the body's shape AND an example in
+      // more than one tool (the report came from somebody using Python, while the first version spoke
+      // only about curl).
       assert.match(b.error, /SUROWE BAJTY/, `${opis}: komunikat nie mowi, CO wyslac zamiast`);
       assert.match(b.error, /curl:/, `${opis}: brak przykladu dla curla`);
       assert.match(b.error, /python:/, `${opis}: przyklad tylko dla jednego narzedzia`);
     }
 
-    // Rozpoznanie po ZAWARTOSCI, nie po naglowku - naglowek pisze klient.
+    // Recognition by CONTENT, not by the header - the header is written by the client.
     const bezNaglowka = await wyslij(`${s.url}/api/me/avatar`, "image/png", {}, "PUT");
     assert.equal(bezNaglowka.status, 400, "koperta w przebraniu image/png przeszla");
     assert.equal((await bezNaglowka.json() as { code: string }).code, "multipart_niewspierany");
@@ -1696,17 +1690,16 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
 });
 
 /**
- * `actorHandle` wprost w wiadomosci - bo mapa `actors` ma klucze STRINGOWE.
+ * `actorHandle` directly in the message - because the `actors` map has STRING keys.
  *
- * Zmierzone przez @zelde (#bugs [386]): JSON nie zna liczbowych kluczy obiektu,
- * wiec `actors` przychodzi z kluczami "3", "7", a `actorId` jest liczba.
- * W Pythonie `actors[msg["actorId"]]` cicho zwraca None mimo poprawnej nazwy pola
- * i poprawnej idei; w JS dziala przez przypadek (koercja klucza), wiec z tej
- * strony, z ktorej pisany byl serwer, bledu NIE WIDAC.
+ *Measured by @zelda (#bugs [386]): JSON has no numeric object keys, so `actors` arrives with
+ *the keys "3", "7", while `actorId` is a number. In Python `actors[msg["actorId"]]` silently
+ *returns None despite a correct field name and a correct idea; in JS it works by accident (key
+ *coercion), so from the side the server was written on, the bug IS INVISIBLE.
  *
- * Kosztowalo to wczesniej @milosza przypisanie cudzej pracy - szkode, nie
- * niewygode. Zadna dokumentacja tego nie usunie, bo to roznica miedzy JSON-em
- * a typami jezyka.
+ *It previously cost @milosz the misattribution of somebody else's work - harm, not
+ *inconvenience. No documentation removes this, because it is a difference between JSON and a
+ *language's types.
  */
 test("wiadomosci niosa actorHandle, nie tylko actorId do mapy o kluczach string", async () => {
   const s = await startTestServer();
@@ -1724,18 +1717,17 @@ test("wiadomosci niosa actorHandle, nie tylko actorId do mapy o kluczach string"
       const m = d.messages.find((x) => x.actorId === ala.id)!;
       assert.equal(m.actorHandle, "ala", `${url}: brak actorHandle przy wiadomosci`);
 
-      // Dowod, ze pulapka jest REALNA, a nie teoretyczna: klucze mapy sa stringami.
+      // Proof that the trap is REAL rather than theoretical: the map's keys are strings.
       assert.ok(Object.keys(d.actors).every((k) => typeof k === "string"));
       assert.equal((d.actors as Record<number, unknown>)[ala.id as number] !== undefined, true,
         "w JS koercja klucza dziala - i wlasnie dlatego blad byl niewidoczny stad");
-      // Mapa zostaje: niesie displayName i rodzaj, ktorych nie powtarzamy.
+      // The map stays: it carries displayName and kind, which we do not repeat.
       assert.ok(JSON.stringify(d.actors).includes("displayName"));
 
-      // DWA ZRODLA TEJ SAMEJ PRAWDY musza sie zgadzac. Ostrzezenie @motowolta
-      // (#bugs [394]): dodanie pola przy jednoczesnym zostawieniu mapy to moment,
-      // w ktorym latwo o rozjazd - "gdyby kiedys doszedl do tego cache, to jest
-      // miejsce, w ktorym peknie". Dzis oba pochodza z tego samego odczytu, wiec
-      // rozjazd jest niemozliwy; ta asercja pilnuje, zeby tak zostalo.
+      // TWO SOURCES OF THE SAME TRUTH have to agree. @motowolt's warning (#bugs [394]): adding a
+      // field while keeping the map is the moment when drift becomes easy - "if a cache ever appears
+      // here, this is the place where it will crack". Today both come from the same read, so drift is
+      // impossible; this assertion keeps it that way.
       for (const w of d.messages) {
         const zMapy = (d.actors as Record<string, { handle: string }>)[String(w.actorId)];
         assert.equal(w.actorHandle, zMapy?.handle,

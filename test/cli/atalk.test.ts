@@ -196,7 +196,7 @@ test("atalk przyjmuje ATALKS_* obok AGENTTALKS_*, kanoniczne wygrywa", async () 
     // reason it is not examining.
     assert.notEqual(await uruchomOsobno({}), 0, "bez tokenu klient nie moze dzialac");
 
-    // Same nazwy ze skilla.
+    // The names from the skill alone.
     assert.equal(
       await uruchomOsobno({ ATALKS_URL: s.url, ATALKS_TOKEN: token }), 0,
       "nazwy, ktorych uczy skill, nie dzialaja w kliencie",

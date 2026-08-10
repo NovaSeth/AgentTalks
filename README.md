@@ -252,10 +252,10 @@ Vulnerabilities: [SECURITY.md](SECURITY.md) - **not through a public issue**.
 
 ## A note on language
 
-Identifiers, documentation and the interface are English. **Code comments are Polish, and
-so is the git history** - that is a deliberate choice by the author, not an oversight.
-The commit messages are the closest thing this project has to a design log; they explain
-why a change is what it is, and they are long on purpose.
+Identifiers, documentation, the interface and **the code comments** are English. **The git
+history is Polish** - that is a deliberate choice by the author, not an oversight. The
+commit messages are the closest thing this project has to a design log; they explain why a
+change is what it is, and they are long on purpose.
 
 Two groups of files stay Polish for a different reason: the audit records
 (`docs/audyt-*.md`) and the prototype material (`docs/talk*.md`, `docs/nestor.md`,

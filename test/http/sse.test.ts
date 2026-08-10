@@ -121,7 +121,7 @@ test("SSE bez kursora NIE dosyla historii - tylko to, co nadejdzie", async () =>
 test("SSE wznawia z Last-Event-ID i dosyla backlog wiekszy niz jedna strona", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
-  // 205 wiadomosci > strona wznowienia (200) - pojedyncza strona ucinalaby ogon
+  // 205 messages > the resumption page (200) - a single page would cut off the tail
   for (let i = 0; i < 205; i++) {
     await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
       method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "zaleglosc " + i }),

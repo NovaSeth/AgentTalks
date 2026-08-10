@@ -669,8 +669,8 @@ test("talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci", 
       return (r.result as { content: Array<{ text: string }> }).content.map((x) => x.text).join("\n");
     };
 
-    // Pusta skrzynka tez musi niesc sygnal - agent w petli czesciej dostaje
-    // "nic nowego" niz cokolwiek innego.
+    // An empty inbox has to carry the signal too - an agent in a loop gets "nothing new"
+    // more often than anything else.
     assert.match(await czytaj({ afterId: 0 }), /\[schemat\] talk_read: /);
 
     postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: "cos" });

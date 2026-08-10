@@ -1,4 +1,4 @@
-/** Testy modulow z feedbacku #nextIteration: dzierzawy, pliki, wake, digest,
+/** Tests for the modules from the #nextIteration feedback: leases, files, wake, the digest,
  *  wzmianki, piny, zywotnosc aktora. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -85,7 +85,7 @@ test("nazwa zasobu ze spacja jest odrzucona", () => {
   assert.throws(() => acquire(ctx, { resource: "zly zasob", actorId: ala.id }), /zasobu/);
 });
 
-// --- pliki -----------------------------------------------------------------
+// --- files -----------------------------------------------------------------
 
 const tmpFiles = () => mkdtempSync(join(tmpdir(), "at-files-"));
 
@@ -126,9 +126,9 @@ test("burn: plik znika po pobraniu przez nie-autora, autor nie spala", () => {
     actorId: ala.id, conversationId: dm.id, name: "jednorazowy.txt",
     data: Buffer.from("x"), maxBytes: 1024, burn: true,
   });
-  readFile(ctx, file.id, ala.id);                    // autor - bez spalenia
+  readFile(ctx, file.id, ala.id);                    // the author - without burning it
   assert.ok(getFileInfo(ctx, file.id, bob.id));
-  readFile(ctx, file.id, bob.id);                    // nie-autor - spala
+  readFile(ctx, file.id, bob.id);                    // a non-author - burns it
   assert.equal(getFileInfo(ctx, file.id, bob.id), null);
 });
 
@@ -489,7 +489,7 @@ test("wiki: slug kolidujacy z trasa (search) jest odrzucany", async () => {
     () => savePage(ctx, { slug: "search", title: "S", body: "x", actorId: a.id }),
     /zarezerwowana/,
   );
-  assert.equal(getPage(ctx, "search"), null); // strona nie powstala
+  assert.equal(getPage(ctx, "search"), null); // the page was not created
 });
 
 test("wiki drzewo: podstrona, przenoszenie, undefined nie rusza polozenia", async () => {
@@ -521,7 +521,7 @@ test("wiki drzewo: cykl (pod soba / pod potomkiem) jest odrzucany", async () => 
     () => savePage(ctx, { slug: "a", title: "A", body: "x", actorId: a.id, parentSlug: "b" }),
     /pod soba|potomkiem/,
   );
-  // rodzic musi istniec
+  // the parent has to exist
   assert.throws(
     () => savePage(ctx, { slug: "c", title: "C", body: "x", actorId: a.id, parentSlug: "nie-ma" }),
     /nie ma strony/,
@@ -533,7 +533,7 @@ test("wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie", a
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   savePage(ctx, { slug: "notatki", title: "Notatki", body: "od ali", actorId: a.id });
-  // autor ma zero (wlasny zapis przesuwa znacznik), bob widzi jedna cudza rewizje
+  // the author has zero (their own write moves the marker), bob sees one revision by somebody else
   assert.equal(listPages(ctx, a.id)[0].unseen, 0);
   assert.equal(listPages(ctx, b.id)[0].unseen, 1);
   markPageSeen(ctx, "notatki", b.id);
@@ -543,7 +543,7 @@ test("wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie", a
   assert.equal(listPages(ctx, b.id)[0].unseen, 1);
   assert.equal(listPages(ctx, a.id)[0].unseen, 0);
   // bob's edit: his marker goes to the end (0), while ala sees somebody else's revision
-  markPageSeen(ctx, "notatki", b.id); // Bob nadraza zaleglosc, zanim pisze
+  markPageSeen(ctx, "notatki", b.id); // Bob catches up on the backlog before writing
   savePage(ctx, { slug: "notatki", title: "Notatki", body: "v3 od boba", actorId: b.id });
   assert.equal(listPages(ctx, b.id)[0].unseen, 0);
   assert.equal(listPages(ctx, a.id)[0].unseen, 1);
@@ -592,7 +592,7 @@ test("news: aktor dostaje nowosci dokladnie raz na wersje tresci", async () => {
   const { firstConnectNews, newsHash } = await import("../../src/core/news.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
-  if (!newsHash()) return; // srodowisko bez NEWS.md - mechanizm spi
+  if (!newsHash()) return; // an environment with no NEWS.md - the mechanism sleeps
   const first = firstConnectNews(ctx, a.id);
   assert.ok(first && first.text.length > 0 && first.prompt.length > 0);
   assert.equal(firstConnectNews(ctx, a.id), null, "nowosci podane drugi raz temu samemu aktorowi");

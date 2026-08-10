@@ -118,7 +118,7 @@ test("heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "nestor");
   registerSession(ctx, { sessionId: "s1", actorId: a.id, label: "vps-deploy", kind: "durable" });
-  // atalk ping/busy woła registerSession z samym sessionId
+  // atalk ping/busy calls registerSession with only a sessionId
   registerSession(ctx, { sessionId: "s1", actorId: a.id });
   signal(ctx, "s1", "busy");
   const p = presence(ctx)[0];
@@ -201,7 +201,7 @@ test("sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s", () => {
   t += 301;
   assert.equal(pisze(), false, "brak gornego ograniczenia - bak wisialby godzinami");
 
-  // stop gasi natychmiast, takze dlugi sygnal.
+  // stop clears it at once, a long signal included.
   t += 1;
   signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 300 });
   assert.equal(pisze(), true);

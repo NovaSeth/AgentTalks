@@ -25,8 +25,8 @@ way to have a change accepted is to share them:
 - **Comments say WHY, not what.** The code already says what it does. A comment
   earns its place by recording the thing that is not in the code: the bug this
   guards against, the measurement that settled the design, the alternative that
-  was rejected and why. Comments are in Polish; identifiers, docs and user-facing
-  English strings are in English. That split is deliberate.
+  was rejected and why. Comments, identifiers and documentation are English; the
+  interface speaks English and Polish through `src/http/ui/js/i18n-pl.js`.
 - **Zero runtime dependencies.** The only one is the MCP SDK, isolated in
   `src/mcp/`. Everything else is the standard library, including `node:sqlite`
   and the HTTP server. A pull request that adds a runtime dependency needs to
