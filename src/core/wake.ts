@@ -1,21 +1,21 @@
 /**
- * Wake: trzeci poziom doreczania, dla agentow, ktorych akurat NIE MA.
+ * Wake: the third level of delivery, for agents who are NOT AROUND.
  *
- * Poziomy doreczania w AgentTalks:
- *   1. SSE        - agent trzyma polaczenie i dostaje push,
- *   2. long-poll  - agent w petli pyta "cos nowego?" i czeka,
- *   3. wake       - agenta nie ma; serwer puka w jego webhook, a TAMTA strona
- *                   decyduje, czy i jak go obudzic (np. most w stylu Nestora
- *                   startuje sesje agenta).
+ * The delivery levels in AgentTalks:
+ *   1. SSE        - the agent holds a connection and receives a push,
+ *   2. long-poll  - the agent asks "anything new?" in a loop and waits,
+ *   3. wake       - the agent is not there; the server knocks on its webhook, and THAT
+ *                   side decides whether and how to wake it (a Nestor-style bridge, for
+ *                   instance, starts the agent's session).
  *
- * To generalizuje `mode=task` z prototypu: tam budzenie dzialalo wylacznie dla
- * sesji mostu Nestora i odpowiadalo PODSZYWAJAC SIE pod cel. Tutaj kazdy aktor
- * moze zarejestrowac wlasny punkt budzenia, a odpowiedz wraca jego wlasnym tokenem.
+ * This generalises `mode=task` from the prototype: there, waking worked only for the
+ * Nestor bridge's session and answered by IMPERSONATING the target. Here every actor can
+ * register its own wake-up point, and the answer comes back under its own token.
  *
- * Kiedy budzimy: wiadomosc w DM/grupie, wzmianka, albo kanal z notify=all.
- * Kogo NIE budzimy: autora, aktorow z zywym polaczeniem SSE (dostana push),
- * wylaczonych po serii porazek, oraz czesciej niz raz na WAKE_MIN_INTERVAL.
- * Ladunek jest podpisany HMAC-em, zeby odbiorca mogl odrzucic podrobione pukniecia.
+ * When we wake: a message in a DM/group, a mention, or a channel with notify=all.
+ * Whom we do NOT wake: the author, actors with a live SSE connection (they get a push),
+ * those switched off after a run of failures, and anybody more often than once per WAKE_MIN_INTERVAL.
+ * The payload is HMAC-signed so the recipient can reject forged knocks.
  */
 import { createHmac, randomBytes } from "node:crypto";
 import { request as httpRequest } from "node:http";
@@ -39,8 +39,8 @@ export type WakeConfig = {
   lastAt: number | null;
 };
 
-/** Rejestracja punktu budzenia. Sekret generuje serwer i pokazuje RAZ -
- *  ta sama zasada co przy tokenach. */
+/** Registering a wake-up point. The server generates the secret and shows it ONCE - the
+ *  same rule as for tokens. */
 export function setWake(
   ctx: Ctx,
   actorId: number,
@@ -51,11 +51,11 @@ export function setWake(
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     throw new Error("wake_target musi byc adresem http(s)");
   }
-  // SSRF: serwer sam wykona POST na ten adres, wiec aktor moglby zmusic go do
-  // pukania w uslugi wewnetrzne (metadata chmury 169.254.169.254, baza, panel na
-  // localhost). Blokujemy adresy lokalne i prywatne. Wyjatek allowLoopback jest
-  // WYLACZNIE dla mostow na tej samej maszynie i wymaga jawnej zgody admina
-  // w konfiguracji instancji - domyslnie zamkniete.
+  // SSRF: the server performs the POST to this address itself, so an actor could make it
+  // knock on internal services (cloud metadata at 169.254.169.254, a database, a panel on
+  // localhost). We block local and private addresses. The allowLoopback exception is ONLY
+  // for bridges on the same machine and requires the admin's explicit consent in the
+  // instance configuration - closed by default.
   assertPublicHost(url.hostname, opts.allowLoopback === true);
   const secret = randomBytes(24).toString("base64url");
   ctx.db
@@ -67,21 +67,21 @@ export function setWake(
   return { config: getWake(ctx, actorId)!, secret };
 }
 
-/** Odrzuca adresy, na ktore serwer nie ma prawa strzelac w cudzym imieniu:
- *  pętla zwrotna, sieci prywatne (RFC 1918), link-local (w tym 169.254.169.254 -
- *  endpoint metadanych chmury), IPv6 ULA/loopback. Nazwy nie-IP przechodza:
- *  rozwiazanie DNS moze i tak wskazac adres prywatny, ale pelna ochrona (rebinding)
- *  wymaga sprawdzenia PRZY strzale, nie przy rejestracji - to jest pierwsza,
- *  tania warstwa, ktora odsiewa oczywiste przypadki. */
+/** Rejects addresses the server has no business firing at on somebody else's behalf:
+ *  loopback, private networks (RFC 1918), link-local (including 169.254.169.254 - the
+ *  cloud metadata endpoint), IPv6 ULA/loopback. Non-IP names pass: DNS resolution may
+ *  still point at a private address, but full protection (rebinding) requires a check AT
+ *  FIRING TIME, not at registration - this is the first, cheap layer that filters out the
+ *  obvious cases. */
 function assertPublicHost(hostname: string, allowLoopback: boolean): void {
   const h = hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (allowLoopback && (h === "127.0.0.1" || h === "::1" || h === "localhost")) return;
-  // Nazwa nie-IP przechodzi TUTAJ i jest sprawdzana dopiero przy strzale
-  // (guardedLookup pina zwalidowany adres, wiec nie ma okna na rebinding).
-  // Adres podany LITERALEM musi zostac rozstrzygniety tu, bo dla literalu
-  // node:net w ogole nie wola `lookup` - to byla ta dziura: guardedLookup nigdy
-  // nie widzial `http://127.0.0.1/`, a lista wzorcow ponizej byla wtedy jedyna
-  // obrona i miala inne reguly niz isBlockedIp. Teraz reguly sa jedne.
+  // A non-IP name passes HERE and is checked only at firing time (guardedLookup pins the
+  // validated address, so there is no window for rebinding).
+  // An address given as a LITERAL has to be settled here, because for a literal node:net
+  // never calls `lookup` at all - that was the hole: guardedLookup never saw
+  // `http://127.0.0.1/`, and the pattern list below was then the only defence, with rules
+  // different from isBlockedIp. Now the rules are one set.
   if (h === "localhost" || isBlockedIp(h, allowLoopback)) {
     throw new Error(
       `wake_target ${hostname} wskazuje adres lokalny/prywatny - serwer nie bedzie ` +
@@ -99,10 +99,10 @@ export function clearWake(ctx: Ctx, actorId: number): void {
     .run(actorId);
 }
 
-/** Czy aktor da sie obudzic: ma zarejestrowany, niewylaczony webhook. To DRUGA os
- *  obok zywotnosci (m487 Nestor/myday): aktor moze byc zywy-ale-nieobudzalny albo
- *  nieobecny-ale-obudzalny. Wysylka do nieobecnego I nieobudzalnego adresata musi
- *  to powiedziec PRZY ZAPISIE - cicha wysylka wyglada jak sukces. */
+/** Whether an actor can be woken: it has a registered, not-switched-off webhook. This is a
+ *  SECOND axis next to liveness (m487 Nestor/myday): an actor can be alive-but-unwakeable
+ *  or absent-but-wakeable. Sending to an addressee who is both absent AND unwakeable has to
+ *  say so AT WRITE TIME - a silent send looks like success. */
 export function isWakeable(ctx: Ctx, actorId: number): boolean {
   const r = ctx.db
     .prepare("SELECT wake_kind, wake_target, wake_disabled_at FROM actors WHERE id = ?")
@@ -133,15 +133,15 @@ export function getWake(ctx: Ctx, actorId: number): WakeConfig | null {
 
 export type WakeReason = "dm" | "mention" | "notify";
 
-/** Podpis ladunku - eksportowany, zeby odbiorca (i test) liczyl go identycznie. */
+/** The payload signature - exported so the recipient (and the test) computes it identically. */
 export function signWake(secret: string, body: string): string {
   return createHmac("sha256", secret).update(body).digest("hex");
 }
 
 /**
- * Podpina wake do szyny. deliver jest wstrzykiwane w testach; domyslnie httpDeliver
- * z autorytatywna kontrola SSRF przy strzale. allowLoopback (z konfiguracji) luzuje
- * ja tylko dla mostow na tej samej maszynie. Zwraca funkcje odpinajaca.
+ * Attaches wake to the bus. `deliver` is injected in tests; by default httpDeliver with the
+ * authoritative SSRF check at firing time. allowLoopback (from the configuration) relaxes it
+ * only for bridges on the same machine. Returns a detach function.
  */
 export function registerWake(
   ctx: Ctx,
@@ -195,8 +195,8 @@ export function registerWake(
       const now = ctx.now();
       if (row.wake_last_at && now - row.wake_last_at < WAKE_MIN_INTERVAL) continue;
 
-      // Znacznik czasu ustawiany PRZED strzalem: dlawienie ma dzialac takze
-      // wtedy, gdy webhook odpowiada wolno i kolejne wiadomosci przychodza
+      // The timestamp is set BEFORE firing: throttling has to work also when the webhook answers
+      // slowly and further messages arrive before the first knock comes back.
       // zanim pierwsze pukniecie wroci.
       ctx.db.prepare("UPDATE actors SET wake_last_at = ? WHERE id = ?").run(now, actorId);
 
@@ -222,17 +222,17 @@ export function registerWake(
 }
 
 /**
- * Czy IP nalezy do sieci, w ktora serwer nie ma prawa strzelac. To jest
- * AUTORYTATYWNA kontrola SSRF: dziala na rozwiazanym adresie, nie na nazwie,
- * wiec broni takze przed DNS rebinding (nazwa publiczna przy rejestracji,
- * prywatna przy strzale). Eksportowane do testu.
+ * Whether an IP belongs to a network the server has no business firing at. This is the
+ * AUTHORITATIVE SSRF check: it works on the resolved address, not on a name, so it also
+ * defends against DNS rebinding (a public name at registration, a private one at firing
+ * time). Exported for the test.
  */
 /**
- * Normalizacja adresu przed decyzja. Parser URL zwraca adresy IPv4-mapped IPv6
- * w postaci SZESNASTKOWEJ (`new URL("http://[::ffff:169.254.169.254]/")` daje
- * hostname `[::ffff:a9fe:a9fe]`), wiec wzorzec dopasowujacy tylko zapis kropkowy
- * przepuszczal endpoint metadanych chmury. Sprowadzamy oba zapisy do IPv4 -
- * inaczej "ten sam adres" ma dwie reprezentacje i tylko jedna jest sprawdzana.
+ * Normalising an address before deciding. The URL parser returns IPv4-mapped IPv6
+ * addresses in HEXADECIMAL form (`new URL("http://[::ffff:169.254.169.254]/")` gives the
+ * hostname `[::ffff:a9fe:a9fe]`), so a pattern matching only dotted notation let the cloud
+ * metadata endpoint through. We reduce both notations to IPv4 - otherwise "the same
+ * address" has two representations and only one of them is checked.
  */
 function doIpv4(ip: string): string {
   const s = ip.replace(/^\[|\]$/g, "").toLowerCase();
@@ -246,9 +246,9 @@ function doIpv4(ip: string): string {
   return s;
 }
 
-/** Czy adres jest prywatny/lokalny. JEDNO miejsce z regulami - i przy rejestracji
- *  webhooka, i przy strzale. Dwie listy regul w dwoch miejscach juz raz sie
- *  rozjechaly (100.64/10 i 0.0.0.0/8 byly tylko w jednej z nich). */
+/** Whether an address is private/local. ONE place with the rules - both at webhook
+ *  registration and at firing time. Two lists of rules in two places had already drifted
+ *  apart once (100.64/10 and 0.0.0.0/8 were only in one of them). */
 export function isBlockedIp(ip: string, allowLoopback = false): boolean {
   const s = doIpv4(ip);
   const loopback = /^127\./.test(s) || s === "::1";
@@ -266,9 +266,9 @@ export function isBlockedIp(ip: string, allowLoopback = false): boolean {
   );
 }
 
-/** lookup dla node:http, ktory ODMAWIA polaczenia na adres prywatny i PINUJE
- *  socket do zwalidowanego IP - ten sam adres jest sprawdzony i uzyty, wiec
- *  nie ma okna TOCTOU na rebinding. */
+/** A lookup for node:http that REFUSES a connection to a private address and PINS the
+ *  socket to the validated IP - the same address is checked and used, so there is no TOCTOU
+ *  window for rebinding. */
 function guardedLookup(allowLoopback: boolean): typeof dnsLookup {
   return ((hostname: string, options: unknown, callback: unknown) => {
     const cb = (typeof options === "function" ? options : callback) as
@@ -290,11 +290,11 @@ function guardedLookup(allowLoopback: boolean): typeof dnsLookup {
 }
 
 /**
- * Dostarczenie webhooka przez node:http/https zamiast fetch, bo daje dwie rzeczy,
- * ktorych fetch nie da bez zaleznosci: (a) wlasny lookup pinujacy do zwalidowanego
- * IP (obrona przed rebinding), (b) BRAK automatycznego podazania za 3xx - webhook
- * nie moze przekierowac serwera na adres wewnetrzny, bo przekierowanie jest po
- * prostu traktowane jak porazka.
+ * Delivering the webhook through node:http/https rather than fetch, because it gives two
+ * things fetch cannot without a dependency: (a) a custom lookup pinning to the validated IP
+ * (defence against rebinding), (b) NO automatic following of 3xx - a webhook must not
+ * redirect the server to an internal address, because a redirect is simply treated as a
+ * failure.
  */
 function httpDeliver(
   target: string,
@@ -323,8 +323,8 @@ function httpDeliver(
         timeout: WAKE_TIMEOUT_MS,
       },
       (res) => {
-        // node:http NIE podaza za redirectami; 3xx to dla nas porazka, nie okazja
-        // do skierowania serwera gdzie indziej. Sukces = tylko 2xx.
+        // node:http does NOT follow redirects; a 3xx is a failure for us, not an opportunity to
+        // send the server somewhere else. Success = 2xx only.
         const ok = (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300;
         res.resume(); // odsacz cialo, zeby socket sie zwolnil
         resolve(ok);
@@ -354,8 +354,8 @@ function onFailure(ctx: Ctx, actorId: number, handle: string): void {
   if (row.wake_failures < WAKE_MAX_FAILURES) return;
 
   ctx.db.prepare("UPDATE actors SET wake_disabled_at = ? WHERE id = ?").run(ctx.now(), actorId);
-  // Wylaczenie ma zostawic slad tam, gdzie wlasciciel go zobaczy: w jego DM.
-  // Ciche wylaczenie = aktor mysli, ze jest budzony, a nie jest.
+  // Switching it off has to leave a trace where the owner will see it: in their DM.
+  // A silent switch-off = the actor thinks it is being woken, and it is not.
   const system = getActorByHandle(ctx, "system");
   if (!system) return;
   try {

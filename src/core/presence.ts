@@ -1,35 +1,35 @@
 /**
- * Obecnosc.
+ * Presence.
  *
- * Dwa sygnaly, celowo rozdzielone - to jedna z lepszych decyzji prototypu:
+ * Two signals, deliberately kept apart - one of the prototype's better decisions:
  *
- *   typing - czlowiek faktycznie stuka w klawiature w UI (gasnie po 7 s)
- *   busy   - sesja uzyla narzedzia (gasnie po 30 s)
+ *   typing - a human really is tapping the keyboard in the UI (clears after 7 s)
+ *   busy   - the session used a tool (clears after 30 s)
  *
- * Sygnal "pracuje" MUSI pochodzic z uzycia narzedzia, nigdy z pollowania API.
- * Inaczej otwarta karta przegladarki udaje prace, a wtedy wskaznik nie niesie
- * zadnej informacji.
+ * The "working" signal MUST come from tool use, never from polling the API. Otherwise an
+ * open browser tab pretends to be work, and then the indicator carries no information at
+ * all.
  *
- * Rodzaj sesji jest DEKLAROWANY przy rejestracji, nie zgadywany z ksztaltu nazwy.
- * Prototyp zgadywal po prefiksie ("bs/") i sufiksie ("/oneshot"), przez co wcielenia
- * subagentow swiecily sie jako aktywne dziesiec minut po smierci.
+ * The kind of session is DECLARED at registration, not guessed from the shape of a name.
+ * The prototype guessed from a prefix ("bs/") and a suffix ("/oneshot"), which made
+ * subagent incarnations glow as active ten minutes after they died.
  */
 import type { Ctx } from "./ctx.ts";
 import { notFound } from "./errors.ts";
 
 /**
- * Ile sekund zyje sygnal "pisze" bez odswiezenia.
+ * How many seconds the "typing" signal lives without a refresh.
  *
- * Siedem sekund jest dobre dla CZLOWIEKA: kazde uderzenie w klawisz odswieza
- * sygnal, wiec bak nika chwile po tym, jak ktos przestal pisac. Dla AGENTA jest
- * bezuzyteczne - agent "pisze" jednym ruchem, ktory trwa kilkadziesiat sekund
- * albo minute, i nie ma czego odswiezac po drodze. Zmierzone na tej instancji:
- * 8 z 26 sesji ustawilo sygnal KIEDYKOLWIEK, wiekszosc z nich to moje proby.
- * Funkcja istniala i byla nieuzywalna dla polowy uczestnikow tego kanalu.
+ * Seven seconds is right for a HUMAN: every keystroke refreshes the signal, so the bubble
+ * goes out shortly after somebody stops writing. For an AGENT it is useless - an agent
+ * "writes" in one move that lasts tens of seconds or a minute, with nothing to refresh
+ * along the way. Measured on this instance: 8 of 26 sessions set the signal EVER, and most
+ * of those were my own attempts. The feature existed and was unusable for half of this
+ * channel's participants.
  *
- * Dlatego sygnal moze nieść WLASNY czas zycia (do TYPING_MAX). Nie grozi to
- * wiszacymi bakami, bo wyslanie wiadomosci gasi sygnal natychmiast - a stop
- * jest jednym wywolaniem.
+ * That is why the signal can carry its OWN lifetime (up to TYPING_MAX). This does not risk
+ * stuck bubbles, because sending a message clears the signal immediately - and stop is one
+ * call.
  */
 export const TYPING_TTL = 7;
 export const TYPING_MAX = 300;
@@ -37,12 +37,12 @@ export const BUSY_TTL = 30;
 export const ONLINE_WINDOW = 900;
 export const STALE_DURABLE = 600;
 export const STALE_EPHEMERAL = 60;
-// Sesja trwala bez heartbeatu dluzej niz to znika z obecnosci. Feedback z
-// #nextIteration: lista uczestnikow prototypu rosla monotonicznie i nowa sesja
-// czytala 14 martwych rozmowcow przy 3 zywych. Klucz do bezpieczenstwa tej
-// operacji: znika WPIS OBECNOSCI, nie tozsamosc - aktor zostaje w rosterze
-// (tabela actors) i jego etykieta nie ma jak sie "wyprowadzic", co bylo bledem
-// prototypu przy kasowaniu po bezczynnosci.
+// A durable session without a heartbeat for longer than this disappears from presence.
+// Feedback from #nextIteration: the prototype's participant list grew monotonically and a
+// new session read 14 dead participants next to 3 live ones. The key to this operation
+// being safe: the PRESENCE ROW disappears, not the identity - the actor stays in the roster
+// (the actors table) and its label has no way to "move out", which was the prototype's bug
+// when it deleted on idleness.
 export const PRESENCE_RETENTION = 7 * 24 * 3600;
 
 export type SessionKind = "durable" | "ephemeral";
@@ -60,7 +60,7 @@ export type PresenceRow = {
   online: boolean;
   stale: boolean;
   typing: boolean;
-  /** Gdzie pisze: "c:<convId>" / "w:<slug wiki>" / null (sygnal bez miejsca). */
+  /** Where it is writing: "c:<convId>" / "w:<wiki slug>" / null (a signal with no place). */
   typingIn: string | null;
   busy: boolean;
 };
@@ -79,15 +79,15 @@ export function registerSession(
   const exists = ctx.db.prepare("SELECT id FROM actors WHERE id = ?").get(input.actorId);
   if (!exists) throw notFound("aktor", `nie ma aktora ${input.actorId}`);
   const now = ctx.now();
-  // Stan PRZED zapisem - do rozstrzygniecia, czy ktokolwiek zobaczy roznice.
+  // The state BEFORE the write - to decide whether anybody will see a difference.
   const przed = ctx.db
     .prepare("SELECT label, kind, ended_at FROM sessions WHERE id = ?")
     .get(input.sessionId) as { label: string; kind: string; ended_at: number | null } | undefined;
-  // COALESCE(excluded, sessions): pola PODANE nadpisuja, POMINIETE zostaja.
-  // `atalk ping`/`busy`/`typing` wolaja to samo POST /api/sessions z samym
-  // sessionId - bez tego heartbeat kasowal etykiete ustawiona przez `atalk me`
-  // (label spadal do sessionId.slice(0,8), kind/cwd/host do domyslnych), przez
-  // co rozmowca co chwile zmienial nazwe w obecnosci.
+  // COALESCE(excluded, sessions): fields that are GIVEN overwrite, fields OMITTED stay.
+  // `atalk ping`/`busy`/`typing` call the same POST /api/sessions with only a sessionId -
+  // without this the heartbeat erased the label set by `atalk me` (label fell back to
+  // sessionId.slice(0,8), kind/cwd/host to their defaults), so a participant kept changing
+  // name in presence.
   ctx.db
     .prepare(
       `INSERT INTO sessions(id, actor_id, label, kind, cwd, host, started_at, last_seen_at)
@@ -108,18 +108,18 @@ export function registerSession(
       cwd: input.cwd ?? null,
       host: input.host ?? null,
       now,
-      // przy UPDATE: null = "nie ruszaj tego pola"
+      // on UPDATE: null = "leave this field alone"
       labelOrNull: input.label ?? null,
       kindOrNull: input.kind ?? null,
     });
   sprzatnijMartweSesje(ctx);
 
-  // Rozgloszenie TYLKO przy realnej zmianie. Interfejs bije heartbeat co 30 s
-  // tym samym wywolaniem, wiec bezwarunkowa publikacja oznaczala, ze przy N
-  // otwartych sesjach kazda z nich co 30 s budzila wszystkie pozostale: ruch
-  // rosnie z kwadratem liczby uczestnikow, a tresc zdarzenia jest za kazdym
-  // razem ta sama ("cos w obecnosci"). Samo odswiezenie znacznika czasu nie
-  // zmienia niczego, co ktokolwiek widzi - przez pierwsze 60 s od ostatniego
+  // Broadcast ONLY on a real change. The interface beats a heartbeat every 30 s with this
+  // same call, so unconditional publication meant that with N open sessions each of them woke
+  // all the others every 30 s: traffic grows with the square of the number of participants,
+  // and the event's content is the same every time ("something in presence"). Refreshing a
+  // timestamp alone changes nothing anybody can see - for the first 60 s after the last
+  // contact the session is "online" regardless.
   // kontaktu sesja i tak jest "online".
   const nowaSesja = przed === undefined;
   const wrocila = przed?.ended_at != null;
@@ -130,10 +130,10 @@ export function registerSession(
   }
 }
 
-/** Sprzatanie martwych sesji. Tabela `sessions` rosla bez konca (kazde
- *  uruchomienie CLI zostawialo wiersz), a `presence()` czyta ja W CALOSCI przy
- *  kazdym odczycie - wiec koszt listy obecnych rosl z historia uruchomien, a nie
- *  z liczba obecnych. Zamiast osobnego zadania: sprzatamy leniwie, przy zapisie. */
+/** Cleaning up dead sessions. The `sessions` table grew without bound (every CLI run left a
+ *  row), and `presence()` reads it IN FULL on every read - so the cost of the presence list
+ *  grew with the history of runs rather than with the number of people present. Instead of
+ *  a separate job: we clean up lazily, on write. */
 const MARTWA_SESJA_SEK = 7 * 24 * 3600;
 function sprzatnijMartweSesje(ctx: Ctx): void {
   ctx.db.prepare("DELETE FROM sessions WHERE COALESCE(ended_at, last_seen_at) < ?")
@@ -151,9 +151,9 @@ export function setDoing(ctx: Ctx, sessionId: string, doing: string | null): voi
   ctx.bus.publish(allActorIds(ctx), { type: "presence" });
 }
 
-/** Sygnal typing/busy. Dla typing mozna podac MIEJSCE ("c:<convId>" / "w:<slug>")
- *  oraz stop=true, gdy autor rozmyslil sie i kuleczka ma zniknac od razu
- *  (zamiast czekac na TTL). */
+/** The typing/busy signal. For typing you can give a PLACE ("c:<convId>" / "w:<slug>") and
+ *  stop=true, when the author changed their mind and the bubble should disappear at once
+ *  (rather than wait for the TTL). */
 export function signal(
   ctx: Ctx,
   sessionId: string,
@@ -167,9 +167,9 @@ export function signal(
         .prepare("UPDATE sessions SET typing_at = NULL, typing_in = NULL, typing_sec = NULL, last_seen_at = ? WHERE id = ?")
         .run(now, sessionId);
     } else {
-      // Wlasny czas zycia zapisujemy OBOK znacznika, nie przez przesuniecie
-      // znacznika w przyszlosc: inaczej "kiedy zaczal pisac" i "jak dlugo to
-      // wazne" bylyby ta sama liczba i nie dalo by sie odroznic swiezego
+      // We store a custom lifetime NEXT TO the timestamp rather than by pushing the timestamp
+      // into the future: otherwise "when they started writing" and "how long this is valid"
+      // would be the same number and a fresh signal could not be told from a long one.
       // sygnalu od dlugiego.
       const sec = opts?.sec == null ? null
         : Math.min(Math.max(Math.trunc(Number(opts.sec) || 0), 1), TYPING_MAX);
@@ -185,7 +185,7 @@ export function signal(
   ctx.bus.publish(allActorIds(ctx), { type: "presence" });
 }
 
-/** Wyslanie wiadomosci konczy pisanie - kuleczka znika bez czekania na TTL. */
+/** Sending a message ends typing - the bubble disappears without waiting for the TTL. */
 export function clearTyping(ctx: Ctx, sessionId: string): void {
   ctx.db
     .prepare("UPDATE sessions SET typing_at = NULL, typing_in = NULL WHERE id = ?")
@@ -231,11 +231,11 @@ export function presence(ctx: Ctx): PresenceRow[] {
     const age = now - r.last_seen_at;
     const staleAfter = r.kind === "ephemeral" ? STALE_EPHEMERAL : STALE_DURABLE;
     const stale = age > staleAfter;
-    // Sesja ZAKONCZONA (sygnal konca, np. hook SessionEnd) znika z obecnosci
-    // niezaleznie od rodzaju - obecnosc pokazuje, z kim mozna rozmawiac TERAZ,
-    // a tozsamosc trzyma roster aktorow. Martwa efemeryda znika tez po ciszy,
-    // sesja trwala dopiero po PRESENCE_RETENTION - bo bezczynnosc nie znaczy
-    // koniec, a dla sesji bez petli jest stanem normalnym.
+    // A session that ENDED (an end signal, for instance the SessionEnd hook) disappears from
+    // presence regardless of its kind - presence shows who you can talk to NOW, and identity
+    // is held by the actor roster. A dead ephemeral session also disappears after silence, a
+    // durable one only after PRESENCE_RETENTION - because idleness does not mean the end, and
+    // for a session without a loop it is the normal state.
     if (r.ended_at) continue;
     if (r.kind === "ephemeral" && stale) continue;
     if (r.kind === "durable" && age > PRESENCE_RETENTION) continue;
@@ -260,10 +260,10 @@ export function presence(ctx: Ctx): PresenceRow[] {
 }
 
 /**
- * Zywotnosc AKTORA (naj-swiezsza z jego niezakonczonych sesji). Feedback
- * z #nextIteration: `talk to <ktokolwiek>` zawsze mowilo "wyslane" i nadawca
- * dowiadywal sie o martwym adresacie z braku odpowiedzi, po godzinie. Ta funkcja
- * zasila jedna linie potwierdzenia przy zapisie: zywy / cisza N min / nieobecny.
+ * An ACTOR's liveness (the freshest of its unfinished sessions). Feedback from
+ * #nextIteration: `talk to <anybody>` always said "sent" and the sender learned about a
+ * dead addressee from the absence of an answer, an hour later. This function feeds the one
+ * confirmation line at write time: alive / silent for N min / absent.
  */
 export function actorLiveness(
   ctx: Ctx,
@@ -278,9 +278,9 @@ export function actorLiveness(
   return { online: ctx.now() - row.seen < ONLINE_WINDOW, lastSeenAt: row.seen };
 }
 
-/** Obecnosc jest informacja publiczna w obrebie instancji, wiec zdarzenie idzie
- *  do wszystkich. Lista jest krotka (aktorzy, nie sesje) i czytana z indeksu.
- *  Eksport: wiki (tez publiczna) uzywa tej samej listy odbiorcow. */
+/** Presence is public information within an instance, so the event goes to everybody. The
+ *  list is short (actors, not sessions) and read from an index.
+ *  Exported: the wiki (also public) uses the same recipient list. */
 export function allActorIds(ctx: Ctx): number[] {
   const rows = ctx.db.prepare("SELECT id FROM actors WHERE disabled_at IS NULL").all() as Array<{
     id: number;
@@ -289,16 +289,16 @@ export function allActorIds(ctx: Ctx): number[] {
 }
 
 /**
- * Kto WLASNIE pisze - w formie do wstawienia tam, gdzie agent podejmuje decyzje.
+ * Who is writing RIGHT NOW - in a form ready to be placed where an agent makes its decision.
  *
- * Prosba @michal (#general [226]): "zrob tak, aby w api bylo widac, kto pisze,
- * moze to udrozni rozmowy". Sygnal istnial, ale wylacznie w LISCIE OBECNYCH -
- * czyli trzeba bylo o niego zapytac osobno i wiedziec, ze warto. Agent, ktory
- * wlasnie czyta nowe wiadomosci i zabiera sie do odpowiedzi, nie pytal o roster
- * i nie mial jak sie dowiedziec, ze ktos inny juz odpowiada.
+ * @michal's request (#general [226]): "make it so that the api shows who is writing, maybe
+ * that will unblock the conversations". The signal existed, but only in the PRESENCE LIST -
+ * that is, you had to ask for it separately and know that it was worth asking. An agent
+ * that is reading new messages and about to answer did not ask for the roster and had no
+ * way to learn that somebody else is already answering.
  *
- * Stad to samo pytanie zadane w miejscu decyzji, a nie w osobnym wywolaniu.
- * Wlasne sesje pomijamy: "pisze" o samym sobie nie jest informacja.
+ * Hence the same question asked at the point of decision rather than in a separate call.
+ * We skip our own sessions: "typing" about yourself is not information.
  */
 export function whoIsTyping(
   ctx: Ctx,

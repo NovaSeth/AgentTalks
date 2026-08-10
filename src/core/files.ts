@@ -1,19 +1,19 @@
 /**
- * Pliki przesylane przez kanal.
+ * Files sent through the channel.
  *
- * Feedback z #nextIteration (332c7e42): przez wspolny katalog prototypu przeszly
- * prywatne zdjecia i trzeba je bylo czyscic recznie. Stad trzy mechanizmy:
- *   ttl        - plik znika sam po czasie,
- *   sensitive  - plik oznaczony jako wrazliwy dostaje domyslny TTL i nie jest
- *                listowany poza konwersacja, w ktorej go wyslano,
- *   burn       - plik znika po pierwszym pobraniu przez kogos innego niz autor.
+ * Feedback from #nextIteration (332c7e42): private photographs passed through the
+ * prototype's shared directory and had to be cleaned up by hand. Hence three mechanisms:
+ *   ttl        - the file disappears by itself after a time,
+ *   sensitive  - a file marked as sensitive gets a default TTL and is not listed outside
+ *                the conversation it was sent in,
+ *   burn       - the file disappears after the first download by somebody other than the author.
  *
- * Dostep do pliku = dostep do konwersacji, w ktorej go wyslano. Plik bez
- * konwersacji widzi tylko autor.
+ * Access to a file = access to the conversation it was sent in. A file with no conversation
+ * is visible to its author only.
  *
- * Bajty leza na dysku pod losowa nazwa (id), metadane w bazie. Kasowanie
- * najpierw zapisuje deleted_at, potem usuwa bajty - odwrotna kolejnosc
- * zostawialaby wpis wskazujacy na nieistniejacy plik jako stan normalny.
+ * The bytes sit on disk under a random name (the id), the metadata in the database.
+ * Deletion writes deleted_at first and removes the bytes afterwards - the other order would
+ * leave an entry pointing at a non-existent file as a normal state.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -68,8 +68,8 @@ const toInfo = (r: FileRow): FileInfo => ({
 });
 
 function safeName(raw: string): string {
-  // basename + odsiew sciezkowych smieci: nazwa pliku pochodzi od klienta
-  // i nie ma prawa wplynac na to, GDZIE plik wyladuje.
+  // basename + filtering out path junk: the file name comes from the client and has no
+  // business influencing WHERE the file lands.
   const name = basename(String(raw ?? "").trim()).replace(/[\x00-\x1f]/g, "");
   return name && name !== "." && name !== ".." ? name.slice(0, 200) : "plik";
 }
@@ -90,15 +90,15 @@ export function storeFile(
     sessionId?: string | null;
   },
 ): { file: FileInfo; message: Message } {
-  // Prawo zapisu PRZED walidacja rozmiaru (walidacja jest w persistBytes): nie
-  // chcemy odpowiadac "za duzy" na kanal, do ktorego i tak nie wolno pisac.
+  // The write permission BEFORE size validation (validation lives in persistBytes): we do not
+  // want to answer "too big" for a channel you are not allowed to write to anyway.
   assertCanPost(ctx, input.conversationId, input.actorId);
 
   const sensitive = input.sensitive === true;
-  // Wrazliwy plik bez SENSOWNEGO TTL dostaje domyslny. `?? ` nie wystarczy:
-  // ttl=0 (albo pusty naglowek X-TTL zamieniony na 0) to nie "podaj TTL", tylko
-  // "brak TTL" - a "wrazliwy i wieczny" to dokladnie kombinacja, ktora bolala
-  // w prototypie. Traktujemy wiec kazde ttl <= 0 jak brak.
+  // A sensitive file without a SENSIBLE TTL gets the default. `?? ` is not enough: ttl=0 (or
+  // an empty X-TTL header turned into 0) is not "here is a TTL" but "no TTL" - and
+  // "sensitive and eternal" is exactly the combination that hurt in the prototype. So we
+  // treat every ttl <= 0 as absent.
   const explicitTtl = input.ttlSec && input.ttlSec > 0 ? Math.trunc(input.ttlSec) : null;
   const ttl = explicitTtl ?? (sensitive ? SENSITIVE_DEFAULT_TTL : null);
 
@@ -129,8 +129,8 @@ export function storeFile(
   return { file: getFileInfo(ctx, id, input.actorId)!, message };
 }
 
-/** Metadane pliku, jesli aktor ma prawo go widziec. Zalacznik wiki
- *  (wiki_page_id) jest publiczny - widzi go kazdy zalogowany, bo wiki jest wspolna. */
+/** A file's metadata, if the actor is allowed to see it. A wiki attachment (wiki_page_id) is
+ *  public - every signed-in actor sees it, because the wiki is shared. */
 export function getFileInfo(ctx: Ctx, id: string, actorId: number): FileInfo | null {
   const row = ctx.db.prepare("SELECT * FROM files WHERE id = ?").get(id) as FileRow | undefined;
   if (!row || row.deleted_at) return null;
@@ -146,9 +146,9 @@ export function getFileInfo(ctx: Ctx, id: string, actorId: number): FileInfo | n
 }
 
 /**
- * Zalacznik do strony wiki: plik w miejscu PUBLICZNYM, nie w jednej rozmowie.
- * Nie posta wiadomosci (wiki nie jest kanalem) i nie ma TTL/burn - wiedza trwala
- * ma trwac. Dostep: kazdy zalogowany, bo wiki jest wspolna.
+ * An attachment to a wiki page: a file in a PUBLIC place, not in one conversation. It does
+ * not post a message (the wiki is not a channel) and has no TTL/burn - durable knowledge is
+ * meant to last. Access: everybody signed in, because the wiki is shared.
  */
 export function storeWikiFile(
   ctx: Ctx,
@@ -171,7 +171,7 @@ export function storeWikiFile(
   return getFileInfo(ctx, id, input.actorId)!;
 }
 
-/** Pliki podpiete pod strone wiki. */
+/** Files attached to a wiki page. */
 export function listWikiFiles(ctx: Ctx, wikiPageId: number): FileInfo[] {
   const rows = ctx.db
     .prepare("SELECT * FROM files WHERE wiki_page_id = ? AND deleted_at IS NULL ORDER BY created_at")
@@ -180,8 +180,8 @@ export function listWikiFiles(ctx: Ctx, wikiPageId: number): FileInfo[] {
 }
 
 /**
- * Pobranie bajtow. burn: plik znika po pierwszym pobraniu przez NIE-autora -
- * autor moze sprawdzic wlasny plik bez spalenia go.
+ * Fetching the bytes. burn: the file disappears after the first download by a NON-author -
+ * the author can check their own file without burning it.
  */
 export function readFile(
   ctx: Ctx,
@@ -210,7 +210,7 @@ export function deleteFile(ctx: Ctx, id: string, actorId: number): void {
   deleteFileRow(ctx, row);
 }
 
-/** Pliki widoczne dla aktora w danej konwersacji. */
+/** Files visible to an actor in a given conversation. */
 export function listFiles(ctx: Ctx, q: { conversationId: number; actorId: number }): FileInfo[] {
   if (!canRead(ctx, q.conversationId, q.actorId)) return [];
   sweepExpired(ctx);
@@ -223,10 +223,10 @@ export function listFiles(ctx: Ctx, q: { conversationId: number; actorId: number
 }
 
 /**
- * Kasowanie zalacznikow skasowanej wiadomosci. Bez tego "skasuj" znaczyloby
- * "przestan pokazywac w liscie": wiersz wiadomosci traci tresc, ale bajty leza
- * dalej na dysku i sa pobieralne przez GET /api/files/:id, bo ta trasa pyta
- * o plik, a nie o wiadomosc, przy ktorej wisi.
+ * Deleting the attachments of a deleted message. Without this, "delete" would mean "stop
+ * showing it in a list": the message row loses its content, but the bytes stay on disk and
+ * are fetchable through GET /api/files/:id, because that route asks about a file, not about
+ * the message it hangs from.
  */
 export function deleteFilesOfMessage(ctx: Ctx, messageId: number): number {
   const rows = ctx.db
@@ -236,9 +236,9 @@ export function deleteFilesOfMessage(ctx: Ctx, messageId: number): number {
   return rows.length;
 }
 
-/** To samo dla strony wiki: skasowanie strony nie moze zostawiac jej zalacznikow
- *  jako osieroconych bajtow, ktorych nikt juz nie zobaczy w zadnym interfejsie,
- *  a ktore dalej mozna pobrac, znajac id. */
+/** The same for a wiki page: deleting a page must not leave its attachments as orphaned
+ *  bytes that nobody will see in any interface any more, and that can still be downloaded
+ *  by anybody who knows the id. */
 export function deleteFilesOfWikiPage(ctx: Ctx, wikiPageId: number): number {
   const rows = ctx.db
     .prepare("SELECT * FROM files WHERE wiki_page_id = ? AND deleted_at IS NULL")
@@ -248,11 +248,11 @@ export function deleteFilesOfWikiPage(ctx: Ctx, wikiPageId: number): number {
 }
 
 /**
- * Sprzatanie wygaslych. Wolane leniwie przy listowaniu i okresowo z serwera.
+ * Cleaning up the expired. Called lazily on listing and periodically from the server.
  *
- * Drugi przebieg (bajty-sieroty) istnieje, bo `deleteFileRow` moze nie usunac
- * pliku z dysku - i wtedy komentarz "kolejny sweep sprobuje jeszcze raz" musi
- * byc prawda, a nie pociecha. Bez tego przebiegu nikt by nie sprobowal.
+ * The second pass (orphaned bytes) exists because `deleteFileRow` may fail to remove the
+ * file from disk - and then the comment "the next sweep will try again" has to be true
+ * rather than consoling. Without that pass nobody would try.
  */
 export function sweepExpired(ctx: Ctx): number {
   const rows = ctx.db
@@ -260,7 +260,7 @@ export function sweepExpired(ctx: Ctx): number {
     .all(ctx.now()) as FileRow[];
   for (const row of rows) deleteFileRow(ctx, row);
 
-  // Sieroty: wiersz oznaczony jako skasowany, a plik nadal na dysku.
+  // Orphans: a row marked as deleted with the file still on disk.
   const sieroty = ctx.db
     .prepare("SELECT * FROM files WHERE deleted_at IS NOT NULL LIMIT 200")
     .all() as FileRow[];
@@ -269,15 +269,15 @@ export function sweepExpired(ctx: Ctx): number {
     try {
       rmSync(row.path, { force: true });
     } catch {
-      // Nastepny przebieg sprobuje ponownie - teraz to zdanie jest prawdziwe.
+      // The next pass will try again - now that sentence is true.
     }
   }
   return rows.length;
 }
 
-/** Wspolny zapis bajtow: walidacja, zapis na dysk (0600), hash, wiersz w bazie.
- *  Uzywany i przez pliki rozmow (storeFile), i przez zalaczniki wiki (storeWikiFile),
- *  zeby format rekordu istnial w jednym miejscu. */
+/** The shared byte write: validation, writing to disk (0600), the hash, the database row.
+ *  Used both by conversation files (storeFile) and by wiki attachments (storeWikiFile), so
+ *  that the record format exists in one place. */
 function persistBytes(
   ctx: Ctx,
   filesDir: string,
@@ -319,8 +319,8 @@ function deleteFileRow(ctx: Ctx, row: FileRow): void {
   try {
     rmSync(row.path, { force: true });
   } catch {
-    // Wpis jest juz oznaczony jako skasowany, wiec bajty-sieroty nie beda
-    // nikomu serwowane; kolejny przebieg sweepExpired sprobuje ponownie
+    // The entry is already marked as deleted, so orphaned bytes will not be served to anybody;
+    // the next sweepExpired pass will try again (the "orphans" pass - see there).
     // (przebieg "sieroty" - patrz tam).
   }
 }

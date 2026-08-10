@@ -1,17 +1,17 @@
 /**
- * Konwersacje: JEDEN prymityw dla kanalow publicznych, prywatnych, DM-ow i grup.
+ * Conversations: ONE primitive for public channels, private channels, DMs and groups.
  *
- * To najwazniejsza zmiana wobec prototypu. Tam wiadomosc miala `chan` ALBO `to`,
- * wiec kanaly i DM-y byly dwiema osobnymi sciezkami kodu w kazdej funkcji: widocznosc,
- * liczniki, dostarczanie i render mialy po dwie galezie, ktore trzeba bylo trzymac
- * zgodne recznie. "Wiadomosc do wielu" nie miescila sie w zadnej z nich i po prostu
+ * This is the most important change from the prototype. There a message had `chan` OR
+ * `to`, so channels and DMs were two separate code paths in every function: visibility,
+ * counters, delivery and rendering each had two branches that had to be kept consistent by
+ * hand. "A message to many" fitted in neither of them and simply did not exist.
  * nie istniala.
  *
- * Tutaj wszystko jest konwersacja z lista czlonkow. Rodzaj mowi, kto moze wejsc:
- *   public  - czyta kazdy, pisanie dolacza automatycznie
- *   private - tylko czlonkowie
- *   dm      - dokladnie dwoch, tworzona przez ensureDirect
- *   group   - trzech i wiecej, tworzona przez ensureDirect
+ * Here everything is a conversation with a member list. The kind says who may enter:
+ *   public  - anybody reads, writing joins automatically
+ *   private - members only
+ *   dm      - exactly two, created by ensureDirect
+ *   group   - three or more, created by ensureDirect
  */
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
@@ -32,8 +32,8 @@ export type Conversation = {
   createdBy: number | null;
   createdAt: number;
   archivedAt: number | null;
-  /** Uczestnicy rozmowy prywatnej POZA pytajacym - tylko dla dm/group.
-   *  Dzieki temu lista rozmow ma nazwy i twarze od razu po zalogowaniu. */
+  /** The participants of a direct conversation OTHER than the asker - for dm/group only.
+   *  Thanks to this the conversation list has names and faces right after login. */
   others?: Rozmowca[];
 };
 
@@ -91,8 +91,8 @@ export function createChannel(
 ): Conversation {
   const slug = normalizeSlug(input.slug, "nazwa kanalu");
   if (getBySlug(ctx, slug)) throw conflict("kanal_istnieje", `kanal "${slug}" juz istnieje`);
-  // Jedna transakcja na kanal i czlonkostwo tworcy: awaria posrodku palilaby
-  // unikalny slug na zawsze, zostawiajac kanal-widmo bez zadnego admina.
+  // One transaction for the channel and the creator's membership: a failure in the middle
+  // would burn the unique slug forever, leaving a ghost channel with no admin at all.
   return tx(ctx.db, () => {
     const now = ctx.now();
     ctx.db
@@ -122,12 +122,12 @@ export function getBySlug(ctx: Ctx, slug: string): Conversation | null {
 }
 
 /**
- * Rozmowa bezposrednia miedzy podanym zbiorem aktorow. Dwoch to `dm`, trzech
- * i wiecej to `group`. Idempotentna niezaleznie od kolejnosci argumentow.
+ * A direct conversation between the given set of actors. Two is a `dm`, three or more a
+ * `group`. Idempotent regardless of the order of the arguments.
  *
- * Klucz `member_key` (posortowane id po przecinku, UNIQUE) sprawia, ze ponowne
- * "napisz do tych trzech" jest jednym odczytem po indeksie, a nie porownywaniem
- * zbiorow czlonkostw wszystkich rozmow.
+ * The `member_key` key (sorted ids, comma-separated, UNIQUE) makes a repeated "write to
+ * these three" one indexed read rather than a comparison of the membership sets of every
+ * conversation.
  */
 export function ensureDirect(ctx: Ctx, actorIds: readonly number[]): Conversation {
   const ids = [...new Set(actorIds)].sort((a, b) => a - b);
@@ -135,12 +135,12 @@ export function ensureDirect(ctx: Ctx, actorIds: readonly number[]): Conversatio
     throw badRequest("za_malo_uczestnikow", "rozmowa wymaga co najmniej dwoch roznych osob");
   }
   const key = ids.join(",");
-  // Calosc w jednej transakcji: rozmowa bez kompletu czlonkow to najgorszy mozliwy
-  // stan trwaly ("DM do Boba", ktorego Bob nie widzi), a UNIQUE member_key
-  // utrwalalby go na zawsze. ON CONFLICT DO NOTHING zamyka wyscig miedzy
-  // procesami: przegrany nie dostaje surowego bledu UNIQUE, tylko istniejacy wiersz.
-  // Czlonkowie dokladani takze dla istniejacej rozmowy (INSERT OR IGNORE w join),
-  // wiec ewentualny wczesniejszy stan polowiczny sam sie leczy przy nastepnym uzyciu.
+  // The whole thing in one transaction: a conversation without its full membership is the
+  // worst possible durable state ("a DM to Bob" that Bob cannot see), and UNIQUE member_key
+  // would make it permanent. ON CONFLICT DO NOTHING closes the race between processes: the
+  // loser does not get a raw UNIQUE error but the existing row.
+  // Members are added for an existing conversation too (INSERT OR IGNORE in join), so any
+  // earlier half-state heals itself on the next use.
   return tx(ctx.db, () => {
     ctx.db
       .prepare(
@@ -150,9 +150,9 @@ export function ensureDirect(ctx: Ctx, actorIds: readonly number[]): Conversatio
       .run(ids.length === 2 ? "dm" : "group", key, ctx.now());
     const row = ctx.db.prepare("SELECT * FROM conversations WHERE member_key = ?")
       .get(key) as ConvRow;
-    // Rozmowa prywatna ma dochodzic w calosci, nie tylko przy wzmiance - ale
-    // tylko dla NOWO dodanych. Kto wczesniej wyciszyl te rozmowe, ma zostac
-    // wyciszony (patrz komentarz w join).
+    // A direct conversation is meant to arrive in full, not only on a mention - but only for
+    // the NEWLY added. Whoever muted this conversation earlier is to stay muted (see the
+    // comment in join).
     for (const actorId of ids) join(ctx, row.id, actorId, "member", "all");
     return toConv(row);
   });
@@ -168,12 +168,12 @@ export function join(
   const existing = getMember(ctx, convId, actorId);
   if (existing) return existing;
   if (!getConversation(ctx, convId)) throw notFound("konwersacja", `nie ma konwersacji ${convId}`);
-  // OR IGNORE: dwa procesy dolaczajace ten sam duet w tym samym momencie nie moga
-  // konczyc sie surowym bledem klucza glownego u przegranego.
+  // OR IGNORE: two processes joining the same pair at the same moment must not end with a
+  // raw primary-key error for the loser.
   //
-  // `notify` ustawiamy TUTAJ, przy wstawianiu, a nie zbiorczym UPDATE-em po
-  // petli: zbiorczy UPDATE nadpisywal ustawienie WSZYSTKICH czlonkow, wiec
-  // wyciszona rozmowa odciszala sie sama, gdy ktokolwiek do niej wrocil.
+  // We set `notify` HERE, at insert time, rather than with a bulk UPDATE after the loop: the
+  // bulk UPDATE overwrote the setting of EVERY member, so a muted conversation unmuted
+  // itself whenever anybody returned to it.
   ctx.db
     .prepare(
       "INSERT OR IGNORE INTO members(conversation_id, actor_id, role, joined_at, notify) VALUES(?,?,?,?,?)",
@@ -185,8 +185,8 @@ export function join(
 export function leave(ctx: Ctx, convId: number, actorId: number): void {
   const conv = getConversation(ctx, convId);
   if (conv && (conv.kind === "dm" || conv.kind === "group")) {
-    // Wyjscie z DM-a zostawialoby rozmowe z jednym uczestnikiem i wiadomosciami,
-    // ktorych nikt nie moze przeczytac. Rozmowe prywatna sie ukrywa, nie opuszcza.
+    // Leaving a DM would leave a conversation with one participant and messages nobody can
+    // read. A direct conversation is hidden, not left.
     throw badRequest("nie_mozna_wyjsc", "z rozmowy bezposredniej nie da sie wyjsc");
   }
   ctx.db
@@ -220,16 +220,16 @@ export function canRead(ctx: Ctx, convId: number, actorId: number): boolean {
 
 export function assertCanRead(ctx: Ctx, convId: number, actorId: number): Conversation {
   const conv = getConversation(ctx, convId);
-  // Celowo ten sam blad dla "nie ma" i "nie wolno": inaczej odpowiedz serwera
-  // zdradzalaby istnienie kanalow prywatnych komus, kto nie ma do nich prawa.
+  // Deliberately the same error for "does not exist" and "not allowed": otherwise the server's
+  // answer would reveal private channels to somebody with no right to them.
   if (!conv || !canRead(ctx, convId, actorId)) {
     throw forbidden("brak_dostepu", "brak dostepu do tej konwersacji");
   }
   return conv;
 }
 
-/** Pisanie do kanalu publicznego dolacza aktora - tak jak w prototypie, gdzie samo
- *  odezwanie sie czynilo cie uczestnikiem. Do reszty trzeba byc juz czlonkiem. */
+/** Writing to a public channel joins the actor - as in the prototype, where speaking up made
+ *  you a participant. For everything else you have to be a member already. */
 export function assertCanPost(ctx: Ctx, convId: number, actorId: number): Conversation {
   const conv = assertCanRead(ctx, convId, actorId);
   if (conv.archivedAt) throw forbidden("zarchiwizowana", "ta konwersacja jest zarchiwizowana");
@@ -237,7 +237,7 @@ export function assertCanPost(ctx: Ctx, convId: number, actorId: number): Conver
   return conv;
 }
 
-/** Konwersacje widoczne dla aktora: wszystkie publiczne plus te, ktorych jest czlonkiem. */
+/** Conversations visible to an actor: all public ones plus those it is a member of. */
 export function listForActor(ctx: Ctx, actorId: number): Conversation[] {
   const rows = ctx.db
     .prepare(
@@ -250,11 +250,11 @@ export function listForActor(ctx: Ctx, actorId: number): Conversation[] {
     )
     .all(actorId) as ConvRow[];
 
-  // Rozmowy prywatne dostaja UCZESTNIKOW od razu. Bez tego klient zna tylko id
-  // i po zalogowaniu pokazuje trzy identyczne wiersze "Wiadomosc" bez twarzy -
-  // nazwa rozmowy pojawiala sie dopiero, gdy sie ja otworzylo i przyszly
-  // wiadomosci. W komunikatorze lista rozmow JEST nawigacja, wiec musi byc
-  // czytelna od pierwszej klatki (Messenger: twarze i imiona, nie tresc).
+  // Direct conversations carry their PARTICIPANTS straight away. Without this the client
+  // knows only the id and after login shows three identical "Message" rows with no faces -
+  // the conversation's name appeared only once you opened it and messages arrived. In a
+  // messenger the conversation list IS the navigation, so it has to be readable from the
+  // first frame (Messenger: faces and names, not content).
   const rozmowcy = ctx.db.prepare(
     `SELECT m.conversation_id AS cid, a.handle, a.display_name, a.kind
        FROM members m JOIN actors a ON a.id = m.actor_id
@@ -277,9 +277,9 @@ export function listForActor(ctx: Ctx, actorId: number): Conversation[] {
   });
 }
 
-/** Czlonkostwa aktora: rola, ustawienie powiadomien, znacznik odczytu.
- *  Potrzebne i przy /api/me, i przy /api/conversations - wiec mieszka w rdzeniu,
- *  a nie w jednej z tras. */
+/** An actor's memberships: role, notification setting, read marker.
+ *  Needed both by /api/me and by /api/conversations - so it lives in the core rather than
+ *  in one of the routes. */
 export function myMemberships(ctx: Ctx, actorId: number): Member[] {
   const rows = ctx.db
     .prepare("SELECT * FROM members WHERE actor_id = ? ORDER BY conversation_id")
@@ -304,9 +304,9 @@ export function setNotify(ctx: Ctx, convId: number, actorId: number, notify: Not
     .run(notify, convId, actorId);
 }
 
-/** Kto ma dostac zdarzenie o nowej wiadomosci. Dla kanalu publicznego sa to jego
- *  czlonkowie, a nie wszyscy aktorzy: kanal, ktorego nikt nie obserwuje, nie ma
- *  budzic calego swiata. Kto chce dostawac, ten dolacza. */
+/** Who is to receive the event about a new message. For a public channel these are its
+ *  members, not every actor: a channel nobody watches must not wake the whole world.
+ *  Whoever wants to receive, joins. */
 export function recipientsOf(ctx: Ctx, convId: number): number[] {
   const rows = ctx.db
     .prepare("SELECT actor_id FROM members WHERE conversation_id = ?")
@@ -314,9 +314,9 @@ export function recipientsOf(ctx: Ctx, convId: number): number[] {
   return rows.map((r) => r.actor_id);
 }
 
-// ------------------------------------------------------ zarzadzanie kanalem
+// ------------------------------------------------------- channel management
 
-/** Kanalem zarzadza jego admin (rola w members) albo admin instancji. */
+/** A channel is managed by its admin (a role in members) or the instance admin. */
 function assertCanManage(ctx: Ctx, convId: number, actorId: number, isInstanceAdmin: boolean): Conversation {
   const conv = getConversation(ctx, convId);
   if (!conv) throw notFound("konwersacja", `nie ma konwersacji ${convId}`);
@@ -328,8 +328,8 @@ function assertCanManage(ctx: Ctx, convId: number, actorId: number, isInstanceAd
   return conv;
 }
 
-/** Edycja kanalu: temat i (dla kanalow) slug. DM/grupa moze zmienic tylko temat -
- *  nazwa rozmowy bezposredniej to jej uczestnicy, nie etykieta. */
+/** Editing a channel: the topic and (for channels) the slug. A DM/group can change only the
+ *  topic - the name of a direct conversation is its participants, not a label. */
 export function updateConversation(
   ctx: Ctx,
   input: { convId: number; actorId: number; isInstanceAdmin: boolean; topic?: string; slug?: string },
@@ -356,9 +356,9 @@ export function updateConversation(
   });
 }
 
-/** "Usuniecie" kanalu = archiwizacja: znika z list i nie przyjmuje wiadomosci,
- *  ale historia zostaje i operacje da sie cofnac reczna zmiana w bazie.
- *  Nieodwracalne kasowanie rozmow to nie jest operacja na jeden klik. */
+/** "Deleting" a channel = archiving: it disappears from lists and stops accepting messages,
+ *  but the history stays and the operation can be undone by hand in the database.
+ *  Irreversible deletion of conversations is not a one-click operation. */
 export function archiveConversation(
   ctx: Ctx,
   input: { convId: number; actorId: number; isInstanceAdmin: boolean },
@@ -373,9 +373,9 @@ export function archiveConversation(
   }));
 }
 
-/** Usuniecie uczestnika: sam siebie moze kazdy (= leave), innych tylko
- *  zarzadzajacy kanalem. Z DM-a nie da sie nikogo usunac - to bylaby rozmowa
- *  z samym soba. */
+/** Removing a participant: anybody can remove themselves (= leave), others only somebody
+ *  managing the channel. Nobody can be removed from a DM - that would be a conversation
+ *  with yourself. */
 export function removeMember(
   ctx: Ctx,
   input: { convId: number; actorId: number; targetActorId: number; isInstanceAdmin: boolean },
@@ -384,11 +384,11 @@ export function removeMember(
     ? (getConversation(ctx, input.convId) ?? (() => { throw notFound("konwersacja", `nie ma konwersacji ${input.convId}`); })())
     : assertCanManage(ctx, input.convId, input.actorId, input.isInstanceAdmin);
   if (conv.kind === "dm" || conv.kind === "group") {
-    // Spojnie z leave(): sklad rozmowy bezposredniej jest staly, ukrywa sie ja,
-    // a nie okraja z uczestnikow.
+    // Consistent with leave(): the membership of a direct conversation is fixed; you hide it
+    // rather than trim its participants.
     throw badRequest("dm_staly", "z rozmowy bezposredniej nie usuwa sie uczestnikow");
   }
-  // Odbiorcy zdarzenia LICZENI PRZED usunieciem - usuwany tez ma sie dowiedziec.
+  // Event recipients are COUNTED BEFORE the removal - the one being removed should learn of it too.
   const audience = recipientsOf(ctx, conv.id);
   leave(ctx, conv.id, input.targetActorId);
   onCommitted(ctx.db, () => ctx.bus.publish(audience, {
