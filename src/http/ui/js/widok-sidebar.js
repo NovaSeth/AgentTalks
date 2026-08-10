@@ -243,6 +243,8 @@ export function renderSidebarList() {
       ${channels.map(row).join("") || sidebarEmptyHtml("Nie jesteś jeszcze na żadnym kanale.",
         { id: "sb-new-chan", label: "Załóż kanał" })}
     </div>
+    ${discoverable.length ? `<div class="sb-group discover">
+      <h3>Kanały, do których możesz dołączyć</h3>${discoverable.map(row).join("")}</div>` : ""}
     <div class="sb-group">
       <h3>Rozmowy prywatne ${plus("dm", "Nowa rozmowa prywatna")}</h3>
       ${directs.map(row).join("") || sidebarEmptyHtml("Jeszcze z nikim nie rozmawiasz na osobności.",
@@ -271,8 +273,6 @@ export function renderSidebarList() {
       }).join("") : sidebarEmptyHtml("Nikt nic teraz nie blokuje.",
         { id: "sb-new-lease", label: "Zajmij zasób" })}
     </div>
-    ${discoverable.length ? `<div class="sb-group">
-      <h3>Kanały, do których możesz dołączyć</h3>${discoverable.map(row).join("")}</div>` : ""}
   `;
   el.scrollTop = scrollTop;
   el.querySelectorAll("[data-person]").forEach((b) =>

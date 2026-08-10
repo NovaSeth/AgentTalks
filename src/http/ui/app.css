@@ -153,6 +153,13 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   background:none;border:0;padding:.15rem .25rem;border-radius:6px;cursor:pointer;text-align:left}
 .sb-head .me:hover{background:var(--surface-2)}
 .sb-head .me:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+/* Kanaly do dolaczenia stoja TUZ POD wlasnymi, bo tam czlowiek szuka kanalow -
+   wczesniej byly ostatnia sekcja, pod calym drzewem wiki (45 stron w tej
+   instancji), czyli technicznie widoczne i praktycznie nieosiagalne. Lekki
+   odstep oddziela "gdzie jestem" od "gdzie moge wejsc". */
+.sb-group.discover{margin-top:.1rem}
+.sb-group.discover .conv{opacity:.72}
+.sb-group.discover .conv:hover{opacity:1}
 .sb-head .mename{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--green);flex:0 0 auto;box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
 .iconbtn{width:2rem;height:2rem;border-radius:9px;display:grid;place-items:center;color:var(--muted);
