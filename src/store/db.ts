@@ -1,5 +1,5 @@
 /**
- * Otwarcie bazy i transakcje. To jedyny modul, ktory wie o `node:sqlite`.
+ * Opening the database and transactions. The only module that knows about `node:sqlite`.
  */
 import { DatabaseSync } from "node:sqlite";
 import { MIGRATIONS, SCHEMA_VERSION } from "./schema.ts";
@@ -8,10 +8,10 @@ export type Db = DatabaseSync;
 
 export function openDb(path: string): Db {
   const db = new DatabaseSync(path);
-  // WAL: czytelnicy nie blokuja pisarza. W prototypie czytelnicy w ogole nie brali
-  // locka i przez to mogli przeczytac urwana linie JSON, ktora byla po cichu pomijana -
-  // czyli wiadomosc znikala bez sladu. Tutaj albo transakcja przeszla, albo nie ma jej
-  // wcale, a blad wraca do wywolujacego.
+  // WAL: readers do not block the writer. In the prototype readers took no lock at
+  // all, so they could read a truncated JSON line, which was then silently skipped -
+  // that is, a message disappeared without a trace. Here either the transaction went
+  // through or it does not exist at all, and the error returns to the caller.
   if (path !== ":memory:") db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec("PRAGMA busy_timeout = 5000");
@@ -25,13 +25,13 @@ export function schemaVersion(db: Db): number {
 }
 
 /**
- * Wykonuje brakujace migracje.
+ * Runs the migrations that are missing.
  *
- * BEGIN IMMEDIATE i PONOWNY odczyt wersji w srodku transakcji: dwa procesy
- * (serwer i CLI) moga startowac rownoczesnie na tej samej bazie. Bez tego
- * przegrany wyscigu wykonywalby migracje drugi raz i padal na "table already
- * exists" - z IMMEDIATE czeka na busy_timeout, a potem widzi juz podniesiona
- * wersje i nie robi nic.
+ * BEGIN IMMEDIATE and a RE-READ of the version inside the transaction: two processes
+ * (the server and the CLI) can start on the same database at the same time. Without
+ * this, the loser of the race would run the migration a second time and die on "table
+ * already exists" - with IMMEDIATE it waits on busy_timeout and then sees the version
+ * already raised and does nothing.
  */
 function migrate(db: Db): void {
   if (schemaVersion(db) >= SCHEMA_VERSION) return;
@@ -40,7 +40,7 @@ function migrate(db: Db): void {
     const from = schemaVersion(db);
     for (let i = from; i < MIGRATIONS.length; i++) {
       db.exec(MIGRATIONS[i]);
-      // user_version nie przyjmuje parametru zwiazanego, tylko literal.
+      // user_version does not accept a bound parameter, only a literal.
       db.exec(`PRAGMA user_version = ${i + 1}`);
     }
     db.exec("COMMIT");
@@ -50,22 +50,22 @@ function migrate(db: Db): void {
   }
 }
 
-// ---- transakcje z zagniezdzaniem -----------------------------------------
+// ---- transactions with nesting --------------------------------------------
 //
-// Pierwotna wersja tx() zabranila zagniezdzania i to okazalo sie zlym pomyslem:
-// operacje domenowe skladaja sie z innych operacji domenowych (ask = wiadomosc
-// + wpis pytania), wiec zakaz zmuszal do rozrywania atomowosci. Przeglad
-// adwersaryjny pokazal trzy realne skutki: pytanie-sierota po padzie miedzy
-// commitami, podwojna odpowiedz na pytanie i trwale zepsuty DM bez czlonka.
+// The original tx() forbade nesting, and that turned out to be a bad idea: domain
+// operations are composed of other domain operations (ask = a message + a question
+// row), so the ban forced atomicity to be torn apart. An adversarial review showed
+// three real consequences: an orphaned question after a crash between commits, a
+// double answer to a question, and a permanently broken DM with no member.
 //
-// Teraz: transakcja zewnetrzna to BEGIN IMMEDIATE (write-lock od razu, wiec
-// busy_timeout dziala przy wejsciu, a nie wybucha SQLITE_BUSY w srodku przy
-// podnoszeniu blokady odczyt->zapis), a tx() wewnatrz tx() to SAVEPOINT.
+// Now: the outer transaction is BEGIN IMMEDIATE (a write lock straight away, so
+// busy_timeout applies on entry rather than exploding as SQLITE_BUSY halfway through
+// an upgrade from read to write lock), and tx() inside tx() is a SAVEPOINT.
 //
-// Zdarzenia na szyne NIE moga wychodzic przed prawdziwym COMMIT - subskrybent
-// zapytalby o dane, ktorych jeszcze nie ma (albo ktore zaraz znikna po
-// rollbacku). Stad onCommitted(): w transakcji odklada wywolanie do chwili
-// zatwierdzenia NAJBARDZIEJ zewnetrznej, poza transakcja wykonuje od razu.
+// Events must NOT leave for the bus before the real COMMIT - a subscriber would ask
+// for data that is not there yet (or that is about to disappear on a rollback). Hence
+// onCommitted(): inside a transaction it defers the call until the OUTERMOST one
+// commits; outside a transaction it runs immediately.
 
 const txDepth = new WeakMap<Db, number>();
 const afterCommit = new WeakMap<Db, Array<() => void>>();
@@ -90,8 +90,8 @@ export function tx<T>(db: Db, fn: () => T): T {
         try {
           cb();
         } catch (err) {
-          // Zatwierdzone dane sa juz prawda; padniety subskrybent nie moze
-          // udawac, ze transakcja sie nie powiodla.
+          // Committed data is already the truth; a subscriber that threw cannot
+          // pretend the transaction failed.
           console.error("[db] callback po commicie rzucil wyjatek:", err);
         }
       }
@@ -109,28 +109,28 @@ export function tx<T>(db: Db, fn: () => T): T {
         db.exec(`ROLLBACK TO sp_${depth}`);
         db.exec(`RELEASE sp_${depth}`);
       } catch {
-        // savepoint mogl zniknac przy auto-rollbacku calej transakcji
+        // the savepoint may have vanished in an auto-rollback of the whole transaction
       }
     }
     throw err;
   }
 }
 
-/** Wykonaj po zatwierdzeniu biezacej transakcji; poza transakcja - od razu.
- *  Uzywane do publikacji zdarzen: push nie moze wyprzedzac danych. */
+/** Run after the current transaction commits; outside a transaction - immediately.
+ *  Used for publishing events: a push must not get ahead of the data. */
 export function onCommitted(db: Db, cb: () => void): void {
   const callbacks = afterCommit.get(db);
   if (callbacks) callbacks.push(cb);
   else cb();
 }
 
-/** ROLLBACK, ktory nie zamaskuje pierwotnego bledu: gdy SQLite zdazyl zrobic
- *  auto-rollback, jawny ROLLBACK rzuca "no transaction is active" - i ten
- *  wtorny wyjatek nie moze przykryc przyczyny. */
+/** A ROLLBACK that will not mask the original error: when SQLite has already done an
+ *  auto-rollback, an explicit ROLLBACK throws "no transaction is active" - and that
+ *  secondary exception must not cover up the cause. */
 function safeRollback(db: Db): void {
   try {
     db.exec("ROLLBACK");
   } catch {
-    // brak aktywnej transakcji = cel osiagniety
+    // no active transaction = goal achieved
   }
 }
