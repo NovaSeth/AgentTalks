@@ -369,23 +369,12 @@ export const PL = {
   // --- composer ---
   "Replying in the thread of <b>@{handle}</b>": "Odpowiadasz w wątku <b>@{handle}</b>",
   "Cancel replying in the thread": "Anuluj odpowiadanie w wątku",
-  "This goes as a <b>question to the channel</b> - it stays open until somebody answers.":
-    "To pójdzie jako <b>pytanie do kanału</b> - zostanie otwarte, dopóki ktoś nie odpowie.",
-  "Back to a normal message": "Wróć do zwykłej wiadomości",
   "Attach files": "Załącz pliki",
   "Choose files to send": "Wybierz pliki do wysłania",
-  "Ask the channel a question": "Zadaj pytanie kanałowi",
-  "Ask the channel a question - it stays open until somebody answers":
-    "Zadaj pytanie kanałowi - zostanie otwarte, dopóki ktoś nie odpowie",
-  "Your question to the channel": "Twoje pytanie do kanału",
   "Your message": "Twoja wiadomość",
-  "What do you want to ask the channel?": "O co chcesz zapytać kanał?",
   "Your message...": "Twoja wiadomość...",
-  "Send the question": "Wyślij pytanie",
   "Send the message": "Wyślij wiadomość",
   "Send (Enter)": "Wyślij (Enter)",
-  "The question went to the channel. You will see it as open until somebody answers.":
-    "Pytanie poszło na kanał. Zobaczysz je jako otwarte, dopóki ktoś nie odpowie.",
 
   // --- attachments ---
   "sensitive": "wrażliwy",

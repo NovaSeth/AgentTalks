@@ -41,7 +41,6 @@ export const state = {
   pendingFiles: [],        // files waiting to be sent (previews in the composer)
   sseCursor: 0,            // highest message id seen = the SSE replay cursor (?after=)
   newBelow: 0,             // how many new ones arrived while the list was scrolled up
-  askMode: false,          // the composer sends a QUESTION to the channel instead of an ordinary message
   view: "chat",            // "chat" | "wiki" | "users" | "notifications"
   notifUnread: 0,          // licznik centrum powiadomien (dzwonek w sidebarze)
   notifications: [],       // ostatnie powiadomienia (GET /api/notifications)

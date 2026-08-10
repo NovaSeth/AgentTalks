@@ -722,19 +722,6 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   padding:.3rem .4rem;font-size:.8rem;color:var(--ink)}
 .pv-why{color:var(--muted);font-size:.75rem;line-height:1.35;font-weight:400}
 
-/* Composer w trybie pytania do kanalu - czlowiek moze wreszcie ZADAC pytanie,
-   nie tylko odpowiadac na cudze. */
-.asking{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--coral);
-  background:var(--coral-soft);border-radius:16px 16px 0 0;padding:.45rem .9rem;
-  margin:0 .3rem -.4rem;border:1px solid color-mix(in srgb,var(--coral) 30%,transparent);
-  border-bottom:0;position:relative;z-index:1}
-.asking svg{width:1em;height:1em;flex:0 0 auto}
-.asking b{color:var(--coral)}
-.asking button{margin-left:auto;color:var(--coral);font-size:1rem}
-.composer .card.asking-card:focus-within{box-shadow:0 0 0 2px var(--coral) inset,0 10px 30px rgba(0,0,0,.2)}
-.composer .askbtn.on{background:var(--coral);color:#fff}
-.composer .askbtn svg{width:1.2rem;height:1.2rem}
-
 /* Pasek "brak polaczenia" nad rozmowa (wczesniej drobny druk w stopce listy). */
 .offbar{flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:.45rem 1rem;
   background:var(--coral-soft);color:var(--coral);font-size:.85rem;font-weight:650;

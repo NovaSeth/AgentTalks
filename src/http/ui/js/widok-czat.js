@@ -1,7 +1,7 @@
 /**
  * The conversation view: the message list, the composer, a thread, the details panel.
  */
-import { answerQuestion, askChannel, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./akcje.js";
+import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./akcje.js";
 import { api, csrf } from "./api.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./dane.js";
 import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, zachowanieScrolla } from "./dom.js";
@@ -1114,27 +1114,28 @@ export function renderComposer() {
   const el = document.getElementById("composer");
   if (!el) return;
   const replyMsg = state.replyTo ? findMsgById(state.replyTo) : null;
-  const c = state.conversations.find((x) => x.id === state.activeId);
-  // A question only makes sense on a channel: in a direct conversation an "open question" has
-  // nobody's list to lie on.
-  const kanal = !!c && (c.kind === "public" || c.kind === "private");
-  const ask = kanal && state.askMode;
+  // The composer used to carry a second pictogram next to the attach "+": a bare question
+  // mark that switched it into "ask the channel" mode. It is gone, and the reason is a
+  // measurement rather than taste. @michal - who owns this product - asked what that icon
+  // was and said it should not be there; and the database answered the rest: in the whole
+  // life of this instance the number of questions asked through it, by anybody, human or
+  // agent, was ZERO. An unlabelled pictogram in the most valuable place of the interface,
+  // for an action nobody had ever performed, next to the one control people press all day.
+  //
+  // The primitive itself stays whole: agents ask through `talk_ask` / POST /ask, the open
+  // questions are listed in the side panel, and a human still ANSWERS them inline - which is
+  // the half that was actually being used.
   el.innerHTML = `
     ${replyMsg ? `<div class="replying">${t("Replying in the thread of <b>@{handle}</b>", { handle: escapeHtml(actorHandle(replyMsg.actorId)) })}
       <button id="cancel-reply" aria-label="${t("Cancel replying in the thread")}" title="${t("Cancel")}"><span aria-hidden="true">&times;</span></button></div>` : ""}
-    ${ask ? `<div class="asking">${iconQuestion()} ${t("This goes as a <b>question to the channel</b> - it stays open until somebody answers.")}
-      <button id="cancel-ask" aria-label="${t("Back to a normal message")}" title="${t("Back to a normal message")}"><span aria-hidden="true">&times;</span></button></div>` : ""}
-    <div class="card ${ask ? "asking-card" : ""}" id="composer-card">
+    <div class="card" id="composer-card">
       <div class="previews" id="composer-previews"></div>
       <div class="row">
         <button class="attach" id="composer-attach" type="button" aria-label="${t("Attach files")}" title="${t("Attach files")}">${iconPlus()}</button>
         <input type="file" id="composer-file" multiple style="display:none" aria-label="${t("Choose files to send")}">
-        ${kanal ? `<button class="attach askbtn ${ask ? "on" : ""}" id="composer-ask" type="button"
-          aria-pressed="${ask}" aria-label="${t("Ask the channel a question")}"
-          title="${t("Ask the channel a question - it stays open until somebody answers")}">${iconQuestion()}</button>` : ""}
-        <label class="sr-only" for="composer-input">${ask ? t("Your question to the channel") : t("Your message")}</label>
-        <textarea id="composer-input" rows="1" placeholder="${ask ? t("What do you want to ask the channel?") : t("Your message...")}"></textarea>
-        <button class="send" id="composer-send" disabled aria-label="${ask ? t("Send the question") : t("Send the message")}" title="${t("Send (Enter)")}">${iconSend()}</button>
+        <label class="sr-only" for="composer-input">${t("Your message")}</label>
+        <textarea id="composer-input" rows="1" placeholder="${t("Your message...")}"></textarea>
+        <button class="send" id="composer-send" disabled aria-label="${t("Send the message")}" title="${t("Send (Enter)")}">${iconSend()}</button>
       </div>
     </div>`;
   const ta = document.getElementById("composer-input");
@@ -1143,16 +1144,6 @@ export function renderComposer() {
   const attachBtn = document.getElementById("composer-attach");
   const fileInput = document.getElementById("composer-file");
   if (cancel) cancel.addEventListener("click", () => { state.replyTo = null; renderComposer(); focusComposer(); });
-  const askBtn = document.getElementById("composer-ask");
-  if (askBtn) askBtn.addEventListener("click", () => {
-    // A question and a thread reply are mutually exclusive: a question goes to the channel, not
-    // under somebody's utterance.
-    state.askMode = !state.askMode;
-    if (state.askMode) state.replyTo = null;
-    renderComposer(); focusComposer();
-  });
-  const cancelAsk = document.getElementById("cancel-ask");
-  if (cancelAsk) cancelAsk.addEventListener("click", () => { state.askMode = false; renderComposer(); focusComposer(); });
   const autosize = () => {
     ta.style.height = "auto";
     const maxH = window.innerHeight * 0.4;
@@ -1197,14 +1188,6 @@ export function renderComposer() {
     const v = ta.value.trim();
     if (!v && !state.pendingFiles.length) return;
     closeMentionPopover();
-    // A question to the channel goes by a separate route and carries no attachments.
-    if (ask) {
-      if (!v) return;
-      ta.value = ""; autosize();
-      const ok = await askChannel(v);
-      if (!ok) { ta.value = v; autosize(); ta.focus(); }
-      return;
-    }
     const files = state.pendingFiles; state.pendingFiles = [];
     ta.value = ""; renderPreviews(); autosize();
     // A file that failed to send RETURNS to the previews - otherwise it would disappear together

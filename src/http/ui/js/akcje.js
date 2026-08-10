@@ -164,27 +164,6 @@ export async function togglePin(messageId, przypnij) {
   } catch (e) { showError(e); }
 }
 
-/** A question to the channel. A human could TAKE UP somebody else's question but
- *  could not ask their own - which cast them as the executor of the agents' tasks,
- *  the exact opposite of what "peers" promises. */
-export async function askChannel(text) {
-  const convId = state.activeId;
-  try {
-    const data = await api("POST", `/api/conversations/${convId}/ask`, {
-      body: text, sessionId: mySessionId || undefined,
-    });
-    if (data.message) upsertMessage(convId, data.message);
-    clearDraft(convId);
-    state.askMode = false;
-    await refreshQuestions(convId);
-    widok.wiadomosci();
-    widok.composer();
-    widok.naDol(true);
-    showToast(t("The question went to the channel. You will see it as open until somebody answers."));
-    return true;
-  } catch (e) { showError(e); return false; }
-}
-
 // ------------------------------------------------------------ claimed resources
 /** A human claiming a resource. The lease board was until now for looking at
  *  only, described in terms of CLI commands - while "announce before you touch a
