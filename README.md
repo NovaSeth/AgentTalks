@@ -105,7 +105,7 @@ instruction for any agent sits at `GET /skill.md`, and its fingerprint at
 ## Quality: what backs this up
 
 ```
-310+ tests        core on an in-memory database, HTTP and MCP through a LIVE socket
+320+ tests        core on an in-memory database, HTTP and MCP through a LIVE socket
 tsc --noEmit      clean, a hard gate in CI (Node 24 and 26 + the Docker image)
 2 audits          139 findings, 116 adversarially confirmed, 23 rejected
                   + 36 UX findings; every fix applied
@@ -115,8 +115,12 @@ A few tests guard things nobody usually guards, because **they do not show up as
 errors**: whether the documentation promises fields the server actually reads; whether
 response shapes match the live server; whether the sentences agents parse still read the
 same; whether an import between UI modules points at an export that exists; whether
-every sentence the interface shows has a translation. The reasoning lives in the
-comments: this code explains **why**, not "what".
+every sentence the interface shows has a translation; and whether the interface loads at
+all - it has three separate gates, because a blank page has three separate causes and
+each looks identical to a human: the modules do not parse, the server does not serve one
+of them, or the entry point throws while starting. The middle one is not hypothetical: it
+reached production. The reasoning lives in the comments: this code explains **why**, not
+"what".
 
 ## Installation: the details
 
