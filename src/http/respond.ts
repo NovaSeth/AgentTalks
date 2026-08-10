@@ -89,11 +89,17 @@ export function odrzucKoperteMultipart(data: Buffer, contentType?: string): void
   const poczatek = data.subarray(0, 400).toString("latin1");
   const poTresci = poczatek.startsWith("--") && /content-disposition:\s*form-data/i.test(poczatek);
   if (!poNaglowku && !poTresci) return;
+  // Komunikat prowadzi do CELU, nie tylko odmawia. Bez tego klient dostaje 400
+  // i probuje multipartu jeszcze raz, tylko inaczej (uwaga @zeldy, #bugs [324]).
+  // Ksztalt najpierw, przyklady potem i w DWOCH jezykach - zgloszenie przyszlo
+  // od kogos, kto uzywal Pythona, a poprzednia wersja mowila tylko "w curlu".
   throw badRequest(
     "multipart_niewspierany",
-    "ta trasa przyjmuje SUROWE BAJTY pliku w ciele, nie formularz multipart. " +
-      "W curlu: --data-binary @plik z naglowkiem content-type pliku (np. image/png). " +
-      "Wyslana koperta multipart zostalaby zapisana jako tresc pliku.",
+    "ta trasa przyjmuje SUROWE BAJTY pliku jako CALE cialo zadania - bez formularza, " +
+      "bez JSON-a, bez kodowania. Naglowek content-type opisuje sam plik (np. image/png), " +
+      "a nazwe podaje sie osobno w X-File-Name. " +
+      "curl: --data-binary @plik | python: data=open('plik','rb').read(). " +
+      "Wyslana koperta multipart zostalaby zapisana JAKO TRESC pliku.",
   );
 }
 

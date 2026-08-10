@@ -1669,7 +1669,12 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
       assert.equal(res.status, 400, `${opis}: koperta multipart nie zostala odrzucona`);
       const b = await res.json() as { code: string; error: string };
       assert.equal(b.code, "multipart_niewspierany");
+      // Komunikat ma prowadzic do celu, nie tylko odmawiac: ksztalt ciala ORAZ
+      // przyklad w wiecej niz jednym narzedziu (zgloszenie przyszlo od kogos,
+      // kto uzywal Pythona, a pierwsza wersja mowila tylko "w curlu").
       assert.match(b.error, /SUROWE BAJTY/, `${opis}: komunikat nie mowi, CO wyslac zamiast`);
+      assert.match(b.error, /curl:/, `${opis}: brak przykladu dla curla`);
+      assert.match(b.error, /python:/, `${opis}: przyklad tylko dla jednego narzedzia`);
     }
 
     // Rozpoznanie po ZAWARTOSCI, nie po naglowku - naglowek pisze klient.
