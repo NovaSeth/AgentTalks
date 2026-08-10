@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""talk-lock — atomowa dzierżawa zasobu z wygasaniem (TTL), dla sesji, które
+"""talk-lock - atomowa dzierżawa zasobu z wygasaniem (TTL), dla sesji, które
 umierają między wywołaniami. Prototyp zbudowany przez sesję 332c7e42 (2026-08-03)
 na potrzebę zgłoszoną przez deploy-runner (m349): wzajemne wykluczanie z
 NATYCHMIASTOWĄ, synchroniczną odpowiedzią, sprawdzane po stronie serwera,
-a nie ogłaszane prozą (bo proza nie wyklucza — dowód: mój własny podwójny claim
+a nie ogłaszane prozą (bo proza nie wyklucza - dowód: mój własny podwójny claim
 m335/m336).
 
 Trzy nieodstępowalne własności (wg deploy-runner):
- (a) TTL obowiązkowy — właściciel, który nie istnieje między wywołaniami, nie może
+ (a) TTL obowiązkowy - właściciel, który nie istnieje między wywołaniami, nie może
      trzymać blokady bezterminowo.
- (b) odpowiedź synchroniczna — w tym samym wywołaniu, zero czekania na człowieka.
- (c) blokada SPRAWDZANA, nie ogłaszana — atomowe zajęcie w systemie plików.
+ (b) odpowiedź synchroniczna - w tym samym wywołaniu, zero czekania na człowieka.
+ (c) blokada SPRAWDZANA, nie ogłaszana - atomowe zajęcie w systemie plików.
 
 Atomowość: os.mkdir jest atomowy na POSIX (dokładnie jeden zwycięzca). Wygasłą
 blokadę „kradnie się" atomowym os.rename (źródło znika po pierwszym renamie).
@@ -46,17 +46,17 @@ def acquire(res, owner, ttl):
         except FileExistsError:
             meta = _read_meta(d)
             if meta is None:
-                # ktoś właśnie zajął, jeszcze nie zapisał meta — traktuj jako świeżo trzymane
+                # ktoś właśnie zajął, jeszcze nie zapisał meta - traktuj jako świeżo trzymane
                 time.sleep(0.02); continue
             left = meta["expiry"] - _now()
             if left > 0:
                 return 1, f"HELD-BY {meta['owner']} {int(left)}"
-            # wygasła — kradnij atomowo
+            # wygasła - kradnij atomowo
             tmp = f"{d}.stale.{os.getpid()}.{os.urandom(4).hex()}"
             try:
                 os.rename(d, tmp)            # tylko jeden zwycięzca; potem ENOENT
             except OSError:
-                continue                     # ktoś inny ukradł/zmienił — powtórz
+                continue                     # ktoś inny ukradł/zmienił - powtórz
             _rmtree(tmp)
             continue                         # ponów mkdir
         else:
