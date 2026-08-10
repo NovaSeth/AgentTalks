@@ -1,12 +1,12 @@
 /**
- * Tokeny agentow.
+ * Agent tokens.
  *
- * Token nalezy do AKTORA, nie do sesji, i jest odwolywalny pojedynczo - jeden agent
- * moze miec osobny token na VPS, na laptopa i do CI, a wyciek jednego nie zmusza do
- * rotacji reszty. W bazie lezy wylacznie sha256; wartosc jawna widac raz, przy nadaniu.
- *
- * To jest miejsce, w ktorym znika najgrozniejsza wlasnosc prototypu: tam kazdy proces
- * majacy dostep do katalogu mogl podac sie za dowolnego uczestnika przez `TALK_SID`.
+ * A token belongs to an ACTOR, not to a session, and is revocable one at a time - one agent
+ * can have a separate token for a VPS, a laptop and CI, and a leak of one does not force
+ * rotation of the rest. Only the sha256 is in the database; the plain value is seen once,
+ *when it is issued.
+ * This is where the prototype's most dangerous property disappears: there, any process with
+ * access to the directory could pass itself off as any participant through `TALK_SID`.
  */
 import { createHash, randomBytes } from "node:crypto";
 import type { Ctx } from "./ctx.ts";
@@ -48,13 +48,13 @@ const toInfo = (r: TokenRow): TokenInfo => ({
 const hashOf = (token: string): string => createHash("sha256").update(token).digest("hex");
 
 /**
- * Minimalny sensowny czas zycia tokenu AGENTA: 3 miesiace.
+ * The minimum sensible lifetime for an AGENT's token: 3 months.
  *
- * To nie jest liczba z bezpieczenstwa, tylko z obserwacji kanalu: agent nie umie
- * odnowic sobie wygaslego tokenu, wiec zamiast rotacji dostajemy nowe zaproszenie
- * i NOWEGO aktora obok starego - czyli rosnaca liste tozsamosci tej samej osoby.
- * Krotki token ma sens tam, gdzie sekret lezy na cudzej maszynie (CI, host
- * wykonujacy instrukcje z sieci) - i tam podaje sie go swiadomie.
+ * This is not a number from security but from watching the channel: an agent cannot renew
+ * its own expired token, so instead of a rotation we get a new invite and a NEW actor next
+ * to the old one - that is, a growing list of identities for the same person. A short token
+ * makes sense where the secret sits on somebody else's machine (CI, a host executing
+ * instructions from the network) - and there it is given deliberately.
  */
 export const MIN_AGENT_TTL_SEC = 90 * 24 * 3600;
 
@@ -67,9 +67,9 @@ export function mintToken(
   if (!getActor(ctx, actorId)) throw notFound("aktor", `nie ma aktora ${actorId}`);
   const token = PREFIX + randomBytes(32).toString("base64url");
   const now = ctx.now();
-  // Krotkozyciowy token dla niezaufanego hosta (CI, VPS wykonujacy instrukcje
-  // z publicznego HTTPS) - feedback 332c7e42: "sekret na maszynie wykonujacej
-  // instrukcje z publicznego HTTPS to dzisiejsza rana".
+  // A short-lived token for an untrusted host (CI, a VPS executing instructions from public
+  // HTTPS) - feedback 332c7e42: "a secret on a machine executing instructions from public
+  // HTTPS is today's wound".
   const expiresAt = ttlSec && ttlSec > 0 ? now + Math.trunc(ttlSec) : null;
   ctx.db
     .prepare("INSERT INTO tokens(actor_id, hash, name, created_at, expires_at) VALUES(?,?,?,?,?)")
@@ -81,11 +81,11 @@ export function mintToken(
 }
 
 /**
- * Dlaczego token zostal odrzucony - TYLKO dla tokenu, ktory istnieje w bazie.
- * Sluzy do jednej rzeczy: zeby agent z martwym tokenem uslyszal "popros o nowy
- * token do @X" zamiast domyslic sie "zaloz nowa tozsamosc". Nieznany token nie
- * dostaje zadnej odpowiedzi poza ogolnym 401 - odpowiedz "nie ma takiego" nie
- * moze byc wyrocznia, ktore tokeny istnialy.
+ * Why a token was rejected - ONLY for a token that exists in the database.
+ * It serves one purpose: so that an agent with a dead token hears "ask for a new token for
+ * @X" instead of guessing "create a new identity". An unknown token gets no answer beyond
+ * a generic 401 - an answer of "there is no such thing" must not be an oracle for which
+ * tokens existed.
  */
 export function tokenTrouble(
   ctx: Ctx,
@@ -104,14 +104,14 @@ export function tokenTrouble(
   return null;
 }
 
-/** Zwraca aktora albo null. NIE rzuca - zly token to normalny ruch sieciowy,
- *  a nie sytuacja wyjatkowa, i nie ma powodu, zeby generowal slad stosu. */
+/** Returns an actor or null. It does NOT throw - a bad token is ordinary network traffic,
+ *  not an exceptional situation, and there is no reason for it to produce a stack trace. */
 export function verifyToken(ctx: Ctx, token: string): Actor | null {
   const raw = String(token ?? "").trim();
   if (!raw.startsWith(PREFIX)) return null;
-  // Wyszukanie po sha256 w kolumnie UNIQUE jest cala weryfikacja: token ma
-  // 256 bitow entropii, wiec kolizje i zgadywanie nie sa realnymi wektorami,
-  // a dodatkowe porownania "stalo-czasowe" hasza z nim samym bylyby teatrem.
+  // A lookup by sha256 in a UNIQUE column is the whole verification: a token has 256 bits of
+  // entropy, so collisions and guessing are not real vectors, and extra "constant-time"
+  // comparisons of a hash against itself would be theatre.
   const row = ctx.db
     .prepare("SELECT * FROM tokens WHERE hash = ? AND revoked_at IS NULL")
     .get(hashOf(raw)) as TokenRow | undefined;
@@ -119,25 +119,25 @@ export function verifyToken(ctx: Ctx, token: string): Actor | null {
   if (row.expires_at !== null && row.expires_at <= ctx.now()) return null; // wygasl
   const actor = getActor(ctx, row.actor_id);
   if (!actor || actor.disabledAt) return null;
-  // last_used_at jest telemetryczne, wiec: (a) dlawione do jednego zapisu na
-  // minute, (b) best-effort - gdy inny proces (import CLI) trzyma wlasnie
-  // write-lock, uwierzytelnienie NIE moze sie od tego wywracac, bo polozyloby
+  // last_used_at is telemetry, so: (a) throttled to one write per minute, (b) best-effort -
+  // when another process (a CLI import) is holding the write lock, authentication must NOT
+  // fall over because of it, because that would take down every agent's GETs as well.
   // to takze wszystkie GET-y agentow.
   if (row.last_used_at === null || ctx.now() - row.last_used_at >= 60) {
     try {
       ctx.db.prepare("UPDATE tokens SET last_used_at = ? WHERE id = ?").run(ctx.now(), row.id);
     } catch {
-      // zapis telemetryczny - nastepne zadanie sprobuje jeszcze raz
+      // a telemetry write - the next request will try again
     }
   }
   return actor;
 }
 
 /**
- * Odwolanie tokenu. Zwraca, czy COS SIE ZMIENILO - i to nie jest kosmetyka:
- * odwolywanie tokenu robi sie w chwili, gdy podejrzewa sie wyciek, a "ok"
- * w odpowiedzi na literowke w numerze wyglada dokladnie tak samo jak "ok" na
- * realne odwolanie. Operator przestaje wtedy szukac, majac wyciek nadal aktywny.
+ * Revoking a token. Returns whether ANYTHING CHANGED - and that is not cosmetic: you revoke
+ * a token at the moment you suspect a leak, and an "ok" in response to a typo in the id
+ * looks exactly like an "ok" for a real revocation. The operator then stops looking, with
+ * the leak still live.
  */
 export function revokeToken(ctx: Ctx, tokenId: number): boolean {
   const r = ctx.db

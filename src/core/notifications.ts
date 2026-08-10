@@ -1,19 +1,19 @@
 /**
- * Powiadomienia: jedno miejsce na "co sie wydarzylo, o czym mam wiedziec".
+ * Notifications: one place for "what happened that I should know about".
  *
- * Wczesniej odpowiedz na to pytanie byla rozsypana: licznik nieprzeczytanych
- * mowil o kanalach, tabela `mentions` o wzmiankach, a reakcje i zmiany wiki nie
- * mowily nic - czyli o polowie rzeczy, ktore dotycza uzytkownika, dowiadywal sie
- * przez przypadek albo wcale.
+ * Previously the answer to that question was scattered: the unread counter spoke about
+ * channels, the `mentions` table about mentions, and reactions and wiki changes said
+ * nothing at all - so about half of what concerns a user, they learned by accident or not
+ * at all.
  *
- * Trzy zasady, ktore odrozniaja to od licznika nieprzeczytanych:
- *  - powiadomienie ma WLASNY znacznik odczytu; przeczytanie kanalu nie kasuje
- *    faktu, ze ktos Cie w nim wolal, a odhaczenie powiadomienia nie klamie,
- *    ze przeczytales cala rozmowe,
- *  - powiadomienie ma CEL: rozmowa+wiadomosc albo strona wiki, wiec klikniecie
- *    prowadzi tam, gdzie rzecz sie stala, a nie "gdzies w okolice",
- *  - powiadomienia nie tworzy sie sobie samemu - wlasna wzmianka, wlasna reakcja
- *    i wlasna edycja wiki nie sa zdarzeniem dla autora.
+ * Three rules that separate this from the unread counter:
+ *  - a notification has its OWN read marker; reading a channel does not erase the fact that
+ *    somebody called you in it, and ticking off a notification does not lie that you read
+ *    the whole conversation,
+ *  - a notification has a TARGET: a conversation+message or a wiki page, so a click leads
+ *    to where the thing happened rather than "somewhere nearby",
+ *  - you do not create notifications for yourself - your own mention, your own reaction and
+ *    your own wiki edit are not an event for their author.
  */
 import { onCommitted } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
@@ -42,7 +42,7 @@ type Row = {
 
 const MAX_EXCERPT = 160;
 
-/** Podglad tresci: jedna linia, bez sciany tekstu w liscie powiadomien. */
+/** A content preview: one line, no wall of text in the notification list. */
 export function excerptOf(body: string): string {
   const oneLine = String(body ?? "").replace(/\s+/g, " ").trim();
   return oneLine.length > MAX_EXCERPT ? `${oneLine.slice(0, MAX_EXCERPT - 1)}…` : oneLine;
@@ -61,12 +61,12 @@ const toNotification = (r: Row): Notification => ({
 });
 
 /**
- * Zapisuje powiadomienia dla listy odbiorcow. Nadawca jest z niej usuwany
- * (nikt nie powiadamia sam siebie), duplikaty tez - jedno zdarzenie to jedno
- * powiadomienie, nawet gdy ktos jest i wspomniany, i czlonkiem DM-a.
+ * Writes notifications for a list of recipients. The sender is removed from it (nobody
+ * notifies themselves), and so are duplicates - one event is one notification, even when
+ * somebody is both mentioned and a member of the DM.
  *
- * Zdarzenie SSE leci PO commicie, zeby klient, ktory od razu pobierze liste,
- * zobaczyl w niej to, o czym wlasnie zostal powiadomiony.
+ * The SSE event goes out AFTER the commit, so that a client which immediately fetches the
+ * list sees in it what it has just been notified about.
  */
 export function notify(
   ctx: Ctx,
@@ -78,8 +78,8 @@ export function notify(
     messageId?: number | null;
     wikiSlug?: string | null;
     excerpt?: string | null;
-    /** false = zapisz, ale zdarzenie SSE oglosi wywolujacy (kolejnosc ma znaczenie:
-     *  powiadomienie o wiadomosci nie moze wyprzedzic samej wiadomosci). */
+    /** false = write it, but the caller will announce the SSE event (order matters: a
+     *  notification about a message must not get ahead of the message itself). */
     announce?: boolean;
   },
 ): number[] {
@@ -107,11 +107,11 @@ export function notify(
 }
 
 /**
- * Retencja. Tabela powiadomien rosnie z kazda wzmianka, reakcja i wiadomoscia
- * w DM - czyli szybciej niz rozmowy - a nic jej nie zmniejszalo. Trzymamy
- * PRZECZYTANE starsze niz 30 dni i wszystko starsze niz 180 dni: powiadomienie,
- * ktorego nikt nie otworzyl przez pol roku, nie jest juz powiadomieniem.
- * Sprzatanie jest leniwe (przy zapisie), zeby nie trzymac osobnego zadania.
+ * Retention. The notifications table grows with every mention, reaction and DM message -
+ * that is, faster than the conversations - and nothing shrank it. We keep READ ones newer
+ * than 30 days and everything newer than 180 days: a notification nobody opened in half a
+ * year is not a notification any more.
+ * The cleanup is lazy (on write), so as not to keep a separate job.
  */
 const PRZECZYTANE_DNI = 30;
 const WSZYSTKIE_DNI = 180;
@@ -151,9 +151,9 @@ export function unreadNotificationCount(ctx: Ctx, actorId: number): number {
 }
 
 /**
- * Odhaczenie. Bez `ids` odhacza WSZYSTKIE nieprzeczytane - to jest ten jeden
- * przycisk "widzialem". Zwraca liczbe realnie zmienionych rekordow, zeby
- * "odhaczylem 0" nie wygladalo tak samo jak "odhaczylem 12".
+ * Ticking off. Without `ids` it ticks off ALL unread ones - this is the one "I have seen
+ * it" button. It returns the number of records actually changed, so that "I ticked off 0"
+ * does not look the same as "I ticked off 12".
  */
 export function markNotificationsRead(
   ctx: Ctx,

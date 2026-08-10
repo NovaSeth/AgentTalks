@@ -1,10 +1,10 @@
 /**
- * Aktorzy: trwale tozsamosci. Czlowiek albo agent.
+ * Actors: durable identities. A human or an agent.
  *
- * Roznica wobec prototypu, ktora pociaga za soba polowe reszty projektu: aktor NIE jest
- * tym samym co sesja. Prototyp mial jedno pojecie (`sid`) i przez to dwie rownolegle
- * sesje tego samego agenta byly dla czlowieka dwoma roznymi rozmowcami albo dostawaly
- * sufiks "(2)". Tutaj aktor jest jeden, sesji moze byc dowolnie wiele.
+ * The difference from the prototype that drags half the rest of the project behind it: an
+ * actor is NOT the same thing as a session. The prototype had one concept (`sid`), which
+ * made two parallel sessions of the same agent two different participants to a human, or
+ * gave them a "(2)" suffix. Here there is one actor and any number of sessions.
  */
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { Ctx } from "./ctx.ts";
@@ -21,9 +21,9 @@ export type Actor = {
   isAdmin: boolean;
   createdAt: number;
   disabledAt: number | null;
-  /** Odcisk tresci awatara albo null. Klient sklada z niego adres obrazka
-   *  (`/api/actors/<id>/avatar?v=<avatar>`) - odcisk w adresie sprawia, ze zmiana
-   *  awatara jest widoczna od razu mimo dlugiego cache'owania. */
+  /** The fingerprint of the avatar's content, or null. The client builds the image URL from
+   *  it (`/api/actors/<id>/avatar?v=<avatar>`) - the fingerprint in the URL makes an avatar
+   *  change visible immediately despite long caching. */
   avatar: string | null;
 };
 
@@ -72,8 +72,8 @@ export function getActor(ctx: Ctx, id: number): Actor | null {
 }
 
 export function getActorByHandle(ctx: Ctx, handle: string): Actor | null {
-  // Bez normalizeHandle: ta funkcja bywa wolana danymi z zewnatrz i ma odpowiadac
-  // "nie ma takiego", a nie rzucac bledem walidacji.
+  // No normalizeHandle: this function is sometimes called with data from outside and should
+  // answer "there is no such actor" rather than throw a validation error.
   const h = String(handle ?? "").trim().replace(/^@+/, "").toLowerCase();
   const row = ctx.db.prepare("SELECT * FROM actors WHERE handle = ?").get(h) as
     | ActorRow
@@ -81,9 +81,9 @@ export function getActorByHandle(ctx: Ctx, handle: string): Actor | null {
   return row ? toActor(row) : null;
 }
 
-/** Mapa id -> {handle, displayName, kind} dla zbioru wiadomosci. Konsument
- *  (np. agent egzekwujacy "zgoda na produkcje tylko od czlowieka") musi TANIO
- *  wiedziec, czy autor jest human - feedback 332c7e42/claude-general. */
+/** A map id -> {handle, displayName, kind} for a set of messages. The consumer (an agent
+ *  enforcing "approval for production only from a human", say) has to know CHEAPLY whether
+ *  the author is human - feedback 332c7e42/claude-general. */
 export function actorsByIds(
   ctx: Ctx,
   ids: readonly number[],
@@ -91,8 +91,8 @@ export function actorsByIds(
   const uniq = [...new Set(ids)];
   if (uniq.length === 0) return {};
   const marks = uniq.map(() => "?").join(",");
-  // avatar_hash, nie sciezka do pliku: klient sklada adres sam, a odcisk sluzy
-  // do uniewaznienia cache'a. Nazwa pliku na dysku nie jest niczyja sprawa.
+  // avatar_hash, not a path to a file: the client builds the URL itself, and the fingerprint
+  // serves to invalidate the cache. The name of the file on disk is nobody's business.
   const rows = ctx.db
     .prepare(`SELECT id, handle, display_name, kind, avatar_hash FROM actors WHERE id IN (${marks})`)
     .all(...uniq) as Array<{ id: number; handle: string; display_name: string; kind: ActorKind;
@@ -111,32 +111,32 @@ export function listActors(ctx: Ctx): Actor[] {
   return rows.map(toActor);
 }
 
-/** Wylaczenie konta: aktor przestaje przechodzic uwierzytelnienie (token,
- *  haslo, passkey), historia i tozsamosc zostaja. Odwracalne. */
+/** Disabling an account: the actor stops passing authentication (token, password, passkey),
+ *  the history and the identity stay. Reversible. */
 export function setDisabled(ctx: Ctx, actorId: number, disabled: boolean): Actor {
   const a = getActor(ctx, actorId);
   if (!a) throw notFound("aktor", `nie ma aktora ${actorId}`);
   ctx.db.prepare("UPDATE actors SET disabled_at = ? WHERE id = ?")
     .run(disabled ? ctx.now() : null, actorId);
-  // Wylaczenie konta musi domykac to, co juz otwarte - inaczej "wylaczylem konto"
-  // znaczy tylko "nie zaloguje sie ponownie".
+  // Disabling an account has to close what is already open - otherwise "I disabled the
+  // account" only means "it will not sign in again".
   if (disabled) bumpSessionEpoch(ctx, actorId);
   return getActor(ctx, actorId)!;
 }
 
 /**
- * Zmiana nazwy (handle) ISTNIEJACEGO aktora - z zachowaniem tozsamosci.
+ * Renaming (the handle of) an EXISTING actor - keeping the identity.
  *
- * Istnieje, bo alternatywa jest zla: bez tego "chce sie nazywac inaczej" konczy
- * sie wykupieniem nowego zaproszenia, czyli DRUGIM aktorem tej samej osoby -
- * a wtedy historia, wzmianki, czlonkostwa i tokeny zostaja przy starym. Numer
- * aktora sie NIE zmienia, wiec wszystko, co go wskazuje, dziala dalej: tokeny,
- * czlonkostwa, powiadomienia, autorstwo wiadomosci i rewizji wiki.
+ * It exists because the alternative is bad: without it, "I want a different name" ends in
+ * redeeming a new invite, that is, a SECOND actor for the same person - and then the
+ * history, mentions, memberships and tokens stay with the old one. The actor's number does
+ * NOT change, so everything pointing at it keeps working: tokens, memberships,
+ * notifications, authorship of messages and of wiki revisions.
  *
- * Czego to NIE naprawia i o czym trzeba wiedziec: tekst "@stara-nazwa" w JUZ
- * napisanych wiadomosciach zostaje tekstem - wzmianki byly rozwiazane na numery
- * przy zapisie, wiec powiadomienia doszly, ale klikniecie w stary tekst nie
- * trafi w nikogo. Nie przepisujemy cudzych wiadomosci, zeby zmiana nazwy nie
+ * What this does NOT fix, and what has to be known: the text "@old-name" in messages
+ * ALREADY written stays text - mentions were resolved to numbers at write time, so the
+ * notifications arrived, but clicking the old text hits nobody. We do not rewrite other
+ * people's messages, so that a rename does not change content somebody else authored.
  * zmieniala tresci, ktorej ktos inny jest autorem.
  */
 export function renameActor(
@@ -152,9 +152,9 @@ export function renameActor(
   if (zajety && zajety.id !== actorId) {
     throw conflict("handle_zajety", `nazwa "${handle}" jest juz zajeta przez innego aktora`);
   }
-  // displayName domyslnie idzie za handle TYLKO wtedy, gdy wczesniej byl jego
-  // kopia - inaczej zmiana nazwy technicznej kasowalaby recznie ustawiona
-  // nazwe wyswietlana ("Milosz / VPS").
+  // displayName follows the handle by default ONLY when it was a copy of it before -
+  // otherwise changing the technical name would wipe a manually set display name
+  // ("Milosz / VPS").
   const nowaNazwa = displayName ?? (a.displayName === a.handle ? handle : a.displayName);
   ctx.db.prepare("UPDATE actors SET handle = ?, display_name = ? WHERE id = ?")
     .run(handle, nowaNazwa, actorId);
@@ -170,14 +170,14 @@ export function setDisplayName(ctx: Ctx, actorId: number, displayName: string): 
   return getActor(ctx, actorId)!;
 }
 
-// ---- hasla (tylko dla ludzi) ---------------------------------------------
-// scrypt z biblioteki standardowej. Token agenta jest losowy i wysokoentropijny,
-// wiec wystarcza mu sha256; haslo czlowieka jest zgadywalne, wiec musi byc drogie.
+// ---- passwords (humans only) ----------------------------------------------
+// scrypt from the standard library. An agent's token is random and high-entropy, so sha256
+// is enough for it; a human's password is guessable, so it has to be expensive.
 
 const SCRYPT_KEYLEN = 64;
 
-/** Walidacja hasla PRZED jakimkolwiek zapisem - CLI wola to przed utworzeniem
- *  aktora, zeby blad walidacji nie zostawial konta-wydmuszki bez hasla. */
+/** Password validation BEFORE any write - the CLI calls this before creating an actor, so
+ *  that a validation error does not leave a husk of an account with no password. */
 export function assertPasswordOk(password: string): void {
   if (!password || password.length < 8) {
     throw badRequest("haslo_za_krotkie", "haslo musi miec co najmniej 8 znakow");
@@ -191,15 +191,15 @@ export function setPassword(ctx: Ctx, actorId: number, password: string): void {
   ctx.db
     .prepare("UPDATE actors SET password_hash = ? WHERE id = ?")
     .run(`scrypt$${salt.toString("hex")}$${hash.toString("hex")}`, actorId);
-  // Zmiana hasla ma WYRZUCIC dotychczasowe sesje. Inaczej czlowiek, ktory zmienia
-  // haslo po kradziezy laptopa, robi to w przekonaniu, ze zamknal drzwi, a stare
-  // ciasteczko dziala dalej przez caly swoj TTL.
+  // Changing a password has to THROW OUT the existing sessions. Otherwise a human changing
+  // their password after a laptop theft does it believing they closed the door, while the
+  // old cookie keeps working for the whole of its TTL.
   bumpSessionEpoch(ctx, actorId);
 }
 
-/** Uniewaznia wszystkie wczesniej wydane ciasteczka sesji tego aktora.
- *  Numer epoki wchodzi do podpisu cookie, wiec podbicie = natychmiastowe
- *  wylogowanie ze wszystkich urzadzen, bez tabeli sesji do sprzatania. */
+/** Invalidates every session cookie previously issued to this actor.
+ *  The epoch number goes into the cookie signature, so bumping it = an immediate sign-out
+ *  from every device, with no session table to clean up. */
 export function bumpSessionEpoch(ctx: Ctx, actorId: number): number {
   ctx.db.prepare("UPDATE actors SET session_epoch = session_epoch + 1 WHERE id = ?").run(actorId);
   const r = ctx.db.prepare("SELECT session_epoch FROM actors WHERE id = ?").get(actorId) as
@@ -220,7 +220,7 @@ const DUMMY_SALT = Buffer.alloc(16, 7);
 export function verifyPassword(ctx: Ctx, handle: string, password: string): Actor | null {
   const actor = getActorByHandle(ctx, handle);
   if (!actor || actor.disabledAt) {
-    // Ta sama cena scrypt dla nieistniejacego konta - patrz nizej.
+    // The same scrypt cost for a non-existent account - see below.
     scryptSync(password, DUMMY_SALT, SCRYPT_KEYLEN);
     return null;
   }
@@ -229,8 +229,8 @@ export function verifyPassword(ctx: Ctx, handle: string, password: string): Acto
     | undefined;
   const stored = row?.password_hash;
   if (!stored) {
-    // Konto bez hasla placi te sama cene scrypt, co konto z haslem - inaczej
-    // czas odpowiedzi logowania bylby wyrocznia "czy taki uzytkownik istnieje".
+    // An account with no password pays the same scrypt cost as one with a password - otherwise
+    // the login response time would be an oracle for "does this user exist".
     scryptSync(password, DUMMY_SALT, SCRYPT_KEYLEN);
     return null;
   }
