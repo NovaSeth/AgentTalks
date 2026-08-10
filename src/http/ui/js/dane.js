@@ -1,12 +1,12 @@
 /**
- * Pobieranie i odswiezanie danych. Rysowanie wola przez rejestr `widok`.
+ * Fetching and refreshing data. It calls drawing through the `widok` registry.
  */
 import { SID_KEY, api } from "./api.js";
 import { updateTitleBadge } from "./dom.js";
 import { animatedMsgs, applyUnreadRows, mergeActors, mergeReactions, state, upsertMessage, widok } from "./stan.js";
 import { showError } from "./toasty.js";
 
-// ------------------------------------------------------------------- ladowanie
+// ----------------------------------------------------------------- loading
 export async function loadConversationsList() {
   const data = await api("GET", "/api/conversations");
   state.conversations = data.conversations;
@@ -16,10 +16,10 @@ export async function loadConversationsList() {
   applyUnreadRows(data.unread);
 }
 
-// Wejscie w rozmowe ma pokazac NAJNOWSZE od razu, wiec pierwsza paczka jest
-// mala (tyle, ile mniej wiecej miesci sie na ekranie); starsze doczytuja sie
-// same, po 20, gdy przewijasz w gore. Pobieranie 200 wiadomosci na otwarcie
-// bylo placeniem czasem do pierwszego widoku za historie, ktorej nikt nie czyta.
+// Entering a conversation must show the NEWEST messages at once, so the first batch is small
+// (roughly what fits on a screen); older ones load themselves, 20 at a time, as you scroll
+// up. Fetching 200 messages on open was paying in time-to-first-view for history nobody
+// reads.
 const PIERWSZA_PACZKA = 30;
 
 const STARSZA_PACZKA = 20;
@@ -27,22 +27,22 @@ const STARSZA_PACZKA = 20;
 export async function loadMessages(convId) {
   const pierwszyRaz = !state.loaded[convId];
   const data = await api("GET", `/api/conversations/${convId}/messages?limit=${PIERWSZA_PACZKA}`);
-  // SCALAMY zamiast podmieniac tablice: przypisanie `state.msgs[id] = ...`
-  // kasowalo wszystko, co uzytkownik doladowal przewijaniem w gore.
-  // Historia wchodzi bez animacji - "wjazd" odgrywa tylko wiadomosc, ktora
-  // przyszla na zywo (SSE), nie kazde otwarcie kanalu.
+  // We MERGE rather than replace the array: assigning `state.msgs[id] = ...` erased everything
+  // the user had loaded by scrolling up.
+  // History enters without animation - the "slide in" is played only by a message that arrived
+  // live (SSE), not by every opening of a channel.
   for (const m of data.messages) { upsertMessage(convId, m); animatedMsgs.add(m.id); }
-  // Znacznik "historia POBRANA" (nie "sa jakies wiadomosci"): pojedyncza
-  // wiadomosc z SSE nie moze udawac wczytanej rozmowy.
+  // The "history FETCHED" marker (not "there are some messages"): a single message from SSE
+  // must not pretend to be a loaded conversation.
   state.loaded[convId] = true;
-  // Pelna paczka = pewnie jest starsza historia do doladowania. Przy odswiezeniu
-  // juz wczytanej rozmowy nowa paczka nie mowi nic o tym, co jest NAD nasza lista.
+  // A full batch = there is probably older history to load. When refreshing an already loaded
+  // conversation, a new batch says nothing about what lies ABOVE our list.
   if (pierwszyRaz) state.hasMore[convId] = data.messages.length >= PIERWSZA_PACZKA;
   mergeActors(data.actors);
   mergeReactions(data.messages, data.reactions);
-  // Odpowiedzi w watkach nie stoja na glownej liscie, wiec paczka 30 wiadomosci
-  // moze dac ekran z trzema. Dobieramy, dopoki nie ma z czego przewijac - bez
-  // tego lazy loading nigdy by sie nie uruchomil, bo scrolla po prostu nie ma.
+  // Thread replies do not stand in the main list, so a batch of 30 messages can produce a
+  // screen with three. We fetch more until there is something to scroll - without that, lazy
+  // loading would never start, because there simply is no scrollbar.
   let dobrane = 0;
   while (
     state.hasMore[convId] && dobrane < 4 &&
@@ -53,8 +53,8 @@ export async function loadMessages(convId) {
   }
 }
 
-/** Doladowanie starszej historii nad tym, co juz mamy - z zachowaniem pozycji
- *  scrolla (tresc nie moze uciec spod oczu, gdy nad nia wjezdza starsze). */
+/** Loading older history above what we already have - keeping the scroll position (the content
+/**  must not run away from your eyes when older messages slide in above it). */
 let doladowanieTrwa = false;
 
 export async function loadOlderMessages(convId) {
@@ -71,17 +71,16 @@ export async function loadOlderMessages(convId) {
     const el = document.getElementById("messages");
     const beforeH = el ? el.scrollHeight : 0, beforeTop = el ? el.scrollTop : 0;
     widok.wiadomosci();
-    // Kotwica: po dolozeniu starszych nad spodem tresc, na ktora patrzysz, ma
-    // zostac pod tym samym palcem - inaczej lazy loading "wyrywa" widok.
+    // An anchor: after adding older messages above, what you are looking at has to stay under the
+    // same finger - otherwise lazy loading "yanks" the view.
     if (el) el.scrollTop = beforeTop + (el.scrollHeight - beforeH);
   } catch (e) { showError(e); }
   finally { doladowanieTrwa = false; }
 }
 
-// Uchwyt cyklicznego odswiezania dzierzaw/digestu. W zmiennej modulowej, bo bez
-// niego kazde ponowne logowanie w tej samej karcie zostawialo kolejny, rownolegle
-// dzialajacy interwal (i trzeci po trzecim logowaniu). Dzierzawy zyja minutami,
-// wiec 30 s wystarcza na "tablice".
+// The handle of the periodic leases/digest refresh. In a module variable, because without it
+// every re-login in the same tab left another interval running in parallel (and a third after
+// a third login). Leases live for minutes, so 30 s is enough for a "board".
 let digestTimer = null;
 
 export function startDigestTimer() {
@@ -91,14 +90,13 @@ export function startDigestTimer() {
 
 export function stopDigestTimer() { clearInterval(digestTimer); digestTimer = null; }
 
-/** Digest "Co Cie ominelo" i tablica dzierzaw - dane do sidebara.
- *  summary=1: sidebar potrzebuje z digestu JEDNEJ liczby, a pelna odpowiedz to
- *  komplet wzmianek i otwartych pytan z trescia (dziesiatki KB co 30 s). Gdy
- *  serwer parametru nie zna, po prostu odda wszystko - nic sie nie psuje. */
-/** @param force pomija warunek widocznosci karty. Cykliczne odswiezanie w tle
- *  jest bez sensu, ale odswiezenie PO CZYNNOSCI uzytkownika (zajal zasob,
- *  zwolnil) musi dojsc zawsze - inaczej lista przeczy komunikatowi, ktory
- *  wlasnie powiedzial "gotowe". */
+/** The "What you missed" digest and the lease board - data for the sidebar.
+/**  summary=1: the sidebar needs ONE number from the digest, while the full response is the
+/**  complete set of mentions and open questions with their content (tens of KB every 30 s).
+/**  When the server does not know the parameter it simply returns everything - nothing breaks. */
+/** @param force skips the tab-visibility condition. A periodic refresh in the background is
+/**  pointless, but a refresh AFTER A USER ACTION (they claimed a resource, released one) has to
+/**  go through always - otherwise the list contradicts the message that has just said "done". */
 export async function refreshDigestAndLeases(force) {
   if (!force && document.visibilityState !== "visible") return;  // karta w tle nie potrzebuje tablicy dzierzaw
   try {
@@ -112,9 +110,9 @@ export async function refreshDigestAndLeases(force) {
   } catch { /* dodatki, nie fundament */ }
 }
 
-/** Reakcje JEDNEJ wiadomosci. Osobnego endpointu nie ma, ale `before=<id+1>&limit=1`
- *  zwraca dokladnie te jedna wiadomosc razem z jej mapa reakcji - zamiast 200
- *  pelnych wiadomosci (kilkaset KB) po kazdym kliknieciu emoji u kazdego czlonka. */
+/** The reactions of ONE message. There is no dedicated endpoint, but `before=<id+1>&limit=1`
+/**  returns exactly that one message together with its reaction map - instead of 200 full
+/**  messages (hundreds of KB) after every emoji click by every member. */
 export async function loadReactionsForMessage(convId, messageId) {
   if (!convId || !messageId) return;
   try {
@@ -125,10 +123,10 @@ export async function loadReactionsForMessage(convId, messageId) {
   } catch { /* best effort */ }
 }
 
-// Katalog aktorow: JEDNA regula zamiast trzech roznych (mentionAutocomplete brala
-// go, gdy lista byla pusta; nowa rozmowa tak samo; panel szczegolow po swojemu).
-// Prosty TTL + wspolne zapytanie, zeby seria wiadomosci od nieznanych autorow nie
-// wystrzelila serii identycznych zadan.
+// The actor directory: ONE rule instead of three different ones (mentionAutocomplete fetched
+// it when the list was empty; a new conversation did the same; the details panel had its own
+// way). A simple TTL plus a shared request, so that a run of messages from unknown authors
+// does not fire a run of identical requests.
 const AKTORZY_TTL_MS = 60000;
 
 let pobieranieAktorow = null;
@@ -155,9 +153,9 @@ export async function refreshPresence() {
   try {
     const data = await api("GET", "/api/presence");
     state.presence = data.presence;
-    // Punktowo: obecnosc zmienia w sidebarze WYLACZNIE kropki. Sesje web bija
-    // heartbeat co 30 s, wiec pelna przebudowa listy przy kazdym oddechu
-    // wyrzucalaby uzytkownikowi liste spod kursora.
+    // Pointwise: presence changes ONLY the dots in the sidebar. Web sessions beat a heartbeat
+    // every 30 s, so a full rebuild of the list on every breath would yank the list out from
+    // under the user's cursor.
     widok.obecnosc();
   } catch { /* obecnosc nie jest krytyczna */ }
 }
@@ -167,8 +165,8 @@ export async function refreshQuestions(convId) {
     const data = await api("GET", "/api/questions/open");
     const open = {};
     for (const q of data.questions) open[q.message.id] = q.id;
-    // Bez tego porownania kazde wejscie do rozmowy i kazda odpowiedz
-    // przerysowywaly cala liste wiadomosci, zwykle po to, zeby nic nie zmienic.
+    // Without this comparison, every entry into a conversation and every reply redrew the whole
+    // message list, usually in order to change nothing.
     const zmiana = Object.keys(open).join(",") !== Object.keys(state.openQuestions).join(",");
     state.openQuestions = open;
     if (!zmiana) return;
@@ -177,10 +175,9 @@ export async function refreshQuestions(convId) {
   } catch { /* best effort */ }
 }
 
-/** Piny aktywnej rozmowy. Wczesniej pobieral je WYLACZNIE panel szczegolow,
- *  wiec menu wiadomosci nie mialo skad wiedziec, czy pokazac "Przypnij" czy
- *  "Odepnij". Odpowiedz jest maleńka (lista identyfikatorow), a wchodzi raz na
- *  wejscie do rozmowy. */
+/** The active conversation's pins. Previously ONLY the details panel fetched them, so the
+/**  message menu had no way of knowing whether to offer "Pin" or "Unpin". The response is tiny
+/**  (a list of identifiers) and arrives once per entry into a conversation. */
 export async function loadPins(convId) {
   try {
     const data = await api("GET", `/api/conversations/${convId}/pins`);
@@ -200,16 +197,15 @@ export async function loadWikiList() {
 
 let markReadTimers = {};
 
-/** @param messageId do ktorej wiadomosci czytamy. Bez niego serwer przesuwa
- *  znacznik na NAJNOWSZA wiadomosc w systemie - czyli skok do wpisu sprzed
- *  godziny kasowalby takze wszystko, co przyszlo po nim. */
+/** @param messageId up to which message we are reading. Without it the server moves the marker
+/**  to the NEWEST message in the system - so a jump to an entry from an hour ago would also
+/**  clear everything that arrived after it. */
 export function markReadDebounced(convId, messageId) {
   clearTimeout(markReadTimers[convId]);
   markReadTimers[convId] = setTimeout(async () => {
     try {
       await api("POST", `/api/conversations/${convId}/read`, messageId ? { messageId } : {});
-      // Zerujemy DOPIERO po potwierdzeniu serwera: licznik, ktory raz sklamal,
-      // przestaje byc czytany w ogole.
+      // We clear it ONLY after the server confirms: a counter that lied once stops being read at all.
       state.unread[convId] = 0;
       state.unreadBadge[convId] = 0;
       widok.wiersz(convId);
@@ -218,9 +214,9 @@ export function markReadDebounced(convId, messageId) {
   }, 500);
 }
 
-// -------------------------------------------------- sesja czlowieka (obecnosc)
-// Rejestrujemy sesje przegladarki, zeby INNI widzieli nasza obecnosc i "pisze...".
-// Efemeryczna + heartbeat: zamkniecie karty po prostu wygasza sesje.
+// -------------------------------------------------- the human's session (presence)
+// We register the browser session so that OTHERS see our presence and our "typing...".
+// Ephemeral + a heartbeat: closing the tab simply lets the session expire.
 export let mySessionId = sessionStorage.getItem(SID_KEY) || null;
 
 let heartbeatTimer = null;
@@ -243,8 +239,8 @@ export async function registerPresenceSession() {
 
 let lastTypingSignal = 0;
 
-/** Sygnal "pisze" z miejscem: loc = "c:<convId>" / "w:<slug>". Bez loc bierze
- *  aktywna rozmowe. Throttle 3 s - TTL na serwerze to 7 s. */
+/** The "typing" signal with a place: loc = "c:<convId>" / "w:<slug>". Without loc it takes the
+/**  active conversation. Throttled to 3 s - the server TTL is 7 s. */
 export function signalTyping(loc) {
   const now = Date.now();
   if (!mySessionId || now - lastTypingSignal < 3000) return;

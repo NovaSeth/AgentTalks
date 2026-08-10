@@ -1,17 +1,17 @@
 /**
- * Strumien zdarzen na zywo: wznawianie z kursorem, backoff, powiadomienia.
+ * The live event stream: resumption with a cursor, backoff, notifications.
  */
 import { api } from "./api.js";
 import { ensureActors, loadConversationsList, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions } from "./dane.js";
 import { announce, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { actorHandle, findMsgById, mentionsMe, state, upsertMessage, widok } from "./stan.js";
 
-// --------------------------------------------------------------- SSE (na zywo)
-// EventSource wznawia SAM tylko zerwanie na poziomie TCP. Odpowiedz HTTP inna niz
-// 200 (429 z limitu strumieni, 401 po wygasnieciu sesji, 502/504 podczas deployu)
-// przestawia go w stan CLOSED i nie probuje juz nigdy - a cicha smierc live-update
-// jest gorsza od widocznego bledu. Stad wlasne wznawianie z narastajaca przerwa,
-// kursor dosylki i widoczny stan polaczenia w stopce panelu bocznego.
+// -------------------------------------------------------------- SSE (live)
+// EventSource resumes BY ITSELF only from a TCP-level break. An HTTP response other than 200
+// (a 429 from the stream limit, a 401 after the session expires, a 502/504 during a
+// deployment) puts it into the CLOSED state and it never tries again - and a silent death of
+// live updates is worse than a visible error. Hence our own resumption with a growing pause,
+// a replay cursor, and a visible connection state in the sidebar footer.
 let es = null;
 
 let sseRetry = 0;        // numer proby: 1s, 2s, 4s ... max 30 s
@@ -23,9 +23,9 @@ let sseWznowienie = false; // czy to polaczenie jest powrotem po przerwie
 function setOnline(online) {
   if (state.online === online) return;
   state.online = online;
-  // Stan polaczenia to pasek NAD ROZMOWA, nie drobny druk pod lista kanalow:
-  // "nie widzisz nowych wiadomosci" jest wazniejsze niz numer wersji interfejsu,
-  // z ktorym dzielilo dotad jeden wiersz w stopce.
+  // The connection state is a bar ABOVE THE CONVERSATION, not fine print under the channel
+  // list: "you are not seeing new messages" matters more than the interface version number,
+  // with which it used to share one line in the footer.
   widok.pasekOffline();
 }
 
@@ -37,8 +37,8 @@ function scheduleReconnect() {
   sseTimer = setTimeout(() => { if (state.actor) connectSSE(); }, delay);
 }
 
-/** Powrot do karty: strumien mogl paść w tle. CONNECTING zostawiamy w spokoju -
- *  przegladarka wlasnie probuje sama. */
+/** Returning to the tab: the stream may have died in the background. We leave CONNECTING
+/**  alone - the browser is trying by itself right now. */
 export function ensureSSE() {
   if (!es || es.readyState === EventSource.CLOSED) connectSSE();
 }
@@ -54,17 +54,17 @@ export function disconnectSSE() {
 export function connectSSE() {
   clearTimeout(sseTimer);
   if (es) es.close();
-  // BRAK parametru i after=0 to dla serwera dwie rozne rzeczy: brak znaczy
-  // "tylko przyszlosc", zero znaczy "dosylaj od poczatku". Przy pierwszym
-  // polaczeniu chcemy pierwszego, po zerwaniu - dosylki od kursora.
+  // NO parameter and after=0 are two different things to the server: absent means "the future
+  // only", zero means "replay from the beginning". On a first connection we want the former,
+  // after a break - a replay from the cursor.
   es = new EventSource(state.sseCursor ? `/api/events?after=${state.sseCursor}` : "/api/events");
   es.onopen = async () => {
     sseRetry = 0;
     setOnline(true);
     if (!sseWznowienie) return;
     sseWznowienie = false;
-    // Po przerwie liczniki nieprzeczytanych i sklad list moga byc dowolnie stare -
-    // dosylka niesie tylko wiadomosci, nie stan.
+    // After a break the unread counters and list contents can be arbitrarily stale - a replay
+    // carries messages only, not state.
     try { await loadConversationsList(); widok.sidebar(); updateTitleBadge(); }
     catch { /* best effort */ }
   };
@@ -75,8 +75,8 @@ export function connectSSE() {
   es.addEventListener("presence", () => refreshPresence());
   es.addEventListener("notification", () => refreshNotifications());
   es.addEventListener("wiki", (e) => {
-    // Czyjas edycja wiki: odswiez liste (badge zmian), a gdy patrzysz wlasnie
-    // na te strone (i jej nie edytujesz), takze jej tresc i historie.
+    // Somebody else's wiki edit: refresh the list (the change badge), and when you are looking at
+    // that very page (and not editing it), its content and history as well.
     loadWikiList();
     try {
       const ev = JSON.parse(e.data);
@@ -86,9 +86,9 @@ export function connectSSE() {
     } catch { /* zdarzenie bez danych */ }
   });
   es.addEventListener("conversation", async (e) => {
-    // Zmiana kanalu (edycja/archiwum/sklad): odswiez liste; gdy dotyczy aktywnej
-    // rozmowy, takze widok i otwarty panel szczegolow. Archiwizacja aktywnej
-    // przenosi na pierwsza dostepna rozmowe.
+    // A channel change (edit/archive/membership): refresh the list; when it concerns the active
+    // conversation, the view and the open details panel as well. Archiving the active one moves
+    // you to the first available conversation.
     await loadConversationsList();
     widok.sidebar();
     try {
@@ -106,8 +106,8 @@ export function connectSSE() {
     } catch { /* zdarzenie bez danych */ }
   });
   es.onerror = () => {
-    // readyState CONNECTING (0) = przegladarka wznawia sama, nie przeszkadzamy.
-    // CLOSED (2) = koniec, dalej juz nikt nie sprobuje - to nasza robota.
+    // readyState CONNECTING (0) = the browser is resuming by itself, we do not interfere.
+    // CLOSED (2) = the end, nobody will try again - that is our job.
     setOnline(false);
     if (es && es.readyState === EventSource.CLOSED) scheduleReconnect();
   };
@@ -117,22 +117,22 @@ async function onMessageEvent(ev) {
   const convId = ev.conversationId, msg = ev.message;
   const known = state.conversations.some((c) => c.id === convId);
   if (!known) { await loadConversationsList(); widok.sidebar(); }
-  // Nieznany autor: dociagamy KATALOG AKTOROW, a nie wiadomosci. Przeladowanie
-  // listy podmienialo tablice na 30 najnowszych i kasowalo cala doladowana
-  // historie - i to za jeden brakujacy handle.
+  // An unknown author: we fetch the ACTOR DIRECTORY, not the messages. Reloading the list
+  // replaced the array with the 30 newest and erased all the loaded history - and that for one
+  // missing handle.
   if (!state.actorsCache[msg.actorId]) await ensureActors({ force: true });
   const wasMine = msg.actorId === state.actor.id;
   const otwarta = state.view === "chat" && state.activeId === convId;
   const atBottom = otwarta && isScrolledToBottom();
-  // Wiadomosc do rozmowy, ktorej nigdy nie otwieralismy, NIE zaklada tablicy:
-  // pusta-ale-istniejaca wygladala potem jak "historia juz wczytana" i po
-  // wejsciu bylo widac jedna wiadomosc bez niczego przed nia.
+  // A message for a conversation we have never opened does NOT create an array: an
+  // empty-but-existing one then looked like "history already loaded", and after entering you
+  // saw one message with nothing before it.
   if (state.loaded[convId] || otwarta) upsertMessage(convId, msg);
   else if (msg.id > state.sseCursor) state.sseCursor = msg.id;
   if (msg.kind === "ask" || msg.kind === "answer") refreshQuestions(convId);
-  // "Patrze na rozmowe" to nie to samo co "widze najnowsze": przy historii
-  // przewinietej w gore wiadomosci nie byly ani liczone, ani oznaczane -
-  // klient pokazywal 0, serwer wiedzial o trzydziestu.
+  // "Looking at a conversation" is not the same as "seeing the newest": with the history
+  // scrolled up, messages were neither counted nor marked - the client showed 0 while the
+  // server knew about thirty.
   const viewing = otwarta && document.visibilityState === "visible";
   const widzeNajnowsze = viewing && atBottom;
   if (!widzeNajnowsze && !wasMine) {
@@ -161,10 +161,10 @@ async function onMessageEvent(ev) {
   }
 }
 
-// ------------------------------------------------- powiadomienia przegladarki
-// O zgode pytamy KONTEKSTOWO - przy pierwszej wzmiance albo z centrum powiadomien,
-// nigdy na starcie. Prosba bez powodu jest odrzucana raz na zawsze i wtedy nie ma
-// juz jak jej ponowic.
+// ----------------------------------------------- browser notifications
+// We ask for permission IN CONTEXT - on the first mention or from the notification centre,
+// never at startup. A request with no reason is refused once and for all, and then there is
+// no way to ask again.
 function maybeNotify(conv, msg, direct) {
   if (!("Notification" in window) || document.visibilityState === "visible") return;
   const notify = (conv && state.memberships[conv.id]?.notify) || "all";
@@ -182,9 +182,9 @@ function maybeNotify(conv, msg, direct) {
 }
 
 function onReactionEvent(ev) {
-  // Reakcja niesie messageId, wiec nie ma powodu pobierac 200 pelnych wiadomosci
-  // (57 KB) u kazdego czlonka rozmowy - i to takze wtedy, gdy reakcja padla
-  // w rozmowie, ktorej nawet nie mamy otwartej.
+  // A reaction carries a messageId, so there is no reason to fetch 200 full messages (57 KB)
+  // for every member of the conversation - and that also when the reaction landed in a
+  // conversation we do not even have open.
   if (ev.conversationId !== state.activeId && !state.threadOpen) return;
   loadReactionsForMessage(ev.conversationId, ev.messageId).then(() => {
     if (state.view === "chat" && state.activeId === ev.conversationId) widok.wiadomosc(findMsgById(ev.messageId));

@@ -1,10 +1,10 @@
 /**
- * Stan aplikacji i czyste operacje na nim. NIE importuje widokow - komunikacja
- * w te strone idzie przez rejestr `widok` (wstrzykiwane funkcje rysujace).
+ * Application state and pure operations on it. It does NOT import views - communication in
+ * that direction goes through the `widok` registry (injected drawing functions).
  */
 import { t } from "./i18n.js";
 
-// ------------------------------------------------------------------- stan
+// ------------------------------------------------------------------ state
 export const state = {
   actor: null,
   conversations: [],
@@ -52,11 +52,11 @@ export const state = {
   },
 };
 
-/** Rejestr funkcji rysujacych. Warstwa danych i akcji NIE importuje widokow -
- *  to zamykaloby cykl importow (widok wola akcje, akcja przerysowuje widok).
- *  Widoki rejestruja sie tutaj raz, przy starcie; reszta kodu wola je przez ten
- *  obiekt. Domyslne puste funkcje sprawiaja, ze wszystko dziala takze zanim
- *  jakikolwiek widok w ogole powstal (np. blad w trakcie logowania). */
+/** The registry of drawing functions. The data and action layers do NOT import views - that
+/**  would close an import cycle (a view calls an action, the action redraws the view). Views
+/**  register here once, at startup; the rest of the code calls them through this object. The
+/**  default empty functions mean everything works even before any view exists at all (say, an
+/**  error during login). */
 export const widok = {
   render: () => {},           // caly ekran: login albo powloka
   powloka: () => {},          // rail + panel boczny + kolumna glowna
@@ -91,9 +91,9 @@ export function actorKind(id) { return (state.actorsCache[id] && state.actorsCac
 
 export function mergeActors(map) { Object.assign(state.actorsCache, map || {}); }
 
-/** Adres awatara aktora albo null (wtedy rysujemy kropke z inicjalami).
- *  `?v=<odcisk>` w adresie sprawia, ze zmiana awatara jest widoczna od razu mimo
- *  rocznego cache'owania - bez tego "zmienilem awatar i nic sie nie stalo". */
+/** An actor's avatar URL, or null (then we draw the dot with initials).
+/**  `?v=<fingerprint>` in the URL makes an avatar change visible immediately despite a year of
+/**  caching - without it, "I changed my avatar and nothing happened". */
 export function avatarUrl(handleOrId) {
   const id = typeof handleOrId === "number" ? handleOrId : actorIdByHandle(handleOrId);
   const a = id != null ? state.actorsCache[id] : null;
@@ -106,23 +106,23 @@ function actorIdByHandle(h) {
   return null;
 }
 
-// Aliasy wolania calego kanalu - DOKLADNIE ta sama lista co w rdzeniu
-// (core/mentions.ts), inaczej ogloszenie z @all liczyloby sie na kliencie
-// slabiej niz na serwerze i licznik zmienialby sie po samym odswiezeniu.
+// Aliases that call the whole channel - EXACTLY the same list as in the core
+// (core/mentions.ts), otherwise an @all announcement would count for less on the client than
+// on the server and the counter would change on a mere refresh.
 const WOLANIA_OGOLNE = ["all", "channel", "here", "wszyscy", "kanal"];
 
-/** "Czy ta wiadomosc wola mnie" - wyrazenie budowane RAZ po zalogowaniu, a nie
- *  dla kazdego dymka przy kazdym renderze. Klasa znakow przed @ jest ta sama co
- *  w mdInline, wiec "(@michal" liczy sie tak samo jak " @michal". */
-// Handle dopuszcza kropke i myslnik (core/ids.ts), a kropka w wyrazeniu regularnym
-// znaczy "dowolny znak" - bez ucieczki "@jan.kowalski" pasowalby do "@janXkowalski".
-// Helper stoi tu, a nie w dom.js, bo stan.js celowo nie importuje niczego.
+/** "Does this message call me" - an expression built ONCE after login, rather than for every
+/**  bubble on every render. The character class before @ is the same as in mdInline, so
+/**  "(@michal" counts the same as " @michal". */
+// A handle allows a dot and a hyphen (core/ids.ts), and a dot in a regular expression means
+// "any character" - without escaping, "@jan.kowalski" would match "@janXkowalski".
+// The helper lives here rather than in dom.js, because stan.js deliberately imports nothing.
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 let mentionRe = null;
 
-/** Wylogowanie zeruje wzorzec - inaczej nastepny uzytkownik w tej samej karcie
- *  liczylby wzmianki po cudzym handle. */
+/** Logging out clears the pattern - otherwise the next user in the same tab would count
+/**  mentions against somebody else's handle. */
 export function resetMentionRe() { mentionRe = null; }
 
 export function rebuildMentionRe() {
@@ -136,8 +136,8 @@ export function mentionsMe(text) {
   return mentionRe.test(String(text ?? ""));
 }
 
-/** Jedyne miejsce, w ktorym wiadomosc wchodzi do stanu - i jedyne, w ktorym
- *  przesuwa sie kursor dosylki SSE. */
+/** The only place a message enters the state - and the only one where the SSE replay cursor
+/**  moves. */
 export function upsertMessage(convId, msg) {
   const list = state.msgs[convId] || (state.msgs[convId] = []);
   const i = list.findIndex((m) => m.id === msg.id);
@@ -145,10 +145,10 @@ export function upsertMessage(convId, msg) {
   if (msg.id > state.sseCursor) state.sseCursor = msg.id;
 }
 
-/** Wiersze unread z serwera (pola: unread, badge) do dwoch map stanu.
- *  UWAGA: pole nazywa sie `unread`, nie `count` - stary odczyt row.count dawal
- *  undefined i liczniki z serwera NIGDY sie nie ladowaly (dzialaly tylko
- *  przyrosty SSE w zywej sesji; po odswiezeniu znikaly). */
+/** Unread rows from the server (fields: unread, badge) into two state maps.
+/**  NOTE: the field is called `unread`, not `count` - the old read of row.count returned
+/**  undefined and the server's counters NEVER loaded (only SSE increments worked in a live
+/**  session; after a refresh they disappeared). */
 export function applyUnreadRows(rows) {
   state.unread = {};
   state.unreadBadge = {};
@@ -158,24 +158,24 @@ export function applyUnreadRows(rows) {
   }
 }
 
-/** Scala reakcje z odpowiedzi serwera. Najpierw KASUJE wpisy dla pobranych
- *  wiadomosci: wiadomosc bez reakcji nie ma klucza w odpowiedzi, wiec samo
- *  Object.assign nigdy nie zdejmuje ostatniej reakcji (chip zostawal na zawsze). */
+/** Merges reactions from a server response. It first DELETES the entries for the fetched
+/**  messages: a message with no reactions has no key in the response, so a plain Object.assign
+/**  never removes the last reaction (the chip stayed forever). */
 export function mergeReactions(messages, reactions) {
   for (const m of messages) delete state.reactions[m.id];
   Object.assign(state.reactions, reactions || {});
 }
 
-// ------------------------------------------------------------------- szkice
-// Przelaczenie rozmowy w trakcie pisania to w komunikatorze norma, a nie wypadek
-// przy pracy - wiec tekst i podpiete pliki maja to przezyc. Tekst dodatkowo
-// laduje w localStorage, zeby przezyl F5 i deploy; pliki zostaja w pamieci karty
-// (obiektu File nie da sie zserializowac).
+// ------------------------------------------------------------------ drafts
+// Switching conversation while writing is the norm in a messenger, not an accident - so the
+// text and the attached files have to survive it. The text additionally lands in localStorage
+// so that it survives F5 and a deployment; the files stay in the tab's memory (a File object
+// cannot be serialised).
 const DRAFT_KEY = (id) => `atalks_draft_${id}`;
 
-/** Zaglada do pola tekstowego, bo to ono jest zrodlem prawdy o tresci szkicu
- *  (stan nie sledzi kazdego nacisniecia klawisza). To jedyne miejsce w tym
- *  module, ktore dotyka DOM - i nie tworzy zaleznosci od zadnego widoku. */
+/** It looks into the text field, because that is the source of truth about a draft's content
+/**  (the state does not track every keystroke). This is the only place in this module that
+/**  touches the DOM - and it creates no dependency on any view. */
 export function saveDraft() {
   const id = state.activeId;
   if (!id) return;
@@ -204,9 +204,9 @@ export function clearDraft(convId) {
   try { localStorage.removeItem(DRAFT_KEY(convId)); } catch { /* prywatny tryb */ }
 }
 
-/** Historia rozmow, ktorych nie ogladamy, nie moze rosnac w karcie w nieskonczonosc.
- *  Kasujemy ja RAZEM ze znacznikiem "wczytana", zeby powrot dociagnal ja tak samo
- *  jak za pierwszym razem - stan i pamiec nie moga sie rozjechac. */
+/** The history of conversations we are not looking at must not grow in the tab forever.
+/**  We delete it TOGETHER with the "loaded" marker, so that returning fetches it exactly as it
+/**  did the first time - the state and the memory must not drift apart. */
 const CACHE_ROZMOW = 5;
 
 export function przytnijCache() {
@@ -220,8 +220,8 @@ export function przytnijCache() {
   }
 }
 
-/** Id ostatniej wiadomosci rozmowy. Pomija wpisy optymistyczne (id "tmp-..."),
- *  bo serwer takiego identyfikatora nie zna. */
+/** The id of a conversation's last message. It skips optimistic entries (ids "tmp-..."),
+/**  because the server does not know such an identifier. */
 export function lastMessageId(convId) {
   const list = state.msgs[convId] || [];
   for (let i = list.length - 1; i >= 0; i--) if (typeof list[i].id === "number") return list[i].id;
@@ -232,15 +232,15 @@ export function actorOnline(actorId) {
   return state.presence.some((p) => p.actorId === actorId && p.online);
 }
 
-/** Obecnosc po nazwie, nie po id. Rozmowcy z `others` przychodza z serwera jako
- *  handle/displayName/kind - bez identyfikatorow - a lista rozmow ma pokazywac
- *  kropke obecnosci od pierwszej klatki, jeszcze zanim katalog aktorow dojdzie. */
+/** Presence by name, not by id. The participants in `others` arrive from the server as
+/**  handle/displayName/kind - with no identifiers - and the conversation list has to show the
+/**  presence dot from the first frame, before the actor directory arrives. */
 export function handleOnline(handle) {
   const low = String(handle ?? "").toLowerCase();
   return state.presence.some((p) => p.online && String(p.handle).toLowerCase() === low);
 }
 
-// Zwiniete galezie drzewa wiki - pamiec per przegladarka.
+// Collapsed branches of the wiki tree - remembered per browser.
 export const wikiCollapsed = new Set((() => {
   try { return JSON.parse(localStorage.getItem("atalks_wiki_collapsed") || "[]"); }
   catch { return []; }
@@ -248,13 +248,12 @@ export const wikiCollapsed = new Set((() => {
 
 export const dmMembersCache = {}; // convId -> [actorId,...] (bez mnie)
 
-/** Rozmowcy rozmowy prywatnej: [{handle, displayName, kind}], bez mnie.
- *
- *  Zrodlem prawdy jest pole `others` z serwera (GET /api/me i /api/conversations) -
- *  dzieki niemu lista rozmow ma nazwy i twarze OD RAZU. Cache po autorach
- *  wiadomosci zostaje jako zapas dla starszego serwera, ktory `others` nie zna;
- *  wczesniej byl jedynym zrodlem, wiec kazda rozmowa prywatna nazywala sie
- *  "Wiadomosc" do czasu, az sie ja otworzylo. */
+/** The participants of a direct conversation: [{handle, displayName, kind}], without me.
+/**  The source of truth is the `others` field from the server (GET /api/me and
+/**  /api/conversations) - thanks to it the conversation list has names and faces AT ONCE. The
+/**  cache built from message authors remains as a fallback for an older server that does not
+/**  know `others`; it used to be the only source, so every direct conversation was called
+/**  "Message" until you opened it. */
 export function dmOthers(c) {
   if (Array.isArray(c.others) && c.others.length) return c.others;
   const ids = dmMembersCache[c.id];
@@ -270,27 +269,26 @@ export function dmLabel(c) {
   return c.topic || (c.kind === "group" ? t("Group conversation") : t("Direct conversation"));
 }
 
-/** Wiadomosci "w obiegu zgloszen": tylko przy nich ma sens klucz "naprawiłem"
- *  i check "potwierdzam". Serwer nie ma pola "to jest zgloszenie" - jest tylko
- *  slad po czynnosciach (fixedAt/resolvedAt) - wiec jawne wskazanie przez
- *  czlowieka ("Potraktuj jako zgłoszenie") trzymamy tutaj, w pamieci karty.
- *  Bez tego oba przyciski wisialy przy KAZDEJ cudzej wiadomosci, takze w
- *  rozmowie prywatnej o obiedzie, a przypadkowy klik wysylal komus falszywe
- *  zadanie potwierdzenia. */
+/** Messages "in the report cycle": the "I fixed it" wrench and the "I confirm" check only make
+/**  sense next to those. The server has no "this is a report" field - there is only the trace
+/**  of the actions (fixedAt/resolvedAt) - so an explicit indication by a human ("Treat as a
+/**  report") is kept here, in the tab's memory. Without it both buttons hung next to EVERY
+/**  message from somebody else, including in a private conversation about lunch, and an
+/**  accidental click sent somebody a false request to confirm something they never reported. */
 export const zgloszenia = new Set();
 
 export function czyZgloszenie(m) {
   return !!(m && (m.fixedAt || m.resolvedAt || zgloszenia.has(m.id)));
 }
 
-/** Czy moge zarzadzac ta rozmowa (rola admin w kanale albo admin instancji). */
+/** Whether I can manage this conversation (an admin role in the channel, or the instance admin). */
 export function canManageActive() {
   const m = state.memberships[state.activeId];
   return !!(state.actor?.isAdmin || (m && m.role === "admin"));
 }
 
-/** Wiadomosci widoczne na glownej liscie: te z serwera plus wpisy w locie
- *  (optymistyczne). Odpowiedzi w watkach nie stoja na glownej liscie. */
+/** Messages visible in the main list: those from the server plus in-flight (optimistic)
+/**  entries. Thread replies do not stand in the main list. */
 export function widoczneWiadomosci(convId) {
   const msgs = (state.msgs[convId] || []).filter((m) => !m.threadId);
   const pend = (state.pending[convId] || []).filter((m) => !m.threadId);
@@ -304,7 +302,7 @@ export function findMsgById(id) {
   return null;
 }
 
-// Ostatnio otwierane rozmowy - pamiec palety przy pustym zapytaniu.
+// Recently opened conversations - what the palette shows for an empty query.
 const RECENT_KEY = "atalks_recent";
 
 function recentConvIds() {
