@@ -1,17 +1,16 @@
 /**
- * Podsumowanie nieobecnosci - odpowiednik `talk since` z prototypu.
- *
- * Odpowiada na pytanie, ktore uczestnik zadaje po powrocie: "przegapilem cos
- * waznego?" - a nie "pokaz mi 241 wiadomosci". Feedback z #nextIteration wskazal
- * wprost, ze parytet CLI/UI nie obejmowal trzeciego klienta (agenta po HTTP);
- * ten modul, wystawiony przez REST i MCP, zamyka te luke.
- *
- * Kotwica jest PER ROZMOWA: kazda liczy sie od wlasnego znacznika odczytu
- * (`members.last_read_message_id`). Jedna wspolna kotwica - maksimum ze
- * wszystkich znacznikow - powodowala, ze przeczytanie jednego gadatliwego
- * kanalu chowalo nieprzeczytane wiadomosci prywatne: digest odpowiadal "nic Cie
- * nie ominelo", gdy czekaly trzy DM-y. To jest ta sama semantyka, ktora ma juz
- * licznik nieprzeczytanych, wiec oba mechanizmy mowia teraz to samo.
+ * A summary of an absence - the equivalent of `talk since` from the prototype.
+ * 
+ * It answers the question a participant asks on returning: "did I miss anything
+ * important?" - not "show me 241 messages". Feedback from #nextIteration pointed out
+ * that CLI/UI parity did not cover the third client (an agent over HTTP); this module,
+ * exposed through REST and MCP, closes that gap.
+ * 
+ * The anchor is PER CONVERSATION: each counts from its own read marker
+ * (`members.last_read_message_id`). One shared anchor - the maximum over all markers -
+ * meant that reading one talkative channel hid unread direct messages: the digest
+ * answered "you missed nothing" while three DMs were waiting. This is the same semantics
+ * the unread counter already has, so both mechanisms now say the same thing.
  */
 import type { Ctx } from "./ctx.ts";
 import { messageFromRow, type Message, type MsgRow } from "./messages.ts";
@@ -29,14 +28,13 @@ export type Digest = {
 };
 
 export function digestFor(ctx: Ctx, actorId: number): Digest | null {
-  // Kotwica JEST PER ROZMOWA, nie globalna. Wczesniej brano MAX ze wszystkich
-  // znacznikow odczytu, wiec przeczytanie jednego gadatliwego kanalu przesuwalo
-  // kotwice ponad wszystko inne i chowalo nieprzeczytane DM-y: digest mowil
-  // "nic Cie nie ominelo", gdy czekaly trzy wiadomosci prywatne. Fallbackiem dla
-  // rozmowy bez znacznika jest 0 (czyli "wszystko jest nowe"), bo brak znacznika
-  // znaczy, ze aktor nie widzial jeszcze niczego w tej rozmowie.
-  // Zachowane w odpowiedzi dla zgodnosci klientow: najstarszy znacznik odczytu,
-  // czyli "od kiedy najdalej siega ten digest". Nie sluzy juz do liczenia.
+  // The anchor IS PER CONVERSATION, not global. Previously the MAX over all read markers was
+  // taken, so reading one talkative channel pushed the anchor past everything else and hid
+  // unread DMs: the digest said "you missed nothing" while three private messages waited.
+  // The fallback for a conversation with no marker is 0 (that is, "everything is new"),
+  // because the absence of a marker means the actor has not seen anything in it yet.
+  // Kept in the response for client compatibility: the oldest read marker, that is, "how far
+  // back this digest reaches". It is no longer used for counting.
   const najstarszy = ctx.db
     .prepare("SELECT COALESCE(MIN(last_read_message_id), 0) AS x FROM members WHERE actor_id = ?")
     .get(actorId) as { x: number };

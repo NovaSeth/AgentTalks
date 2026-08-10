@@ -1,9 +1,9 @@
 /**
- * Kontekst rdzenia. Kazda funkcja `core/*` bierze go pierwszym argumentem.
- *
- * `now` jest wstrzykiwane, a nie wolane wprost, bo polowa logiki obecnosci to progi
- * czasowe (typing 7 s, busy 30 s, efemeryda 60 s). Test, ktory musi realnie czekac
- * 30 sekund, nie jest uruchamiany - a test, ktory nie jest uruchamiany, nie chroni.
+ * The core context. Every `core/*` function takes it as its first argument.
+ * 
+ * `now` is injected rather than called directly, because half the presence logic is time
+ * thresholds (typing 7 s, busy 30 s, ephemeral 60 s). A test that has to wait a real 30
+ * seconds does not get run - and a test that is not run protects nothing.
  */
 import type { Db } from "../store/db.ts";
 import { EventBus } from "./events.ts";
@@ -11,7 +11,7 @@ import { EventBus } from "./events.ts";
 export type Ctx = {
   db: Db;
   bus: EventBus;
-  now: () => number; // sekundy uniksowe
+  now: () => number; // unix seconds
 };
 
 export function createCtx(db: Db, bus: EventBus = new EventBus(), now?: () => number): Ctx {

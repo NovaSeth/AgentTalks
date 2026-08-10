@@ -1,6 +1,6 @@
 /**
- * Przypiete wiadomosci. Per konwersacja (jak w Slacku), z informacja KTO przypial -
- * przypiecie jest sygnalem redakcyjnym i bez autora traci znaczenie.
+ * Pinned messages. Per conversation (as in Slack), with WHO pinned it - a pin is an
+ * editorial signal and loses its meaning without an author.
  */
 import type { Ctx } from "./ctx.ts";
 import { assertCanRead, canRead } from "./conversations.ts";

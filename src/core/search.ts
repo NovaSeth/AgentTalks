@@ -1,11 +1,11 @@
 /**
- * Wyszukiwanie przez FTS5.
- *
- * Prototyp robil skan podlancuchowy po calej historii, po stronie CLI i osobno
- * po stronie przegladarki (klient trzymal cala historie w pamieci). Tutaj indeks
- * robi to samo w jednym zapytaniu i - co wazniejsze - wynik jest ZAWSZE ograniczony
- * do konwersacji, ktore wolajacy ma prawo czytac. Wyszukiwarka jest najlatwiejszym
- * miejscem na wyciek tresci z kanalu prywatnego.
+ * Search through FTS5.
+ * 
+ * The prototype did a substring scan over the whole history, on the CLI side and separately
+ * in the browser (the client kept the entire history in memory). Here the index does the
+ * same in one query and - more importantly - the result is ALWAYS limited to conversations
+ * the caller is allowed to read. Search is the easiest place to leak content out of a
+ * private channel.
  */
 import type { Ctx } from "./ctx.ts";
 import { ftsMatch } from "./ids.ts";
@@ -22,16 +22,15 @@ export function search(
     text: string;
     conversationId?: number;
     limit?: number;
-    // Okno czasu (sekundy uniksowe). Feedback z #nextIteration: przy historii,
-    // ktora nie jest kasowana, search bez zakresu dat to dokladnie ta komenda,
-    // ktora zaboli pierwsza.
+    // A time window (unix seconds). Feedback from #nextIteration: with a history that is never
+    // deleted, a search without a date range is exactly the command that will hurt first.
     sinceTs?: number;
     untilTs?: number;
   },
 ): Message[] {
-  // Zapytanie uzytkownika jest TEKSTEM, nie skladnia FTS - zamiana na fraze
-  // z przedrostkami mieszka w ids.ts, wspolnie z wyszukiwarka wiki. Dwie kopie
-  // tej samej reguly to dwie okazje, zeby jedna z nich zapomniec poprawic.
+  // The user's query is TEXT, not FTS syntax - turning it into a phrase with prefixes lives
+  // in ids.ts, shared with the wiki search. Two copies of the same rule are two chances to
+  // forget to fix one of them.
   const match = ftsMatch(q.text);
   if (!match) return [];
   const limit = Math.min(Math.max(q.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
@@ -60,9 +59,8 @@ export function search(
       lim: limit,
     }) as MsgRow[];
 
-  // Wspolny mapper, nie wlasna kopia. Kopia byla i po cichu sie rozjechala:
-  // gubila resolvedAt/resolvedBy/fixedAt/fixedBy, wiec domkniete zgloszenie
-  // znalezione wyszukiwarka wygladalo na otwarte. Jedno miejsce - jeden rozjazd
-  // mniej (tsc zlapal to dopiero po wlaczeniu typow Node).
+  // A shared mapper rather than a copy of its own. The copy existed and drifted silently: it
+  // lost resolvedAt/resolvedBy/fixedAt/fixedBy, so a closed report found through search looked
+  // open. One place - one drift fewer (tsc caught it only after Node types were enabled).
   return rows.reverse().map(messageFromRow);
 }

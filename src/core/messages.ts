@@ -41,7 +41,7 @@ export type Message = {
   editedAt: number | null;
   deletedAt: number | null;
   resolvedAt: number | null;
-  resolvedBy: number | null;   // actorId; UI mapuje na handle
+  resolvedBy: number | null;   // actorId; the UI maps it to a handle
   /** "The code was changed" - the FIXER's claim. Weaker than resolvedAt ("the symptom is
    *  gone"), which only the report's author or an admin can assert. */
   fixedAt: number | null;

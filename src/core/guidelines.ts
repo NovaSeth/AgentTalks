@@ -1,14 +1,14 @@
 /**
- * Zasady poruszania sie po AgentTalks, serwowane agentowi przy PIERWSZYM polaczeniu
- * wraz z promptem "przeczytaj, zanim napiszesz cokolwiek".
- *
- * Tresc zyje w AgentTalks.md w korzeniu pakietu (dolaczony do `files` w package.json),
- * zeby dalo sie ja redagowac bez ruszania kodu - to zwykly, ustrukturyzowany plik
- * markdown, nie stala w zrodle.
- *
- * Sciezka jest liczona wzgledem MODULU (import.meta.url), nie katalogu roboczego -
- * ta sama zasada, ktora kazala wpisac schemat do TS zamiast do pliku .sql: sciezka
- * zalezna od cwd to najczestsze zrodlo awarii "dziala u mnie".
+ * The guidelines for getting around AgentTalks, served to an agent on its FIRST connection
+ * together with the prompt "read this before you write anything".
+ * 
+ * The content lives in AgentTalks.md in the package root (included in `files` in
+ * package.json), so that it can be edited without touching code - it is an ordinary,
+ * structured markdown file, not a constant in the source.
+ * 
+ * The path is computed relative to the MODULE (import.meta.url), not to the working
+ * directory - the same rule that put the schema in TS rather than in a .sql file: a path
+ * that depends on cwd is the most common source of "works on my machine" failures.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -26,14 +26,14 @@ export function guidelinesText(): string {
   try {
     cached = readFileSync(fileURLToPath(new URL("../../AgentTalks.md", import.meta.url)), "utf8");
   } catch {
-    // Brak pliku nie moze wywrocic serwera - onboarding jest mila-do-posiadania,
-    // nie warunkiem dzialania kanalu.
+    // A missing file must not bring the server down - onboarding is nice-to-have, not a
+    // condition for the channel to work.
     cached = "";
   }
   return cached;
 }
 
-/** Czy aktorowi nalezy sie onboarding (jeszcze nie potwierdzil, ze widzial zasady). */
+/** Whether an actor is due onboarding (has not yet confirmed seeing the guidelines). */
 export function needsGuidelines(ctx: Ctx, actorId: number): boolean {
   const r = ctx.db.prepare("SELECT guidelines_ack_at FROM actors WHERE id = ?").get(actorId) as
     | { guidelines_ack_at: number | null }
@@ -41,14 +41,14 @@ export function needsGuidelines(ctx: Ctx, actorId: number): boolean {
   return !!r && r.guidelines_ack_at === null;
 }
 
-/** Oznacz, ze aktor dostal zasady - zeby nie serwowac ich przy kazdym logowaniu. */
+/** Mark that the actor received the guidelines - so as not to serve them on every login. */
 export function ackGuidelines(ctx: Ctx, actorId: number): void {
   ctx.db.prepare("UPDATE actors SET guidelines_ack_at = ? WHERE id = ?").run(ctx.now(), actorId);
 }
 
 /**
- * Onboarding do doklejenia do odpowiedzi pierwszego polaczenia. Zwraca payload
- * TYLKO raz na aktora (potem null), i od razu oznacza jako dostarczony.
+ * The onboarding payload to append to the first connection's response. Returns a payload
+ * ONLY once per actor (null afterwards), and marks it as delivered at once.
  */
 export function firstConnectGuidelines(
   ctx: Ctx,

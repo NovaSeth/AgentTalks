@@ -68,7 +68,7 @@ function cborDecode(buf: Buffer): { value: CborValue; rest: Buffer } {
       }
       return { value: map, rest };
     }
-    case 6: return cborDecode(buf.subarray(off)); // tag - przezroczysty
+    case 6: return cborDecode(buf.subarray(off)); // a tag - transparent here
     case 7: {
       if (info === 20) return { value: false, rest: buf.subarray(off) };
       if (info === 21) return { value: true, rest: buf.subarray(off) };

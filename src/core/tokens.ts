@@ -116,7 +116,7 @@ export function verifyToken(ctx: Ctx, token: string): Actor | null {
     .prepare("SELECT * FROM tokens WHERE hash = ? AND revoked_at IS NULL")
     .get(hashOf(raw)) as TokenRow | undefined;
   if (!row) return null;
-  if (row.expires_at !== null && row.expires_at <= ctx.now()) return null; // wygasl
+  if (row.expires_at !== null && row.expires_at <= ctx.now()) return null; // expired
   const actor = getActor(ctx, row.actor_id);
   if (!actor || actor.disabledAt) return null;
   // last_used_at is telemetry, so: (a) throttled to one write per minute, (b) best-effort -

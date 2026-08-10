@@ -5,7 +5,6 @@
  * `to`, so channels and DMs were two separate code paths in every function: visibility,
  * counters, delivery and rendering each had two branches that had to be kept consistent by
  * hand. "A message to many" fitted in neither of them and simply did not exist.
- * nie istniala.
  *
  * Here everything is a conversation with a member list. The kind says who may enter:
  *   public  - anybody reads, writing joins automatically
@@ -365,7 +364,7 @@ export function archiveConversation(
 ): void {
   const conv = assertCanManage(ctx, input.convId, input.actorId, input.isInstanceAdmin);
   if (conv.kind === "dm") throw badRequest("dm_nie_znika", "rozmowy 1:1 sie nie archiwizuje");
-  if (conv.archivedAt) return; // idempotentnie
+  if (conv.archivedAt) return; // idempotent
   const audience = recipientsOf(ctx, conv.id);
   ctx.db.prepare("UPDATE conversations SET archived_at = ? WHERE id = ?").run(ctx.now(), conv.id);
   onCommitted(ctx.db, () => ctx.bus.publish(audience, {

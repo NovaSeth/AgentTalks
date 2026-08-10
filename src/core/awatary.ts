@@ -1,15 +1,15 @@
 /**
- * Awatary aktorow.
- *
- * Prosba @michal z #general [192]: zamiast dwoch liter na kolorowej kropce -
- * obrazek, ktory agent sam wygeneruje albo sciagnie.
- *
- * DECYZJA, ktora ksztaltuje cala reszte: serwer NIE POBIERA obrazka z podanego
- * adresu. Agent pobiera go sam i przysyla BAJTY. Gdyby serwer siegal po URL,
- * kazdy uczestnik moglby kazac mu odpytac dowolny adres w sieci wewnetrznej -
- * czyli dokladnie ta klasa (SSRF), przed ktora broni sie wake, i ktorej nie ma
- * powodu wpuszczac drugimi drzwiami dla funkcji kosmetycznej. Agent i tak umie
- * pobrac plik; serwer nie musi tego robic za niego.
+ * Actor avatars.
+ * 
+ * @michal's request in #general [192]: instead of two letters on a coloured dot - a
+ * picture the agent generates or downloads itself.
+ * 
+ * THE DECISION that shapes everything else: the server DOES NOT FETCH the image from a
+ * given URL. The agent fetches it and sends the BYTES. If the server reached for a URL,
+ * any participant could make it query any address on the internal network - that is,
+ * exactly the class (SSRF) that wake defends against, and which there is no reason to let
+ * in through a side door for a cosmetic feature. The agent can fetch a file anyway; the
+ * server does not have to do it for it.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, unlinkSync, writeFileSync, readFileSync } from "node:fs";
@@ -17,12 +17,12 @@ import { join } from "node:path";
 import type { Ctx } from "./ctx.ts";
 import { badRequest, tooLarge } from "./errors.ts";
 
-/** 256 kB. Awatar jest miniatura - wieksze pliki to pomylka, nie potrzeba. */
+/** 256 kB. An avatar is a thumbnail - larger files are a mistake, not a need. */
 export const MAX_AVATAR_BYTES = 256 * 1024;
 
-/** Bialla lista, nie "image/*": SVG jest dokumentem ze skryptem, a nie obrazkiem,
- *  i wyswietlony z naszej domeny bylby wektorem XSS. Reszta formatow rastrowych
- *  nie wykonuje niczego. */
+/** A whitelist, not "image/*": an SVG is a document with a script rather than a picture,
+/**  and served from our domain it would be an XSS vector. The remaining raster formats
+/**  execute nothing. */
 const DOZWOLONE: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -30,8 +30,8 @@ const DOZWOLONE: Record<string, string> = {
   "image/gif": "gif",
 };
 
-/** Rozpoznanie po ZAWARTOSCI, nie po naglowku - naglowek pisze klient.
- *  Zwraca null, gdy bajty nie sa zadnym z dozwolonych formatow. */
+/** Recognition by CONTENT, not by the header - the header is written by the client.
+/**  Returns null when the bytes are none of the permitted formats. */
 export function rozpoznajObraz(data: Buffer): string | null {
   if (data.length < 12) return null;
   if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) return "image/png";
@@ -57,9 +57,9 @@ export function bajtyAwatara(filesDir: string, a: Awatar): Buffer {
 }
 
 /**
- * Zapisuje awatar i zwraca jego odcisk. Poprzedni plik jest kasowany - awatar
- * jest JEDEN na aktora, wiec trzymanie historii dawaloby rosnacy katalog bez
- * niczyjego pozytku.
+ * Stores an avatar and returns its fingerprint. The previous file is deleted - there is
+ * ONE avatar per actor, so keeping a history would give a growing directory of no use to
+ * anybody.
  */
 export function ustawAwatar(
   ctx: Ctx, filesDir: string, actorId: number, data: Buffer, mimeZNaglowka?: string,
@@ -88,7 +88,7 @@ export function ustawAwatar(
   return { file: nazwa, mime, hash };
 }
 
-/** Powrot do kropki z inicjalami. */
+/** Back to the dot with initials. */
 export function usunAwatar(ctx: Ctx, filesDir: string, actorId: number): void {
   const stary = pobierzAwatar(ctx, actorId);
   ctx.db.prepare("UPDATE actors SET avatar_file = NULL, avatar_mime = NULL, avatar_hash = NULL WHERE id = ?")

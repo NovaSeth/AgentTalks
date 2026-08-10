@@ -1,9 +1,9 @@
 /**
- * Reakcje. Wlasna tabela, a nie wiadomosci w tym samym logu.
- *
- * W prototypie reakcja byla rekordem w channel.jsonl, wiec kazde miejsce czytajace
- * historie musialo ja odfiltrowac zbiorem NOISE - powtorzonym w trzech plikach,
- * w dwoch jezykach. Osobna tabela usuwa ten obowiazek u zrodla.
+ * Reactions. Their own table rather than messages in the same log.
+ * 
+ * In the prototype a reaction was a record in channel.jsonl, so every place reading the
+ * history had to filter it out with a NOISE set - repeated across three files, in two
+ * languages. A separate table removes that obligation at the source.
  */
 import type { Ctx } from "./ctx.ts";
 import { canRead, recipientsOf } from "./conversations.ts";
@@ -12,7 +12,7 @@ import { normalizeEmoji } from "./ids.ts";
 import { notFound } from "./errors.ts";
 import { excerptOf, notify } from "./notifications.ts";
 
-/** Przelacznik: druga taka sama reakcja tego samego aktora ja zdejmuje. */
+/** A toggle: a second identical reaction from the same actor removes it. */
 export function react(
   ctx: Ctx,
   input: { messageId: number; actorId: number; emoji: string },
@@ -21,8 +21,8 @@ export function react(
   const msg = ctx.db
     .prepare("SELECT conversation_id FROM messages WHERE id = ?")
     .get(input.messageId) as { conversation_id: number } | undefined;
-  // Jeden blad dla "nie ma" i "nie masz dostepu": numer wiadomosci z cudzego
-  // kanalu prywatnego nie moze byc wyrocznia jej istnienia.
+  // One error for "does not exist" and "you have no access": the id of a message from
+  // somebody else's private channel must not be an oracle for its existence.
   if (!msg || !canRead(ctx, msg.conversation_id, input.actorId)) {
     throw notFound("wiadomosc", `nie ma wiadomosci ${input.messageId} (albo brak dostepu)`);
   }
@@ -43,9 +43,9 @@ export function react(
       .prepare("INSERT INTO reactions(message_id, actor_id, emoji, created_at) VALUES(?,?,?,?)")
       .run(input.messageId, input.actorId, emoji, ctx.now());
   }
-  // Powiadamiamy TYLKO o dolozeniu reakcji i tylko autora wpisu: zdjecie reakcji
-  // nie jest zdarzeniem, o ktorym warto kogos budzic, a reszta kanalu widzi
-  // emoji przy wiadomosci i bez powiadomienia.
+  // We notify ONLY about a reaction being added, and only its post's author: removing a
+  // reaction is not an event worth waking anybody for, and the rest of the channel sees the
+  // emoji next to the message without a notification.
   if (!existing && target) {
     notify(ctx, {
       actorIds: [target.actor_id],
@@ -64,8 +64,8 @@ export function react(
   return { on: !existing };
 }
 
-/** { messageId: { emoji: [handle, ...] } } - `handle` zasila tooltip "kto zareagowal".
- *  Bez tego emoji jest anonimowe i przestaje byc sygnalem. */
+/** { messageId: { emoji: [handle, ...] } } - `handle` feeds the "who reacted" tooltip.
+/**  Without it an emoji is anonymous and stops being a signal. */
 export function reactionsFor(
   ctx: Ctx,
   messageIds: readonly number[],

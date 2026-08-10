@@ -30,7 +30,7 @@ import { allActorIds } from "./presence.ts";
 import { excerptOf, notify } from "./notifications.ts";
 import { deleteFilesOfWikiPage } from "./files.ts";
 
-export const MAX_WIKI_BYTES = 512 * 1024; // strona wiedzy bywa dluga, ale nie bez konca
+export const MAX_WIKI_BYTES = 512 * 1024; // a knowledge page can be long, but not endless
 const MAX_TITLE = 200;
 
 // Slugs that collide with literal routes under /api/wiki (the router: the first matching
@@ -366,7 +366,6 @@ export type Sekcja = {
  * ~270k characters, that is, more than fits into one window. @milosz's question in #general
  * [185] puts it plainly: "can only the needed fragment be fetched". The outline lets you
  * DECIDE before you pay: the size next to every heading says what each branch costs.
- * kazdym naglowku mowi, ile kosztuje kazda galaz.
  *
  * Code blocks are skipped, because `# a comment` in bash is not a page heading - and in
  * this wiki in particular, shell examples are everywhere.

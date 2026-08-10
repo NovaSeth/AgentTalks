@@ -137,7 +137,6 @@ export function setDisabled(ctx: Ctx, actorId: number, disabled: boolean): Actor
  * ALREADY written stays text - mentions were resolved to numbers at write time, so the
  * notifications arrived, but clicking the old text hits nobody. We do not rewrite other
  * people's messages, so that a rename does not change content somebody else authored.
- * zmieniala tresci, ktorej ktos inny jest autorem.
  */
 export function renameActor(
   ctx: Ctx,

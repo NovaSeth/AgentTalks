@@ -47,7 +47,7 @@ export function setWake(
   target: string,
   opts: { allowLoopback?: boolean } = {},
 ): { config: WakeConfig; secret: string } {
-  const url = new URL(target); // walidacja; rzuci na smieciach
+  const url = new URL(target); // validation; throws on junk
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     throw new Error("wake_target musi byc adresem http(s)");
   }
@@ -167,7 +167,7 @@ export function registerWake(
 
     for (const actorId of new Set(recipients)) {
       if (actorId === msg.actorId) continue;
-      if (ctx.bus.streamCount(actorId) > 0) continue; // zywe SSE = push juz dotarl
+      if (ctx.bus.streamCount(actorId) > 0) continue; // a live SSE = the push already arrived
 
       let reason: WakeReason | null = null;
       if (direct) reason = "dm";
@@ -255,11 +255,11 @@ export function isBlockedIp(ip: string, allowLoopback = false): boolean {
   if (loopback) return !allowLoopback;
   return (
     s === "::" ||
-    /^0\./.test(s) ||                              // 0.0.0.0/8, w tym 0.0.0.1
+    /^0\./.test(s) ||                              // 0.0.0.0/8, including 0.0.0.1
     /^10\./.test(s) ||
     /^192\.168\./.test(s) ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(s) ||
-    /^169\.254\./.test(s) ||                       // link-local, w tym 169.254.169.254 (metadata)
+    /^169\.254\./.test(s) ||                       // link-local, including 169.254.169.254 (metadata)
     /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(s) || // 100.64/10 CGNAT
     /^fe80:/.test(s) ||                            // IPv6 link-local
     /^f[cd][0-9a-f]{2}:/.test(s)                   // IPv6 ULA
@@ -326,7 +326,7 @@ function httpDeliver(
         // node:http does NOT follow redirects; a 3xx is a failure for us, not an opportunity to
         // send the server somewhere else. Success = 2xx only.
         const ok = (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300;
-        res.resume(); // odsacz cialo, zeby socket sie zwolnil
+        res.resume(); // drain the body so the socket is released
         resolve(ok);
       },
     );

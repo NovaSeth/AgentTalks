@@ -1,17 +1,18 @@
 /**
- * Nieprzeczytane.
- *
- * Semantyka przeniesiona z prototypu swiadomie, bo jest dobra i pochodzi ze Slacka:
- *
- *   unread ("cos nowego")   -> pogrubienie nazwy konwersacji
- *   badge  ("dotyczy CIEBIE") -> numerowana plakietka
- *
- * Numer na wszystkim splaszcza te hierarchie i przestaje cokolwiek znaczyc.
- * Plakietke daje wzmianka o mnie ORAZ kazda wiadomosc w rozmowie bezposredniej -
- * DM jest z definicji adresowany do mnie, wiec nie wymaga wzmianki.
- *
- * Znacznikiem odczytu jest ID wiadomosci, nie czas. Prototyp trzymal milisekundy
- * i przez to zderzal sie z rozjazdem zegarow oraz z wiadomosciami o tym samym ts.
+ * Unread.
+ * 
+ * The semantics are carried over from the prototype deliberately, because they are good and
+ * come from Slack:
+ * 
+ *   unread ("something new")     -> the conversation's name in bold
+ *   badge  ("concerns YOU")      -> a numbered badge
+ * 
+ * A number on everything flattens that hierarchy and stops meaning anything.
+ * A badge comes from a mention of me AND from every message in a direct conversation - a
+ * DM is by definition addressed to me, so it needs no mention.
+ * 
+ * The read marker is a message ID, not a time. The prototype kept milliseconds and thereby
+ * collided with clock drift and with messages sharing a ts.
  */
 import type { Ctx } from "./ctx.ts";
 import { canRead, join, isMember } from "./conversations.ts";
@@ -22,8 +23,8 @@ export type UnreadRow = {
   conversationId: number;
   unread: number;
   badge: number;
-  /** Id ostatniej NIEPRZECZYTANEJ wiadomosci; przy zerze nieprzeczytanych -
-   *  znacznik odczytu. To NIE jest id ostatniej wiadomosci w rozmowie. */
+  /** The id of the last UNREAD message; with zero unread - the read marker.
+  /**  This is NOT the id of the last message in the conversation. */
   lastUnreadMessageId: number;
 };
 
@@ -81,14 +82,14 @@ export function totalBadge(ctx: Ctx, actorId: number): number {
 }
 
 /**
- * Bez `messageId` zeruje do najnowszej wiadomosci w systemie.
- * Znacznik nigdy sie nie cofa: dwa urzadzenia czytajace rownolegle nie moga
- * odebrac sobie nawzajem przeczytanych wiadomosci.
+ * Without `messageId` it clears up to the newest message in the system.
+ * The marker never moves backwards: two devices reading in parallel cannot take each
+ * other's read messages away.
  */
 export function markRead(ctx: Ctx, actorId: number, convId: number, messageId?: number): void {
-  // Guard w rdzeniu, nie tylko w trasach: markRead dolacza do konwersacji,
-  // wiec bez tego sprawdzenia kazde "oznacz przeczytane" byloby furtka
-  // do wejscia w cudzy kanal prywatny (znaleziona przez sciezke MCP).
+  // The guard is in the core, not only in the routes: markRead joins the conversation, so
+  // without this check every "mark as read" would be a way into somebody else's private
+  // channel (found through the MCP path).
   if (!canRead(ctx, convId, actorId)) return;
   if (!isMember(ctx, convId, actorId)) join(ctx, convId, actorId);
   const target = messageId ?? lastMessageId(ctx);

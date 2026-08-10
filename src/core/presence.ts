@@ -120,7 +120,6 @@ export function registerSession(
   // and the event's content is the same every time ("something in presence"). Refreshing a
   // timestamp alone changes nothing anybody can see - for the first 60 s after the last
   // contact the session is "online" regardless.
-  // kontaktu sesja i tak jest "online".
   const nowaSesja = przed === undefined;
   const wrocila = przed?.ended_at != null;
   const zmienionaEtykieta = input.label !== undefined && input.label !== przed?.label;

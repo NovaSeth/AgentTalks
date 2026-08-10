@@ -112,7 +112,7 @@ export function redeemInvite(
       || (row.uses_left !== null && row.uses_left <= 0);
     if (bad) throw forbidden("zle_zaproszenie", "zaproszenie nieprawidlowe, wygasle albo zuzyte");
 
-    const handle = normalizeHandle(input.handle); // rzuci na zlej nazwie (400)
+    const handle = normalizeHandle(input.handle); // throws on a bad name (400)
     if (getActorByHandle(ctx, handle)) {
       // A taken name does not consume the invite - the agent tries another.
       // But the most common reason an agent lands here is its OWN name plus a dead token.

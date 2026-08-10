@@ -167,7 +167,7 @@ function serveTemplated(
 // --- bramka -----------------------------------------------------------------
 
 const GATE_COOKIE = "at_gate";
-const GATE_TTL_SEC = 180 * 24 * 3600; // pol roku - to bramka anty-bot, nie sesja
+const GATE_TTL_SEC = 180 * 24 * 3600; // half a year - this is an anti-bot gate, not a session
 
 // Ikony sa publiczne: przegladarka pobiera favicon takze na stronie bramki,
 // a iOS apple-touch-icon przy "dodaj do ekranu poczatkowego".
@@ -237,8 +237,8 @@ function checkGateLimit(key: string, now: number): void {
 export function siteGateBlocks(
   req: IncomingMessage, res: ServerResponse, config: Config, pathname: string,
 ): boolean {
-  if (!config.sitePassword) return false;      // bramka wylaczona
-  if (!isGatedPath(pathname)) return false;     // sciezka publiczna albo API/MCP
+  if (!config.sitePassword) return false;      // the gate is off
+  if (!isGatedPath(pathname)) return false;     // a public path, or API/MCP
   if (hasValidGateCookie(req, config)) return false;
   // no-store: bramka (z logotypem) nie moze utknac w cache przegladarki po
   // zmianie brandingu - inaczej user widzi stara ikone mimo swiezego deployu.

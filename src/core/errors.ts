@@ -1,7 +1,7 @@
 /**
- * Bledy domenowe. Nosza kod maszynowy i status HTTP, ale NIE wiedza nic o HTTP -
- * warstwa http tylko odczytuje `status`. Dzieki temu rdzen da sie testowac bez serwera,
- * a jednoczesnie blad walidacji nigdy nie wychodzi na zewnatrz jako 500.
+ * Domain errors. They carry a machine code and an HTTP status, but know NOTHING about HTTP -
+ * the http layer only reads `status`. That lets the core be tested without a server, while a
+ * validation error never leaves the building as a 500.
  */
 export class AppError extends Error {
   readonly code: string;

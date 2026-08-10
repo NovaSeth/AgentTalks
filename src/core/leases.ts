@@ -1,18 +1,18 @@
 /**
- * Dzierzawy zasobow z TTL - nastepca talk-lock.py z prototypu.
- *
- * Trzy nieodstepowalne wlasnosci, sformulowane przez deploy-runnera i przeniesione
- * doslownie, bo sa trafne:
- *  (a) TTL obowiazkowy - wlasciciel, ktory nie istnieje miedzy wywolaniami,
- *      nie moze trzymac blokady bezterminowo,
- *  (b) odpowiedz synchroniczna - w tym samym wywolaniu, zero czekania na czlowieka,
- *  (c) blokada SPRAWDZANA, nie ogloszona - "biore X" napisane na kanale nie wyklucza
- *      niczego; dowodem byl podwojny claim m335/m336.
- *
- * Feedback 332c7e42 nazwal to "najwiekszym zyskiem konceptualnym: kanarki/kontrole
- * PRZED dzialaniem". Atomowosc daje pojedynczy UPSERT wykonywany pod lockiem
- * zapisu SQLite - w odroznieniu od talk-lock.py nie ma tu okna miedzy sprawdzeniem
- * a zajeciem, nawet miedzy procesami.
+ * Resource leases with a TTL - the successor to the prototype's talk-lock.py.
+ * 
+ * Three non-negotiable properties, formulated by the deploy runner and carried over
+ * literally, because they are right:
+ *  (a) the TTL is mandatory - an owner who does not exist between calls must not hold a
+ *      lock indefinitely,
+ *  (b) the answer is synchronous - in the same call, with no waiting on a human,
+ *  (c) the lock is ENFORCED, not announced - "taking X" written on a channel excludes
+ *      nothing; the proof was the double claim m335/m336.
+ * 
+ * Feedback 332c7e42 called it "the biggest conceptual gain: canaries/checks BEFORE
+ * acting". Atomicity comes from a single UPSERT executed under SQLite's write lock -
+ * unlike talk-lock.py there is no window here between checking and taking, not even
+ * between processes.
  */
 import type { Ctx } from "./ctx.ts";
 import { badRequest } from "./errors.ts";
@@ -49,9 +49,8 @@ function clampTtl(ttl: number | undefined): number {
 }
 
 function rowToLease(ctx: Ctx, r: Record<string, unknown>): Lease {
-  // r.actor_id jest `unknown` (wiersz to Record<string, unknown>), a sterownik
-  // przyjmuje tylko wartosci SQL - rzutowanie na number jest tu jawnym miejscem,
-  // w ktorym mowimy, czym ta kolumna jest.
+  // r.actor_id is `unknown` (a row is Record<string, unknown>), and the driver accepts only
+  // SQL values - the cast to number is the explicit place where we say what this column is.
   const actor = ctx.db.prepare("SELECT handle FROM actors WHERE id = ?")
     .get(r.actor_id as number) as { handle: string } | undefined;
   return {
@@ -66,10 +65,10 @@ function rowToLease(ctx: Ctx, r: Record<string, unknown>): Lease {
 }
 
 /**
- * Atomowe zajecie: jeden UPSERT, ktory nadpisuje wpis TYLKO gdy wygasl albo nalezy
- * juz do tego samego aktora (wtedy dziala jak renew). changes=0 znaczy "trzymane
- * przez kogos innego" - i wtedy zwracamy KTO i na jak dlugo, bo sama odmowa bez
- * tej informacji zmusza do osobnego zapytania.
+ * An atomic claim: one UPSERT that overwrites the entry ONLY when it has expired or
+ * already belongs to the same actor (then it acts as a renew). changes=0 means "held by
+ * somebody else" - and then we return WHO and for how long, because a bare refusal without
+ * that forces a second query.
  */
 export function acquire(
   ctx: Ctx,
@@ -102,8 +101,8 @@ export function acquire(
   return { granted: false, heldBy: lease };
 }
 
-/** Zwolnienie: tylko wlasciciel. Zwolnienie nieistniejacej dzierzawy jest OK
- *  (cel osiagniety), cudzej - odmowa z podaniem wlasciciela. */
+/** Releasing: the owner only. Releasing a lease that does not exist is OK (the goal is
+/**  achieved); releasing somebody else's is refused, naming the owner. */
 export function release(
   ctx: Ctx,
   input: { resource: string; actorId: number },
@@ -121,7 +120,7 @@ export function release(
   return { released: true };
 }
 
-/** Aktywne dzierzawy. Wygasle sa przy okazji sprzatane - lista ma mowic prawde. */
+/** Active leases. Expired ones are cleaned up along the way - the list is to tell the truth. */
 export function listLeases(ctx: Ctx): Lease[] {
   ctx.db.prepare("DELETE FROM leases WHERE expires_at <= ?").run(ctx.now());
   const rows = ctx.db.prepare("SELECT * FROM leases ORDER BY resource").all() as
