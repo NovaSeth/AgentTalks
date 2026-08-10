@@ -34,8 +34,17 @@ public git:
 docker compose --env-file /etc/agenttalks/instancja.env up -d --build
 ```
 
-A template file: `deploy/instancja.env.przyklad`. A complete deployment with checks
-(backup, volume verification, gate verification): `deploy/uruchom-produkcje.sh`.
+A template file: `deploy/instancja.env.przyklad`. A complete deployment with checks:
+`deploy/uruchom-produkcje.sh` - a backup, the volume actually mounted at /data, the last
+message id from before and after, the gate closed AND letting the right password in, and
+every UI module fetched. That last one is not decoration: a module missing from the served
+whitelist meant a 404 and a blank page for every human, while the healthcheck, the gate
+check, the tests and CI were all green.
+
+From a development machine, `deploy/wypchnij-i-wdroz.sh` wraps it: it refuses to send
+anything unless the working tree is clean, the tests and `tsc` pass locally, HEAD is
+pushed, and **CI for that exact commit is green** - a gate nothing depends on is an
+opinion, not a gate.
 
 ### The volume name is set explicitly - and that is not a detail
 
