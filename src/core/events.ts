@@ -1,11 +1,11 @@
 /**
- * Szyna zdarzen w procesie. Subskrypcje sa per AKTOR, nie per polaczenie, bo ten sam
- * czlowiek ma otwarta karte na laptopie i na telefonie, a ten sam agent ma kilka sesji.
+ * An in-process event bus. Subscriptions are per ACTOR, not per connection, because the
+ * same human has a tab open on a laptop and on a phone, and the same agent has several sessions.
  *
- * Filtrowanie odbiorcow robi wolajacy (`publish(recipients, event)`), a nie subskrybent.
- * To swiadome: gdyby kazdy subskrybent sam sprawdzal, czy zdarzenie go dotyczy, to
- * kontrola dostepu bylaby rozsypana po klientach zamiast stac w jednym miejscu obok
- * regul widocznosci konwersacji.
+ * Recipient filtering is done by the caller (`publish(recipients, event)`), not by the
+ * subscriber. That is deliberate: if every subscriber checked for itself whether an event
+ * concerns it, access control would be scattered across the clients instead of standing in
+ * one place next to the conversation visibility rules.
  */
 import type { Message } from "./messages.ts";
 
@@ -17,27 +17,26 @@ export type Event =
   | { type: "presence" }
   | { type: "wiki"; slug: string }
   | { type: "conversation"; conversationId: number }
-  // Powiadomienie do JEDNEJ osoby - centrum powiadomien odswieza sie po nim.
-  // Brakowalo go w unii, mimo ze rdzen je publikowal: typ klamal, a kazdy
-  // wyczerpujacy switch po rodzajach zdarzen cicho je pomijal (zlapane przez
-  // tsc dopiero po wlaczeniu typow Node w tsconfig).
+  // A notification to ONE person - the notification centre refreshes on it.
+  // It was missing from the union even though the core published it: the type lied, and every
+  // exhaustive switch over event kinds silently skipped it (caught by tsc only after Node
+  // types were enabled in tsconfig).
   | { type: "notification" };
 
 type Listener = (e: Event) => void;
 
-/** Tap widzi KAZDA publikacje razem z lista odbiorcow - w odroznieniu od
- *  subskrybenta, ktory widzi tylko zdarzenia adresowane do jego aktora.
- *  Uzywa go wake: musi wiedziec, do kogo zdarzenie MIALO dojsc, zeby obudzic
- *  tych, ktorzy nie sluchaja. */
+/** A tap sees EVERY publication together with its recipient list - unlike a subscriber,
+ *  which sees only the events addressed to its actor. wake uses it: it has to know whom an
+ *  event WAS MEANT to reach, in order to wake those who are not listening. */
 export type Tap = (recipients: readonly number[], event: Event) => void;
 
 export class EventBus {
   #byActor = new Map<number, Set<Listener>>();
   #taps = new Set<Tap>();
-  // Osobny licznik ZASOBOCHLONNYCH strumieni (SSE): subscriberCount liczy tez
-  // long-poll i MCP talk_read, ktore trzymaja subskrypcje tylko na chwile, wiec
-  // limit strumieni oparty na nim raz odcinalby SSE przez wiszace long-polle,
-  // a raz w ogole nie widzialby dlugotrwalych polaczen.
+  // A separate counter for EXPENSIVE streams (SSE): subscriberCount also counts long-polls
+  // and MCP talk_read, which hold a subscription only briefly, so a stream limit based on it
+  // would sometimes cut off SSE because of hanging long-polls and sometimes not see
+  // long-lived connections at all.
   #streams = new Map<number, number>();
 
   subscribe(actorId: number, fn: Listener): () => void {
@@ -71,14 +70,14 @@ export class EventBus {
     for (const actorId of new Set(recipients)) {
       const set = this.#byActor.get(actorId);
       if (!set) continue;
-      // Kopia, bo subskrybent moze sie odsubskrybowac we wlasnym handlerze
-      // (SSE robi dokladnie to przy zerwanym polaczeniu).
+      // A copy, because a subscriber may unsubscribe inside its own handler (SSE does exactly
+      // that on a dropped connection).
       for (const fn of [...set]) {
         try {
           fn(event);
         } catch (err) {
-          // Padniety klient nie moze zabic dostarczania pozostalym ani transakcji,
-          // ktora wlasnie sie zakonczyla.
+          // A client that threw must not kill delivery to the others, nor the transaction that has
+          // just finished.
           console.error("[bus] subskrybent rzucil wyjatek:", err);
         }
       }
@@ -89,8 +88,8 @@ export class EventBus {
     return this.#byActor.get(actorId)?.size ?? 0;
   }
 
-  /** Rejestruje dlugotrwaly strumien (SSE) na potrzeby limitu. Zwraca funkcje
-   *  zwalniajaca; count NIE obejmuje krotkotrwalych subskrypcji long-polla. */
+  /** Registers a long-lived stream (SSE) for the purposes of the limit. Returns a releasing
+   *  function; count does NOT include the short-lived subscriptions of a long-poll. */
   openStream(actorId: number): () => void {
     this.#streams.set(actorId, (this.#streams.get(actorId) ?? 0) + 1);
     let released = false;

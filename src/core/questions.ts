@@ -1,10 +1,10 @@
 /**
- * Otwarte pytania.
+ * Open questions.
  *
- * Najlepszy prymityw prototypu i powod, dla ktorego to nie jest zwykly komunikator:
- * pytanie zadaje sie KANALOWI, nie konkretnej sesji, wiec podejmie je ktokolwiek,
- * kto wroci. Dla agentow, ktorzy przychodza i odchodza, to jest roznica miedzy
- * "pytanie czeka" a "pytanie utknelo, bo adresat juz nie istnieje".
+ * The prototype's best primitive, and the reason this is not an ordinary messenger: a
+ * question is asked of the CHANNEL, not of a particular session, so whoever comes back can
+ * take it. For agents that come and go, that is the difference between "the question is
+ * waiting" and "the question is stuck, because its addressee no longer exists".
  */
 import { tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
@@ -18,10 +18,10 @@ export function ask(
   ctx: Ctx,
   input: { conversationId: number; actorId: number; body: string; sessionId?: string | null },
 ): { question: number; message: Message } {
-  // JEDNA transakcja na wiadomosc i wpis pytania. Bez niej pad procesu (albo
-  // SQLITE_BUSY od rownoleglego CLI) miedzy dwoma commitami zostawial trwale
-  // dostarczona wiadomosc kind='ask', na ktora nikt nigdy nie mogl odpowiedziec,
-  // bo pytanie nie istnialo. Zdarzenie na szyne i tak wyjdzie dopiero po commicie
+  // ONE transaction for the message and the question row. Without it, a process crash (or
+  // SQLITE_BUSY from a parallel CLI) between the two commits left a permanently delivered
+  // kind='ask' message that nobody could ever answer, because the question did not exist.
+  // The event reaches the bus after the commit anyway (onCommitted inside postMessage).
   // (onCommitted wewnatrz postMessage).
   return tx(ctx.db, () => {
     const message = postMessage(ctx, {
@@ -45,27 +45,27 @@ export function answer(
   ctx: Ctx,
   input: { questionId: number; actorId: number; body: string; sessionId?: string | null },
 ): { message: Message } {
-  // Kontrola dostepu PRZED sprawdzeniem stanu: bez tego endpoint zdradzal
-  // istnienie i status pytan z cudzych kanalow prywatnych ("juz zamkniete"
-  // to tez informacja). Nieistniejace pytanie i pytanie bez dostepu daja
-  // celowo rozne bledy o TEJ SAMEJ tresci co reszta systemu.
+  // The access check BEFORE checking the state: without it the endpoint revealed the
+  // existence and status of questions from other people's private channels ("already closed"
+  // is information too). A non-existent question and a question without access deliberately
+  // give errors with THE SAME wording as the rest of the system.
   const q = ctx.db.prepare("SELECT * FROM questions WHERE id = ?").get(input.questionId) as
     | { id: number; message_id: number; conversation_id: number; closed_at: number | null }
     | undefined;
   if (!q) throw notFound("pytanie", `nie ma pytania ${input.questionId}`);
   assertCanRead(ctx, q.conversation_id, input.actorId);
 
-  // JEDNA transakcja na wiadomosc-odpowiedz i zamkniecie pytania, z PONOWNYM
-  // sprawdzeniem stanu w srodku: dwa procesy odpowiadajace rownoczesnie nie moga
-  // oba przejsc walidacji "otwarte" i zostawic dwoch odpowiedzi.
+  // ONE transaction for the answer message and closing the question, with a RE-CHECK of the
+  // state inside: two processes answering simultaneously must not both pass the "open"
+  // validation and leave two answers.
   return tx(ctx.db, () => {
     const fresh = ctx.db
       .prepare("SELECT closed_at, message_id, conversation_id FROM questions WHERE id = ?")
       .get(q.id) as { closed_at: number | null; message_id: number; conversation_id: number };
     if (fresh.closed_at) throw badRequest("juz_zamkniete", "na to pytanie ktos juz odpowiedzial");
 
-    // Odpowiedz laduje w watku pytania - dzieki temu "co bylo odpowiedzia na co"
-    // wynika ze struktury, a nie z czytania po kolei.
+    // The answer lands in the question's thread - so "what answered what" follows from the
+    // structure rather than from reading in order.
     const message = postMessage(ctx, {
       conversationId: fresh.conversation_id,
       actorId: input.actorId,
@@ -81,16 +81,16 @@ export function answer(
   });
 }
 
-/** Otwarte pytania z konwersacji widocznych dla aktora. Kanal prywatny nie wycieka. */
+/** Open questions from conversations visible to the actor. A private channel does not leak. */
 export function openQuestions(
   ctx: Ctx,
   q: { actorId: number; conversationId?: number },
 ): OpenQuestion[] {
   if (q.conversationId !== undefined) assertCanRead(ctx, q.conversationId, q.actorId);
-  // Wiadomosc pobierana W TYM SAMYM zapytaniu: wczesniej kazde pytanie kosztowalo
-  // osobne `getMessage`, wiec panel z 40 otwartymi pytaniami robil 41 zapytan.
-  // Do tego LIMIT - lista "do podjecia" bez ograniczenia to zaproszenie do
-  // odpowiedzi, ktora rosnie z historia instancji.
+  // The message is fetched IN THE SAME query: previously every question cost a separate
+  // `getMessage`, so a panel with 40 open questions made 41 queries. Plus a LIMIT - a list of
+  // things "to take up" without a bound is an invitation to an answer that grows with the
+  // instance's history.
   const rows = ctx.db
     .prepare(
       `SELECT qu.id AS qid, qu.message_id, m.*

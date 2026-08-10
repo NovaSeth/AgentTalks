@@ -1,12 +1,12 @@
 /**
- * "Co nowego": lista swiezych mozliwosci serwera, dostarczana kazdemu aktorowi
- * DOKLADNIE RAZ po kazdej zmianie tresci - i agentom (API/MCP), i ludziom (UI).
+ * "What's new": a list of the server's fresh capabilities, delivered to every actor EXACTLY
+ * ONCE after each change of content - to agents (API/MCP) and to humans (UI) alike.
  *
- * Mechanizm jest lustrem zasad (guidelines.ts), ale wielorazowym: tozsamoscia
- * dostawy nie jest "kiedykolwiek widzial", tylko hash biezacej tresci NEWS.md.
- * Nowa tresc = nowy hash = jedna dostawa dla kazdego, kto go jeszcze nie ma.
- * Dzieki temu "kanal nowosci" nie wymaga zadnej reki: wystarczy zredagowac
- * NEWS.md w korzeniu pakietu i wdrozyc.
+ * The mechanism mirrors the guidelines (guidelines.ts), but is repeatable: the identity of a
+ * delivery is not "has ever seen it" but the hash of the current NEWS.md content.
+ * New content = a new hash = one delivery for everybody who does not have it yet.
+ * Thanks to that the "news channel" needs no hand at all: it is enough to edit NEWS.md in
+ * the package root and deploy.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import type { Ctx } from "./ctx.ts";
 import { getPage, savePage } from "./wiki.ts";
 
-/** Slug strony-lustra NEWS.md. */
+/** The slug of the NEWS.md mirror page. */
 export const NEWS_SLUG = "nowosci";
 
 export const NEWS_PROMPT =
@@ -29,7 +29,7 @@ export function newsText(): string {
   try {
     cachedText = readFileSync(fileURLToPath(new URL("../../NEWS.md", import.meta.url)), "utf8");
   } catch {
-    // Brak pliku nie wywraca serwera - nowosci sa mile-do-posiadania.
+    // A missing file does not bring the server down - the news is nice-to-have.
     cachedText = "";
   }
   return cachedText;
@@ -43,15 +43,15 @@ export function newsHash(): string {
 }
 
 /**
- * Publikacja NEWS.md jako STRONY WIKI.
+ * Publishing NEWS.md as a WIKI PAGE.
  *
- * Plik jest zrodlem prawdy (jedzie z kodem, wiec nie da sie rozjechac z tym, co
- * faktycznie stoi na serwerze), ale zyje raz - dostarczony i zapomniany. Na wiki
- * ta sama tresc dostaje to, czego plikowi brakuje: da sie do niej wrocic, wyszukac
- * ja i - dzieki rewizjom - zobaczyc kolejne wersje obok siebie.
+ * The file is the source of truth (it travels with the code, so it cannot drift from what
+ * actually runs on the server), but it lives once - delivered and forgotten. On the wiki
+ * the same content gets what the file lacks: you can come back to it, search it and - thanks
+ * to revisions - see successive versions side by side.
  *
- * Zapis idzie TYLKO przy realnej zmianie tresci; inaczej kazdy restart kontenera
- * dokladalby rewizje "bez zmian" i historia przestalaby cokolwiek znaczyc.
+ * The write happens ONLY on a real change of content; otherwise every container restart
+ * would add a "no changes" revision and the history would stop meaning anything.
  */
 export function publishNewsToWiki(ctx: Ctx): "zapisane" | "bez_zmian" | "pominiete" {
   const text = newsText();
@@ -68,18 +68,18 @@ export function publishNewsToWiki(ctx: Ctx): "zapisane" | "bez_zmian" | "pominie
     body: text,
     actorId: system.id,
     note: `imported from NEWS.md (${newsHash()})`,
-    // Polozenie ustawiamy tylko przy zakladaniu - potem niech decyduje ten, kto
-    // porzadkuje drzewo. Przeniesiona strona nie ma wracac przy kazdym deployu.
+    // We set the placement only when creating it - after that let whoever tidies the tree
+    // decide. A moved page must not come back on every deployment.
     ...(current ? {} : { parentSlug: getPage(ctx, "agenttalks") ? "agenttalks" : null }),
-    // Strona jest lustrem pliku, wiec system nadpisuje ja swiadomie; kazda wersja
-    // zostaje w historii, wiec nic nie ginie.
+    // The page is a mirror of the file, so the system overwrites it deliberately; every version
+    // stays in the history, so nothing is lost.
     force: true,
   });
   return "zapisane";
 }
 
-/** Payload nowosci do doklejenia do odpowiedzi. Zwraca tresc TYLKO, gdy aktor
- *  nie widzial biezacej wersji - i od razu oznacza ja jako dostarczona. */
+/** The news payload to append to a response. Returns content ONLY when the actor has not
+ *  seen the current version - and marks it as delivered at once. */
 export function firstConnectNews(
   ctx: Ctx,
   actorId: number,

@@ -1,28 +1,28 @@
 /**
- * Wzmianki. Parsowane raz, przy zapisie, i zapisywane do tabeli `mentions`.
+ * Mentions. Parsed once, at write time, and stored in the `mentions` table.
  *
- * W prototypie kazde pytanie "czy to mnie dotyczy" bylo skanem podlancuchowym po
- * calej historii, z lista wariantow nazwy budowana w locie (`@label`, `@pierwsza-czesc`,
- * `@osiem-znakow-sid`). To bylo wolne i zawodne: zmiana etykiety zmieniala wynik
- * wstecz, a fraza "@nestor" w cudzej wiadomosci liczyla sie tak samo jak wzmianka.
+ * In the prototype every "does this concern me" question was a substring scan over the whole
+ * history, with a list of name variants built on the fly (`@label`, `@first-part`,
+ * `@eight-characters-of-sid`). That was slow and unreliable: changing a label changed the result
+ * retroactively, and "@nestor" inside somebody else's message counted the same as a mention.
  */
 import type { Ctx } from "./ctx.ts";
 import { transliterate } from "./ids.ts";
 import { messageFromRow, type Message, type MsgRow } from "./messages.ts";
 
-// Wzmianka musi byc poprzedzona poczatkiem tekstu albo znakiem, ktory nie jest
-// czescia slowa. Bez tego "michal@example.com" bylby wzmianka uzytkownika "example".
+// A mention has to be preceded by the start of the text or by a character that is not part
+// of a word. Without that, "michal@example.com" would be a mention of the user "example".
 const MENTION_RE = /(^|[^\p{L}\p{N}_@.-])@([\p{L}\p{N}][\p{L}\p{N}._-]{1,31})/gu;
 
-/** Zwraca handle w kolejnosci wystapienia, bez duplikatow, malymi literami. */
+/** Returns handles in order of occurrence, without duplicates, lower-cased. */
 export function parseMentions(body: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const m of String(body ?? "").matchAll(MENTION_RE)) {
-    // Kropka i mysnik moga byc czescia handle, ale nie na koncu - tam to zwykle
-    // interpunkcja zdania ("zapytaj @nestor."). Transliteracja TA SAMA co przy
-    // nadawaniu handle - inaczej "@Michal" pisane z polskimi znakami nigdy nie
-    // trafialoby w konto "michal", bo handle jest po transliteracji.
+    // A dot and a hyphen can be part of a handle, but not at the end - there they are usually
+    // sentence punctuation ("ask @nestor."). Transliteration is THE SAME as when a handle is
+    // issued - otherwise "@Michal" written with Polish diacritics would never hit the account
+    // "michal", because a handle is stored transliterated.
     const h = transliterate(m[2]).replace(/[._-]+$/, "");
     if (h.length < 2 || seen.has(h)) continue;
     seen.add(h);
@@ -31,13 +31,13 @@ export function parseMentions(body: string): string[] {
   return out;
 }
 
-/** Wzmianki zbiorowe: kazdy z tych aliasow wola WSZYSTKICH czlonkow kanalu. */
+/** Collective mentions: each of these aliases calls EVERY member of the channel. */
 const ALL_ALIASES = new Set(["all", "channel", "here", "wszyscy", "kanal"]);
 
-/** Handle, ktore realnie istnieja, na id aktorow. Nieistniejace sa po prostu tekstem.
- *  Gdy podano conversationId, `@all` (i aliasy) rozwijaja sie na wszystkich
- *  czlonkow kanalu - tak, zeby ogloszenie do calego kanalu dotarlo pushem/wake
- *  do kazdego, kto go obserwuje. */
+/** Handles that really exist, mapped to actor ids. Non-existent ones are simply text.
+ *  When a conversationId is given, `@all` (and its aliases) expands to every member of the
+ *  channel - so that an announcement to the whole channel reaches, by push/wake, everybody
+ *  watching it. */
 export function resolveMentions(ctx: Ctx, body: string, conversationId?: number): number[] {
   const handles = parseMentions(body);
   if (handles.length === 0) return [];
@@ -59,9 +59,9 @@ export function resolveMentions(ctx: Ctx, body: string, conversationId?: number)
 }
 
 /**
- * Wiadomosci wspominajace aktora - odpowiednik `talk mentions`.
- * Ograniczone do konwersacji, ktore aktor ma prawo czytac (publiczne albo wlasne):
- * wzmianka w cudzym kanale prywatnym NIE moze byc kanalem wycieku tresci.
+ * Messages mentioning an actor - the equivalent of `talk mentions`.
+ * Limited to conversations the actor is allowed to read (public or its own): a mention in
+ * somebody else's private channel must NOT become a channel for leaking content.
  */
 export function mentionsOf(
   ctx: Ctx,

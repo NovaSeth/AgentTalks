@@ -1,15 +1,15 @@
 /**
- * Passkeys (WebAuthn) bez zaleznosci: logowanie Touch ID / Face ID.
+ * Passkeys (WebAuthn) with no dependencies: Touch ID / Face ID sign-in.
  *
- * Model zaufania: poswiadczenie WIAZEMY z aktorem podczas ZALOGOWANEJ sesji
- * (haslem), wiec atestacja urzadzenia nic by nam nie dodala - przyjmujemy
- * attestation "none" i ignorujemy attStmt. Dowodem przy logowaniu jest podpis
- * challenge'a kluczem, ktorego publiczna polowe zapisalismy przy rejestracji;
- * prywatna nigdy nie opuszcza Secure Enclave urzadzenia.
+ * The trust model: we BIND a credential to an actor during a SIGNED-IN session (by
+ * password), so device attestation would add nothing - we accept attestation "none" and
+ * ignore attStmt. The proof at login is a signature over the challenge by the key whose
+ * public half we stored at registration; the private half never leaves the device's Secure
+ * Enclave.
  *
- * Obslugiwane algorytmy: ES256 (-7, Apple/wiekszosc) i RS256 (-257, Windows
- * Hello). Weryfikacja czysto na node:crypto - CBOR i COSE parsujemy sami,
- * bo potrzebny podzbior to kilkadziesiat linii.
+ * Supported algorithms: ES256 (-7, Apple and most others) and RS256 (-257, Windows Hello).
+ * Verification purely on node:crypto - we parse CBOR and COSE ourselves, because the
+ * subset needed is a few dozen lines.
  */
 import { createHash, createVerify, randomBytes } from "node:crypto";
 import type { Ctx } from "./ctx.ts";
@@ -20,13 +20,13 @@ export const b64u = {
   dec: (s: string): Buffer => Buffer.from(String(s ?? ""), "base64url"),
 };
 
-// ---------------------------------------------------------------- CBOR (odczyt)
+// ---------------------------------------------------------------- CBOR (reading)
 
 type CborValue = number | bigint | string | Buffer | boolean | null | CborValue[]
   | Map<number | string, CborValue>;
 
-/** Dekoder CBOR ograniczony do tego, co wystepuje w attestationObject i COSE:
- *  liczby, bajty, teksty, tablice, mapy, proste wartosci. Bez strumieni. */
+/** A CBOR decoder limited to what occurs in attestationObject and COSE: numbers, bytes,
+ *  text, arrays, maps, simple values. No streams. */
 function cborDecode(buf: Buffer): { value: CborValue; rest: Buffer } {
   if (buf.length === 0) throw badRequest("cbor", "puste dane CBOR");
   const ib = buf[0];
@@ -83,7 +83,7 @@ function cborDecode(buf: Buffer): { value: CborValue; rest: Buffer } {
 
 type StoredKey = { kty: "EC" | "RSA"; jwk: Record<string, string>; alg: number };
 
-/** COSE_Key (mapa z kluczami calkowitymi) na JWK zrozumialy dla node:crypto. */
+/** A COSE_Key (a map with integer keys) into a JWK that node:crypto understands. */
 function coseToJwk(cose: Map<number | string, CborValue>): StoredKey {
   const kty = cose.get(1);
   const alg = Number(cose.get(3) ?? 0);
@@ -106,10 +106,10 @@ function coseToJwk(cose: Map<number | string, CborValue>): StoredKey {
   throw badRequest("webauthn", `nieobslugiwany typ klucza COSE (kty=${String(kty)})`);
 }
 
-// --------------------------------------------------------------- challenge'y
+// --------------------------------------------------------------- challenges
 
-/** Challenge zyje krotko i jednorazowo, w pamieci procesu - restart serwera
- *  po prostu uniewaznia otwarte proby logowania, co jest wlasciwym zachowaniem. */
+/** A challenge lives briefly and once, in the process's memory - a server restart simply
+ *  invalidates open login attempts, which is the right behaviour. */
 const CHALLENGE_TTL_MS = 2 * 60 * 1000;
 const challenges = new Map<string, { purpose: "register" | "login"; actorId: number | null; expires: number }>();
 
@@ -130,7 +130,7 @@ function consumeChallenge(c: string, purpose: "register" | "login"):
   return { actorId: row.actorId };
 }
 
-// ------------------------------------------------------------------ weryfikacja
+// ------------------------------------------------------------------ verification
 
 type ClientData = { type: string; challenge: string; origin: string };
 
@@ -160,23 +160,23 @@ export type RegistrationInput = {
   rpId: string;
   expectedOrigins: readonly string[];
   actorId: number;
-  // Pole `challengeFromClient` USUNIETE. Bylo martwe: nikt go nie czytal, a jego
-  // komentarz sugerowal kontrole, ktorej nie bylo. Wiarygodny challenge i tak
-  // pochodzi WYLACZNIE z clientDataJSON (podpisanego przez authenticator) i tam
-  // jest zuzywany - kopia podana obok przez klienta niczego by nie dowodzila,
-  // bo klient moglby podac dowolna. Lepsze puste miejsce niz pozorna kontrola.
+  // The `challengeFromClient` field was REMOVED. It was dead: nobody read it, and its comment
+  // suggested a check that did not exist. The trustworthy challenge comes ONLY from
+  // clientDataJSON (signed by the authenticator) and is consumed there - a copy handed over
+  // alongside it by the client would prove nothing, because the client could hand over
+  // anything. Better an empty space than an apparent check.
   clientDataJSON: string;           // base64url
   attestationObject: string;        // base64url
   label?: string | null;
 };
 
-/** Rejestracja poswiadczenia: sprawdza challenge/origin/rpId/flagi, wyciaga
- *  credentialId + klucz publiczny i zapisuje. Zwraca id poswiadczenia. */
-/** Wywolanie, ktore MOZE dostac smiec od klienta, opakowane tak, zeby smiec
- *  konczyl sie bledem 400 ("przyslales cos nie tak"), a nie 500 ("serwer sie
- *  wywrocil"). Odczyty bufora (readUInt16BE, subarray, CBOR) rzucaja RangeError
- *  na obcietych danych - a nieobsluzony RangeError to nasza awaria w odpowiedzi
- *  na cudzy blad, czyli komunikat mowiacy nieprawde o tym, kto zawinil. */
+/** Registering a credential: checks challenge/origin/rpId/flags, extracts the credentialId
+ *  and the public key, and stores them. Returns the credential's id. */
+/** A call that MAY receive junk from a client, wrapped so that junk ends in a 400 ("you sent
+ *  something wrong") rather than a 500 ("the server fell over"). Buffer reads (readUInt16BE,
+ *  subarray, CBOR) throw a RangeError on truncated data - and an unhandled RangeError is our
+ *  failure in response to somebody else's error, that is, a message that lies about who was
+ *  at fault. */
 function zeSmieciemJako400<T>(co: () => T): T {
   try {
     return co();
@@ -241,7 +241,7 @@ export type AuthenticationInput = {
   signature: string;                // base64url
 };
 
-/** Logowanie passkeyem: zwraca actorId po pomyslnej weryfikacji podpisu. */
+/** Passkey login: returns the actorId after the signature verifies. */
 export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   const row = ctx.db.prepare(
     "SELECT actor_id, public_key, sign_count FROM webauthn_credentials WHERE id = ?",
@@ -281,8 +281,8 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   if (!ok) throw unauthorized("webauthn_podpis", "podpis sie nie zgadza");
 
   const count = authData.readUInt32BE(33);
-  // Licznik podpisow rosnie na urzadzeniach, ktore go wspieraja; regres MOZE
-  // oznaczac sklonowany klucz. Apple trzyma zero - wtedy nie porownujemy.
+  // The signature counter grows on devices that support it; a regression MAY mean a cloned
+  // key. Apple keeps zero - then we do not compare.
   if (count !== 0 && row.sign_count !== 0 && count <= row.sign_count) {
     throw unauthorized("webauthn_licznik", "licznik podpisow sie cofnal - poswiadczenie odrzucone");
   }
@@ -292,7 +292,7 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   return row.actor_id;
 }
 
-/** Lista poswiadczen aktora (do allowCredentials i do UI ustawien). */
+/** An actor's list of credentials (for allowCredentials and for the settings UI). */
 export function listCredentials(ctx: Ctx, actorId: number): Array<{ id: string; label: string | null; createdAt: number; lastUsedAt: number | null }> {
   const rows = ctx.db.prepare(
     "SELECT id, label, created_at, last_used_at FROM webauthn_credentials WHERE actor_id = ? ORDER BY created_at",

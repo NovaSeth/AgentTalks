@@ -1,15 +1,15 @@
 /**
- * Zaproszenia (enrollment).
+ * Invites (enrollment).
  *
- * Napiecie do rozwiazania: chcemy, zeby nowy agent dolaczal jednym poleceniem
- * ("tworze katalog, odpalam Claude Code, on sie odzywa"), ale NIE chcemy, zeby
- * ktokolwiek z sieci tworzyl sobie tozsamosc - bo to jest dokladnie ta dziura,
- * ktora ten projekt zamyka.
+ * The tension to resolve: we want a new agent to join with one command ("I create a
+ * directory, start Claude Code, it says hello"), but we do NOT want anybody on the network
+ * creating an identity for themselves - because that is exactly the hole this project
+ * closes.
  *
- * Rozwiazanie: admin wydaje KOD-zaproszenie (raz), a agent nim wykupuje swojego
- * aktora i token. Decyzja "kto moze dolaczyc" nalezy do admina (ma kod), a sam
- * akt zalozenia jest jednokomendowy. Kod moze miec termin (expires_at) i limit
- * uzyc (uses_left; NULL = bez limitu). W bazie lezy sha256, nie kod.
+ * The resolution: an admin issues an invite CODE (once), and the agent redeems it for its
+ * actor and token. The decision "who may join" belongs to the admin (who holds the code),
+ * while the act of creation is a single command. A code can have an expiry (expires_at) and
+ * a use limit (uses_left; NULL = no limit). The database holds a sha256, not the code.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { tx } from "../store/db.ts";
@@ -78,10 +78,10 @@ export function listInvites(ctx: Ctx): InviteInfo[] {
   return rows.map((r) => toInfo(ctx, r));
 }
 
-/** Zwraca true, gdy faktycznie odwolano istniejace, jeszcze-nieodwolane zaproszenie.
- *  false = nie ma takiego id (albo bylo juz odwolane) - wolajacy nie moze raportowac
- *  sukcesu, bo "odwolane" dla zaproszenia, ktorego nie ma, to falszywe poczucie
- *  bezpieczenstwa dokladnie wtedy, gdy ktos gasi wynikniety kod. */
+/** Returns true when an existing, not-yet-revoked invite really was revoked.
+ *  false = there is no such id (or it was revoked already) - the caller must not report
+ *  success, because "revoked" for an invite that does not exist is a false sense of
+ *  security at exactly the moment somebody is putting out a leaked code. */
 export function revokeInvite(ctx: Ctx, id: number): boolean {
   const info = ctx.db
     .prepare("UPDATE invites SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
@@ -90,9 +90,9 @@ export function revokeInvite(ctx: Ctx, id: number): boolean {
 }
 
 /**
- * Wykupienie zaproszenia: zaklada aktora o wybranej nazwie i mintuje mu token.
- * Calosc w jednej transakcji, zeby zuzycie kodu i utworzenie tozsamosci byly
- * atomowe. Zajeta nazwa NIE zuzywa uzycia (agent moze sprobowac inna).
+ * Redeeming an invite: creates an actor with the chosen name and mints it a token.
+ * The whole thing in one transaction, so that using up the code and creating the identity
+ * are atomic. A taken name does NOT consume a use (the agent can try another).
  */
 export function redeemInvite(
   ctx: Ctx,
@@ -105,8 +105,8 @@ export function redeemInvite(
     const row = ctx.db.prepare("SELECT * FROM invites WHERE hash = ?").get(hashOf(raw)) as
       | InviteRow
       | undefined;
-    // Jeden komunikat dla "nie ma", "odwolane", "wygaslo", "zuzyte": kod nie moze
-    // byc wyrocznia, ktore zaproszenia istnialy.
+    // One message for "does not exist", "revoked", "expired" and "used up": a code must not be
+    // an oracle for which invites existed.
     const bad = !row || row.revoked_at !== null
       || (row.expires_at !== null && row.expires_at <= ctx.now())
       || (row.uses_left !== null && row.uses_left <= 0);
@@ -114,10 +114,10 @@ export function redeemInvite(
 
     const handle = normalizeHandle(input.handle); // rzuci na zlej nazwie (400)
     if (getActorByHandle(ctx, handle)) {
-      // Zajeta nazwa nie zuzywa zaproszenia - agent probuje inna.
-      // Ale najczestszy powod, dla ktorego agent tu trafia, to WLASNA nazwa i
-      // martwy token. "Wybierz inna" popycha go wtedy do zalozenia @handle-2,
-      // czyli drugiej tozsamosci tej samej osoby - dlatego mowimy to wprost.
+      // A taken name does not consume the invite - the agent tries another.
+      // But the most common reason an agent lands here is its OWN name plus a dead token.
+      // "Pick another one" then pushes it towards creating @handle-2, that is, a second identity
+      // for the same person - which is why we say so outright.
       throw conflict(
         "handle_zajety",
         `nazwa "${handle}" jest juz zajeta - wybierz inna. Jesli to Ty i stracil sie token: ` +
@@ -125,8 +125,8 @@ export function redeemInvite(
           `(agenttalks token create --actor ${handle}).`,
       );
     }
-    // Zawsze agent: samodzielna rejestracja przez rozdany kod nie moze nadac
-    // tozsamosci czlowieka. Aktora-czlowieka zaklada admin osobno.
+    // Always an agent: self-registration through a distributed code must not grant a human
+    // identity. A human actor is created by an admin separately.
     const actor = createActor(ctx, {
       kind: "agent",
       handle,
