@@ -65,6 +65,7 @@ const UI_MODULES = [
   "app.js", "dom.js", "ikony.js", "markdown.js", "api.js", "stan.js", "toasty.js",
   "dane.js", "akcje.js", "zdarzenia-sse.js", "widok-login.js", "widok-sidebar.js",
   "widok-czat.js", "widok-wiki.js", "widok-powiadomienia.js", "widok-admin.js", "szukaj.js",
+  "i18n.js", "i18n-pl.js",
 ];
 const UI_MODULE_SET = new Set(UI_MODULES);
 
