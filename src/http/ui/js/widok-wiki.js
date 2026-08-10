@@ -11,9 +11,9 @@ import { state, widok } from "./stan.js";
 import { showError, showToast } from "./toasty.js";
 
 // ------------------------------------------------ wersja robocza edytora wiki
-// Czat od dawna trzyma szkic wiadomosci przezywajacy F5 i wdrozenie; edytor wiki
-// nie trzymal nic, a to w nim pisze sie najdluzsze teksty. Wyjscie z edytora
-// (Anuluj, klik w inna strone, zamkniecie karty) kasowalo je bez pytania.
+// The chat has long kept a message draft that survives F5 and a deployment; the wiki editor
+// kept nothing, and it is where the longest texts are written. Leaving the editor (Cancel, a
+// click on another page, closing the tab) erased them without asking.
 const WIKI_DRAFT_KEY = (slug) => `atalks_wiki_draft_${slug}`;
 
 function zapiszWersjeRobocza(slug, draft) {
@@ -32,7 +32,7 @@ function skasujWersjeRobocza(slug) {
   try { localStorage.removeItem(WIKI_DRAFT_KEY(slug)); } catch { /* prywatny tryb */ }
 }
 
-/** Czy w edytorze jest cos, czego nie ma na serwerze. */
+/** Whether the editor holds anything the server does not have. */
 function saNiezapisaneZmiany() {
   const w = state.wiki;
   if (!w.editing || !w.draft) return false;
@@ -41,7 +41,7 @@ function saNiezapisaneZmiany() {
   return tytul !== (w.page?.title ?? w.slug) || tresc !== (w.page?.body ?? "");
 }
 
-/** Wyjscie z edytora pyta, zamiast kasowac. Zwraca false, gdy uzytkownik zostaje. */
+/** Leaving the editor asks instead of erasing. Returns false when the user stays. */
 export async function mozeszOpuscicEdytorWiki() {
   if (!saNiezapisaneZmiany()) return true;
   const zapamietaj = () => {
@@ -59,18 +59,17 @@ export async function mozeszOpuscicEdytorWiki() {
   });
 }
 
-// Strony wlasnie przez nas kasowane. Serwer roztrasa zdarzenie `wiki` takze dla
-// skasowanej strony, a obsluga tego zdarzenia otwiera strone na nowo, gdy wlasnie
-// sie na nia patrzy. Zdarzenie potrafi wyprzedzic odpowiedz na DELETE, wiec
-// interfejs probowal wczytac strone, ktorej sam przed chwila kazal zniknac - i
-// pokazywal "Nie ma takiej strony wiki" obok wlasnego "Skasowano".
+// Pages we are deleting right now. The server broadcasts a `wiki` event for a deleted page as
+// well, and the handler for that event reopens the page when you are looking at it. The event
+// can outrun the response to DELETE, so the interface tried to load a page it had just told
+// to disappear - and showed "There is no such wiki page" next to its own "Deleted".
 const kasowaneStrony = new Set();
 
 // ============================================================= WIKI
 export async function openWikiPage(slug) {
   if (kasowaneStrony.has(slug)) return;
-  // Przejscie na inna strone w trakcie pisania to najczestsza droga do utraty
-  // tekstu - wiec pytamy tu, a nie dopiero przy Anuluj.
+  // Moving to another page while writing is the most common route to losing text - so we ask
+  // here, not only at Cancel.
   if (state.wiki.editing && state.wiki.slug !== slug && !(await mozeszOpuscicEdytorWiki())) return;
   state.view = "wiki";
   state.drawerOpen = false;
@@ -89,8 +88,8 @@ export async function openWikiPage(slug) {
     state.wiki.page = pageData.page;
     state.wiki.files = pageData.files || [];
     state.wiki.history = histData.revisions;
-    // Wejscie na strone zeruje wskaznik "N zmian" - najpierw lokalnie (badge
-    // znika od razu), potem znacznik na serwerze (best effort).
+    // Entering a page clears the "N changes" indicator - locally first (the badge disappears at
+    // once), then the marker on the server (best effort).
     const item = state.wiki.pages.find((p) => p.slug === slug);
     if (item && item.unseen) { item.unseen = 0; widok.sidebar(); }
     api("POST", `/api/wiki/${encodeURIComponent(slug)}/seen`, {}).catch(() => {});
@@ -101,8 +100,8 @@ export async function openWikiPage(slug) {
 }
 
 export function newWikiPageModal() {
-  // Domyslne polozenie: strona, na ktora wlasnie patrzysz - "dopisuje podstrone
-  // do tego, co czytam" to najczestszy przypadek przy rosnacym drzewie.
+  // The default placement: the page you are looking at - "I am adding a subpage to what I am
+  // reading" is the most common case with a growing tree.
   const defaultParent = state.view === "wiki" && state.wiki.page ? state.wiki.page.slug : "";
   const options = state.wiki.pages
     .slice()
@@ -143,8 +142,8 @@ async function saveWikiEdit(title, body, note, parentSlug) {
   const slug = state.wiki.slug;
   try {
     // baseRevision = wersja, ktora widzielismy otwierajac strone. Gdy ktos zapisal
-    // w miedzyczasie, serwer odmawia (409) zamiast po cichu skasowac jego zmiane;
-    // dla nowej strony 0 znaczy "zaloz, jesli takiej nie ma".
+    // in the meantime, the server refuses (409) rather than silently erasing their change;
+    // for a new page 0 means "create it if it does not exist".
     const data = await api("PUT", `/api/wiki/${encodeURIComponent(slug)}`, {
       title, body, note: note || undefined, parentSlug,
       baseRevision: state.wiki.page ? state.wiki.page.lastRevisionId : 0,
@@ -159,12 +158,12 @@ async function saveWikiEdit(title, body, note, parentSlug) {
     renderWikiMain();
     showToast(t("Page saved."));
   } catch (e) {
-    // Konflikt to nie awaria zapisu tylko cudza zmiana - i wymaga DECYZJI, a nie
-    // komunikatu znikajacego po czterech sekundach.
+    // A conflict is not a save failure but somebody else's change - and it calls for a DECISION,
+    // not for a message that vanishes after four seconds.
     //
-    // Warunek testowal dotad slowo "konflikt" w TRESCI bledu, a ono jest wylacznie
-    // w jego KODZIE - wiec przyjazna sciezka nie odpalala sie ani razu i czlowiek
-    // dostawal w toascie instrukcje z curl-em, napisana dla agenta.
+    // The condition used to test for the word "konflikt" in the error's TEXT, while it lives only
+    // in its CODE - so the friendly path never fired once and a human got, in a toast, an
+    // instruction with curl in it, written for an agent.
     if (e.code === "konflikt_wiki") { pokazKonfliktWiki(title, body, note, parentSlug); return; }
     showError(e, {
       slug: t("Invalid page address. Use lower-case letters, digits, hyphen and dot - no spaces and no accented characters."),
@@ -173,9 +172,9 @@ async function saveWikiEdit(title, body, note, parentSlug) {
   }
 }
 
-/** Okno konfliktu: co sie stalo i trzy wyjscia, z ktorych kazde ratuje tekst.
- *  Wersja robocza laduje w localStorage ZANIM cokolwiek pokazemy - inaczej
- *  odswiezenie strony w panice kasowaloby prace, o ktora wlasnie sie bijemy. */
+/** The conflict window: what happened and three ways out, each of which saves the text.
+/**  The draft lands in localStorage BEFORE we show anything - otherwise refreshing the page in
+/**  a panic would erase the work we are fighting over. */
 function pokazKonfliktWiki(title, body, note, parentSlug) {
   const slug = state.wiki.slug;
   zapiszWersjeRobocza(slug, { title, body, parentSlug });
@@ -203,8 +202,8 @@ function pokazKonfliktWiki(title, body, note, parentSlug) {
   modal.querySelector("#kw-nadpisz").addEventListener("click", async () => {
     close();
     try {
-      // Dociagamy AKTUALNY numer wersji i zapisujemy na jego podstawie: to jest
-      // swiadome "wiem, ze ktos zmienil, i tak chce swoje", a nie wyscig.
+      // We fetch the CURRENT revision number and save against it: this is a deliberate "I know
+      // somebody changed it and I want mine anyway", not a race.
       const swieza = await api("GET", `/api/wiki/${encodeURIComponent(slug)}`);
       state.wiki.page = swieza.page;
       await saveWikiEdit(title, body, note, parentSlug);
@@ -239,10 +238,10 @@ async function revertWikiTo(revId) {
   } catch (e) { showError(e); }
 }
 
-/** Odtworzenie skasowanej strony z danych, ktore serwer oddal przy kasowaniu.
- *  baseRevision=0 znaczy "zaloz, jesli takiej nie ma" - a po skasowaniu takiej
- *  nie ma, wiec to jest dokladnie ta sciezka. Historia sprzed skasowania nie
- *  wraca i trzeba to powiedziec wprost, zamiast udawac pelne cofniecie. */
+/** Restoring a deleted page from the data the server returned when deleting it.
+/**  baseRevision=0 means "create it if it does not exist" - and after a deletion it does not,
+/**  so this is exactly that path. The history from before the deletion does not come back and
+/**  that has to be said outright rather than pretending it is a full undo. */
 async function odtworzStroneWiki(deleted) {
   if (!deleted) return;
   try {
@@ -306,8 +305,8 @@ export function renderWikiMain(loading) {
     a.addEventListener("click", (e) => { e.preventDefault(); openWikiPage(a.dataset.crumb); }));
   const delBtn = document.getElementById("wiki-delete");
   if (delBtn) delBtn.addEventListener("click", async () => {
-    // Kasowanie zabiera takze historie, wiec pytamy NAZWA strony, a nie samym
-    // "na pewno?" - zeby klik w zly wiersz nie kosztowal dzialu wiki.
+    // Deleting takes the history with it, so we ask with the page's NAME rather than a bare
+    // "are you sure?" - so that a click on the wrong row does not cost a wiki section.
     if (!await confirmModal({
       title: t("Delete the page “{title}”?", { title: page.title }),
       body: t("It goes away together with its change history and attachments. Subpages do not disappear - they move one level up."),
@@ -316,10 +315,10 @@ export function renderWikiMain(loading) {
     const kasowany = w.slug;
     kasowaneStrony.add(kasowany);
     try {
-      // Serwer oddaje przy kasowaniu KOMPLET danych strony (tytul, tresc,
-      // rodzica) - czyli wszystko, czego trzeba, zeby ja odtworzyc. Skoro tak,
-      // "skasowane" nie musi znaczyc "nie do odzyskania": daje to na cofniecie
-      // tyle czasu, ile trwa zrozumienie, ze kliknelo sie nie tam.
+      // When deleting, the server returns the page's COMPLETE data (title, content, parent) - that
+      // is, everything needed to restore it. Given that, "deleted" does not have to mean
+      // "unrecoverable": it gives as much time to undo as it takes to realise you clicked the wrong
+      // thing.
       const { deleted } = await api("DELETE", `/api/wiki/${encodeURIComponent(kasowany)}`);
       state.wiki.page = null; state.wiki.slug = null; state.view = "chat";
       loadWikiList(); widok.render();
@@ -327,14 +326,14 @@ export function renderWikiMain(loading) {
         action: { label: t("Undo"), onClick: () => { kasowaneStrony.delete(kasowany); odtworzStroneWiki(deleted); } },
       });
     } catch (e) { showError(e); }
-    // Blokada zdejmowana z opoznieniem: dosylka SSE potrafi przyjsc po
-    // odpowiedzi na DELETE, a nie tylko przed nia.
+    // The lock is lifted with a delay: an SSE replay can arrive after the response to DELETE, not
+    // only before it.
     finally { setTimeout(() => kasowaneStrony.delete(kasowany), 3000); }
   });
   const editBtn = document.getElementById("wiki-edit");
   if (editBtn) editBtn.addEventListener("click", () => {
-    // Wersja robocza z poprzedniego podejscia wygrywa z trescia na serwerze:
-    // jesli cos tu zostalo, to znaczy, ze uzytkownik tego nie dokonczyl.
+    // A draft from a previous attempt beats the content on the server: if something stayed here,
+    // it means the user did not finish it.
     const robocza = wczytajWersjeRobocza(w.slug);
     w.editing = true;
     w.draft = robocza
@@ -355,8 +354,8 @@ function renderWikiContent(loading) {
 
   if (w.editing) {
     const d = w.draft || { title: w.page?.title ?? w.slug, body: w.page?.body ?? "" };
-    // Umiejscowienie w drzewie: dowolna strona poza soba i wlasnym poddrzewem
-    // (serwer i tak odrzuci cykl, ale nie ma co go proponowac).
+    // Placement in the tree: any page except itself and its own subtree (the server rejects a
+    // cycle anyway, but there is no point in offering one).
     const descendants = new Set([w.slug]);
     let grew = true;
     while (grew) {
@@ -395,9 +394,9 @@ function renderWikiContent(loading) {
     const par = el.querySelector("#we-parent");
     const znacznik = el.querySelector("#we-zapis");
     ti.value = d.title; b.value = d.body;
-    // Autozapis wersji roboczej: co sekunde bezruchu, do localStorage. Nie
-    // zastepuje zapisu na serwer i mowi to wprost - ma tylko sprawic, zeby
-    // zamkniecie karty, F5 albo klik w inna strone nie kosztowaly calego tekstu.
+    // Autosaving the draft: after a second of stillness, into localStorage. It does not replace
+    // saving to the server and says so outright - it exists only so that closing the tab, F5 or a
+    // click on another page do not cost the whole text.
     let autoTimer = null;
     const autozapis = () => {
       clearTimeout(autoTimer);
@@ -406,7 +405,7 @@ function renderWikiContent(loading) {
         if (znacznik) znacznik.textContent = t("draft kept in the browser");
       }, 1000);
     };
-    // Edycja wiki tez sygnalizuje pisanie - kuleczka przy stronie u innych.
+    // A wiki edit signals typing too - the bubble next to the page for everybody else.
     b.addEventListener("input", () => { signalTyping(`w:${w.slug}`); autozapis(); });
     ti.addEventListener("input", autozapis);
     par.addEventListener("change", autozapis);

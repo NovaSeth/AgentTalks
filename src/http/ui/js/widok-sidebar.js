@@ -18,10 +18,9 @@ import { newWikiPageModal, openWikiPage } from "./widok-wiki.js";
 // ------------------------------------------------------------- sidebar
 export function renderSidebar() {
   const el = document.getElementById("sidebar");
-  // Panelu nie ma w widoku powiadomien ani kont - a zdarzenia z serwera wolaja
-  // odswiezenie niezaleznie od tego, co uzytkownik ma otwarte. Bez tego strazu
-  // pierwsza wiadomosc, ktora przyjdzie przy otwartych powiadomieniach, wywalala
-  // caly render na `el.innerHTML` po `null`.
+  // The panel is absent in the notifications and accounts views - and server events call for a
+  // refresh regardless of what the user has open. Without this guard the first message arriving
+  // while notifications were open blew up the whole render on `el.innerHTML` of `null`.
   if (!el) return;
   el.innerHTML = `
     <div class="sb-head">
@@ -44,8 +43,8 @@ export function renderSidebar() {
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
   bindLangSwitch("sb-lang");
-  // Wersja UI: to, co widzi uzytkownik, kontra to, co wysyla serwer. Rozjazd
-  // znaczy cache po drodze - i to jest jedyny sposob, zeby to zobaczyc.
+  // The UI version: what the user sees against what the server sends. A mismatch means a cache
+  // somewhere along the way - and this is the only way to see it.
   const foot = document.getElementById("sb-ui");
   if (foot) {
     foot.textContent = `UI ${UI_STAMP || "?"}`;
@@ -59,14 +58,14 @@ export function renderSidebar() {
       }
     }).catch(() => {});
   }
-  // Stan strumienia zdarzen wyprowadzil sie stad do paska nad rozmowa: "nie
-  // widzisz nowych wiadomosci" nie moze dzielic drobnego druku z numerem wersji.
+  // The event stream's state moved out of here into the bar above the conversation: "you are
+  // not seeing new messages" must not share fine print with a version number.
   renderSidebarList();
 }
 
-/** Punktowa aktualizacja JEDNEGO wiersza: pogrubienie i plakietka. Lista
- *  nawigacyjna musi byc nieruchomym punktem odniesienia - gdy przy kazdej
- *  wiadomosci przebudowuje sie w calosci, uzytkownik klika nie w to, w co celowal. */
+/** A pointwise update of ONE row: the bold text and the badge. A navigation list has to be a
+/**  fixed point of reference - when it rebuilds in full on every message, the user clicks
+/**  something other than what they aimed at. */
 export function updateConvRow(convId) {
   const row = document.querySelector(`#sb-scroll [data-open="${convId}"]`);
   if (!row) return;
@@ -86,9 +85,9 @@ export function updateConvRow(convId) {
   badge.textContent = unread > 99 ? "99+" : String(unread);
 }
 
-/** Kropki obecnosci - jedyne, co zmienia w sidebarze heartbeat sesji co 30 s.
- *  Obecnosc czytamy po NAZWIE, bo rozmowcy z serwera (`others`) nie niosa
- *  identyfikatorow, a lista "Kto tu jest" i tak stoi na nazwach. */
+/** Presence dots - the only thing a session heartbeat changes in the sidebar every 30 s.
+/**  We read presence by NAME, because the participants from the server (`others`) carry no
+/**  identifiers, and the "Who is here" list stands on names anyway. */
 export function updatePresenceDots() {
   for (const row of document.querySelectorAll("#sb-scroll [data-open]")) {
     const dot = row.querySelector(".ppresence");
@@ -105,8 +104,8 @@ export function updatePresenceDots() {
 export function renderSidebarList() {
   const el = document.getElementById("sb-scroll");
   if (!el) return;
-  // Kontener sam sie przewija: bez zapamietania pozycji kazda przebudowa
-  // wyrzucalaby liste na gore pod kursorem uzytkownika.
+  // The container scrolls itself: without remembering the position, every rebuild would throw
+  // the list to the top under the user's cursor.
   const scrollTop = el.scrollTop;
   const mine = state.conversations.filter((c) => state.memberships[c.id]);
   const channels = mine.filter((c) => c.kind === "public" || c.kind === "private");
@@ -121,9 +120,9 @@ export function renderSidebarList() {
     const label = isDirect ? dmLabel(c) : (c.slug || c.topic || t("unnamed"));
     const inni = isDirect ? dmOthers(c) : [];
     const online = inni.some((o) => handleOnline(o.handle));
-    // Rozmowa prywatna dostaje TWARZ, nie sama kropke: nazwy i awatary przychodza
-    // teraz z serwera (`others`) razem z lista rozmow, wiec nie trzeba juz czekac
-    // na otwarcie rozmowy, zeby zobaczyc, z kim sie rozmawia.
+    // A direct conversation gets a FACE, not just a dot: names and avatars now arrive from the
+    // server (`others`) together with the conversation list, so there is no need to wait for the
+    // conversation to open to see who you are talking to.
     const pre = isDirect
       ? `<span class="conv-face">${avatarHtml(inni[0]?.handle ?? "?", 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>`
       : c.kind === "private" ? `<span class="pre">${iconLock()}</span>` : `<span class="pre">#</span>`;
@@ -137,15 +136,15 @@ export function renderSidebarList() {
       </button>`;
   };
 
-  // "Kto tu jest" - lista, bez ktorej caly produkt jest niewidoczny. Do tej pory
-  // sklad serwera dalo sie zobaczyc WYLACZNIE w panelu szczegolow pojedynczej
-  // rozmowy, czyli czlowiek nie wiedzial, z kim w ogole moglby porozmawiac.
-  // Klik zaklada rozmowe prywatna - to jedyna rzecz, ktora ma sens zrobic z
+  // "Who is here" - the list without which the whole product is invisible. Until now the
+  // server's roster could be seen ONLY in the details panel of a single conversation, which
+  // means a human did not know who they could talk to at all.
+  // A click starts a direct conversation - the only thing that makes sense to do with
   // czyjas nazwa.
   const ludzieHtml = () => {
     const lista = state.actorsList.filter((a) => a.handle !== state.actor.handle && a.kind !== "system");
     if (!lista.length) return sidebarEmptyHtml(t("You are alone here for now. Invite an agent or a human."));
-    // Najpierw obecni, potem reszta - "z kim moge pogadac teraz" to pierwsze pytanie.
+    // The present first, then the rest - "who can I talk to now" is the first question.
     const wg = [...lista].sort((a, b) => {
       const oa = handleOnline(a.handle), ob = handleOnline(b.handle);
       if (oa !== ob) return oa ? -1 : 1;
@@ -164,8 +163,8 @@ export function renderSidebarList() {
     }).join("");
   };
 
-  // Wiki jest drzewem: strona-rodzic gra role katalogu. Zwiniete galezie
-  // pamietamy per przegladarka; badge na zwinietym rodzicu sumuje poddrzewo.
+  // The wiki is a tree: a parent page plays the role of a directory. Collapsed branches are
+  // remembered per browser; the badge on a collapsed parent sums its subtree.
   const wikiTreeHtml = () => {
     const pages = state.wiki.pages;
     if (!pages.length) {
@@ -184,10 +183,10 @@ export function renderSidebarList() {
     }
     const subtreeUnseen = (slug) => (kids.get(slug) || [])
       .reduce((n, c) => n + (c.unseen || 0) + subtreeUnseen(c.slug), 0);
-    // Chevron jest RODZENSTWEM wiersza, nie elementem w jego srodku: przycisk
-    // w przycisku jest niedozwolony w HTML, nie da sie go dosiegnac Tabem
-    // (Enter na wierszu zawsze otwieral strone), a cel dotykowy 16 px lezacy
-    // wewnatrz innego celu nie ratuje sie nawet wyjatkiem odstepu z WCAG 2.5.8.
+    // The chevron is a SIBLING of the row, not an element inside it: a button inside a button is
+    // not allowed in HTML, cannot be reached with Tab (Enter on the row always opened the page),
+    // and a 16 px touch target lying inside another target is not saved even by the spacing
+    // exception in WCAG 2.5.8.
     const row = (p, depth) => {
       const active = state.view === "wiki" && state.wiki.slug === p.slug;
       const hasKids = kids.has(p.slug);
@@ -213,18 +212,18 @@ export function renderSidebarList() {
     return level("", 0);
   };
 
-  // Przyciski "+" niosly nazwe dostepna "+" (tresc wygrywa z title), stad
-  // aria-label na przycisku i aria-hidden na samym znaku.
+  // The "+" buttons carried the accessible name "+" (content beats title), hence aria-label on
+  // the button and aria-hidden on the sign itself.
   const plus = (kind, label) =>
     `<button data-new="${kind}" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span></button>`;
-  // KOLEJNOSC SEKCJI = kolejnosc pytan, z ktorymi sie tu wraca. Najpierw "co
-  // mnie ominelo i co na mnie czeka" (po to wracasz po dwoch dniach), potem
-  // "gdzie rozmawiam", potem "kto tu jest", a dopiero na koncu wiki i zasoby.
-  // Wczesniej drzewo wiki stalo NAD otwartymi pytaniami i digestem, wiec to,
-  // po co przyszedles, bylo pod widokiem - za lista, ktora rosnie bez konca.
+  // THE ORDER OF THE SECTIONS = the order of the questions you come back with. First "what did
+  // I miss and what is waiting for me" (that is why you return after two days), then "where do
+  // I talk", then "who is here", and only at the end the wiki and resources.
+  // Previously the wiki tree stood ABOVE open questions and the digest, so what you came for
+  // was below the fold - behind a list that grows without end.
   //
-  // Otwarte pytania i digest trafily do JEDNEJ sekcji: mowily o tej samej
-  // rzeczy trzema jezykami, w trzech miejscach, z trzema licznikami.
+  // Open questions and the digest went into ONE section: they spoke about the same thing in
+  // three languages, in three places, with three counters.
   const doNadrobienia = openCount > 0 || (state.digest && state.digest.count > 0);
   el.innerHTML = `
     ${doNadrobienia ? `
@@ -288,15 +287,15 @@ export function renderSidebarList() {
     b.addEventListener("click", async () => {
       if (await releaseLease(b.dataset.freelease)) refreshDigestAndLeases(true);
     }));
-  // Lista "Kto tu jest" musi byc czyms wiecej niz autorami wiadomosci - katalog
-  // dociagamy w tle przy pierwszym renderze, bez blokowania rysowania.
+  // The "Who is here" list has to be more than the authors of messages - we fetch the directory
+  // in the background on the first render, without blocking drawing.
   if (!state.actorsList.length) ensureActors().then(() => renderSidebarList());
   el.querySelectorAll("[data-open]").forEach((b) =>
     b.addEventListener("click", () => openConversation(Number(b.dataset.open))));
   el.querySelectorAll("[data-wikipage]").forEach((b) =>
     b.addEventListener("click", () => openWikiPage(b.dataset.wikipage)));
-  // Chevron jest osobnym przyciskiem obok wiersza, wiec stopPropagation nie jest
-  // juz potrzebny - klik nie ma czego "przebijac".
+  // The chevron is a separate button next to the row, so stopPropagation is no longer needed -
+  // a click has nothing to "punch through".
   el.querySelectorAll("[data-wikitwist]").forEach((tw) =>
     tw.addEventListener("click", () => {
       const slug = tw.dataset.wikitwist;
@@ -316,12 +315,12 @@ export function renderSidebarList() {
   if (dg) dg.addEventListener("click", openDigestModal);
 }
 
-/** Modal "Co Cie ominelo": rozmowy i autorzy od ostatniej wizyty, wzmianki
- *  ze skokiem do wiadomosci, otwarte pytania. */
+/** The "What you missed" modal: conversations and authors since the last visit, mentions with
+/**  a jump to the message, open questions. */
 async function openDigestModal() {
-  // Sidebar potrzebuje z digestu JEDNEJ liczby; komplet (wzmianki, otwarte
-  // pytania z pelnymi trescia) pobieramy dopiero tutaj, czyli wtedy, gdy jest
-  // naprawde ogladany - a nie co 30 s w tle.
+  // The sidebar needs ONE number from the digest; the full set (mentions, open questions with
+  // their content) is fetched only here, that is, when it is really being looked at - rather
+  // than every 30 s in the background.
   let d = state.digest;
   if (!d || !Array.isArray(d.byConversation)) {
     try { d = (await api("GET", "/api/digest")).digest; }
@@ -464,8 +463,8 @@ function zmienAwatar() {
       });
       const dane = await odp.json().catch(() => ({}));
       if (!odp.ok) throw new Error(dane.error || `HTTP ${odp.status}`);
-      // Katalog aktorow trzyma odcisk, z ktorego sklada sie adres obrazka -
-      // bez tej aktualizacji awatar zmienilby sie dopiero po odswiezeniu strony.
+      // The actor directory holds the fingerprint the image URL is built from - without this update
+      // the avatar would change only after a page refresh.
       if (state.actorsCache[state.actor.id]) state.actorsCache[state.actor.id].avatar = dane.avatar?.hash ?? null;
       widok.sidebar();
       widok.glowny();
