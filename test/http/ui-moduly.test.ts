@@ -48,8 +48,8 @@ test("kazdy modul UI z katalogu jest serwowany pod /js/", async () => {
 });
 
 test("kazdy import miedzy modulami UI wskazuje na plik, ktory serwer odda", async () => {
-  // Druga strona tej samej pary: nawet gdy plik istnieje i jest na liscie, import
-  // moze wskazywac na nazwe, ktorej w katalogu nie ma - i objaw jest identyczny.
+  // The other side of the same pair: even when a file exists and is on the list, an
+  // import can point at a name the directory does not have - and the symptom is identical.
   const importy = new Set<string>();
   for (const f of pliki()) {
     const src = readFileSync(UI_DIR + f, "utf8");

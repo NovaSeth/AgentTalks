@@ -15,7 +15,7 @@ export const state = {
   msgs: {},                // convId -> Message[] (rosnaco po id)
   loaded: {},              // convId -> whether the history was FETCHED (not: whether any messages exist)
   readMark: {},            // convId -> id ostatniej przeczytanej, ZAMROZONE przy wejsciu (kreska "nowe")
-  drafts: {},              // convId -> {text, replyTo} - szkic przezywajacy przelaczenie rozmowy
+  drafts: {},              // convId -> {text, replyTo} - a draft surviving a conversation switch
   pending: {},             // convId -> local in-flight messages (ids "tmp-...")
   actorsCache: {},         // id -> {handle, displayName, kind}
   actorsAt: 0,             // kiedy ostatnio pobrano katalog aktorow (TTL)
@@ -24,9 +24,9 @@ export const state = {
   presence: [],            // PresenceRow[] (sesje)
   threadOpen: null,
   threadMsgs: [],
-  detailsOpen: false,      // panel szczegolow rozmowy (uczestnicy/piny/akcje)
-  convMembers: [],         // czlonkowie aktywnej rozmowy (z GET /:id)
-  convPins: [],            // piny aktywnej rozmowy
+  detailsOpen: false,      // the conversation details panel (members/pins/actions)
+  convMembers: [],         // members of the active conversation (from GET /:id)
+  convPins: [],            // pins of the active conversation
   replyTo: null,
   drawerOpen: false,
   loadingConv: false,
@@ -68,8 +68,8 @@ export const widok = {
   wiadomosc: () => {},        // ONE bubble
   naDol: () => {},            // scrolling the list to the newest
   watek: () => {},
-  otworzWatek: () => {},      // otwarcie panelu watku dla danego korzenia
-  pasekOffline: () => {},     // pasek "brak polaczenia" nad rozmowa
+  otworzWatek: () => {},      // opening the thread panel for a given root
+  pasekOffline: () => {},     // the "no connection" bar above the conversation
   composer: () => {},
   szczegoly: () => {},
   wiki: () => {},

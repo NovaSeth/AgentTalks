@@ -247,7 +247,7 @@ test("po serii porazek wake gasnie i wlasciciel dostaje systemowy DM", async () 
   setWake(ctx, bob.id, "https://martwy.example/wake");
   setOk(false);
   let t = 0;
-  // kazda proba w osobnym oknie dlawienia
+  // every attempt in its own throttling window
   for (let i = 0; i < WAKE_MAX_FAILURES; i++) {
     ctx.db.prepare("UPDATE actors SET wake_last_at = NULL WHERE id = ?").run(bob.id);
     postMessage(ctx, { conversationId: dm.id, actorId: ala.id, body: "proba " + i });

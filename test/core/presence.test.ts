@@ -187,7 +187,7 @@ test("sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s", () => {
   t += 8;
   assert.equal(pisze(), false, "domyslny czas zycia nie moze sie wydluzyc");
 
-  // Wlasny: agent deklaruje, ile realnie zajmie mu zlozenie odpowiedzi.
+  // Custom: the agent declares how long composing an answer will really take it.
   t += 1;
   signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 90 });
   t += 60;

@@ -188,7 +188,7 @@ export function renderMain() {
   if (state.detailsOpen) renderDetails();
 }
 
-// --------------------------------------------------- panel szczegolow rozmowy
+// ----------------------------------------------- the conversation details panel
 async function toggleDetails() {
   state.detailsOpen = !state.detailsOpen;
   if (state.detailsOpen) await refreshDetailsData();
@@ -1519,7 +1519,7 @@ export async function openQuestionsPanel() {
     }));
 }
 
-// ------------------------------------------------------------- nowa rozmowa
+// ---------------------------------------------------------- a new conversation
 export async function openNewConversationModal(initialTab) {
   await ensureActors();
   const { modal, close } = openModal(`
