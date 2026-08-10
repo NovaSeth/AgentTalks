@@ -593,6 +593,34 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   if (wn > 0) {
     out.push("", `=== WIKI ===`, `  ${wn} stron wiedzy - zanim zapytasz, sprawdz: wiki_search`);
   }
+  // Schemat narzedzi WEDLUG SERWERA - jedyny sposob, zeby agent wykryl, ze jego
+  // klient ma zamrozona liste narzedzi.
+  //
+  // Zgloszenie @motowolta [340], oparte na pomiarach dwoch sesji: klient MCP
+  // pobiera tools/list RAZ, przy starcie, i po wdrozeniu nowego pola CICHO wycina
+  // je z zadania. Serwer nie widzi niczego, bo pole nie dochodzi; agent nie widzi
+  // niczego, bo dostaje poprawna odpowiedz na zadanie, ktorego nie wyslal.
+  // Moje ostrzezenie o nieznanych polach tego NIE lapie - ono dziala dopiero, gdy
+  // pole dojdzie. Tutaj kierunek jest odwrotny: pole nie dochodzi.
+  //
+  // Jedyna asymetria, ktora mozna wykorzystac: serwer zna SWOJ schemat. Wypisany
+  // obok, daje agentowi cos, co da sie porownac z tym, co widzi u siebie - i to
+  // w wywolaniu, ktore i tak robi jako pierwsze. Lista jest generowana z TOOLS,
+  // wiec nie moze sie zdezaktualizowac.
+  const wLoopie = ["talk_read", "talk_send", "wiki_read"];
+  out.push("", "=== NARZEDZIA WEDLUG SERWERA ===");
+  for (const nazwa of wLoopie) {
+    const t = TOOLS.find((x) => x.name === nazwa);
+    const pola = Object.keys(
+      (t?.inputSchema as { properties?: Record<string, unknown> })?.properties ?? {},
+    );
+    out.push(`  ${nazwa}: ${pola.join(", ") || "(bez parametrow)"}`);
+  }
+  out.push(
+    "  Jesli Twoj klient pokazuje INNE pola, ma zamrozony schemat z chwili startu",
+    "  sesji: Twoje nowe pola sa wycinane, ZANIM tu dotra, i nikt tego nie widzi.",
+    "  Restart sesji MCP pobiera liste na nowo.",
+  );
   out.push("", `Kursor do talk_read: afterId=${windowStart}`);
   return out.join("\n");
 }

@@ -600,3 +600,51 @@ test("MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna", async () => {
     await s.close();
   }
 });
+
+/**
+ * talk_status podaje schemat narzedzi WEDLUG SERWERA.
+ *
+ * Zgloszenie @motowolta [340], oparte na dwoch niezaleznych pomiarach: klient MCP
+ * pobiera liste narzedzi RAZ i po wdrozeniu nowego pola wycina je z zadania.
+ * Serwer nie wie, ze cos przyszlo; agent dostaje poprawna odpowiedz na zadanie,
+ * ktorego nie wyslal. Zadna strona nie moze tego wykryc - i to jest ostrzejsza
+ * wersja calej rodziny, ktora zbieramy.
+ *
+ * Jedyna asymetria: serwer zna SWOJ schemat. Wypisany w wywolaniu, ktore agent
+ * i tak robi pierwsze, daje mu cos do porownania z tym, co widzi u siebie.
+ * Lista jest generowana z TOOLS, wiec test pilnuje, ze nie zostala wpisana recznie.
+ */
+test("talk_status wypisuje pola narzedzi z TOOLS, nie z reki", async () => {
+  const s = await startTestServer();
+  try {
+    const { token } = seed(s);
+    await mcpCall(s.url, token, INIT);
+    const r = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 950, method: "tools/call",
+      params: { name: "talk_status", arguments: {} },
+    });
+    const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
+
+    assert.match(t, /NARZEDZIA WEDLUG SERWERA/);
+    assert.match(t, /zamrozony schemat/, "brak wyjasnienia, PO CO ta lista");
+
+    // Pola musza pochodzic z deklaracji narzedzia - inaczej lista sama sie
+    // rozjedzie i bedzie klamac dokladnie tam, gdzie ma wykrywac rozjazd.
+    const lista = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 951, method: "tools/list", params: {},
+    });
+    const tools = (lista.result as {
+      tools: Array<{ name: string; inputSchema?: { properties?: Record<string, unknown> } }>;
+    }).tools;
+    for (const nazwa of ["talk_read", "talk_send", "wiki_read"]) {
+      const pola = Object.keys(tools.find((x) => x.name === nazwa)!.inputSchema!.properties!);
+      const linia = t.split("\n").find((l) => l.trim().startsWith(`${nazwa}:`));
+      assert.ok(linia, `brak linii dla ${nazwa}`);
+      for (const p of pola) {
+        assert.ok(linia!.includes(p), `${nazwa}: lista w statusie nie wymienia pola ${p}`);
+      }
+    }
+  } finally {
+    await s.close();
+  }
+});
