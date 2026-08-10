@@ -1,9 +1,9 @@
 /**
- * Konfiguracja i katalog danych.
- *
- * Prototyp mial sciezki wpisane na sztywno ("/home/claude/second-brain/bin/talk",
- * "~/.talk", "~/lowmem-sample.log"), przez co dawal sie uruchomic na dokladnie
- * jednej maszynie jednego uzytkownika. Tutaj wszystko idzie przez ten modul.
+ * Configuration and the data directory.
+ * 
+ * The prototype had paths hard-coded ("/home/claude/second-brain/bin/talk", "~/.talk",
+ * "~/lowmem-sample.log"), which meant it could run on exactly one machine belonging to one
+ * user. Here everything goes through this module.
  */
 import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -23,14 +23,13 @@ export type Config = {
   maxMessageBytes: number;
   maxFileBytes: number;
   sessionTtlSec: number;
-  // Bramka anty-bot na UI (nie na API/MCP): gdy sitePassword ustawione, strona
-  // wymaga jednego wspolnego hasla (wlasny ekran, nie przegladarkowy Basic Auth -
-  // ten miesza sie z pozniejszym logowaniem do aplikacji), wiec crawler/bot nie
-  // dosiegnie tresci. Agenci (token na /api i /mcp) i sciezki publiczne
-  // (/install, /robots.txt) sa wolne. Z env, nie z pliku - to poswiadczenie
-  // wdrozenia, nie stan aplikacji.
+  // The anti-bot gate on the UI (not on API/MCP): when sitePassword is set, the page requires
+  // one shared password (our own screen, not the browser's Basic Auth - that gets confused
+  // with the later login to the application), so a crawler/bot does not reach the content.
+  // Agents (a token on /api and /mcp) and public paths (/install, /robots.txt) are free. From
+  // the environment, not from a file - this is a deployment credential, not application state.
   sitePassword: string;
-  // Publiczny adres wystawienia (do linkow w /install), np. https://atalks.monokoda.com
+  // The public address of the deployment (for links in /install), e.g. https://atalks.monokoda.com
   baseUrl: string;
 };
 
@@ -44,8 +43,8 @@ export function inContainer(): boolean {
 export function defaultDataDir(): string {
   const fromEnv = process.env.AGENTTALKS_DATA?.trim();
   if (fromEnv) return fromEnv;
-  // /var/lib tylko wtedy, gdy naprawde da sie tam pisac. Sprawdzenie "czy jestem
-  // rootem" byloby zle: w kontenerze proces chodzi jako `node` i i tak ma /data.
+  // /var/lib only when it really is writable. A "am I root" check would be wrong: in a
+  // container the process runs as `node` and has /data anyway.
   const system = "/var/lib/agenttalks";
   try {
     if (existsSync(system) && statSync(system).isDirectory()) {
@@ -67,11 +66,12 @@ const DEFAULTS = {
   sessionTtlSec: 30 * 24 * 3600,
 };
 
-/** Zaklada katalog danych, baze i plik konfiguracji. Idempotentne: ponowne wywolanie
- *  NIE nadpisuje sekretu (to wylogowaloby wszystkich ludzi bez powodu). */
+/** Creates the data directory, the database and the configuration file. Idempotent: calling
+/**  it again does NOT overwrite the secret (that would log every human out for no reason). */
 export function initData(dataDir: string = defaultDataDir()): Config {
-  // 0700 na katalogach: baza zawiera pelna tresc rozmow i hashe hasel, a pliki
-  // WAL/SHM dziedzicza prawa z katalogu. Sam config 0600 nie wystarczal.
+  // 0700 on the directories: the database holds the full content of conversations and password
+  // hashes, and the WAL/SHM files inherit permissions from the directory. 0600 on the config
+  // alone was not enough.
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   mkdirSync(join(dataDir, "files"), { recursive: true, mode: 0o700 });
   try {
@@ -87,17 +87,17 @@ export function initData(dataDir: string = defaultDataDir()): Config {
 }
 
 /**
- * Haslo bramki: z PLIKU (zalecane), z env, albo z konfiguracji instancji.
+ * The gate password: from a FILE (recommended), from the environment, or from the instance config.
  *
- * Powod dla wariantu z plikiem - zgloszenie [37] na #bugs: haslo podane jako
- * zmienna srodowiskowa kontenera widac w `docker inspect`, `docker ps --format`,
- * w /proc/<pid>/environ i w historii powloki tego, kto kontener tworzyl. Czyli
- * trafia do wydrukow diagnostycznych, ktore ludzie wklejaja do zgloszen i czatow.
- * Z plikiem `inspect` pokazuje SCIEZKE, a nie wartosc.
+ * The reason for the file variant - report [37] on #bugs: a password given as a container
+ * environment variable is visible in `docker inspect`, `docker ps --format`, in
+ * /proc/<pid>/environ and in the shell history of whoever created the container. That is, it
+ * lands in diagnostic dumps people paste into bug reports and chats. With a file, `inspect`
+ * shows the PATH, not the value.
  *
- * Nieczytelny plik NIE jest cicho pomijany: pusta wartosc = OTWARTA bramka, a to
- * jest dokladnie ta awaria, ktorej nikt nie zauwaza (patrz komentarz przy
- * siteGateBlocks). Lepiej nie wstac, niz wstac bez bramki.
+ * An unreadable file is NOT silently skipped: an empty value = an OPEN gate, and that is
+ * exactly the failure nobody notices (see the comment at siteGateBlocks). Better not to come
+ * up at all than to come up with no gate.
  */
 function loadSitePassword(stored: Record<string, unknown>): string {
   const file = process.env.AGENTTALKS_SITE_PASSWORD_FILE;
@@ -111,7 +111,7 @@ function loadSitePassword(stored: Record<string, unknown>): string {
           `(${(err as Error).message}). Odmawiam startu: puste haslo znaczy OTWARTA bramka.`,
       );
     }
-    // Plik z hasla konczy sie zwykle znakiem nowej linii - `echo > plik` go dokleja.
+    // A password file usually ends with a newline - `echo > file` appends one.
     const value = raw.replace(/\r?\n$/, "");
     if (!value) {
       throw new Error(`plik ${file} jest pusty - to wylaczyloby bramke publiczna`);
@@ -128,8 +128,8 @@ export function loadConfig(dataDir: string = defaultDataDir()): Config {
     stored = JSON.parse(readFileSync(cfgPath, "utf8")) as Record<string, unknown>;
   }
   const num = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d);
-  // Przyjmujemy typowe zapisy prawdy: "AGENTTALKS_TRUST_PROXY=true" ciche
-  // zinterpretowane jako falsz to cookie bez atrybutu Secure na produkcji.
+  // We accept the usual spellings of truth: "AGENTTALKS_TRUST_PROXY=true" silently read as
+  // false is a cookie with no Secure attribute in production.
   const bool = (v: unknown, d: boolean) => {
     if (v === undefined || v === null) return d;
     if (typeof v === "boolean") return v;
@@ -157,10 +157,10 @@ export function loadConfig(dataDir: string = defaultDataDir()): Config {
 const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 
 /**
- * Bramka publicznego bindowania. Uslugi, ktore po instalacji nasluchuja na 0.0.0.0,
- * to najczestszy sposob, w jaki narzedzie wewnetrzne trafia do internetu przez pomylke.
- * W kontenerze bind na 0.0.0.0 jest KONIECZNY (inaczej proxy hosta nie dosiegnie),
- * a publikacja portu i tak jest kontrolowana po stronie Dockera.
+ * A gate on public binding. Services that listen on 0.0.0.0 right after installation are the
+ * most common way an internal tool reaches the internet by accident. In a container binding
+ * to 0.0.0.0 is NECESSARY (otherwise the host's proxy cannot reach it), and port publication
+ * is controlled on the Docker side anyway.
  */
 export function assertBindAllowed(config: Config, host: string): void {
   if (LOOPBACK.has(host) || inContainer() || config.allowPublicBind) return;

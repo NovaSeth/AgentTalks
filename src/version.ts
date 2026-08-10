@@ -1,8 +1,8 @@
 /**
- * AgentTalks uruchamia pliki .ts wprost i uzywa `node:sqlite`. Obie rzeczy sa
- * dostepne dopiero od Node 24. Na starszym Node komunikat bledu bylby zupelnie
- * niezwiazany z przyczyna ("Unknown file extension .ts"), wiec sprawdzamy to sami
- * i mowimy wprost, co zrobic.
+ * AgentTalks runs .ts files directly and uses `node:sqlite`. Both became available
+ * only in Node 24. On an older Node the error message would be entirely unrelated to
+ * the cause ("Unknown file extension .ts"), so we check it ourselves and say outright
+ * what to do.
  */
 export const MIN_NODE_MAJOR = 24;
 

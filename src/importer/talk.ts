@@ -1,18 +1,17 @@
 /**
- * Import historii z prototypu (`~/.talk`).
- *
- * Odwzorowanie:
- *   label z channel.jsonl / presence  -> aktor (michal jako human, reszta jako agent)
- *   chan "#general"                   -> kanal publiczny "general"
- *   rekord z polem `to`               -> DM miedzy nadawca a adresatem
- *   kind "react"                      -> wiersz w reactions, NIE wiadomosc
- *   kind "ask" / "answer"             -> questions, powiazane po id/ref
- *   read/<who>/<view>                 -> last_read_message_id
- *
- * Zasada, ktora rzadzi calym tym plikiem: **nic nie ginie po cichu**. Prototyp
- * pomijal uszkodzone linie JSON bez sladu, wiec wiadomosc mogla zniknac i nikt
- * nigdy sie o tym nie dowiedzial. Tutaj kazdy pominiety rekord jest policzony
- * i opisany w raporcie.
+ * Importing history from the prototype (`~/.talk`).
+ * 
+ * The mapping:
+ *   a label from channel.jsonl / presence  -> an actor (michal as human, the rest as agents)
+ *   chan "#general"                        -> the public channel "general"
+ *   a record with a `to` field              -> a DM between sender and addressee
+ *   kind "react"                            -> a row in reactions, NOT a message
+ *   kind "ask" / "answer"                   -> questions, linked by id/ref
+ *   read/<who>/<view>                       -> last_read_message_id
+ * 
+ * The rule that governs this whole file: **nothing disappears silently**. The prototype
+ * skipped corrupted JSON lines without a trace, so a message could vanish and nobody would
+ * ever find out. Here every skipped record is counted and described in the report.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -54,27 +53,26 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
     questions: 0, reads: 0, skipped: 0, problems: [],
   };
 
-  // Sortowanie po czasie, stabilne. channel.jsonl jest dopisywany, wiec zwykle JEST
-  // chronologiczny - ale "zwykle" nie wystarcza, bo od zgodnosci porzadku id z
-  // porzadkiem czasu zalezy przeliczenie znacznikow odczytu (znacznik jest czasem,
-  // a docelowo ma byc identyfikatorem wiadomosci). Jeden rekord nie na swoim miejscu
-  // oznaczylby czesc historii jako przeczytana, choc nikt jej nie widzial.
+  // A stable sort by time. channel.jsonl is appended to, so it usually IS chronological - but
+  // "usually" is not enough, because the recalculation of read markers depends on the id order
+  // agreeing with the time order (the marker is a time, and is meant to become a message id).
+  // One record out of place would mark part of the history as read that nobody had seen.
   const records = readChannel(join(talkHome, "channel.jsonl"), report)
     .map((rec, index) => ({ rec, index }))
     .sort((a, b) => (a.rec.ts ?? 0) - (b.rec.ts ?? 0) || a.index - b.index)
     .map((x) => x.rec);
   const labelToActor = new Map<string, number>();
-  // Prototyp adresowal DM-y etykieta ALBO osmioznakowym skrotem sid ("4a925a82"),
-  // wiec bez tej drugiej mapy czesc rozmow prywatnych nie da sie odtworzyc.
+  // The prototype addressed DMs by label OR by an eight-character sid digest ("4a925a82"), so
+  // without this second map some private conversations cannot be reconstructed.
   const sidToActor = new Map<string, number>();
 
   const actorFor = (label: string | undefined, sid: string | undefined): number | null => {
-    // Scalanie sufiksow "(N)": w prototypie ten sam agent wystepowal jako
-    // "Nestor/myday", "Nestor/myday (2)", "(3)"... - to byly artefakty tozsamosci
-    // JEDNEJ sesji, nie osobni rozmowcy (pomiar Nestora m436, uwaga claude-general
-    // m476). Bez scalania przenieslibysmy balagan do systemu zbudowanego po to,
-    // zeby tozsamosc byla jednoznaczna. Zdejmujemy sufiks PRZED wszystkim, wiec
-    // "(2)" i baza trafiaja w ten sam klucz, handle i displayName.
+    // Merging "(N)" suffixes: in the prototype the same agent appeared as "Nestor/myday",
+    // "Nestor/myday (2)", "(3)"... - those were artefacts of ONE session's identity, not separate
+    // participants (Nestor's measurement m436, claude-general's remark m476). Without merging we
+    // would carry the mess into a system built precisely so that identity is unambiguous. We
+    // strip the suffix BEFORE everything, so "(2)" and the base land on the same key, handle and
+    // displayName.
     const raw = (label ?? sid ?? "").trim().replace(/\s*\(\d+\)$/, "");
     if (!raw) return null;
     const key = raw.toLowerCase();
@@ -90,10 +88,10 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
       report.problems.push(`nie da sie zrobic handle z etykiety "${raw}"`);
       return null;
     }
-    // Kolizja po transliteracji ("Michal" z ogonkami i bez to ten sam handle,
-    // ale "mac/general" i "mac general" to ROZNE etykiety): cicha fuzja dwoch
-    // rozmowcow w jednego przeklamywalaby historie. Rozstrzygamy po displayName -
-    // ta sama etykieta to ten sam aktor, inna dostaje sufiks.
+    // A collision after transliteration ("Michal" with and without diacritics is the same handle,
+    // but "mac/general" and "mac general" are DIFFERENT labels): silently fusing two participants
+    // into one would falsify the history. We settle it by displayName - the same label is the
+    // same actor, a different one gets a suffix.
     let existing = getActorByHandle(ctx, handle);
     if (existing && existing.displayName !== raw) {
       let n = 2;
@@ -106,7 +104,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
       existing = getActorByHandle(ctx, handle);
     }
     const actor = existing ?? createActor(ctx, {
-      // "michal" to jedyny czlowiek w historii prototypu; reszta to sesje agentow.
+      // "michal" is the only human in the prototype's history; the rest are agent sessions.
       kind: handle === "michal" ? "human" : "agent",
       handle,
       displayName: raw,
@@ -132,8 +130,8 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
   };
 
   const importRecord = (rec: TalkRecord, kind: string): void => {
-      // join/leave byly czystym szumem juz w prototypie (kazde wywolanie mostu
-      // to wejscie i wyjscie); stan obecnosci i tak trzymamy osobno.
+      // join/leave were pure noise already in the prototype (every bridge invocation is an entry
+      // and an exit); presence state is kept separately anyway.
       if (kind === "join" || kind === "leave") {
         report.skipped++;
         return;
@@ -145,9 +143,8 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
       }
 
       if (kind === "react") {
-        // Najpierw mapa z tego przebiegu, potem baza (import_key) - drugi,
-        // przyrostowy import tez musi umiec przypiac reakcje do wiadomosci
-        // zaimportowanej poprzednim razem.
+        // First the map from this run, then the database (import_key) - a second, incremental import
+        // also has to be able to pin a reaction to a message imported the previous time.
         const target = (rec.ref ? midToMessage.get(rec.ref) : undefined)
           ?? messageByImportKey(ctx, rec.ref);
         if (!target) {
@@ -165,7 +162,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
         return;
       }
 
-      // Adresat DM-a byl w prototypie etykieta albo osmioznakowym skrotem sid.
+      // A DM's addressee was, in the prototype, a label or an eight-character sid digest.
       let conversationId: number;
       if (rec.to) {
         const target = resolveRecipient(ctx, rec.to, labelToActor, sidToActor);
@@ -246,14 +243,13 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
   };
 
   const importer = () => {
-    // Aktorzy z katalogu obecnosci ida pierwsi (adresat DM-a, ktory nigdy nic
-    // nie napisal, tez musi byc rozwiazywalny) - i JUZ WEWNATRZ transakcji,
-    // zeby przerwany import nie zostawial samych aktorow bez historii.
+    // Actors from the presence directory go first (a DM addressee who never wrote anything also
+    // has to be resolvable) - and ALREADY INSIDE the transaction, so that an interrupted import
+    // does not leave actors with no history.
     seedFromPresence(ctx, talkHome, actorFor, report);
     for (const rec of records) {
-      // Zly kanal albo inny defekt JEDNEGO rekordu nie moze wywracac calego
-      // importu z rollbackiem po dwustu wiadomosciach - taki rekord jest
-      // pomijany i opisany w raporcie.
+      // A bad channel or another defect in ONE record must not bring down the whole import with a
+      // rollback after two hundred messages - such a record is skipped and described in the report.
       try {
         importRecord(rec, rec.kind ?? "say");
       } catch (err) {
@@ -269,14 +265,14 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
   const convsBefore = (ctx.db.prepare("SELECT COUNT(*) AS n FROM conversations").get() as
     { n: number }).n;
   tx(ctx.db, importer);
-  // Raport liczy WSZYSTKIE utworzone konwersacje (kanaly + DM-y + grupy) z bazy,
-  // a nie z recznego licznika, ktory obejmowal tylko kanaly.
+  // The report counts ALL created conversations (channels + DMs + groups) from the database,
+  // not from a manual counter, which only covered channels.
   report.conversations = (ctx.db.prepare("SELECT COUNT(*) AS n FROM conversations").get() as
     { n: number }).n - convsBefore;
   return report;
 }
 
-// ---- czesci skladowe ------------------------------------------------------
+// ---- the component parts --------------------------------------------------
 
 function readChannel(path: string, report: ImportReport): TalkRecord[] {
   if (!existsSync(path)) return [];
@@ -287,7 +283,7 @@ function readChannel(path: string, report: ImportReport): TalkRecord[] {
     try {
       out.push(JSON.parse(trimmed) as TalkRecord);
     } catch {
-      // Policzone i opisane, a nie pominiete w ciszy - to byl konkretny blad prototypu.
+      // Counted and described, not skipped in silence - that was a concrete bug of the prototype.
       report.skipped++;
       report.problems.push(`uszkodzona linia JSON: ${trimmed.slice(0, 60)}`);
     }
@@ -314,8 +310,8 @@ function seedFromPresence(
   }
 }
 
-/** Adresat po etykiecie, potem po osmioznakowym skrocie sid - dokladnie taka
- *  kolejnosc, jaka stosowal `read_new()` w prototypie. */
+/** The addressee by label, then by the eight-character sid digest - exactly the order
+/**  `read_new()` used in the prototype. */
 function resolveRecipient(
   ctx: Ctx,
   to: string,
@@ -329,7 +325,7 @@ function resolveRecipient(
     const byHandle = getActorByHandle(ctx, normalizeHandle(to));
     if (byHandle) return byHandle.id;
   } catch { /* etykieta nie daje sie sprowadzic do handle */ }
-  // "4a925a82" to skrot sid, a nie skrot etykiety - stad osobna mapa.
+  // "4a925a82" is a digest of a sid, not of a label - hence a separate map.
   const bySid = sidToActor.get(needle);
   if (bySid !== undefined) return bySid;
   for (const [sid, id] of sidToActor) {
@@ -349,7 +345,7 @@ function safeHandleLookup(ctx: Ctx, raw: string): number | undefined {
   }
 }
 
-/** Wiadomosc po kluczu importu (talk:<mid>) - dla przebiegow przyrostowych. */
+/** A message by its import key (talk:<mid>) - for incremental runs. */
 function messageByImportKey(ctx: Ctx, mid: string | undefined): number | undefined {
   if (!mid) return undefined;
   const row = ctx.db.prepare("SELECT id FROM messages WHERE import_key = ?")
@@ -357,10 +353,10 @@ function messageByImportKey(ctx: Ctx, mid: string | undefined): number | undefin
   return row?.id;
 }
 
-/** Pytanie po midzie wiadomosci ask z POPRZEDNIEGO przebiegu importu.
- *  Uwaga: qid prototypu ("q7") to inny naming niz mid ("m123") - refy answer
- *  wskazuja qid, a my mapujemy qid->question w pamieci; fallback dziala przez
- *  wiadomosc ask, ktora ma import_key, gdy ref jest midem. */
+/** A question by the mid of an ask message from a PREVIOUS import run.
+/**  Note: the prototype's qid ("q7") is a different naming from mid ("m123") - answer refs
+/**  point at a qid, and we map qid->question in memory; the fallback works through the ask
+/**  message, which has an import_key, when the ref is a mid. */
 function questionByAskMid(ctx: Ctx, ref: string | undefined): number | undefined {
   if (!ref) return undefined;
   const row = ctx.db.prepare(
@@ -379,17 +375,16 @@ function questionMessage(ctx: Ctx, questionId: number | undefined): number | nul
 }
 
 function insertMentions(ctx: Ctx, messageId: number, body: string): void {
-  // TA SAMA implementacja parsowania co przy zwyklym zapisie (core/mentions) -
-  // dwie kopie regexa juz raz zdazyly sie rozjechac.
+  // THE SAME parsing implementation as on an ordinary write (core/mentions) - two copies of the
+  // regex have already managed to drift apart once.
   const stmt = ctx.db.prepare(
     "INSERT OR IGNORE INTO mentions(message_id, actor_id) VALUES(?, ?)",
   );
   for (const actorId of resolveMentions(ctx, body)) stmt.run(messageId, actorId);
 }
 
-/** Znacznik czasu w milisekundach zamieniamy na id ostatniej wiadomosci, ktora
- *  wtedy istniala. Dzieki temu liczniki po imporcie zgadzaja sie z tym, co
- *  czlowiek widzial przed migracja. */
+/** A millisecond timestamp is turned into the id of the last message that existed then. Thanks
+/**  to that, the counters after an import agree with what the human saw before the migration. */
 function importReadMarks(
   ctx: Ctx,
   talkHome: string,
@@ -400,7 +395,7 @@ function importReadMarks(
   const root = join(talkHome, "read");
   if (!existsSync(root)) return;
   for (const who of readdirSync(root)) {
-    // Katalog nazywa sie sid-em uczestnika, ale dla czlowieka bywal etykieta.
+    // The directory is named after the participant's sid, but for a human it was sometimes a label.
     const actorId = sidToActor.get(who.toLowerCase())
       ?? labelToActor.get(who.toLowerCase())
       ?? safeHandleLookup(ctx, who);
@@ -408,9 +403,9 @@ function importReadMarks(
     for (const view of readdirSync(join(root, who))) {
       let conv = null;
       if (view.startsWith("dm_")) {
-        // Znacznik odczytu DM-a: dm_<sid|etykieta> -> rozmowa tego, kto czytal,
-        // z tamtym aktorem. Porzucenie tych znacznikow robilo z kazdego DM-a
-        // "nieprzeczytany" zaraz po migracji.
+        // A DM's read marker: dm_<sid|label> -> the conversation between the reader
+        // and that actor. Dropping these markers made every DM "unread" right after
+        // the migration.
         const other = sidToActor.get(view.slice(3).toLowerCase())
           ?? labelToActor.get(view.slice(3).toLowerCase());
         if (other && other !== actorId) conv = ensureDirect(ctx, [actorId, other]);
