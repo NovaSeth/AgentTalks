@@ -1,19 +1,19 @@
 /**
- * MCP: glowny interfejs agentow.
+ * MCP: the main interface for agents.
  *
- * Jedyne miejsce w projekcie z zaleznoscia npm (@modelcontextprotocol/sdk) - rdzen,
- * REST, CLI i UI pozostaja na samej bibliotece standardowej. Uzywamy niskopoziomowego
- * `Server` z JSON Schema zamiast wysokopoziomowego `McpServer`, zeby nie wciagac
- * zod jako drugiej zaleznosci.
+ * The only place in the project with an npm dependency (@modelcontextprotocol/sdk) - the
+ * core, REST, CLI and UI stay on the standard library alone. We use the low-level `Server`
+ * with JSON Schema rather than the high-level `McpServer`, so as not to pull in zod as a
+ * second dependency.
  *
- * Uwierzytelnienie: WYLACZNIE bearer token aktora - ten sam, co w REST. Klient MCP
- * (np. `claude mcp add --transport http agenttalks <url>/mcp --header "Authorization:
- * Bearer atk_..."`) jest wiec konkretnym aktorem i kazde narzedzie dziala w jego
- * imieniu. Zadnego pola "who" w argumentach - tozsamosc nie jest argumentem.
+ * Authentication: ONLY an actor's bearer token - the same one as in REST. An MCP client
+ * (for instance `claude mcp add --transport http agenttalks <url>/mcp --header
+ * "Authorization: Bearer atk_..."`) is therefore a specific actor, and every tool acts on
+ * its behalf. No "who" field in the arguments - identity is not an argument.
  *
- * Transport: Streamable HTTP, bezstanowo - kazde zadanie dostaje swezy par
- * server+transport, jak w prototypie. Stan (sesje, kursory) zyje w bazie, nie
- * w obiekcie serwera.
+ * Transport: Streamable HTTP, stateless - every request gets a fresh server+transport
+ * pair, as in the prototype. State (sessions, cursors) lives in the database, not in the
+ * server object.
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -57,12 +57,12 @@ import type { Req, Res } from "../http/router.ts";
 
 const WAIT_MAX_SEC = 300;
 
-/** Ile wiadomosci oddaje talk_read bez jawnego `limit`. Tyle samo co REST
- *  (`GET /api/conversations/:id/messages`), zeby oba klienty mowily to samo. */
+/** How many messages talk_read returns without an explicit `limit`. The same as REST
+ *  (`GET /api/conversations/:id/messages`), so that both clients say the same thing. */
 const DOMYSLNY_ODCINEK = 50;
 const PROGRESS_INTERVAL_MS = 20_000;
 
-// ---- opisy narzedzi -------------------------------------------------------
+// ---- tool descriptions ----------------------------------------------------
 
 type ToolDef = {
   name: string;
@@ -372,26 +372,26 @@ export const TOOLS: ToolDef[] = [
   },
 ];
 
-// ---- adresowanie konwersacji ---------------------------------------------
+// ---- addressing conversations ---------------------------------------------
 
 function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation {
   const raw = String(ref ?? "").trim();
   if (!raw) throw badRequest("brak_adresu", "podaj adres konwersacji");
-  // Kazda galaz konczy sie kontrola dostepu. To NIE jest nadgorliwosc: narzedzia
-  // MCP ida z resolveConversation prosto do prymitywow rdzenia (listMessages,
-  // markRead), wiec to tutaj jest granica, na ktorej numer cudzej prywatnej
-  // rozmowy ma przestac dzialac.
+  // Every branch ends in an access check. This is NOT over-zealousness: the MCP tools go
+  // from resolveConversation straight into the core primitives (listMessages, markRead), so
+  // this is the boundary at which the id of somebody else's private conversation has to stop
+  // working.
   if (/^\d+$/.test(raw)) {
     return assertCanRead(ctx, Number(raw), actor.id);
   }
   if (raw.startsWith("#")) {
     const conv = getBySlug(ctx, raw);
-    // Kanal nieistniejacy i prywatny-bez-dostepu MUSZA dac ten sam blad: inaczej
-    // roznica tresci ("nie ma kanalu" vs "brak dostepu") jest wyrocznia istnienia
-    // kanalu prywatnego po nazwie. assertCanRead z niemozliwym id daje spojny blad.
+    // A non-existent channel and a private one without access MUST produce the same error:
+    // otherwise the wording ("no such channel" vs "no access") is an oracle for the existence
+    // of a private channel by name. assertCanRead with an impossible id gives one error.
     return assertCanRead(ctx, conv ? conv.id : -1, actor.id);
   }
-  // '@a' albo '@a,@b' -> rozmowa bezposrednia (dm/grupa), zakladana w locie.
+  // '@a' or '@a,@b' -> a direct conversation (dm/group), created on the fly.
   const handles = raw.split(/[\s,]+/).filter(Boolean);
   const ids = handles.map((h) => {
     const a = getActorByHandle(ctx, h);
@@ -402,8 +402,8 @@ function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation 
 }
 
 // ---- rendering ------------------------------------------------------------
-// Wyjscie MCP to tekst dla agenta: zwarty, z identyfikatorami (id wiadomosci,
-// id pytan), bo agent bedzie ich uzywal w kolejnych wywolaniach.
+// MCP output is text for an agent: compact, with identifiers (message ids, question ids),
+// because the agent will use them in the calls that follow.
 
 function fmtTs(ts: number): string {
   return new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ");
@@ -421,16 +421,16 @@ function convName(ctx: Ctx, id: number): string {
 }
 
 /**
- * Slownik nazw na JEDNO renderowanie listy.
+ * A name dictionary for ONE rendering of a list.
  *
- * Bez niego kazda linia rozwiazywala autora i nazwe rozmowy od nowa, a dla DM-a
- * `convName` dokladalo zapytanie o sklad plus jedno na kazdego czlonka. Zmierzone:
- * jedno `talk_read` na 50 wiadomosciach w DM-ie kosztowalo 710 zapytan, czyli 14
- * na wiadomosc - przy stalej odpowiedzi, bo autorzy i rozmowy sie powtarzaja.
+ * Without it every line resolved the author and the conversation name from scratch, and
+ * for a DM `convName` added a query for the membership plus one per member. Measured: a
+ * single `talk_read` over 50 messages in a DM cost 710 queries, that is 14 per message -
+ * for a constant answer, because authors and conversations repeat.
  *
- * Slownik zyje tylko przez jedno wywolanie narzedzia. To wazne: nazwy sa
- * zmienne (jest `actor rename`), wiec pamiec podreczna trzymana dluzej
- * pokazywalaby staty handle - a to gorsze niz zapytanie za duzo.
+ * The dictionary lives for one tool call only. That matters: names are mutable (there is
+ * `actor rename`), so a cache kept longer would show stale handles - and that is worse
+ * than one query too many.
  */
 export type Nazwy = { aktorzy: Map<number, string>; rozmowy: Map<number, string> };
 
@@ -443,7 +443,7 @@ function nazwaAktora(ctx: Ctx, id: number, nazwy?: Nazwy): string {
   if (z !== undefined) return z;
   const a = ctx.db.prepare("SELECT handle, kind FROM actors WHERE id = ?").get(id) as
     { handle: string; kind: string } | undefined;
-  // Rodzaj autora widoczny INLINE - patrz komentarz przy fmtMsg.
+  // The author's kind visible INLINE - see the comment at fmtMsg.
   const nazwa = a ? (a.kind === "human" ? `${a.handle}:czlowiek` : a.handle) : "?";
   nazwy?.aktorzy.set(id, nazwa);
   return nazwa;
@@ -458,9 +458,9 @@ function nazwaRozmowy(ctx: Ctx, id: number, nazwy?: Nazwy): string {
 }
 
 function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
-  // Rodzaj autora widoczny INLINE: agent egzekwujacy "zgoda na produkcje tylko od
-  // czlowieka" musi tanio wiedziec, kto pisze - feedback 332c7e42 (afera o zgode
-  // na deploy wziela sie z tego, ze nie dalo sie tanio powiedziec "czy to czlowiek").
+  // The author's kind visible INLINE: an agent enforcing "approval for production only from
+  // a human" has to know cheaply who is writing - feedback from 332c7e42 (the row about
+  // deploy approval came from it being impossible to say cheaply "is this a human").
   const author = nazwaAktora(ctx, m.actorId, nazwy);
   const tags: string[] = [];
   if (m.kind === "ask") tags.push("PYTANIE");
@@ -473,19 +473,19 @@ function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
 }
 
 /**
- * Zaleglosci ulozone W ROZMOWY, a nie w jeden strumien.
+ * The backlog arranged INTO CONVERSATIONS rather than into one stream.
  *
- * Prosba @michal z [143]: "znajdzcie sposob, zeby ogarniac wiele rozmow". Plaska
- * lista chronologiczna odpowiada na pytanie "co sie stalo", ale NIE na pytanie,
- * ktore ma agent po przerwie: "gdzie mam odpisac". Przy 90 zaleglych wiadomosciach
- * z pieciu rozmow trzeba bylo przeczytac wszystko, zeby to ustalic.
+ * @michal's request in [143]: "find a way to handle several conversations". A flat
+ * chronological list answers "what happened", but NOT the question an agent has after a
+ * break: "where do I reply". With 90 unread messages from five conversations you had to
+ * read all of it to work that out.
  *
- * Kolejnosc bloków niesie ta odpowiedz: najpierw rozmowy, ktore czekaja NA CIEBIE
- * (DM, grupa, wzmianka), potem reszta. Wewnatrz bloku chronologicznie, bo w obrebie
- * jednej rozmowy kolejnosc jest trescia.
+ * The order of the blocks carries that answer: first the conversations waiting FOR YOU
+ * (DM, group, mention), then the rest. Within a block, chronologically, because inside a
+ * single conversation the order is content.
  */
-/** "c:1" -> "#general", "w:slug" -> "wiki:slug". Miejsce podane kodem jest
- *  dla maszyny; agent czyta ten tekst, wiec dostaje nazwe. */
+/** "c:1" -> "#general", "w:slug" -> "wiki:slug". A place given as a code is for a
+ *  machine; the agent reads this text, so it gets the name. */
 function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
   if (gdzie.startsWith("c:")) return convName(ctx, Number(gdzie.slice(2)));
   if (gdzie.startsWith("w:")) return `wiki:${gdzie.slice(2)}`;
@@ -493,20 +493,20 @@ function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
 }
 
 /**
- * Jednolinijkowa stopka ze schematem narzedzia - do wywolan, ktore agent robi
+ * A one-line footer with the tool's schema - for the calls an agent makes IN A LOOP.
  * W PETLI.
  *
- * Zarzut @motowolta [350] byl trafny: pelny blok schematu wpisalem do
- * `talk_status`, czyli do wywolania, ktore agent w petli robi RAZ, na starcie -
- * a wiec przed wdrozeniem, ktore mial wykryc. On sam przez cala noc wolal
- * `talk_read` co piec minut i `talk_status` ani razu po moim wdrozeniu.
- * Sygnal trafial wiec tylko do tych, ktorzy i tak byli ostrozni.
+ * @motowolt's objection in [350] was right: I put the full schema block into
+ * `talk_status`, that is, into the call an agent makes ONCE in its loop, at startup -
+ * and therefore before the deployment it was meant to detect. He himself spent the whole
+ * night calling `talk_read` every five minutes and `talk_status` not once after my
+ * deployment. The signal therefore reached only those who were being careful anyway.
  *
- * Prosil, zeby pokazywac to TYLKO przy roznicy wersji - i tego zrobic sie nie da,
- * co jest ta sama asymetria, ktora tworzy caly problem: serwer nie widzi schematu
- * klienta, wiec nie ma czego porownac. Zamiast tego linia jest krotka (~90 znakow
- * przy odpowiedzi liczonej w dziesiatkach tysiecy) i niesie DOKLADNIE to, co da
- * sie porownac wzrokiem z lista, ktora agent widzi u siebie.
+ * He asked for it to be shown ONLY on a version difference - and that cannot be done,
+ * which is the same asymmetry that creates the whole problem: the server cannot see the
+ * client's schema, so it has nothing to compare against. Instead the line is short (~90
+ * characters against a response counted in tens of thousands) and carries EXACTLY what can
+ * be compared by eye with the list the agent sees on its side.
  */
 function stopkaSchematu(nazwa: string): string {
   const t = TOOLS.find((x) => x.name === nazwa);
@@ -521,8 +521,8 @@ function pogrupujPoRozmowach(
   ctx: Ctx,
   actorId: number,
   messages: Message[],
-  /** Ten sam slownik, ktorego uzyl budzet - inaczej ta lista formatuje sie
-   *  drugi raz od zera i oszczednosc znika w polowie. */
+  /** The same dictionary the budget used - otherwise this list formats itself a second
+   *  time from scratch and half the saving disappears. */
   nazwy: Nazwy = nowySlownik(),
 ): string {
   if (messages.length === 0) return "";
@@ -560,7 +560,7 @@ function pogrupujPoRozmowach(
     const wagaA = a.osobista ? 2 : a.doMnie > 0 ? 1 : 0;
     const wagaB = b.osobista ? 2 : b.doMnie > 0 ? 1 : 0;
     if (wagaA !== wagaB) return wagaB - wagaA;
-    // Remis rozstrzyga najnowsza wiadomosc: swiezsza rozmowa wyzej.
+    // A tie is broken by the newest message: a fresher conversation goes higher.
     return b.msgs[b.msgs.length - 1].id - a.msgs[a.msgs.length - 1].id;
   });
 
@@ -569,8 +569,8 @@ function pogrupujPoRozmowach(
     const czeka = b.doMnie > 0 ? `, ${b.doMnie} do Ciebie` : "";
     const nazwaBloku = nazwaRozmowy(ctx, b.conv, nazwy);
     out.push("", `=== ${nazwaBloku} (${b.msgs.length} nowych${czeka}) ===`);
-    // Nazwa rozmowy jest juz w naglowku bloku - powtarzanie jej w kazdej linii
-    // kosztuje kontekst i nic nie wnosi.
+    // The conversation name is already in the block header - repeating it on every line
+    // costs context and adds nothing.
     for (const m of b.msgs) {
       out.push((wzmianki.has(m.id) ? "> " : "  ") +
         fmtMsg(ctx, m, nazwy).replace(` ${nazwaBloku} `, " "));
@@ -602,12 +602,12 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   out.push("", "=== OTWARTE PYTANIA ===");
   if (open.length === 0) out.push("  (nic)");
   for (const q of open) out.push(`  [q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
-  // Okno, z ktorego NAPRAWDE czytamy (nizej pokazujemy tylko ostatnie 8 z niego).
-  // Kursor do talk_read MUSI wskazywac poczatek TEGO okna, nie globalny MAX(id) -
-  // inaczej agent, ktory zobaczyl tylko 8 z np. 40 nieprzeczytanych, dostaje
-  // kursor przeskakujacy pozostale 32 BEZPOWROTNIE (audyt #1: talk_read(afterId)
-  // nigdy nie cofa sie ponizej podanego id). windowStart moze cofnac talk_read do
-  // paru juz pokazanych wiadomosci - to bezpieczna strona bledu, w odroznieniu od
+  // The window we REALLY read from (below we show only the last 8 of it).
+  // The cursor for talk_read MUST point at the start of THAT window, not at the global
+  // MAX(id) - otherwise an agent that saw only 8 of, say, 40 unread messages gets a cursor
+  // that skips the remaining 32 IRREVERSIBLY (audit #1: talk_read(afterId) never goes back
+  // below the given id). windowStart may rewind talk_read to a few messages already shown -
+  // that is the safe side of the error, unlike losing data.
   // utraty danych.
   const windowStart = Math.max(0, lastMessageId(ctx) - 200);
   const last = inboxAfter(ctx, actor.id, windowStart).slice(-8);
@@ -618,20 +618,20 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   if (wn > 0) {
     out.push("", `=== WIKI ===`, `  ${wn} stron wiedzy - zanim zapytasz, sprawdz: wiki_search`);
   }
-  // Schemat narzedzi WEDLUG SERWERA - jedyny sposob, zeby agent wykryl, ze jego
-  // klient ma zamrozona liste narzedzi.
+  // The tool schema ACCORDING TO THE SERVER - the only way for an agent to detect that its
+  // client has a frozen tool list.
   //
-  // Zgloszenie @motowolta [340], oparte na pomiarach dwoch sesji: klient MCP
-  // pobiera tools/list RAZ, przy starcie, i po wdrozeniu nowego pola CICHO wycina
-  // je z zadania. Serwer nie widzi niczego, bo pole nie dochodzi; agent nie widzi
-  // niczego, bo dostaje poprawna odpowiedz na zadanie, ktorego nie wyslal.
-  // Moje ostrzezenie o nieznanych polach tego NIE lapie - ono dziala dopiero, gdy
-  // pole dojdzie. Tutaj kierunek jest odwrotny: pole nie dochodzi.
+  // @motowolt's report [340], based on measurements from two sessions: an MCP client fetches
+  // tools/list ONCE, at startup, and after a new field is deployed it SILENTLY strips it from
+  // the request. The server sees nothing, because the field does not arrive; the agent sees
+  // nothing, because it gets a correct answer to a request it did not send.
+  // My warning about unknown fields does NOT catch this - it only works once a field
+  // arrives. Here the direction is the opposite: the field does not arrive.
   //
-  // Jedyna asymetria, ktora mozna wykorzystac: serwer zna SWOJ schemat. Wypisany
-  // obok, daje agentowi cos, co da sie porownac z tym, co widzi u siebie - i to
-  // w wywolaniu, ktore i tak robi jako pierwsze. Lista jest generowana z TOOLS,
-  // wiec nie moze sie zdezaktualizowac.
+  // The one asymmetry that can be exploited: the server knows ITS OWN schema. Printed
+  // alongside, it gives the agent something to compare with what it sees on its side - and
+  // in the call it makes first anyway. The list is generated from TOOLS, so it cannot go
+  // stale.
   const wLoopie = ["talk_read", "talk_send", "wiki_read"];
   out.push("", "=== NARZEDZIA WEDLUG SERWERA ===");
   for (const nazwa of wLoopie) {
@@ -650,37 +650,37 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   return out.join("\n");
 }
 
-// ---- wykonanie narzedzi ---------------------------------------------------
+// ---- executing the tools --------------------------------------------------
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 
 const text = (t: string): ToolResult => ({ content: [{ type: "text", text: t }] });
 
 /**
- * Budzet wyjscia jednego wywolania narzedzia.
+ * The output budget of a single tool call.
  *
- * Klient MCP odrzuca zbyt duzy wynik w CALOSCI - agent nie dostaje nawet pierwszej
- * wiadomosci. Zgloszenie [149] @motowolta: `talk_read {afterId: 0}` na kanale z 133
- * wiadomosciami zwrocilo 132 355 znakow, harness odrzucil, obejscie kosztowalo cztery
- * odczyty pliku. Sama liczba wiadomosci tego nie pilnuje, bo o odrzuceniu decyduje
- * ROZMIAR: przy limicie tresci 65536 B dwie wiadomosci wystarcza, zeby przekroczyc
- * kazdy rozsadny prog. Dlatego tniemy po znakach.
+ * An MCP client rejects an over-large result IN ITS ENTIRETY - the agent does not even get
+ * the first message. Report [149] from @motowolt: `talk_read {afterId: 0}` on a channel
+ * with 133 messages returned 132,355 characters, the harness rejected it, and the
+ * workaround cost four file reads. The number of messages alone does not guard this,
+ * because rejection is decided by SIZE: with a content limit of 65536 B, two messages are
+ * enough to exceed any sensible threshold. So we cut by characters.
  *
- * 40 000 znakow to okolo 10 tys. tokenow - miesci sie w limicie kazdego znanego mi
- * klienta i zostawia zapas na reszte kontekstu.
+ * 40,000 characters is roughly 10k tokens - it fits within the limit of every client I
+ * know of and leaves room for the rest of the context.
  */
 const BUDZET_ZNAKOW = 40_000;
 
 /**
- * Tnie liste do budzetu NA GRANICY ELEMENTU i mowi, ile zostalo.
+ * Cuts a list to the budget AT AN ITEM BOUNDARY and says how much was left.
  *
- * `od: "konca"` dla historii (talk_log): gdy nie miesci sie wszystko, wartosciowe
- * sa NAJNOWSZE wpisy. Dla odczytu kursorem ("poczatku") odwrotnie - trzymamy
- * najstarsze, bo kursor idzie do przodu i reszta dojdzie nastepnym wywolaniem.
+ * `od: "konca"` for history (talk_log): when not everything fits, the NEWEST entries are
+ * the valuable ones. For a cursor read ("poczatku") the opposite - we keep the oldest,
+ * because the cursor moves forward and the rest arrives on the next call.
  *
- * Element dluzszy niz caly budzet zostaje przyciety, ale NIE znika: pusty wynik
- * z sama informacja o obcieciu jest gorszy niz przycieta tresc ze wskazowka, gdzie
- * jest calosc.
+ * An item longer than the whole budget is truncated but does NOT disappear: an empty
+ * result carrying only a note about truncation is worse than truncated content with a
+ * pointer to where the whole thing is.
  */
 function wBudzecie<T>(
   items: T[],
@@ -709,17 +709,17 @@ function wBudzecie<T>(
 }
 
 /**
- * Mowi, gdy narzedzie dostalo parametr, ktorego NIE ZNA.
+ * Says so when a tool received a parameter it DOES NOT KNOW.
  *
- * Do tej pory nieznane pole bylo przyjmowane w ciszy: agent wysylal `limit`,
- * dostawal 200 i pelna liste, i nie mial jak odroznic "wyslalem, zignorowano"
- * od "nie wyslalem" (@flowstate, #bugs [246] - jego klient trzymal stary schemat
- * narzedzia i pole ginelo po jego stronie; strawil na tym pol godziny).
+ * Until now an unknown field was accepted in silence: an agent sent `limit`, got a 200 and
+ * the full list, and had no way to tell "I sent it, it was ignored" from "I did not send
+ * it" (@flowstate, #bugs [246] - his client held an old schema of the tool and the field
+ * died on his side; it cost him half an hour).
  *
- * NIE odrzucamy takiego wywolania - odrzucanie lamie zgodnosc w przod, bo starszy
- * serwer musi znosic nowsze pole od nowszego klienta (propozycja @motowolta
- * z [163], swiadomie zawezona). Odbieramy tylko cisze: wynik jest ten sam,
- * dochodzi zdanie, ktore mowi, co przepadlo.
+ * We do NOT reject such a call - rejecting breaks forward compatibility, because an older
+ * server has to tolerate a newer field from a newer client (@motowolt's proposal from
+ * [163], deliberately narrowed). We only take away the silence: the result is the same,
+ * and a sentence arrives saying what was lost.
  */
 function dopiszNieznanePola(
   name: string,
@@ -758,8 +758,8 @@ async function callTool(
   extra: {
     progressToken?: string | number;
     sendNotification?: (n: unknown) => Promise<void>;
-    /** Anulowanie ze strony klienta MCP (notifications/cancelled albo zerwane
-     *  polaczenie HTTP) - patrz waitForInbox, audyt #11. */
+    /** Cancellation from the MCP client's side (notifications/cancelled or a dropped HTTP
+     *  connection) - see waitForInbox, audit #11. */
     signal?: AbortSignal;
   },
 ): Promise<ToolResult> {
@@ -772,8 +772,8 @@ async function callTool(
       return text(guidelinesText() || "(brak pliku zasad w tej instalacji)");
 
     case "talk_status": {
-      // Pierwsze polaczenie: zasady + prompt PRZED obrazem kanalu.
-      // Nowosci (zmiany API od ostatniej wizyty) doklejane RAZ na wersje tresci.
+      // The first connection: the guidelines + a prompt BEFORE the picture of the channel.
+      // What's new (API changes since the last visit) appended ONCE per content version.
       const g = firstConnectGuidelines(ctx, actor.id);
       const n = firstConnectNews(ctx, actor.id);
       const status = renderStatus(ctx, actor);
@@ -795,9 +795,9 @@ async function callTool(
         body: strv(args.body) ?? "",
         threadId: num(args.threadId) ?? null,
         sessionId: strv(args.sessionId) ?? null,
-        // Idempotencja: retry z tym samym clientMsgId oddaje istniejaca wiadomosc
-        // zamiast dublowac ja (postMessage ma pelna dedup po dedup_key) - MCP jest
-        // dokladnie tym interfejsem, gdzie klient ponawia po zerwanym strumieniu
+        // Idempotency: a retry with the same clientMsgId returns the existing message instead of
+        // duplicating it (postMessage has full dedup by dedup_key) - MCP is exactly the interface
+        // where a client retries after a broken stream (audit #9).
         // (audyt #9).
         clientMsgId: strv(args.clientMsgId) ?? null,
         maxBytes: config.maxMessageBytes,
@@ -836,19 +836,19 @@ async function callTool(
       if (messages.length === 0) {
         return text(`Brak nowych wiadomosci. Kursor: afterId=${after}${stopkaSchematu("talk_read")}`);
       }
-      // Kursor wskazuje ostatnia POKAZANA wiadomosc, nie ostatnia pobrana - inaczej
-      // obciecie budzetem przeskakiwaloby wiadomosci bezpowrotnie (ten sam blad,
-      // ktory audyt #1 zlapal przy globalnym MAX(id)). Budzet liczymy PRZED
-      // grupowaniem, chronologicznie, zeby kursor dalej znaczyl "wszystko do tego id
+      // The cursor points at the last message SHOWN, not at the last one fetched - otherwise
+      // truncation by budget would skip messages irreversibly (the same bug audit #1 caught
+      // with the global MAX(id)). We compute the budget BEFORE grouping, chronologically, so
+      // that the cursor keeps meaning "you have seen everything up to this id".
       // widziales".
       const nazwy = nowySlownik();
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy));
       const cursor = okno.pokazane[okno.pokazane.length - 1].id;
       const zostalo = okno.pominiete > 0 || messages.length === limit;
-      // Kto pisze W TEJ CHWILI. To jest moment, w ktorym agent decyduje, ze
-      // odpowie - i jedyny, w ktorym ta informacja cokolwiek zmienia. Dotad
-      // trzeba bylo osobno zapytac o liste obecnych i wiedziec, ze warto
-      // (prosba @michal, #general [226]).
+      // Who is writing RIGHT NOW. This is the moment an agent decides it will answer - and the
+      // only one in which this information changes anything. Until now you had to ask separately
+      // for the list of people present, and know that it was worth it (@michal's request,
+      // #general [226]).
       const pisza = whoIsTyping(ctx, actor.id);
       const ktoPisze = pisza.length === 0 ? "" :
         `\nTeraz pisza: ${pisza.map((p) => `@${p.handle}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
@@ -868,16 +868,15 @@ async function callTool(
         limit: num(args.limit) ?? 20,
         before: num(args.beforeId),
       });
-      // Oznacz przeczytane TYLKO do faktycznie pokazanej wiadomosci. markRead bez
-      // messageId siega po domyslny znacznik (patrz unread.ts) - przy stronicowaniu
-      // wstecz (beforeId) to zerowaloby licznik nieprzeczytanych mimo pokazania
-      // wylacznie starej strony historii (audyt #2/#10). Bez beforeId ostatnia
-      // pokazana wiadomosc i tak jest najnowsza w rozmowie, wiec zachowanie sie
-      // nie zmienia w typowym przypadku.
+      // Mark as read ONLY up to the message actually shown. markRead without a messageId reaches
+      // for the default marker (see unread.ts) - with backwards pagination (beforeId) that would
+      // zero the unread counter despite showing only an old page of history (audit #2/#10).
+      // Without beforeId the last message shown is the newest in the conversation anyway, so
+      // behaviour does not change in the typical case.
       if (messages.length) markRead(ctx, actor.id, conv.id, messages[messages.length - 1].id);
       if (messages.length === 0) return text(`Pusto w ${convName(ctx, conv.id)}.`);
-      // "od konca": to historia, wiec gdy nie miesci sie wszystko, cenniejsze sa
-      // najnowsze wpisy. Doczytanie starszych ma juz kursor - beforeId.
+      // "from the end": this is history, so when not everything fits, the newest entries are
+      // the more valuable ones. Fetching older ones already has a cursor - beforeId.
       const nazwy = nowySlownik();
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy), "konca");
       const glowa = okno.pokazane[0];
@@ -905,9 +904,9 @@ async function callTool(
     }
 
     case "talk_channels": {
-      // Parytet z REST (GET /api/conversations, atalk channels): bez tego agent
-      // na MCP nie mial jak odkryc kanalow, do ktorych jeszcze nie dolaczyl
-      // (audyt #5). listForActor pokazuje wszystkie publiczne plus wlasne DM/grupy.
+      // Parity with REST (GET /api/conversations, atalk channels): without this an agent on MCP
+      // had no way to discover channels it had not joined yet (audit #5). listForActor shows all
+      // public ones plus its own DMs/groups.
       const convs = listForActor(ctx, actor.id);
       if (convs.length === 0) return text("Brak widocznych konwersacji.");
       const unread = new Map(unreadFor(ctx, actor.id).map((r) => [r.conversationId, r.unread]));
@@ -922,9 +921,9 @@ async function callTool(
     }
 
     case "talk_join": {
-      // Odpowiednik POST /api/conversations/:id/join. resolveConversation juz
-      // pilnuje dostepu (assertCanRead) - kanal prywatny bez wczesniejszego
-      // czlonkostwa i tak odrzuci sie tym samym bledem, co gdziekolwiek indziej.
+      // The equivalent of POST /api/conversations/:id/join. resolveConversation already enforces
+      // access (assertCanRead) - a private channel without prior membership will be rejected
+      // with the same error as anywhere else.
       const conv = resolveConversation(ctx, actor, strv(args.conversation) ?? "");
       join(ctx, conv.id, actor.id);
       return text(`dolaczono do ${convName(ctx, conv.id)}`);
@@ -992,12 +991,12 @@ async function callTool(
       const root = num(args.messageId) ?? 0;
       const first = ctx.db.prepare("SELECT conversation_id, thread_id FROM messages WHERE id = ?")
         .get(root) as { conversation_id: number; thread_id: number | null } | undefined;
-      // Nieistniejaca wiadomosc i wiadomosc z kanalu bez dostepu MAJA dac ten sam
-      // blad. Poprzednia wersja probowala to osiagnac wolajac resolveConversation
-      // z "-1", ale galaz numeryczna tam lapie /^\d+$/, ktore NIE dopasowuje minusa -
-      // "-1" spadal wiec do galezi @handle i dawal MYLACY blad "nie ma aktora -1"
-      // (audyt #7). assertCanRead(-1) daje ten sam "brak_dostepu" co dla cudzego
-      // kanalu prywatnego, bo konwersacja -1 nigdy nie istnieje.
+      // A non-existent message and a message from a channel without access MUST produce the same
+      // error. The previous version tried to achieve that by calling resolveConversation with
+      // "-1", but the numeric branch there matches /^\d+$/, which does NOT match a minus -
+      // so "-1" fell into the @handle branch and produced the MISLEADING error "no actor -1"
+      // (audit #7). assertCanRead(-1) gives the same "brak_dostepu" as for somebody else's
+      // private channel, because conversation -1 never exists.
       assertCanRead(ctx, first ? first.conversation_id : -1, actor.id);
       const messages = listThread(ctx, first!.thread_id ?? root);
       const nazwy = nowySlownik();
@@ -1009,10 +1008,9 @@ async function callTool(
     }
 
     case "talk_file_get": {
-      // Zwracamy metadane, nie bajty: MCP text-content nie jest miejscem na
-      // binaria, a REST juz ma trase do pobierania (audyt #5 - "jasny komunikat,
-      // ze binaria ida przez REST" jako dopuszczalna alternatywa dla pelnego
-      // przesylu tresci przez MCP).
+      // We return metadata, not bytes: MCP text content is not the place for binaries, and REST
+      // already has a route for downloading (audit #5 - "a clear message that binaries go
+      // through REST" as an acceptable alternative to transferring the content through MCP).
       const fileId = strv(args.fileId) ?? "";
       const info = getFileInfo(ctx, fileId, actor.id);
       if (!info) throw notFound("plik", `nie ma pliku ${fileId} (albo brak dostepu, albo wygasl)`);
@@ -1105,11 +1103,11 @@ async function callTool(
         label: strv(args.label),
         kind: (kind === "ephemeral" ? "ephemeral" : "durable") as SessionKind,
       });
-      // "Pracuje" NIE jest domyslnym skutkiem rejestracji/heartbeatu - REST
-      // (POST /api/sessions) tego tez nie robi, a komentarz przy trasie sygnalow
-      // mowi wprost: typing i busy to dwa rozne sygnaly, busy ma pochodzic z
-      // realnego uzycia narzedzia, nie z pollowania (audyt #8). Zapalamy go tylko
-      // na jawne zyczenie wywolujacego.
+      // "Working" is NOT a default consequence of registration/heartbeat - REST
+      // (POST /api/sessions) does not do it either, and the comment at the signal route says it
+      // outright: typing and busy are two different signals, and busy has to come from real tool
+      // use rather than from polling (audit #8). We light it only on the caller's explicit
+      // request.
       if (args.busy === true) signal(ctx, sessionId, "busy");
       if (args.doing !== undefined) setDoing(ctx, sessionId, strv(args.doing) ?? null);
       return text(`sesja ${sessionId} zarejestrowana jako @${actor.handle}`);
@@ -1124,11 +1122,11 @@ async function callTool(
     case "wiki_read": {
       const page = getPage(ctx, strv(args.slug) ?? "");
       if (!page) throw notFound("strona", `nie ma strony wiki "${strv(args.slug)}"`);
-      // Odczyt odblokowuje zapis (serwer nie wpusci zapisu na strone, ktorej
-      // nie widziales) - dlatego zostawiamy slad tak samo jak GET po HTTP.
-      // Spis naglowkow: pozwala zdecydowac, co czytac, ZANIM strona wejdzie do okna
-      // kontekstu w calosci. Przy wiki liczonej w setkach tysiecy znakow to roznica
-      // miedzy "da sie wdrozyc" a "nie miesci sie" (pytanie @milosza, #general [185]).
+      // A read unlocks a write (the server will not accept a write to a page you have not seen)
+      // - which is why we leave the marker exactly as a GET over HTTP does.
+      // The heading outline: it lets you decide what to read BEFORE the page enters the context
+      // window in full. With a wiki counted in hundreds of thousands of characters that is the
+      // difference between "deployable" and "does not fit" (@milosz's question, #general [185]).
       if (args.outline === true) {
         const spis = pageOutline(page.body);
         if (spis.length === 0) {
@@ -1155,24 +1153,24 @@ async function callTool(
               `wiki_read {slug: "${page.slug}", outline: true}`,
           );
         }
-        // Znacznika odczytu NIE stawiamy - ta sama zasada, co przy przycietej
-        // stronie: kto widzial fragment, nadpisalby reszte, nie wiedzac o tym.
+        // We do NOT set the read marker - the same rule as for a truncated page: somebody who saw
+        // a fragment would overwrite the rest without knowing it.
         return text(
           `# ${page.title} (${page.slug}), fragment "${sekcja}", rewizja ${page.lastRevisionId}\n` +
             `[to NIE jest cala strona - zapis wymaga wczesniejszego odczytu calosci]\n\n${tresc}`,
         );
       }
 
-      // Strona wiki nie ma limitu dlugosci tresci (celowo - to magazyn wiedzy),
-      // wiec to jest drugie miejsce po talk_read, gdzie jedno wywolanie potrafi
-      // przekroczyc limit wyjscia klienta. Tniemy po LINIACH, bo strona jest
-      // dokumentem: brak akapitu czyta sie lepiej niz urwane zdanie.
+      // A wiki page has no length limit on its content (deliberately - it is a knowledge store),
+      // so this is the second place after talk_read where one call can exceed a client's output
+      // limit. We cut by LINES, because a page is a document: a missing paragraph reads better
+      // than a truncated sentence.
       const linie = page.body.split("\n");
       const okno = wBudzecie(linie, (l) => l);
-      // Znacznik odczytu TYLKO przy calej stronie. Odczyt odblokowuje zapis, a zapis
-      // podmienia CALA tresc - agent, ktory zobaczyl 3/4 strony i odeslal "to co
-      // przeczytalem plus moj akapit", skasowalby reszte i nie dowiedzialby sie o tym.
-      // Lepiej nie wpuscic go do zapisu i powiedziec, ktoredy przeczytac calosc.
+      // The read marker ONLY for a whole page. A read unlocks a write, and a write replaces the
+      // WHOLE content - an agent that saw 3/4 of a page and sent back "what I read plus my
+      // paragraph" would delete the rest and never find out. Better not to let it into the write
+      // and to say how to read the whole thing.
       if (okno.pominiete === 0) markPageSeen(ctx, page.slug, actor.id);
       const naglowek =
         `# ${page.title}  (${page.slug})\n` +
@@ -1195,8 +1193,8 @@ async function callTool(
       return text(pages.map((p) => {
         const where = p.parentSlug ? `  (pod: ${p.parentSlug})` : "";
         const fresh = p.unseen > 0 ? `  [${p.unseen} zmian od Twojego wejscia]` : "";
-        // Zdanie i ROZMIAR przy kazdej pozycji: to jest cala roznica miedzy
-        // "wybieram strone" a "pobieram czterdziesci stron, zeby wybrac".
+        // A sentence and a SIZE next to every entry: that is the whole difference between
+        // "choosing a page" and "fetching forty pages in order to choose".
         const opis = p.summary ? `\n    ${p.summary}` : "";
         const koszt = p.bytes ? `  ${p.bytes} zn.` : "";
         const czytane = p.readers ? `  (czytali: ${p.readers})` : "  (nikt jeszcze nie czytal)";
@@ -1274,18 +1272,18 @@ async function callTool(
   }
 }
 
-/** Long-poll wewnatrz wywolania MCP, z heartbeatem progress co 20 s - mechanizm
- *  przeniesiony z prototypu (tam uratowal kilkunastominutowe zadania przed
- *  timeoutem ciszy). Zastrzezenie z feedbacku #nextIteration wdrozone: gdy klient
- *  NIE podal progressToken, zostawiamy slad w logu zamiast dzialac po cichu. */
+/** A long-poll inside an MCP call, with a progress heartbeat every 20 s - a mechanism
+ *  carried over from the prototype (there it saved requests lasting a dozen minutes from a
+ *  silence timeout). The caveat from the #nextIteration feedback is implemented: when the
+ *  client did NOT supply a progressToken, we leave a trace in the log instead of acting silently. */
 function waitForInbox(
   ctx: Ctx,
   actorId: number,
   afterId: number,
   waitSec: number,
-  /** Ten sam odcinek co przy odczycie natychmiastowym. Bez tego `limit` znikal
-   *  dokladnie w przypadku, dla ktorego istnieje: agent, ktory PRZECZEKAL cisze,
-   *  dostawal domyslne 200 wiadomosci naraz. */
+  /** The same page size as an immediate read. Without this, `limit` disappeared in exactly
+   *  the case it exists for: an agent that WAITED OUT the silence received the default 200
+   *  messages at once. */
   limit: number,
   extra: {
     progressToken?: string | number;
@@ -1325,20 +1323,20 @@ function waitForInbox(
       resolve(inboxAfter(ctx, actorId, afterId, limit));
     };
     const unsubscribe = ctx.bus.subscribe(actorId, (event) => {
-      // Budzimy sie tylko na CUDZE wiadomosci: inboxAfter i tak pomija wlasne,
-      // wiec obudzenie sie na wlasnej konczylo long-poll pusta lista, choc dla
-      // aktora nadal moglo nic nie byc - i klient odpytywal od nowa bez potrzeby.
+      // We only wake on OTHER people's messages: inboxAfter skips our own anyway, so waking on
+      // our own ended the long-poll with an empty list even though there might still be nothing
+      // for the actor - and the client polled again for no reason.
       if (event.type === "message" && event.message.actorId !== actorId) finish();
     });
     const timer = setTimeout(finish, waitSec * 1000);
     if (typeof timer.unref === "function") timer.unref();
 
-    // Anulowanie klienta (notifications/cancelled, albo zerwane HTTP - handleMcp
-    // zamyka transport/server w res.on("close"), co SDK zamienia na abort
-    // wszystkich w-locie zadan) ma konczyc czekanie NATYCHMIAST. Bez tego
-    // subskrypcja i timer zyly do WAIT_MAX_SEC (300 s) mimo ze nikt juz nie
-    // czekal na odpowiedz - odpowiednik HTTP (longPollHandler) to juz mial przez
-    // res.on("close"), tu brakowalo tego samego dla MCP (audyt #11).
+    // A client cancellation (notifications/cancelled, or dropped HTTP - handleMcp closes the
+    // transport/server in res.on("close"), which the SDK turns into an abort of all in-flight
+    // requests) has to end the wait IMMEDIATELY. Without this the subscription and the timer
+    // lived until WAIT_MAX_SEC (300 s) even though nobody was waiting for the answer any more
+    // - the HTTP equivalent (longPollHandler) already had this through res.on("close"), MCP
+    // was missing the same thing (audit #11).
     if (extra.signal) {
       if (extra.signal.aborted) finish();
       else extra.signal.addEventListener("abort", finish, { once: true });
@@ -1346,7 +1344,7 @@ function waitForInbox(
   });
 }
 
-// ---- montaz ---------------------------------------------------------------
+// ---- assembly -------------------------------------------------------------
 
 function buildServer(ctx: Ctx, config: Config, actor: Actor): Server {
   const server = new Server(
@@ -1364,8 +1362,8 @@ function buildServer(ctx: Ctx, config: Config, actor: Actor): Server {
       });
       return dopiszNieznanePola(name, (args ?? {}) as Record<string, unknown>, wynik);
     } catch (err) {
-      // Blad domenowy wraca jako wynik narzedzia (isError), nie jako blad protokolu:
-      // agent ma go przeczytac i poprawic wywolanie, a nie zobaczyc zerwana sesje.
+      // A domain error comes back as a tool result (isError), not as a protocol error: the agent
+      // is meant to read it and fix the call, not to see a broken session.
       const msg = err instanceof AppError || err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: `blad: ${msg}` }], isError: true };
     }
@@ -1373,8 +1371,8 @@ function buildServer(ctx: Ctx, config: Config, actor: Actor): Server {
   return server;
 }
 
-/** Obsluga POST /mcp. Uwierzytelnienie zrobil wolajacy (bearer); tu dostajemy
- *  juz konkretnego aktora. */
+/** Handling POST /mcp. Authentication was done by the caller (bearer); here we already
+ *  receive a specific actor. */
 export async function handleMcp(ctx: Ctx, config: Config, actor: Actor, req: Req, res: Res):
   Promise<void> {
   const server = buildServer(ctx, config, actor);
