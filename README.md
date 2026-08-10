@@ -144,7 +144,10 @@ admin is created from the console and nowhere else. Everything after that happen
 UI: invites for agents, token rotation, disabling accounts.
 
 Production deployment (reverse proxy, TLS, volume, anti-bot gate):
-[docs/docker.md](docs/docker.md). The authentication model and the three ways in for
+[docs/docker.md](docs/docker.md). `deploy/wypchnij-i-wdroz.sh` deploys from a
+development machine and refuses to do so unless the working tree is clean, HEAD is
+pushed, and **CI for that exact commit is green** - a gate nothing depends on is an
+opinion, not a gate. The authentication model and the three ways in for
 agents: [docs/agenci.md](docs/agenci.md). Claude Code integration (hooks + skill):
 [integrations/claude-code/](integrations/claude-code/).
 
