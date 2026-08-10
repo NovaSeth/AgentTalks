@@ -1,9 +1,9 @@
 /**
- * CLI administracyjne AgentTalks.
+ * The AgentTalks administrative CLI.
  *
- * Etap 1 daje to, co jest potrzebne, zeby serwer w ogole zyl: zalozenie instancji,
- * uruchomienie, aktorzy, tokeny, import z prototypu. Klient dla agentow (`atalk`)
- * przychodzi w etapie 2 i bedzie mowil HTTP, a nie dotykal bazy.
+ * Stage 1 provides what is needed for the server to live at all: creating an instance,
+ * starting it, actors, tokens, importing from the prototype. The client for agents
+ * (`atalk`) arrives in stage 2 and will speak HTTP rather than touch the database.
  */
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -86,20 +86,20 @@ const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a l
 type Args = { positional: string[]; flags: Record<string, string | boolean> };
 
 /**
- * Parser argumentów. Dwie zasady chronią treść wiadomości przed zjedzeniem:
- *  - `--` (samo) to terminator: wszystko po nim to pozycyjne, nawet z wiodącym `--`,
- *  - `knownFlags` (opcjonalne): tylko wymienione nazwy pobierają wartość i schodzą
- *    z pozycyjnych; reszta `--cokolwiek` zostaje treścią.
- *
- * Bez tego `atalk say testy padly na --coverage prosze` gubił dwa słowa: `--coverage`
- * stawał się flagą, a `prosze` jego wartością. Dla narzędzia, którym agenci rozmawiają
- * o flagach CLI, to codzienny przypadek cichego znieksztalcenia treści.
+ * Argument parser. Two rules protect the body of a message from being eaten:
+ *  - `--` (on its own) is a terminator: everything after it is positional, even with a
+ *    leading `--`,
+ *  - `knownFlags` (optional): only the listed names take a value and drop off the
+ *   positional list; every other `--whatever` stays content.
+ * Without this, `atalk say the tests failed on --coverage please` lost two words:
+ * `--coverage` became a flag and `please` its value. For a tool agents use to talk about
+ * CLI flags, that is a daily case of silently mangled content.
  */
 /**
- * Flagi LOGICZNE - takie, ktore nigdy nie biora wartosci. Bez tej listy
- * `--force tresc strony` ustawialo `force = "tresc"` (bo parser bierze nastepny
- * token jako wartosc), czyli wymuszenie po cichu nie dzialalo, a pierwsze slowo
- * tresci znikalo. Dwa bledy naraz i zaden widoczny w komunikacie.
+ * BOOLEAN flags - the ones that never take a value. Without this list,
+ * `--force page body` set `force = "page"` (because the parser takes the next token as
+ * the value), so forcing silently did not happen and the first word of the body
+ * disappeared. Two bugs at once, and neither visible in any message.
  */
 const FLAGI_LOGICZNE = new Set([
   "force", "stdin", "local", "stop", "private", "sensitive", "burn", "admin", "short",
@@ -120,7 +120,7 @@ export function parseArgs(argv: readonly string[], knownFlags?: Set<string>): Ar
       continue;
     }
     const name = a.slice(2);
-    // Gdy podano liste znanych flag, nieznane `--x` sa traktowane jak zwykla tresc.
+    // When a list of known flags is given, unknown `--x` are treated as ordinary content.
     if (knownFlags && !knownFlags.has(name)) {
       positional.push(a);
       continue;
@@ -196,9 +196,9 @@ function cmdInit(args: Args): number {
   const config = initData(flagStr(args, "data") ?? defaultDataDir());
   const ctx = createCtx(openDb(config.dbPath));
 
-  // Aktor systemowy jest autorem wiadomosci, ktore pisze sam serwer (np. informacja
-  // o wylaczonym punkcie dostarczenia). Bez niego takie komunikaty musialyby udawac
-  // kogos - a podszywanie sie jest dokladnie tym, co ten projekt usuwa.
+  // The system actor is the author of messages written by the server itself (for instance
+  // a notice about a disabled delivery point). Without it such messages would have to
+  // impersonate somebody - and impersonation is exactly what this project removes.
   const system = getActorByHandle(ctx, "system")
     ?? createActor(ctx, { kind: "system", handle: "system", displayName: "AgentTalks" });
   const general = getBySlug(ctx, "general")
@@ -224,9 +224,9 @@ async function cmdServe(args: Args): Promise<number> {
   const port = Number(flagStr(args, "port") ?? config.port);
   assertBindAllowed(config, host);
 
-  // Wake (budzenie nieobecnych agentow webhookiem) i sprzatanie wygaslych plikow
-  // zyja wylacznie w procesie serwera - komendy administracyjne CLI nie maja
-  // prawa strzelac webhookami w cudzym imieniu.
+  // Wake (waking absent agents by webhook) and cleaning up expired files live only in the
+  // server process - administrative CLI commands have no business firing webhooks on
+  // somebody else's behalf.
   registerWake(ctx, undefined, config.allowLoopbackWake);
   const sweep = setInterval(() => {
     try {
@@ -237,8 +237,8 @@ async function cmdServe(args: Args): Promise<number> {
   }, 60_000);
   sweep.unref();
 
-  // Lustro NEWS.md na wiki: tresc, ktora do tej pory zylo raz (dostarczona przy
-  // pierwszym kontakcie), dostaje adres, wyszukiwarke i historie wersji.
+  // The NEWS.md mirror on the wiki: content that until now lived once (delivered on first
+  // contact) gets an address, a search index and a version history.
   try {
     publishNewsToWiki(ctx);
   } catch (err) {
@@ -249,7 +249,7 @@ async function cmdServe(args: Args): Promise<number> {
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
   process.stdout.write(`AgentTalks ${VERSION} nasluchuje na http://${host}:${port}\n`);
 
-  // Zamkniecie na sygnal, zeby kontener nie musial czekac na SIGKILL.
+  // Shut down on a signal, so the container does not have to wait for SIGKILL.
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     process.on(sig, () => {
       process.stdout.write(`\n${sig}: zamykam\n`);
@@ -257,7 +257,7 @@ async function cmdServe(args: Args): Promise<number> {
       server.close(() => process.exit(0));
     });
   }
-  return await new Promise<number>(() => {}); // dziala do sygnalu
+  return await new Promise<number>(() => {}); // runs until a signal
 }
 
 function cmdActorRename(rest: string[], args: Args): number {
@@ -301,9 +301,9 @@ function cmdActor(rest: string[], args: Args): number {
     process.stderr.write("--kind musi byc 'human' albo 'agent'\n");
     return 1;
   }
-  // Walidacja hasla PRZED jakimkolwiek zapisem i calosc w jednej transakcji:
-  // blad w polowie nie moze zostawic konta-wydmuszki, ktorego nie da sie
-  // naprawic ("handle zajety" przy kazdej kolejnej probie).
+  // Password validation BEFORE any write, and the whole thing in one transaction: an error
+  // halfway through must not leave a husk of an account that cannot be repaired ("handle
+  // taken" on every further attempt).
   const password = flagStr(args, "password");
   if (password !== undefined) assertPasswordOk(password);
   const actor = tx(ctx.db, () => {
@@ -313,9 +313,9 @@ function cmdActor(rest: string[], args: Args): number {
       displayName: flagStr(args, "name"),
       isAdmin: args.flags.admin === true,
     });
-    // Nowy uczestnik laduje w #general od razu. Konto zalozone i "nic nie widze"
-    // to zla pierwsza minuta z narzedziem; kazdy inny kanal wymaga swiadomego
-    // dolaczenia.
+    // A new participant lands in #general straight away. An account created and "I cannot
+    // see anything" is a bad first minute with a tool; every other channel requires a
+    // deliberate join.
     const general = getBySlug(ctx, "general");
     if (general) joinConversation(ctx, general.id, created.id);
     if (password) setPassword(ctx, created.id, password);
@@ -344,10 +344,10 @@ function cmdToken(rest: string[], args: Args): number {
       return 1;
     }
     const ttl = flagStr(args, "ttl");
-    // Krotki token dla agenta wraca do nas jako koszt, nie jako bezpieczenstwo:
-    // wygasly token nie da sie odnowic samodzielnie, wiec agent wykupuje NOWE
-    // zaproszenie i na kanale przybywa kolejny aktor tej samej osoby. Dlatego
-    // ponizej MIN_AGENT_TTL_SEC trzeba powiedziec to wprost (--short).
+    // A short token for an agent comes back to us as a cost, not as security: an expired
+    // token cannot be renewed by the agent itself, so the agent redeems a NEW invite and the
+    // channel gains another actor for the same person. That is why anything below
+    // MIN_AGENT_TTL_SEC has to be said out loud (--short).
     if (ttl && Number(ttl) > 0 && Number(ttl) < MIN_AGENT_TTL_SEC && args.flags.short !== true) {
       process.stderr.write(
         `--ttl ${ttl} s to mniej niz ${MIN_AGENT_TTL_SEC} s (3 miesiace), a tyle wynosi minimum ` +
@@ -360,8 +360,8 @@ function cmdToken(rest: string[], args: Args): number {
       ctx, actor.id, flagStr(args, "name") ?? "bez nazwy",
       ttl ? Number(ttl) : null,
     );
-    // Widoczny raz. W bazie lezy tylko sha256, wiec nikt (lacznie z adminem)
-    // nie odczyta go pozniej.
+    // Visible once. Only the sha256 is in the database, so nobody (the admin included) can
+    // read it later.
     process.stdout.write(`${token}\n`);
     const expiryNote = info.expiresAt
       ? ` (wygasa za ${ttl} s)`
@@ -390,8 +390,8 @@ function cmdToken(rest: string[], args: Args): number {
     const exists = Number.isFinite(tokenId)
       && ctx.db.prepare("SELECT 1 FROM tokens WHERE id = ?").get(tokenId);
     if (!exists) {
-      // "Odwolany" dla tokenu, ktorego nie ma, to falszywe poczucie bezpieczenstwa
-      // dokladnie w chwili, gdy ktos rotuje wyciekniety token.
+      // "Revoked" for a token that does not exist is a false sense of security at exactly the
+      // moment somebody is rotating a leaked token.
       process.stderr.write(`nie ma tokenu o id ${id} (sprawdz: token list --actor <handle>)\n`);
       return 1;
     }
@@ -440,8 +440,8 @@ function cmdInvite(rest: string[], args: Args): number {
     return 0;
   }
   if (sub === "revoke" && id) {
-    // Potwierdz sukces tylko, gdy naprawde odwolano istniejacy kod - inaczej
-    // literowka w id daje falszywe "odwolane", a wynikniety kod dalej dziala.
+    // Confirm success only when an existing code really was revoked - otherwise a typo in an
+    // id yields a false "revoked" while the leaked code keeps working.
     if (!revokeInvite(ctx, Number(id))) {
       process.stderr.write(`nie ma aktywnego zaproszenia o id ${id}\n`);
       return 1;
@@ -471,8 +471,8 @@ function cmdImport(rest: string[], args: Args): number {
       `  znaczniki     ${r.reads}\n` +
       `  pominiete     ${r.skipped}\n`,
   );
-  // Pominiete rekordy sa WYPISYWANE, a nie tylko policzone. Cicho pominieta
-  // wiadomosc byla konkretna wada prototypu i nie ma jej odtwarzac importer.
+  // Skipped records are PRINTED, not merely counted. A silently skipped message was a
+  // concrete flaw of the prototype and the importer is not to reproduce it.
   for (const p of r.problems.slice(0, 20)) process.stdout.write(`    - ${p}\n`);
   if (r.problems.length > 20) {
     process.stdout.write(`    ... i ${r.problems.length - 20} wiecej\n`);
@@ -488,12 +488,12 @@ function cmdClone(rest: string[], args: Args): number {
   }
   const { ctx, config } = openCtx(args);
   const destConfig = initData(dest);
-  // VACUUM INTO robi SPOJNA kopie takze przy dzialajacym serwerze (WAL) -
-  // zwykle `cp` w trakcie zapisu potrafi zabrac baze z polowy transakcji.
-  // Kopia dostaje WLASNY sekret (initData) - cookie produkcyjne nie moga
-  // dzialac na instancji testowej.
-  // VACUUM INTO wymaga NIEISTNIEJACEGO pliku docelowego; usuwamy tez -wal/-shm,
-  // bo zostawione obok swiezej kopii naleza do starej bazy i psuja spojnosc.
+  // VACUUM INTO makes a CONSISTENT copy even with the server running (WAL) - an ordinary
+  // `cp` during a write can take the database from the middle of a transaction.
+  // The copy gets its OWN secret (initData) - production cookies must not work on a test
+  // instance.
+  // VACUUM INTO requires a target file that does NOT exist; we also remove -wal/-shm,
+  // because left next to a fresh copy they belong to the old database and break consistency.
   for (const suffix of ["", "-wal", "-shm"]) {
     if (existsSync(destConfig.dbPath + suffix)) rmSync(destConfig.dbPath + suffix);
   }
@@ -519,8 +519,8 @@ function cmdBackup(rest: string[], args: Args): number {
   const dest = joinPath(resolvePath(destRoot), `agenttalks-${stamp}`);
   mkdirSync(dest, { recursive: true });
   const dbCopy = joinPath(dest, "agenttalks.sqlite");
-  // VACUUM INTO daje SPOJNA kopie takze przy zywym serwerze (WAL) - zwykle cp
-  // potrafi zabrac baze z polowy transakcji. Wymaga nieistniejacego celu.
+  // VACUUM INTO gives a CONSISTENT copy even with a live server (WAL) - an ordinary cp can
+  // take the database from the middle of a transaction. It requires a non-existent target.
   if (existsSync(dbCopy)) rmSync(dbCopy);
   ctx.db.prepare("VACUUM INTO ?").run(dbCopy);
   let filesNote = "  plikow: katalog pusty albo nieobecny\n";
@@ -575,8 +575,8 @@ WantedBy=default.target
 }
 
 async function cmdHealthcheck(args: Args): Promise<number> {
-  // Port, w kolejnosci pewnosci: jawny --url, srodowisko (kontener ustawia
-  // AGENTTALKS_PORT), konfiguracja instancji, dopiero na koncu domyslny.
+  // The port, in order of certainty: an explicit --url, the environment (the container sets
+  // AGENTTALKS_PORT), the instance configuration, and only then the default.
   let port = process.env.AGENTTALKS_PORT;
   if (!port) {
     try {

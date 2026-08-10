@@ -1,20 +1,20 @@
 /**
- * atalk - klient AgentTalks dla agentow i ludzi w terminalu.
+ * atalk - the AgentTalks client for agents and humans in a terminal.
  *
- * Mowi WYLACZNIE po HTTP do demona; nie dotyka zadnych plikow danych. To jest
- * roznica architektoniczna wobec prototypowego `talk`, ktory czytal i pisal
- * ~/.talk bezposrednio - i przez to dzialal tylko na jednej maszynie i tylko
- * na Linuksie (tozsamosc z /proc).
+ * It speaks ONLY over HTTP to the daemon; it touches no data files at all. That is the
+ * architectural difference from the `talk` prototype, which read and wrote ~/.talk
+ * directly - and therefore worked on one machine only, and only on Linux (identity
+ * from /proc).
  *
- * Tozsamosc: token aktora. Zadnego zgadywania z PID-ow.
- * Konfiguracja, w kolejnosci: flagi --url/--token, zmienne AGENTTALKS_URL /
- * AGENTTALKS_TOKEN, plik .agenttalks.json szukany od cwd W GORE (tozsamosc
- * per katalog projektu; `atalk login|enroll --local`), na koncu globalny
- * ~/.config/agenttalks/atalk.json (0600, `atalk login`).
+ * Identity: an actor token. No guessing from PIDs.
+ * Configuration, in order: the --url/--token flags, the AGENTTALKS_URL /
+ * AGENTTALKS_TOKEN variables, an .agenttalks.json file looked up from cwd UPWARDS
+ * (identity per project directory; `atalk login|enroll --local`), and finally the
+ * global ~/.config/agenttalks/atalk.json (0600, `atalk login`).
  *
- * Kursor `atalk read` jest lokalny (per serwer+aktor) - dokladnie jak kursor
- * sesji w prototypie: "read" dostarcza nowe, "log" przeglada bez ruszania
- * licznikow, "seen" zeruje liczniki konwersacji.
+ * The `atalk read` cursor is local (per server+actor) - exactly like the session cursor
+ * in the prototype: "read" delivers what is new, "log" browses without touching the
+ * counters, "seen" clears a conversation's counters.
  */
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
@@ -26,9 +26,9 @@ import { assertNodeVersion } from "../version.ts";
 
 const CONFIG_DIR = join(homedir(), ".config", "agenttalks");
 const CONFIG_FILE = join(CONFIG_DIR, "atalk.json");
-/** Tozsamosc per KATALOG PROJEKTU: plik szukany od cwd w gore (jak .git).
- *  Dzieki temu "ten katalog = ten agent": kazde wywolanie atalk/Claude Code
- *  z wnetrza projektu mowi tym samym aktorem, a rozne projekty - roznymi. */
+/** Identity per PROJECT DIRECTORY: the file is looked up from cwd upwards (like .git).
+ *  That makes "this directory = this agent": every atalk/Claude Code invocation from
+ *  inside the project speaks as the same actor, and different projects as different ones. */
 const LOCAL_CONFIG_NAME = ".agenttalks.json";
 
 type ClientConfig = { url: string; token: string };
@@ -55,28 +55,28 @@ type Args = ReturnType<typeof parseArgs>;
 const flagStr = (args: Args, name: string): string | undefined =>
   typeof args.flags[name] === "string" ? (args.flags[name] as string) : undefined;
 
-/** Sekret (token/kod zaproszenia) z flagi, ze specjalna wartoscia "-" = czytaj ze
- *  stdin. `--token <atk_...>` w argv jest widoczne w `ps aux` i w historii powloki
- *  na kazdym hoscie wielouzytkownikowym - "atalk login --token -" (np.
- *  `pbpaste | atalk login --token -`) tego unika (audyt #6). Flaga z jawna
- *  wartoscia ZOSTAJE dziala dalej dla istniejacych skryptow. */
+/** A secret (token / invite code) from a flag, with the special value "-" = read from
+ *  stdin. `--token <atk_...>` in argv is visible in `ps aux` and in the shell history on
+ *  every multi-user host - "atalk login --token -" (for instance
+ *  `pbpaste | atalk login --token -`) avoids that (audit #6). A flag with an explicit
+ *  value KEEPS working for existing scripts. */
 function readSecretFlag(args: Args, name: string): string | undefined {
   const v = flagStr(args, name);
   if (v !== "-") return v;
   return readFileSync(0, "utf8").trim();
 }
 
-/** Zapisuje konfiguracje z tokenem, pilnujac praw 0600. `mode` w writeFileSync
- *  dziala tylko przy TWORZENIU pliku - przy nadpisaniu istniejacego (np. 0644 po
- *  wczesniejszym recznym utworzeniu) uprawnienia by sie nie zmienily, a w pliku
- *  siedzi dlugozyciowy token. Dlatego jawny chmod po zapisie; katalog 0700. */
+/** Writes the configuration with the token, keeping mode 0600. `mode` in writeFileSync
+ *  applies only when CREATING the file - on overwriting an existing one (say 0644 after
+ *  it was created by hand earlier) the permissions would not change, and a long-lived
+ *  token sits in that file. Hence the explicit chmod after the write; the directory 0700. */
 function saveClientConfig(cfg: ClientConfig, local = false): string {
   if (local) {
     const path = join(process.cwd(), LOCAL_CONFIG_NAME);
     writeFileSync(path, JSON.stringify(cfg, null, 2), { mode: 0o600 });
     try { chmodSync(path, 0o600); } catch { /* np. Windows - best effort */ }
-    // Token NIE moze trafic do repo. Jesli to git, dopisujemy ignore od razu -
-    // "mial byc w .gitignore" po wycieku to zadna pociecha.
+    // The token must NOT reach a repository. If this is git, we append the ignore straight
+    // away - "it was supposed to be in .gitignore" is no consolation after a leak.
     if (existsSync(join(process.cwd(), ".git"))) {
       const gi = join(process.cwd(), ".gitignore");
       const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
@@ -94,9 +94,9 @@ function saveClientConfig(cfg: ClientConfig, local = false): string {
 }
 
 function loadClientConfig(args: Args): ClientConfig {
-  // Kolejnosc: flaga > srodowisko > plik projektu (cwd w gore) > plik globalny.
-  // Plik projektu wygrywa z globalnym, zeby "ten katalog = ten agent" dzialalo
-  // takze, gdy user ma tez tozsamosc ogolna.
+  // Order: flag > environment > project file (cwd upwards) > global file.
+  // The project file beats the global one so that "this directory = this agent" also works
+  // when the user has a general identity as well.
   let stored: Partial<ClientConfig> = {};
   for (const path of [findLocalConfig(), CONFIG_FILE]) {
     if (!path || !existsSync(path)) continue;
@@ -104,16 +104,16 @@ function loadClientConfig(args: Args): ClientConfig {
       stored = JSON.parse(readFileSync(path, "utf8")) as Partial<ClientConfig>;
       break;
     } catch {
-      // uszkodzony plik konfiguracyjny nie moze blokowac kolejnych zrodel
+      // a corrupted configuration file must not block the remaining sources
     }
   }
-  // ATALKS_* jako druga nazwa tych samych zmiennych, bo tego uczy skill: kaze
-  // `export ATALKS_TOKEN` i `export ATALKS_URL` (uzywa ich we wlasnych przykladach
-  // curl), a zaraz potem pokazuje `atalk status`. Agent, ktory wykonal jedno i
-  // drugie, dostawal "brak tokenu" TUZ PO ustawieniu tokenu i nie mial z czego
-  // wywnioskowac, ze chodzi o inna nazwe tej samej rzeczy. Skill jest kopiowany
-  // na dyski, wiec kopie ucza tych nazw takze po poprawieniu zrodla; kanoniczne
-  // zostaje AGENTTALKS_*, spojne z konfiguracja serwera.
+  // ATALKS_* as a second name for the same variables, because that is what the skill
+  // teaches: it tells you to `export ATALKS_TOKEN` and `export ATALKS_URL` (it uses them
+  // in its own curl examples) and then immediately shows `atalk status`. An agent that did
+  // both got "no token" RIGHT AFTER setting the token, with nothing to deduce that this is
+  // a different name for the same thing. The skill is copied onto disks, so copies keep
+  // teaching those names even after the source is fixed; the canonical form stays
+  // AGENTTALKS_*, consistent with the server configuration.
   const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? process.env.ATALKS_URL
     ?? stored.url ?? "http://127.0.0.1:8787";
   const token = flagStr(args, "token") ?? process.env.AGENTTALKS_TOKEN
@@ -127,8 +127,8 @@ function loadClientConfig(args: Args): ClientConfig {
   return { url: url.replace(/\/+$/, ""), token };
 }
 
-/** Identyfikator sesji: jawny > srodowisko Claude Code > stabilny dla tej
- *  kombinacji host+pid rodzica (fallback dla recznych uruchomien). */
+/** Session identifier: explicit > the Claude Code environment > stable for this
+ *  host+parent-pid combination (a fallback for manual runs). */
 function sessionId(args: Args): string {
   return (
     flagStr(args, "session")
@@ -138,11 +138,11 @@ function sessionId(args: Args): string {
   );
 }
 
-// ---- klient HTTP ----------------------------------------------------------
+// ---- HTTP client ----------------------------------------------------------
 
 class Api {
-  // Zwykle pole, nie "parameter property": Node uruchamia TypeScript w trybie
-  // strip-only i skladnia generujaca kod (constructor(private x)) nie przechodzi.
+  // An ordinary field, not a "parameter property": Node runs TypeScript in strip-only mode
+  // and syntax that generates code (constructor(private x)) does not pass.
   #cfg: ClientConfig;
 
   constructor(cfg: ClientConfig) {
@@ -174,10 +174,10 @@ class Api {
     }
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      // 409 jest odpowiedzia negocjacyjna TYLKO dla dzierzaw (allow409). Bez tego
-      // `atalk channel #istniejacy` dostawal 409 "kanal istnieje", call go nie
-      // rzucal, a handler czytal undefined.conversation -> TypeError zamiast
-      // komunikatu serwera.
+      // 409 is a negotiation answer ONLY for leases (allow409). Without that,
+      // `atalk channel #existing` got a 409 "channel exists", call did not throw it,
+      // and the handler read undefined.conversation -> a TypeError instead of the
+      // server's message.
       if (res.status === 409 && opts.allow409) return { ...data, _status: 409 };
       throw new Error(String(data.error ?? `HTTP ${res.status}`));
     }
@@ -211,7 +211,7 @@ class Api {
     return Buffer.from(await res.arrayBuffer());
   }
 
-  /** Strumien SSE jako async iterator zdarzen. */
+  /** The SSE stream as an async iterator of events. */
   async *events(after?: number): AsyncGenerator<Record<string, unknown>> {
     const suffix = after !== undefined ? `?after=${after}` : "";
     const res = await fetch(`${this.#cfg.url}/api/events${suffix}`, {
@@ -236,7 +236,7 @@ class Api {
   }
 }
 
-/** Zasady serwowane przez /api/me przy PIERWSZYM polaczeniu - wypisz je z promptem. */
+/** The guidelines served by /api/me on the FIRST connection - print them with a prompt. */
 function maybePrintGuidelines(me: Record<string, unknown>, out: (s: string) => void): void {
   const g = me.guidelines as { prompt: string; text: string } | undefined;
   if (!g) return;
@@ -247,10 +247,10 @@ function maybePrintGuidelines(me: Record<string, unknown>, out: (s: string) => v
   out("=== koniec zasad ===\n");
 }
 
-// ---- lokalny kursor -------------------------------------------------------
+// ---- the local cursor -----------------------------------------------------
 
-/** Kursor kluczowany po serwerze i AKTORZE (handle), nie po tokenie: rotacja
- *  tokenu nie moze cofac kursora do zera i powtarzac calej historii. */
+/** The cursor is keyed by server and ACTOR (handle), not by token: rotating a token
+ *  must not rewind the cursor to zero and repeat the whole history. */
 function cursorFile(cfg: ClientConfig, handle: string): string {
   const key = createHash("sha256").update(`${cfg.url}|${handle}`).digest("hex").slice(0, 16);
   return join(CONFIG_DIR, `cursor-${key}`);
@@ -294,7 +294,7 @@ function fmtMsg(m: Msg, who: Map<number, string>, conv: Map<number, string>): st
   return `  [${m.id}] ${hhmm(m.ts)} ${where} <${author}>${tag}: ${m.body}`;
 }
 
-/** Mapy id->nazwa do renderowania. Dwa zapytania na wywolanie - CLI zyje krotko. */
+/** id->name maps for rendering. Two queries per invocation - the CLI is short-lived. */
 async function nameMaps(api: Api): Promise<{ who: Map<number, string>; conv: Map<number, string> }> {
   const actors = await api.call("GET", "/api/actors");
   const convs = await api.call("GET", "/api/conversations");
@@ -307,7 +307,7 @@ async function nameMaps(api: Api): Promise<{ who: Map<number, string>; conv: Map
   return { who, conv };
 }
 
-/** '#kanal' / '@handle' / '@a,@b' / id -> id konwersacji (dm/grupa zakladana w locie). */
+/** '#channel' / '@handle' / '@a,@b' / id -> a conversation id (a dm/group is created on the fly). */
 async function resolveConv(api: Api, ref: string): Promise<number> {
   const raw = ref.trim();
   if (/^\d+$/.test(raw)) return Number(raw);
@@ -410,14 +410,14 @@ const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
     atalk wiki files <slug>                        zalaczniki strony
 `;
 
-// Wszystkie flagi, ktore atalk rozumie. Dzieki temu `--coverage`, `--foo` itp.
-// w tresci wiadomosci zostaja tekstem, a nie znikaja jako nieznana flaga.
-// Flagi, ktore POBIERAJA wartosc i schodza z listy pozycyjnych. Wszystko spoza
-// tej listy zostaje TRESCIA - dzieki temu `atalk say "testy padly na --coverage"`
-// nie gubi dwoch slow. Cena jest taka, ze flaga zapomniana tutaj dziala odwrotnie
-// niz wyglada: `--force` przy `wiki write` ladowal w tresci strony, a zapis szedl
-// bez wymuszenia. Dlatego test cli/atalk.test.ts pilnuje, zeby kazda flaga uzyta
-// w kodzie byla tu wymieniona.
+// Every flag atalk understands. Thanks to this, `--coverage`, `--foo` and so on inside
+// the body of a message stay text instead of vanishing as an unknown flag.
+// Flags that TAKE a value and drop off the positional list. Everything outside this list
+// stays CONTENT - which is why `atalk say "the tests failed on --coverage"` does not lose
+// two words. The price is that a flag forgotten here behaves the opposite of how it looks:
+// `--force` on `wiki write` landed in the page body while the save went through without
+// forcing. That is why the test in cli/atalk.test.ts checks that every flag used in the
+// code is listed here.
 const KNOWN_FLAGS = new Set([
   "url", "token", "session", "wait", "to", "sensitive", "burn", "ttl", "note",
   "private", "topic", "after", "since-ts", "until-ts", "kind", "data", "name",
@@ -468,9 +468,9 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
     }
     if (cmd === "login") {
       const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? "http://127.0.0.1:8787";
-      // --token -: czyta ze stdin; brak flagi w ogole spada na AGENTTALKS_TOKEN -
-      // dwie alternatywy dla jawnej wartosci w argv, widocznej w `ps` i w historii
-      // powloki (audyt #6). Jawna wartosc dalej dziala (istniejace skrypty).
+      // --token -: reads from stdin; no flag at all falls through to AGENTTALKS_TOKEN -
+      // two alternatives to an explicit value in argv, which is visible in `ps` and in the
+      // shell history (audit #6). An explicit value still works (existing scripts).
       const token = readSecretFlag(args, "token") ?? process.env.AGENTTALKS_TOKEN;
       if (!token) {
         process.stderr.write(
@@ -482,10 +482,10 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
         return 1;
       }
       const base = url.replace(/\/+$/, "");
-      // Kolejnosc jest CELOWA: literowka w tokenie nie moze nadpisac dzialajacej,
-      // NIEODTWARZALNEJ konfiguracji (audyt #4 - w bazie lezy tylko sha256 tokenu,
-      // wiec stary token nie da sie odzyskac). Najpierw sprawdzamy token na
-      // serwerze, plik zapisujemy dopiero PO sukcesie.
+      // The order is DELIBERATE: a typo in a token must not overwrite a working,
+      // IRRECOVERABLE configuration (audit #4 - the database holds only the sha256 of a
+      // token, so an old token cannot be recovered). We check the token against the
+      // server first and write the file only AFTER it succeeds.
       const api = new Api({ url: base, token });
       let me: Record<string, unknown>;
       try {
@@ -582,8 +582,8 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const { who, conv } = await nameMaps(api);
       out(`${messages.length} nowych:`);
       for (const m of messages) out(fmtMsg(m, who, conv));
-      // Kursor PO wydruku: gdyby render rzucil, nastepne `read` pokaze to samo,
-      // a nie przeskoczy nieprzeczytane.
+      // The cursor moves AFTER printing: if rendering threw, the next `read` shows the same
+      // thing instead of skipping past unread messages.
       writeCursor(cfg, handle, messages[messages.length - 1].id);
       return 0;
     }
@@ -601,9 +601,9 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const { who, conv } = await nameMaps(api);
       if (messages.length === 0) out("Pusto.");
       for (const m of messages) out(fmtMsg(m, who, conv));
-      // Oznacz przeczytane TYLKO do faktycznie pokazanej wiadomosci - pusty POST
-      // /read siega po domyslny znacznik serwera (ten sam blad co talk_log w MCP,
-      // audyt #2/#10). Jawny messageId nie cofa znacznika (markRead bierze MAX).
+      // Mark as read ONLY up to the message actually shown - an empty POST /read reaches
+      // for the server's default marker (the same bug as talk_log in MCP, audit #2/#10).
+      // An explicit messageId does not rewind the marker (markRead takes the MAX).
       if (messages.length) {
         await api.call("POST", `/api/conversations/${id}/read`, {
           messageId: messages[messages.length - 1].id,
@@ -701,11 +701,11 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "follow": {
       const { who, conv } = await nameMaps(api);
       const afterRaw = flagStr(args, "after");
-      // NaN z niecyfrowego --after serwer bierze jak 0 i wypisuje cala historie.
+      // A NaN from a non-numeric --after is taken by the server as 0 and prints the whole history.
       let cursor: number | undefined =
         afterRaw !== undefined && /^\d+$/.test(afterRaw) ? Number(afterRaw) : undefined;
       out("strumien na zywo (Ctrl+C konczy)...");
-      // Reconnect: SSE bywa zrywane przez proxy; wznawiamy od ostatniego id.
+      // Reconnect: SSE is sometimes cut by a proxy; we resume from the last id.
       for (;;) {
         try {
           for await (const ev of api.events(cursor)) {
@@ -776,7 +776,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
           process.stderr.write("uzycie: atalk thread <id-wiadomosci> <tekst>\n");
           return 1;
         }
-        // konwersacja wynika z wiadomosci-korzenia
+        // the conversation follows from the root message
         const t = await api.call("GET", `/api/messages/${threadId}/thread`);
         ref = String((t.messages as Msg[])[0].conversationId);
       } else {
@@ -790,10 +790,10 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const id = await resolveConv(api, ref);
       const r = await api.call("POST", `/api/conversations/${id}/messages`, {
         body, threadId, sessionId: sessionId(args),
-        // Idempotencja: retry z tym samym --msg-id oddaje istniejaca wiadomosc
-        // zamiast dublowac ja (postMessage ma pelna dedup po clientMsgId).
-        // undefined znika przy JSON.stringify, wiec brak flagi = brak zmiany
-        // zachowania (audyt #9).
+        // Idempotency: a retry with the same --msg-id returns the existing message instead
+        // of duplicating it (postMessage has full dedup by clientMsgId).
+        // undefined disappears in JSON.stringify, so no flag = no change in behaviour
+        // (audit #9).
         clientMsgId: flagStr(args, "msg-id"),
       });
       const m = r.message as { id: number };
@@ -987,8 +987,8 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "typing":
     case "busy": {
       await api.call("POST", "/api/sessions", { sessionId: sessionId(args) });
-      // atalk typing [#kanal|@handle|wiki:slug] [--stop] - kuleczka "pisze"
-      // przy wlasciwym miejscu; --stop gasi ja od razu (rezygnacja).
+      // atalk typing [#channel|@handle|wiki:slug] [--stop] - the "typing" bubble at the
+      // right place; --stop clears it immediately (changed your mind).
       const where = cmd === "typing" ? rest[0] : undefined;
       const typingIn = !where ? undefined
         : where.startsWith("wiki:") ? `w:${where.slice(5)}`
@@ -1164,12 +1164,12 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       const slugIdx = rrest.findIndex((a) => !a.startsWith("-"));
       if (slugIdx === -1) { process.stderr.write("uzycie: atalk wiki write <slug> --title \"...\" [--file plik | --stdin | tekst]\n"); return 1; }
       const slug = rrest[slugIdx];
-      // Tresc budujemy z POZYCJI po slugu, nie z filter(a => a !== slug) - ten
-      // drugi usuwal KAZDE wystapienie slugu jako slowa, wiec tresc zawierajaca
-      // slug jako zwykle slowo tracila je po cichu. Kazdy nieznany token z '-' po
-      // slugu to najpewniej ZAPOMNIANA FLAGA (np. --force/--base nieujete w
-      // KNOWN_FLAGS), nie tresc strony - inaczej lduje po cichu W TRESCI strony
-      // i zostaje tam trwale w historii rewizji (audyt #3).
+      // We build the body from the POSITION after the slug, not from filter(a => a !== slug) -
+      // the latter removed EVERY occurrence of the slug as a word, so a body containing the
+      // slug as an ordinary word lost it silently. Any unknown token starting with '-' after
+      // the slug is most likely a FORGOTTEN FLAG (say --force/--base missing from KNOWN_FLAGS),
+      // not page content - otherwise it lands silently IN THE BODY of the page and stays there
+      // permanently in the revision history (audit #3).
       const afterSlug = rrest.slice(slugIdx + 1);
       const strayFlag = afterSlug.find((a) => a.startsWith("-"));
       if (strayFlag) {
@@ -1183,9 +1183,9 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       if (args.flags.stdin === true) text = readFileSync(0, "utf8");
       else if (file) text = readFileSync(file, "utf8");
       else text = afterSlug.join(" ");
-      // Celowo NIE pobieramy strony przed zapisem: to serwer ma sprawdzic, czy
-      // wiesz, co nadpisujesz, a automatyczny odczyt "w tle" tylko obszedlby
-      // straz - przeczytalby za Ciebie klient, nie Ty.
+      // We deliberately do NOT fetch the page before saving: it is the server's job to check
+      // whether you know what you are overwriting, and an automatic read "in the background"
+      // would only sidestep the guard - the client would have read it for you, not you.
       const base = flagStr(args, "base");
       const r = await api.call("PUT", `/api/wiki/${enc(slug)}`, {
         title: flagStr(args, "title") ?? slug,
@@ -1199,8 +1199,8 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     case "revision": {
-      // Tresc starej rewizji - to jest odpowiedz na "nadpisalem cudza strone,
-      // jak odzyskam to, co tam bylo": historia listuje, ta trasa oddaje tresc.
+      // The content of an old revision - this is the answer to "I overwrote somebody else's
+      // page, how do I get back what was there": history lists them, this route returns the body.
       if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki revision <slug> <id>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/revisions/${enc(rrest[1])}`);
       const rev = r.revision as { id: number; actor: string | null; title: string; body: string };
