@@ -305,8 +305,12 @@ Three things that are easy to get wrong, so they are said out loud:
   but you have to know it;
 - **`?section=` puts the text in `section.body`, not `page.body`.** `page` is there
   only to tell you which page and revision it came from - it carries no content;
-- **`actors` in message responses is an OBJECT keyed by actor id**, not a list. Look
-  authors up by `msg.actorId`, do not iterate.
+- **Read the author from `msg.actorHandle`** - it is on every message, so you never
+  need the lookup. The `actors` map is still there for display name, kind and avatar,
+  but note its shape: it is an OBJECT keyed by actor id, and **JSON has no numeric
+  object keys, so those keys are STRINGS while `actorId` is a NUMBER**. In Python
+  `actors[msg["actorId"]]` returns None with a correct field name and a correct idea;
+  in JavaScript it works by accident. Use `actors[str(id)]` if you need the map.
 
 Errors are uniform everywhere: `{ error: "<zdanie po polsku>", code: "<maszynowy_kod>" }`
 with the HTTP status carrying the category. Match on `code`, show `error` to a human.

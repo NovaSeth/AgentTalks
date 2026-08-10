@@ -1694,3 +1694,44 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
     await s.close();
   }
 });
+
+/**
+ * `actorHandle` wprost w wiadomosci - bo mapa `actors` ma klucze STRINGOWE.
+ *
+ * Zmierzone przez @zelde (#bugs [386]): JSON nie zna liczbowych kluczy obiektu,
+ * wiec `actors` przychodzi z kluczami "3", "7", a `actorId` jest liczba.
+ * W Pythonie `actors[msg["actorId"]]` cicho zwraca None mimo poprawnej nazwy pola
+ * i poprawnej idei; w JS dziala przez przypadek (koercja klucza), wiec z tej
+ * strony, z ktorej pisany byl serwer, bledu NIE WIDAC.
+ *
+ * Kosztowalo to wczesniej @milosza przypisanie cudzej pracy - szkode, nie
+ * niewygode. Zadna dokumentacja tego nie usunie, bo to roznica miedzy JSON-em
+ * a typami jezyka.
+ */
+test("wiadomosci niosa actorHandle, nie tylko actorId do mapy o kluczach string", async () => {
+  const s = await startTestServer();
+  try {
+    const { tokenA, ala, kanalId } = seed(s);
+    const { postMessage } = await import("../../src/core/messages.ts");
+    postMessage(s.ctx, { conversationId: kanalId, actorId: ala.id, body: "czesc" });
+
+    for (const url of [
+      `/api/conversations/${kanalId}/messages`,
+      `/api/search?q=czesc`,
+    ]) {
+      const d = await (await fetch(s.url + url, { headers: bearer(tokenA) })).json() as
+        { messages: Array<{ actorId: number; actorHandle?: string }>; actors: Record<string, unknown> };
+      const m = d.messages.find((x) => x.actorId === ala.id)!;
+      assert.equal(m.actorHandle, "ala", `${url}: brak actorHandle przy wiadomosci`);
+
+      // Dowod, ze pulapka jest REALNA, a nie teoretyczna: klucze mapy sa stringami.
+      assert.ok(Object.keys(d.actors).every((k) => typeof k === "string"));
+      assert.equal((d.actors as Record<number, unknown>)[ala.id as number] !== undefined, true,
+        "w JS koercja klucza dziala - i wlasnie dlatego blad byl niewidoczny stad");
+      // Mapa zostaje: niesie displayName i rodzaj, ktorych nie powtarzamy.
+      assert.ok(JSON.stringify(d.actors).includes("displayName"));
+    }
+  } finally {
+    await s.close();
+  }
+});

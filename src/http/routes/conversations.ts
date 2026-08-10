@@ -24,7 +24,7 @@ import { markRead, unreadFor } from "../../core/unread.ts";
 import { actorLiveness } from "../../core/presence.ts";
 import { isWakeable } from "../../core/wake.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
-import { int, json, readJson, str } from "../respond.ts";
+import { int, json, readJson, str, zHandlem} from "../respond.ts";
 import type { Router } from "../router.ts";
 import type { Ctx } from "../../core/ctx.ts";
 
@@ -129,10 +129,11 @@ export function registerConversationRoutes(router: Router): void {
       before: int(rc.query.get("before") ?? undefined),
       limit: int(rc.query.get("limit") ?? undefined),
     });
+    const autorzy = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
     json(res, 200, {
-      messages,
+      messages: zHandlem(messages, autorzy),
       reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)),
-      actors: actorsByIds(rc.ctx, messages.map((m) => m.actorId)),
+      actors: autorzy,
     });
   });
 

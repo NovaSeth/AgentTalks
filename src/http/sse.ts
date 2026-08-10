@@ -83,6 +83,20 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
     if (!ok && res.writableLength > MAX_BUFFERED_BYTES) res.destroy();
   };
 
+  /**
+   * Dokleja `actorHandle` do zdarzen niosacych wiadomosc.
+   *
+   * Na strumieniu agent NIE dostaje mapy `actors` w ogole - musialby osobno
+   * pobrac roster i utrzymywac go aktualnym. To ta sama pulapka co w REST
+   * (#bugs [386]), tylko dotkliwsza, bo tam mapa przynajmniej jest w odpowiedzi.
+   */
+  const zAutorem = (event: Event): Event => {
+    if (event.type !== "message" && event.type !== "message_updated") return event;
+    const a = rc.ctx.db.prepare("SELECT handle FROM actors WHERE id = ?")
+      .get(event.message.actorId) as { handle: string } | undefined;
+    return { ...event, message: { ...event.message, actorHandle: a?.handle ?? "?" } };
+  };
+
   // Wznowienie po zerwaniu: klient podaje ostatnie widziane id wiadomosci, a my
   // dosylamy zaleglosci, zanim wpuscimy go na zywy strumien.
   //
@@ -106,7 +120,8 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
       if (res.destroyed || res.writableEnded) { cleanup(); return; }
       const batch = inboxAfter(rc.ctx, actor.id, cursor, RESUME_PAGE, { includeOwn: true });
       for (const message of batch) {
-        send({ type: "message", conversationId: message.conversationId, message }, message.id);
+        send(zAutorem({ type: "message", conversationId: message.conversationId, message }),
+             message.id);
       }
       if (batch.length < RESUME_PAGE) break;
       cursor = batch[batch.length - 1].id;
@@ -128,7 +143,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   res.write(": polaczono\n\n");
 
   unsubscribe = rc.ctx.bus.subscribe(actor.id, (event) => {
-    send(event, event.type === "message" ? event.message.id : undefined);
+    send(zAutorem(event), event.type === "message" ? event.message.id : undefined);
   });
 
   // Komentarz co 20 s. Bez niego proxy z timeoutem bezczynnosci zrywa polaczenie,

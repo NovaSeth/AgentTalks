@@ -14,7 +14,7 @@ import {
   type SessionKind,
 } from "../../core/presence.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
-import { int, json, readJson, str } from "../respond.ts";
+import { int, json, readJson, str, zHandlem} from "../respond.ts";
 import type { Router } from "../router.ts";
 
 export function registerMessageRoutes(router: Router): void {
@@ -72,10 +72,11 @@ export function registerMessageRoutes(router: Router): void {
       throw notFound("wiadomosc", `nie ma wiadomosci ${rc.params.id} (albo brak dostepu)`);
     }
     const messages = listThread(rc.ctx, root.threadId ?? root.id);
+    const autorzy = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
     json(res, 200, {
-      messages,
+      messages: zHandlem(messages, autorzy),
       reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)),
-      actors: actorsByIds(rc.ctx, messages.map((m) => m.actorId)),
+      actors: autorzy,
     });
   });
 
@@ -100,7 +101,8 @@ export function registerMessageRoutes(router: Router): void {
       sinceTs: int(rc.query.get("sinceTs") ?? undefined),
       untilTs: int(rc.query.get("untilTs") ?? undefined),
     });
-    json(res, 200, { messages, actors: actorsByIds(rc.ctx, messages.map((m) => m.actorId)) });
+    const autorzy = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
+    json(res, 200, { messages: zHandlem(messages, autorzy), actors: autorzy });
   });
 
   router.add("GET", "/api/presence", (_req, res, rc) => {

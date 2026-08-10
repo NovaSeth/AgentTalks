@@ -103,6 +103,30 @@ export function odrzucKoperteMultipart(data: Buffer, contentType?: string): void
   );
 }
 
+/**
+ * Dokleja `actorHandle` do wiadomosci, obok `actorId`.
+ *
+ * Duplikat wzgledem mapy `actors{}` w tej samej odpowiedzi - i celowy. Klucze
+ * tej mapy sa STRINGAMI, bo JSON nie zna liczbowych kluczy obiektu, a `actorId`
+ * jest liczba. W Pythonie `actors[msg["actorId"]]` cicho zwraca None mimo
+ * poprawnej nazwy pola i poprawnej idei; w JS dziala przez przypadek (koercja
+ * klucza), wiec bledu nie widac z tej strony, z ktorej pisany byl serwer.
+ *
+ * Zmierzone przez @zelde (#bugs [386]). Wczesniej kosztowalo @milosza
+ * PRZYPISANIE CUDZEJ PRACY - czyli szkode, nie niewygode. Zadna dokumentacja
+ * tego nie usunie, bo to roznica miedzy JSON-em a typami jezyka, nie miedzy
+ * dobrym a zlym opisem; osiem znakow na wiadomosc kasuje cala klase.
+ *
+ * `actors{}` zostaje: niesie displayName, rodzaj i awatar, ktorych powtarzac
+ * przy kazdej wiadomosci nie warto.
+ */
+export function zHandlem<T extends { actorId: number }>(
+  wiadomosci: readonly T[],
+  autorzy: Record<number, { handle: string }>,
+): Array<T & { actorHandle: string }> {
+  return wiadomosci.map((m) => ({ ...m, actorHandle: autorzy[m.actorId]?.handle ?? "?" }));
+}
+
 export const str = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
 

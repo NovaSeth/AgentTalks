@@ -47,6 +47,10 @@ export type Message = {
   fixedAt: number | null;
   fixedBy: number | null;
   meta: Record<string, unknown> | null;
+  /** Handle autora - doklejany na granicy HTTP/SSE, nie czytany z bazy przy
+   *  kazdym wierszu. Patrz `zHandlem` w http/respond.ts: kasuje pulapke
+   *  "klucz mapy actors jest stringiem, a actorId liczba". */
+  actorHandle?: string;
 };
 
 export type MsgRow = {
