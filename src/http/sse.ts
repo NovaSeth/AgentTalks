@@ -1,11 +1,11 @@
 /**
- * Push do klienta: SSE dla polaczen dlugo zyjacych, long-poll dla tych, ktore nie
- * chca trzymac strumienia.
- *
- * Prototyp pollowal `/talk/api/state?since=0` co 2,5 s i za kazdym razem dostawal
- * CALA historie (parametr `since` byl zaimplementowany na serwerze, ale klient zawsze
- * wysylal zero). Tutaj klient dostaje wylacznie to, co przyszlo po jego kursorze,
- * i tylko z konwersacji, ktorych jest czlonkiem.
+ * Push to the client: SSE for long-lived connections, long-poll for those that do not want
+ * to hold a stream.
+ * 
+ * The prototype polled `/talk/api/state?since=0` every 2.5 s and got the WHOLE history
+ * every time (the `since` parameter was implemented on the server, but the client always
+ * sent zero). Here a client receives only what arrived after its cursor, and only from the
+ * conversations it is a member of.
  */
 import type { Event } from "../core/events.ts";
 import { inboxAfter, updatedBefore } from "../core/messages.ts";
@@ -17,24 +17,24 @@ import type { Req, Res, RouteCtx } from "./router.ts";
 const PING_MS = 20_000;
 const MAX_WAIT_SEC = 300;
 const RESUME_PAGE = 200;
-// Okno odtwarzania edycji/kasowan przy wznowieniu. Kursor id nie niesie zmian
-// starych wiadomosci, wiec po zerwaniu dosylamy message_updated dla wszystkiego,
-// co zmienilo sie w tym oknie. Realne zerwania mierzy sie w minutach; 24 h to
-// zapas na laptop zamkniety na noc.
+// The replay window for edits/deletions on resumption. An id cursor carries no changes to
+// old messages, so after a break we send message_updated for everything that changed within
+// this window. Real disconnections are measured in minutes; 24 h is slack for a laptop shut
+// for the night.
 const RESUME_EDIT_WINDOW_SEC = 24 * 3600;
-// Limit rownoleglych strumieni per aktor: SSE trzyma zasoby po stronie serwera,
-// a klient w petli reconnect potrafi otworzyc setki polaczen w minute.
+// A limit on concurrent streams per actor: SSE holds resources on the server side, and a
+// client in a reconnect loop can open hundreds of connections in a minute.
 const MAX_STREAMS_PER_ACTOR = 8;
-// Prog odciecia zapchanego klienta: gdy bufor zapisu urosnie ponad to, klient
-// nie odbiera - dalsze pisanie tylko konsumuje pamiec serwera. Zerwanie jest
-// bezpieczne, bo klient wznowi sie od Last-Event-ID.
+// The cut-off threshold for a clogged client: when the write buffer grows beyond this, the
+// client is not receiving - writing further only consumes the server's memory. Dropping it
+// is safe, because the client resumes from Last-Event-ID.
 const MAX_BUFFERED_BYTES = 1024 * 1024;
 
 export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   const { actor } = requireAuth(rc);
-  // HEAD na trasie GET nie moze otwierac strumienia: klient nie odbiera ciala,
-  // wiec polaczenie wisialoby do timeoutu, trzymajac slot z limitu. Monitoring
-  // sondujacy HEAD-em ma dostac potwierdzenie i rozlaczenie.
+  // A HEAD on a GET route must not open a stream: the client does not receive the body, so
+  // the connection would hang until a timeout, holding a slot from the limit. Monitoring
+  // probing with HEAD should get a confirmation and a disconnect.
   if (req.method === "HEAD") {
     res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8" });
     res.end();
@@ -46,11 +46,11 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   }
   const releaseStream = rc.ctx.bus.openStream(actor.id);
 
-  // Sprzatanie rejestrujemy OD RAZU po zajeciu slotu, a nie na koncu funkcji.
-  // Powod jest konkretny: dosylka zaleglosci nizej ma dwa wyjscia przez `return`
-  // (gdy gniazdo padnie w trakcie), a kazde z nich omijalo rejestracje `cleanup`
-  // - slot zostawal zajety do restartu procesu i po osmiu takich zerwaniach
-  // aktor dostawal 429 na wlasny strumien, bez zadnego sposobu odzyskania go.
+  // We register the cleanup IMMEDIATELY after taking a slot, not at the end of the function.
+  // The reason is concrete: the backlog replay below has two exits through `return` (when the
+  // socket dies mid-way), and each of them skipped registering `cleanup` - the slot stayed
+  // taken until the process restarted, and after eight such breaks the actor got a 429 on
+  // its own stream with no way to recover it.
   let unsubscribe: (() => void) | null = null;
   let ping: ReturnType<typeof setInterval> | null = null;
   let posprzatane = false;
@@ -68,8 +68,8 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-cache, no-transform",
     connection: "keep-alive",
-    // Nginx buforuje text/event-stream domyslnie i zdarzenia dochodza paczkami
-    // albo wcale. To jest naglowek, ktory kaze mu tego nie robic.
+    // Nginx buffers text/event-stream by default and events arrive in batches, or not at all.
+    // This is the header that tells it not to.
     "x-accel-buffering": "no",
   });
 
@@ -78,17 +78,17 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
     if (id !== undefined) res.write(`id: ${id}\n`);
     res.write(`event: ${event.type}\n`);
     const ok = res.write(`data: ${JSON.stringify(event)}\n\n`);
-    // Backpressure: klient nie nadaza. Po przekroczeniu progu zrywamy - to nie
-    // kara, tylko przejscie na sciezke wznowienia, ktora i tak istnieje.
+    // Backpressure: the client is not keeping up. Past the threshold we drop it - that is not a
+    // punishment but a move onto the resumption path, which exists anyway.
     if (!ok && res.writableLength > MAX_BUFFERED_BYTES) res.destroy();
   };
 
   /**
-   * Dokleja `actorHandle` do zdarzen niosacych wiadomosc.
-   *
-   * Na strumieniu agent NIE dostaje mapy `actors` w ogole - musialby osobno
-   * pobrac roster i utrzymywac go aktualnym. To ta sama pulapka co w REST
-   * (#bugs [386]), tylko dotkliwsza, bo tam mapa przynajmniej jest w odpowiedzi.
+   * Attaches `actorHandle` to events carrying a message.
+   * 
+   * On the stream an agent gets NO `actors` map at all - it would have to fetch the roster
+   * separately and keep it current. That is the same trap as in REST (#bugs [386]), only
+   * more painful, because there the map is at least in the response.
    */
   const zAutorem = (event: Event): Event => {
     if (event.type !== "message" && event.type !== "message_updated") return event;
@@ -97,26 +97,25 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
     return { ...event, message: { ...event.message, actorHandle: a?.handle ?? "?" } };
   };
 
-  // Wznowienie po zerwaniu: klient podaje ostatnie widziane id wiadomosci, a my
-  // dosylamy zaleglosci, zanim wpuscimy go na zywy strumien.
-  //
-  // BRAK parametru i `after=0` to dwie rozne rzeczy: brak znaczy "interesuje mnie
-  // tylko to, co dopiero nadejdzie", a zero znaczy "nie widzialem jeszcze niczego,
-  // dosylaj od poczatku". Zwiniecie ich w jedno gubi cala historie przy pierwszym
-  // polaczeniu klienta, ktory dopiero buduje swoj kursor.
+  // Resumption after a break: the client supplies the last message id it saw, and we send the
+  // backlog before letting it onto the live stream.
+  // 
+  // NO parameter and `after=0` are two different things: absent means "I only care about what
+  // is yet to arrive", zero means "I have not seen anything, send from the beginning".
+  // Collapsing them into one loses the whole history on the first connection of a client that
+  // is only now building its cursor.
   const cursorRaw = req.headers["last-event-id"] ?? rc.query.get("after") ?? undefined;
   if (cursorRaw !== undefined && cursorRaw !== null && String(cursorRaw) !== "") {
     const lastSeen = Number(cursorRaw) || 0;
-    // Stronami az do wyczerpania: pojedyncza strona z limitem gubila bez sladu
-    // wszystko powyzej 200 zaleglych wiadomosci. Wlasne wiadomosci WCHODZA do
-    // dosylki (includeOwn) - zywy strumien je dostarcza, wiec wznowienie musi
-    // widziec to samo, inaczej drugie urzadzenie tego samego aktora traci
-    // wlasne wpisy z okresu zerwania.
+    // In pages until exhausted: a single page with a limit silently lost everything above 200
+    // backlogged messages. Our own messages DO enter the replay (includeOwn) - the live stream
+    // delivers them, so a resumption has to see the same, otherwise a second device of the same
+    // actor loses its own entries from the period of the break.
     let cursor = lastSeen;
     for (;;) {
-      // Backpressure moglo zerwac polaczenie w trakcie dosylki - nie ma sensu
-      // synchronicznie doczytywac calego backlogu dla martwego gniazda (node:sqlite
-      // jest jednowatkowe, wiec blokowaloby to event loop wszystkim pozostalym).
+      // Backpressure may have dropped the connection mid-replay - there is no sense in
+      // synchronously reading the whole backlog for a dead socket (node:sqlite is single-threaded,
+      // so it would block the event loop for everybody else).
       if (res.destroyed || res.writableEnded) { cleanup(); return; }
       const batch = inboxAfter(rc.ctx, actor.id, cursor, RESUME_PAGE, { includeOwn: true });
       for (const message of batch) {
@@ -126,8 +125,8 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
       if (batch.length < RESUME_PAGE) break;
       cursor = batch[batch.length - 1].id;
     }
-    // Edycje i kasowania sprzed kursora: kursor id ich nie obejmuje. Stronicowane
-    // tak samo jak inboxAfter - pojedyncza strona gubila zmiany powyzej limitu.
+    // Edits and deletions from before the cursor: an id cursor does not cover them. Paginated
+    // just like inboxAfter - a single page lost changes above the limit.
     let editCursor = 0;
     const since = rc.ctx.now() - RESUME_EDIT_WINDOW_SEC;
     for (;;) {
@@ -146,21 +145,20 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
     send(zAutorem(event), event.type === "message" ? event.message.id : undefined);
   });
 
-  // Komentarz co 20 s. Bez niego proxy z timeoutem bezczynnosci zrywa polaczenie,
-  // a klient nie wie, czy to cisza w kanale, czy awaria.
+  // A comment every 20 s. Without it a proxy with an idle timeout drops the connection, and
+  // the client cannot tell silence on the channel from a failure.
   //
-  // Ten sam takt SPRAWDZA PONOWNIE TOZSAMOSC. Bez tego uwierzytelnienie dzialo
-  // sie dokladnie raz - przy nawiazaniu polaczenia - wiec odwolanie tokenu albo
-  // wylaczenie konta nie mialo jak dosiegnac strumienia, ktory juz stoi: kolejne
-  // zadania HTTP dostawaly 401, a otwarty strumien dalej dostarczal kazda nowa
-  // wiadomosc ze wszystkich rozmow, az do restartu serwera. Odwolanie tokenu
-  // jest JEDYNA reakcja na wyciek, jaka ten produkt oferuje - musi domykac tez
-  // to, co juz plynie.
+  // The same beat RE-CHECKS THE IDENTITY. Without it, authentication happened exactly once -
+  // when the connection was established - so revoking a token or disabling an account had no
+  // way of reaching a stream that was already standing: further HTTP requests got a 401 while
+  // the open stream kept delivering every new message from every conversation, until the
+  // server restarted. Revoking a token is the ONLY response to a leak this product offers -
+  // it has to close what is already flowing as well.
   ping = setInterval(() => {
     if (res.writableEnded || res.destroyed) return;
     if (!authenticate(rc.ctx, rc.config, req)) {
-      // Bez ciala i bez zdarzenia: klient ma zobaczyc zerwanie i probowac
-      // wznowic, a wznowienie przejdzie przez pelne uwierzytelnienie i dostanie 401.
+      // No body and no event: the client is meant to see the break and try to resume, and the
+      // resumption goes through full authentication and gets a 401.
       cleanup();
       res.destroy();
       return;
@@ -171,11 +169,11 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
 }
 
 /**
- * GET /api/messages?after=<id>&wait=<sek>
+ * GET /api/messages?after=<id>&wait=<sec>
  *
- * Zwraca natychmiast, jesli cokolwiek zalega. Inaczej czeka do `wait` sekund na
- * pierwsza nowa wiadomosc. To jest sciezka dla CLI i dla agentow w petli - nie
- * potrzebuja klienta SSE, a i tak nie polluja na pusto.
+ * Returns immediately if anything is backlogged. Otherwise it waits up to `wait` seconds
+ * for the first new message. This is the path for the CLI and for agents in a loop - they
+ * need no SSE client and still do not poll for nothing.
  */
 export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void> {
   const { actor } = requireAuth(rc);
@@ -188,9 +186,9 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
     return Promise.resolve();
   }
 
-  // Long-poll trzyma po stronie serwera to samo, co SSE (subskrypcje, timer,
-  // gniazdo), tylko krocej - wiec obowiazuje go ten sam limit. Bez niego klient
-  // w petli omijal limit strumieni, przechodzac na long-poll.
+  // A long-poll holds the same things on the server side as SSE (subscriptions, a timer, a
+  // socket), only for less time - so the same limit applies to it. Without that, a client in
+  // a loop bypassed the stream limit by switching to long-poll.
   if (rc.ctx.bus.streamCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
     throw tooMany("za_duzo_strumieni",
       `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych oczekiwan - poczekaj na ich koniec`);
@@ -219,14 +217,14 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
     };
 
     const unsubscribe = rc.ctx.bus.subscribe(actor.id, (event) => {
-      // Tylko cudze wiadomosci: inboxAfter pomija wlasne, wiec obudzenie na
-      // wlasnej konczylo long-poll pusta lista i klient odpytywal od nowa.
+      // Other people's messages only: inboxAfter skips our own, so waking on our own ended the
+      // long-poll with an empty list and the client polled again.
       if (event.type === "message" && event.message.actorId !== actor.id) finish();
     });
     const timer = setTimeout(finish, wait * 1000);
     if (typeof timer.unref === "function") timer.unref();
-    // Klient, ktory sie rozlaczyl w trakcie czekania, nie moze zostawic
-    // subskrypcji i timera na zawsze.
+    // A client that disconnected while waiting must not leave a subscription and a timer behind
+    // forever.
     res.on("close", onClose);
   });
 }

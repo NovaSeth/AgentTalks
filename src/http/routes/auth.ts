@@ -1,4 +1,4 @@
-/** Logowanie ludzi i "kim jestem". Agenci nie loguja sie - maja token. */
+/** Login for humans and "who am I". Agents do not log in - they have a token. */
 import { createActor, listActors, verifyPassword } from "../../core/actors.ts";
 import { whoIsTyping } from "../../core/presence.ts";
 import { listForActor, myMemberships } from "../../core/conversations.ts";
@@ -26,13 +26,13 @@ import type { Config } from "../../config.ts";
 import type { Router } from "../router.ts";
 
 /**
- * rpId (domena) i dozwolone originy dla WebAuthn.
- *
- * Produkcja bierze je z AGENTTALKS_BASE_URL. Bez niego zrodlem jest naglowek
- * Host, ktory podaje KLIENT - a rpId decyduje o tym, dla jakiej domeny klucz
- * zostanie zapisany i przyjety. Dlatego droga "z Hosta" jest dozwolona TYLKO
- * lokalnie (dev): na wystawionej instancji brak baseUrl konczy sie jasnym
- * bledem konfiguracji zamiast cicha zgoda na cudza domene.
+ * The rpId (domain) and the permitted origins for WebAuthn.
+ * 
+ * In production they come from AGENTTALKS_BASE_URL. Without it the source is the Host
+ * header, which the CLIENT supplies - and the rpId decides for which domain a key is
+ * stored and accepted. That is why the "from Host" route is permitted ONLY locally (dev):
+ * on an exposed instance a missing baseUrl ends in a clear configuration error rather than
+ * in silent consent to somebody else's domain.
  */
 function webauthnParams(req: IncomingMessage, config: Config): { rpId: string; origins: string[] } {
   if (config.baseUrl) {
@@ -53,47 +53,46 @@ function webauthnParams(req: IncomingMessage, config: Config): { rpId: string; o
 }
 
 /**
- * Atrapy dla nieznanego konta. Endpoint opcji logowania odpowiadal pusta lista
- * dla nieistniejacego handle i niepusta dla istniejacego - czyli byl wyrocznia
- * "czy takie konto tu jest", mimo komentarza, ktory twierdzil, ze nia nie jest.
- * Deterministyczne atrapy (te same dla tego samego handle) sprawiaja, ze ksztalt
- * odpowiedzi nie zdradza niczego, a powtorne pytanie nie ujawnia losowosci.
+ * Decoys for an unknown account. The login-options endpoint answered with an empty list
+ * for a non-existent handle and a non-empty one for an existing handle - that is, it was
+ * an oracle for "does this account exist here", despite a comment claiming it was not.
+ * Deterministic decoys (the same for the same handle) mean the shape of the answer reveals
+ * nothing, and asking twice does not expose randomness.
  */
 function atrapaCredentials(secret: string, handle: string): string[] {
   const mac = createHmac("sha256", secret).update(`webauthn-atrapa:${handle.toLowerCase()}`).digest();
   return [mac.toString("base64url")];
 }
 
-// Rate limit logowania: scrypt jest drogi CELOWO (hasla), wiec bez limitu
-// endpoint logowania jest jednoczesnie wyrocznia hasel i generatorem obciazenia.
-// Okno w pamieci procesu wystarcza - limit ma powstrzymac zgadywanie, nie byc
-// ksiegowoscia; restart serwera zeruje okno i to jest akceptowalne.
+// A login rate limit: scrypt is expensive ON PURPOSE (passwords), so without a limit the
+// login endpoint is both a password oracle and a load generator. An in-process window is
+// enough - the limit exists to stop guessing, not to be bookkeeping; a server restart
+// clears the window and that is acceptable.
 const LOGIN_WINDOW_SEC = 900;
 const LOGIN_MAX_ATTEMPTS = 10;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
-/** Mapy limiterow rosna wraz z liczba roznych adresow zrodlowych i nic ich nie
- *  zmniejsza - przy skanie z tysiecy IP to wyciek pamieci procesu. Sprzatamy
- *  wygasle okna przy okazji, bez osobnego timera. */
+/** The limiter maps grow with the number of distinct source addresses and nothing shrinks
+/**  them - under a scan from thousands of IPs that is a memory leak in the process. We clean
+/**  up expired windows along the way, without a separate timer. */
 function sprzatniecieOkien(mapa: Map<string, { count: number; resetAt: number }>, now: number): void {
   if (mapa.size < 1000) return;
   for (const [k, v] of mapa) if (v.resetAt <= now) mapa.delete(k);
 }
 
 /**
- * Klucz limitera jest kluczowany TAKZE sekretem instancji. Powod jest prosty
- * i wyszedl w testach: mapy sa na poziomie modulu, wiec dwa serwery w jednym
- * procesie (a tak dzialaja testy) dziela liczniki - test, ktory celowo wyczerpuje
- * limit, blokowal logowanie w kolejnym tescie. W produkcji nic to nie zmienia
- * (jeden proces = jedna instancja = jeden sekret), a w testach daje izolacje
- * bez zadnej furtki "wyzeruj limiter", ktora predzej czy pozniej trafilaby
- * do kodu produkcyjnego.
+ * The limiter key is ALSO keyed by the instance secret. The reason is simple and came out
+ * in the tests: the maps are at module level, so two servers in one process (which is how
+ * the tests work) share the counters - a test that deliberately exhausts the limit blocked
+ * logging in for the next test. In production this changes nothing (one process = one
+ * instance = one secret), and in the tests it gives isolation without any "reset the
+ * limiter" back door, which would sooner or later find its way into production code.
  */
 function kluczLimitu(secret: string, key: string): string {
-  // CALY sekret, nie jego poczatek. Pierwsza wersja brala `slice(0, 8)` - a wszystkie
-  // sekrety testowe zaczynaly sie tak samo, wiec "izolacja" dawala ten sam klucz
-  // dla kazdej instancji i niczego nie izolowala. To jest mapa w pamieci procesu,
-  // wiec pelny sekret jako fragment klucza nie wychodzi nigdzie na zewnatrz.
+  // The WHOLE secret, not its beginning. The first version took `slice(0, 8)` - and every
+  // test secret started the same way, so the "isolation" produced the same key for every
+  // instance and isolated nothing. This is a map in the process's memory, so the full secret
+  // as part of a key never leaves the building.
   return `${secret}|${key}`;
 }
 
@@ -111,10 +110,10 @@ function checkLoginLimit(key: string, now: number): void {
   }
 }
 
-/** Udane logowanie kasuje licznik prob. Limit ma powstrzymywac ZGADYWANIE, a nie
- *  karac czlowieka, ktory sie zalogowal: bez tego dziesiec normalnych wejsc
- *  (albo pare wejsc passkeyem, ktore kosztuja po dwie proby) blokowalo konto
- *  wlascicielowi na 15 minut. */
+/** A successful login clears the attempt counter. The limit is there to stop GUESSING, not
+/**  to punish a human who did log in: without this, ten normal entries (or a few passkey
+/**  entries, which cost two attempts each) locked the owner out of their account for 15
+/**  minutes. */
 function zwolnijLimitLogowania(key: string): void {
   loginAttempts.delete(key);
 }
@@ -128,12 +127,12 @@ function checkEnrollLimit(key: string, now: number): void {
   if (e.count > 20) throw tooMany("za_duzo_prob", "za duzo prob rejestracji, sprobuj pozniej");
 }
 
-// Klucz limitera per adres zrodlowy. Za proxy X-Forwarded-For to lista, do ktorej
-// KAZDY hop DOPISUJE z prawej: "<to co podal klient>, <IP ktore widzialo nasze proxy>".
-// Element skrajnie LEWY jest w calosci pod kontrola klienta (moze go podac dowolny),
-// wiec kluczowanie po nim daje atakujacemu nieskonczenie wiele swiezych kubelkow.
-// Bierzemy element skrajnie PRAWY - ten dopisalo nasze wlasne proxy - a bez proxy
-// (albo gdy naglowka nie ma) realny adres gniazda. Zaklada jeden zaufany hop.
+// A limiter key per source address. Behind a proxy, X-Forwarded-For is a list that EVERY
+// hop APPENDS to on the right: "<what the client supplied>, <the IP our proxy saw>". The
+// leftmost element is entirely under the client's control (anybody can supply it), so
+// keying on it gives an attacker infinitely many fresh buckets. We take the rightmost
+// element - the one our own proxy appended - and without a proxy (or when the header is
+// absent) the real socket address. This assumes one trusted hop.
 export function clientKey(
   req: { headers: Record<string, unknown>; socket: { remoteAddress?: string } },
   trustProxy: boolean,
@@ -150,15 +149,14 @@ export function clientKey(
 }
 
 export function registerAuthRoutes(router: Router): void {
-  // Enrollment: jedyna trasa ZAPISU bez logowania - bo zaproszenie JEST poswiadczeniem.
-  // Nowy agent wykupuje kod na aktora + token. Rate-limit chroni przed zgadywaniem kodu.
+  // Enrollment: the only WRITE route without a login - because an invite IS a credential.
+  // A new agent redeems a code for an actor + token. The rate limit protects against guessing it.
   router.add("POST", "/api/enroll", async (req, res, rc) => {
     checkEnrollLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 4096);
-    // kind NIE pochodzi z ciala zadania: samodzielna rejestracja tworzy WYLACZNIE
-    // aktora-agenta. "Jestem czlowiekiem" to sygnal zaufania, ktorego nie wolno
-    // samozadeklarowac przez rozdany kod - aktora-czlowieka zaklada admin (CLI/POST
-    // /api/actors), nie enrollment.
+    // kind does NOT come from the request body: self-registration creates ONLY an agent actor.
+    // "I am a human" is a trust signal that must not be self-declared through a distributed
+    // code - a human actor is created by an admin (CLI/POST /api/actors), not by enrollment.
     const { actor, token } = redeemInvite(rc.ctx, {
       code: str(body.invite) ?? "",
       handle: str(body.handle) ?? "",
@@ -173,8 +171,8 @@ export function registerAuthRoutes(router: Router): void {
     const password = str(body.password) ?? "";
     checkLoginLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const actor = verifyPassword(rc.ctx, handle, password);
-    // Jeden komunikat dla zlego handle i zlego hasla: inaczej odpowiedz serwera
-    // jest wyrocznia "czy taki uzytkownik istnieje".
+    // One message for a bad handle and a bad password: otherwise the server's answer is an
+    // oracle for "does this user exist".
     if (!actor) throw unauthorized("zle_dane", "nieprawidlowy uzytkownik lub haslo");
     zwolnijLimitLogowania(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)));
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
@@ -190,9 +188,9 @@ export function registerAuthRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
-  // --- passkeys (Touch ID / Face ID) ---------------------------------------
-  // Rejestracja wymaga ZALOGOWANEJ sesji (haslem) - poswiadczenie wiaze sie
-  // z aktorem, ktorego tozsamosc juz udowodniono. Tylko ludzie: agent ma token.
+  // --- passkeys (Touch ID / Face ID) ------------------------------------------
+  // Registration requires a SIGNED-IN session (by password) - a credential binds to an actor
+  // whose identity has already been proven. Humans only: an agent has a token.
 
   router.add("POST", "/api/webauthn/register/options", (req, res, rc) => {
     const { actor } = requireAuth(rc);
@@ -232,8 +230,8 @@ export function registerAuthRoutes(router: Router): void {
     json(res, 200, { credentials: listCredentials(rc.ctx, actor.id) });
   });
 
-  /** Opcje logowania passkeyem. Publiczne i limitowane jak logowanie haslem.
-   *  Bez handle: discoverable credential (przegladarka sama pokaze konta). */
+  /** Options for a passkey login. Public and rate-limited like a password login.
+  /**  Without a handle: a discoverable credential (the browser shows the accounts itself). */
   router.add("POST", "/api/webauthn/login/options", async (req, res, rc) => {
     checkLoginLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 4096);
@@ -245,10 +243,9 @@ export function registerAuthRoutes(router: Router): void {
       if (actor && actor.kind === "human") {
         allowCredentials = listCredentials(rc.ctx, actor.id).map((c) => c.id);
       }
-      // Konto nieistniejace ALBO bez klucza dostaje atrape zamiast pustej listy:
-      // pusta lista rozniła sie od niepustej i tym samym odpowiadala na pytanie
-      // "czy taki uzytkownik istnieje". Przegladarka i tak nie znajdzie tego
-      // klucza, wiec uzytkownik widzi normalna odmowe.
+      // A non-existent account OR one with no key gets a decoy instead of an empty list: an empty
+      // list differed from a non-empty one and thereby answered the question "does this user
+      // exist". The browser will not find that key anyway, so the user sees an ordinary refusal.
       if (allowCredentials.length === 0) {
         allowCredentials = atrapaCredentials(rc.config.secret, handle);
       }
@@ -278,8 +275,8 @@ export function registerAuthRoutes(router: Router): void {
     });
   });
 
-  /** Jedno wywolanie = pelny obraz. Agent nie moze pracowac z mniejsza wiedza niz
-   *  czlowiek. Przy PIERWSZYM polaczeniu doklejamy zasady z promptem "przeczytaj". */
+  /** One call = the full picture. An agent must not work with less knowledge than a human has.
+  /**  On the FIRST connection we append the guidelines with a "read this" prompt. */
   router.add("GET", "/api/me", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
     const guidelines = firstConnectGuidelines(rc.ctx, actor.id);
@@ -287,23 +284,22 @@ export function registerAuthRoutes(router: Router): void {
     json(res, 200, {
       actor,
       conversations: listForActor(rc.ctx, actor.id),
-      // Czlonkostwa razem z lista rozmow: klient potrzebuje obu, zeby cokolwiek
-      // narysowac, wiec osobne zapytanie o to samo bylo podwojnym liczeniem
-      // przy kazdym starcie interfejsu.
+      // Memberships together with the conversation list: the client needs both to draw anything,
+      // so a separate query for the same thing was double counting on every interface start.
       memberships: myMemberships(rc.ctx, actor.id),
       unread: unreadFor(rc.ctx, actor.id),
-      // Kto pisze TERAZ - zeby dalo sie to zobaczyc bez osobnego pytania
-      // o liste obecnych (prosba @michal, #general [226]).
+      // Who is writing NOW - so that it can be seen without a separate question about the
+      // presence list (@michal's request, #general [226]).
       typing: whoIsTyping(rc.ctx, actor.id),
-      // Czy aktor ma juz passkey - UI na tej podstawie proponuje (albo nie)
-      // wlaczenie logowania odciskiem na tym urzadzeniu.
+      // Whether the actor already has a passkey - the UI uses this to offer (or not) turning on
+      // fingerprint sign-in on this device.
       passkeys: actor.kind === "human" ? hasCredentials(rc.ctx, actor.id) : false,
-      // Licznik centrum powiadomien - zeby jedno wywolanie /api/me dalo tez
-      // odpowiedz "czy cos mnie wolalo", bez drugiego zapytania.
+      // The notification centre's counter - so that one /api/me call also answers "did anything
+      // call me", without a second query.
       notifications: { unread: unreadNotificationCount(rc.ctx, actor.id) },
-      // Limity instancji podane WPROST: klient, ktory ich nie zna, moze tylko
-      // wyslac i zobaczyc blad - a dla czlowieka piszacego dlugi raport to jest
-      // najgorszy moment na dowiedzenie sie o limicie.
+      // The instance limits given EXPLICITLY: a client that does not know them can only send and
+      // see an error - and for a human writing a long report that is the worst possible moment to
+      // find out about a limit.
       limity: {
         maxMessageBytes: rc.config.maxMessageBytes,
         maxFileBytes: rc.config.maxFileBytes,
@@ -314,7 +310,7 @@ export function registerAuthRoutes(router: Router): void {
     });
   });
 
-  /** Zasady na zadanie (do ponownego przeczytania). */
+  /** The guidelines on demand (to be read again). */
   router.add("GET", "/api/guidelines", (_req, res, rc) => {
     requireAuth(rc);
     json(res, 200, { text: guidelinesText() });

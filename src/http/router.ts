@@ -1,6 +1,6 @@
 /**
- * Maly router. Dopasowanie segmentami, bez budowania wyrazen regularnych z danych
- * wejsciowych - to jest cala jego tajemnica i cala jego wartosc.
+ * A small router. Segment matching, with no regular expressions built from input data - that
+ * is its entire secret and its entire value.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Ctx } from "../core/ctx.ts";
@@ -14,8 +14,8 @@ export type RouteCtx = {
   params: Record<string, string>;
   query: URLSearchParams;
   auth: Auth | null;
-  /** Gdy `auth` jest null, a klient JEDNAK podal token, ktory kiedys byl wazny:
-   *  powod odrzucenia i co z tym zrobic (patrz authFailureNote). */
+  /** When `auth` is null but the client DID supply a token that was once valid: the reason for
+  /**  the rejection and what to do about it (see authFailureNote). */
   authNote?: { code: string; message: string } | null;
   ctx: Ctx;
   config: Config;
@@ -37,8 +37,8 @@ export class Router {
   }
 
   match(method: string, path: string): { handler: Handler; params: Record<string, string> } | null {
-    // HEAD obsluguje kazda trasa GET: Node sam tnie cialo odpowiedzi dla HEAD,
-    // a monitoring sondujacy HEAD-em nie moze widziec 404 na zywym endpoincie.
+    // HEAD is served by every GET route: Node itself strips the response body for HEAD, and
+    // monitoring probing with HEAD must not see a 404 on a live endpoint.
     const m = method.toUpperCase() === "HEAD" ? "GET" : method.toUpperCase();
     const parts = path.split("/").filter(Boolean);
     for (const route of this.#routes) {
@@ -52,8 +52,8 @@ export class Router {
           try {
             params[seg.slice(1)] = decodeURIComponent(parts[i]);
           } catch {
-            // Zepsute %-kodowanie ("%zz") to smieciowe zadanie, nie awaria
-            // serwera - traktowane jak sciezka, ktorej nie ma.
+            // Broken %-encoding ("%zz") is a junk request, not a server failure - treated as a path that
+            // does not exist.
             ok = false;
             break;
           }

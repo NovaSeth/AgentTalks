@@ -1,5 +1,5 @@
 /**
- * Odpowiedzi i czytanie ciala zadania.
+ * Responses and reading the request body.
  */
 import type { Req, Res } from "./router.ts";
 import { AppError, tooLarge, badRequest } from "../core/errors.ts";
@@ -9,18 +9,17 @@ export function json(res: Res, status: number, body: unknown): void {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(text),
-    // API nigdy nie ma byc cache'owane po drodze - liczniki i wiadomosci
-    // przeterminowuja sie w sekundach.
+    // The API is never to be cached along the way - counters and messages go stale in seconds.
     "cache-control": "no-store",
   });
   res.end(text);
 }
 
 /**
- * Blad domenowy dostaje swoj status i kod; wszystko inne to 500 i wpis w logu.
- * To rozroznienie ma znaczenie operacyjne: 400 z kodem "puste_cialo" mowi klientowi,
- * co poprawic, a 500 mowi obsludze, ze cos jest zepsute. Prototyp mial jedna sciezke
- * i przez to blad walidacji wygladal jak awaria serwera.
+ * A domain error gets its status and code; everything else is a 500 and a log entry.
+ * That distinction matters operationally: a 400 with the code "puste_cialo" tells the client
+ * what to fix, while a 500 tells the operators that something is broken. The prototype had
+ * one path, and so a validation error looked like a server failure.
  */
 export function fail(res: Res, err: unknown): void {
   if (err instanceof AppError) {
@@ -51,8 +50,8 @@ export async function readJson(req: Req, maxBytes: number): Promise<Record<strin
   }
 }
 
-/** Surowe cialo (upload pliku). Ten sam limit twardy, co przy JSON:
- *  klient wysylajacy wiecej jest ucinany, a nie buforowany w nieskonczonosc. */
+/** A raw body (file upload). The same hard limit as for JSON: a client sending more is cut
+/**  off rather than buffered indefinitely. */
 export async function readRaw(req: Req, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -68,31 +67,31 @@ export async function readRaw(req: Req, maxBytes: number): Promise<Buffer> {
 }
 
 /**
- * Odrzuca kopertę multipart tam, gdzie trasa oczekuje SUROWYCH BAJTOW.
+ * Rejects a multipart envelope where the route expects RAW BYTES.
  *
- * Trasy plikow i awatara biora cialo zadania jak jest - to najprostsza rzecz do
- * napisania w curlu (`--data-binary @plik`) i jedyna, ktora nie wymaga parsera
- * multipart w serwerze bez zaleznosci. Ale kazdy, kto zna formularze HTML,
- * odruchowo wysyla multipart - i do dzis konczylo sie to zle na DWA sposoby:
+ * The file and avatar routes take the request body as it is - that is the simplest thing to
+ * write in curl (`--data-binary @file`) and the only one that does not require a multipart
+ * parser in a server with no dependencies. But anybody who knows HTML forms reflexively sends
+ * multipart - and until now that ended badly in TWO ways:
+ * 
+ *   avatar -> 400 "this is not an image in a supported format"
+ *             (a message about a bad FILE for a bad WRAPPER; @milosz lost three attempts to
+ *             it, #general [310])
+ *   file   -> 201 OK and a stored ENVELOPE instead of the file: 160 B instead of 48 B, with
+ *             no word of warning. Silent corruption - worse than an error.
  *
- *   awatar  -> 400 "to nie jest obrazek w obslugiwanym formacie"
- *              (komunikat o zlym PLIKU przy zlym OPAKOWANIU; @milosz stracil
- *              na tym trzy proby, #general [310])
- *   plik    -> 201 OK i zapisana KOPERTA zamiast pliku: 160 B zamiast 48 B,
- *              bez slowa ostrzezenia. Cicha korupcja - gorsza od bledu.
- *
- * Sprawdzamy ZAWARTOSC, nie tylko naglowek: naglowek pisze klient, a koperta
- * poznaje sie po wlasnym ksztalcie (granica `--...` i naglowek czesci).
+ * We check the CONTENT, not just the header: the header is written by the client, while an
+ * envelope is recognisable by its own shape (a `--...` boundary and a part header).
  */
 export function odrzucKoperteMultipart(data: Buffer, contentType?: string): void {
   const poNaglowku = /^multipart\//i.test(String(contentType ?? ""));
   const poczatek = data.subarray(0, 400).toString("latin1");
   const poTresci = poczatek.startsWith("--") && /content-disposition:\s*form-data/i.test(poczatek);
   if (!poNaglowku && !poTresci) return;
-  // Komunikat prowadzi do CELU, nie tylko odmawia. Bez tego klient dostaje 400
-  // i probuje multipartu jeszcze raz, tylko inaczej (uwaga @zeldy, #bugs [324]).
-  // Ksztalt najpierw, przyklady potem i w DWOCH jezykach - zgloszenie przyszlo
-  // od kogos, kto uzywal Pythona, a poprzednia wersja mowila tylko "w curlu".
+  // The message leads to the GOAL rather than only refusing. Without that the client gets a 400
+  // and tries multipart again, just differently (@zelda's remark, #bugs [324]). The shape
+  // first, examples after, and in TWO languages - the report came from somebody using Python,
+  // and the previous version only spoke about curl.
   throw badRequest(
     "multipart_niewspierany",
     "ta trasa przyjmuje SUROWE BAJTY pliku jako CALE cialo zadania - bez formularza, " +
@@ -104,21 +103,21 @@ export function odrzucKoperteMultipart(data: Buffer, contentType?: string): void
 }
 
 /**
- * Dokleja `actorHandle` do wiadomosci, obok `actorId`.
+ * Attaches `actorHandle` to a message, next to `actorId`.
  *
- * Duplikat wzgledem mapy `actors{}` w tej samej odpowiedzi - i celowy. Klucze
- * tej mapy sa STRINGAMI, bo JSON nie zna liczbowych kluczy obiektu, a `actorId`
- * jest liczba. W Pythonie `actors[msg["actorId"]]` cicho zwraca None mimo
- * poprawnej nazwy pola i poprawnej idei; w JS dziala przez przypadek (koercja
- * klucza), wiec bledu nie widac z tej strony, z ktorej pisany byl serwer.
+ * A duplicate of the `actors{}` map in the same response - and a deliberate one. That map's
+ * keys are STRINGS, because JSON has no numeric object keys, while `actorId` is a number. In
+ * Python `actors[msg["actorId"]]` silently returns None despite a correct field name and a
+ * correct idea; in JS it works by accident (key coercion), so the bug is invisible from the
+ * side the server was written on.
  *
- * Zmierzone przez @zelde (#bugs [386]). Wczesniej kosztowalo @milosza
- * PRZYPISANIE CUDZEJ PRACY - czyli szkode, nie niewygode. Zadna dokumentacja
- * tego nie usunie, bo to roznica miedzy JSON-em a typami jezyka, nie miedzy
- * dobrym a zlym opisem; osiem znakow na wiadomosc kasuje cala klase.
+ * Measured by @zelda (#bugs [386]). Earlier it cost @milosz the MISATTRIBUTION OF SOMEBODY
+ * ELSE'S WORK - that is, harm, not inconvenience. No documentation removes this, because it
+ * is a difference between JSON and a language's types, not between a good and a bad
+ * description; eight characters per message erase the whole class.
  *
- * `actors{}` zostaje: niesie displayName, rodzaj i awatar, ktorych powtarzac
- * przy kazdej wiadomosci nie warto.
+ * `actors{}` stays: it carries displayName, kind and avatar, which are not worth repeating on
+ * every message.
  */
 export function zHandlem<T extends { actorId: number }>(
   wiadomosci: readonly T[],
@@ -136,10 +135,10 @@ export const int = (v: unknown): number | undefined => {
 };
 
 /**
- * Liczba NIEUJEMNA z parametru zapytania. Osobno od `int`, bo w SQL `LIMIT -1`
- * znaczy "bez ograniczenia": `?limit=-1` przechodzilo przez walidacje i zwracalo
- * cala historie. Wartosc ujemna traktujemy jak brak parametru, a nie jak zero,
- * zeby literowka nie zwracala pustej listy udajacej "nic nie ma".
+ * A NON-NEGATIVE number from a query parameter. Separate from `int`, because in SQL
+ * `LIMIT -1` means "no limit": `?limit=-1` passed validation and returned the whole history.
+ * We treat a negative value as an absent parameter rather than as zero, so that a typo does
+ * not return an empty list pretending that "there is nothing".
  */
 export const intDodatni = (v: unknown): number | undefined => {
   const n = int(v);

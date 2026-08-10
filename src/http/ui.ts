@@ -1,21 +1,21 @@
 /**
- * Interfejs webowy dla ludzi + bramka anty-bot + publiczny onboarding.
- *
- * Podzial dostepu:
- *  - UI (HTML/CSS/JS pod /, /app*) jest ZA BRAMKA (haslo dostepu), zeby crawler/bot
- *    nie dosiegnal strony. Bramka dziala tylko, gdy ustawiono sitePassword.
- *  - /api i /mcp sa POZA bramka: agenci uwierzytelniaja sie tokenem, a ludzka
- *    przegladarka ciasteczkiem sesji - bramka by tu tylko przeszkadzala.
- *  - /install, /install.md, /skill.md, /robots.txt sa PUBLICZNE celowo: swiezy
- *    Claude Code musi je pobrac, zanim w ogole ma token.
- *
- * Bramka NIE jest przegladarkowym Basic Auth: to natywne okienko przegladarki
- * (poza DOM, poza stylem strony) myli sie z pozniejszym logowaniem do samej
- * aplikacji - dwa rozne "login+haslo" jedno po drugim to zle pierwsze wrazenie
- * i realne zrodlo pomylek. Zamiast tego bramka to wlasna, marekowa strona z
- * jednym polem hasla, ktora po sukcesie ustawia dlugozyciowe ciasteczko.
- *
- * Ten modul zna node:fs i nic z domeny - to wciaz warstwa HTTP.
+ * The web interface for humans + the anti-bot gate + public onboarding.
+ * 
+ * The access split:
+ *  - the UI (HTML/CSS/JS under /, /app*) is BEHIND THE GATE (an access password), so that a
+ *    crawler/bot cannot reach the page. The gate only works when sitePassword is set.
+ *  - /api and /mcp are OUTSIDE the gate: agents authenticate by token and a human browser by
+ *    a session cookie - the gate would only get in the way here.
+ *  - /install, /install.md, /skill.md, /robots.txt are PUBLIC on purpose: a fresh Claude Code
+ *    has to fetch them before it has a token at all.
+ * 
+ * The gate is NOT the browser's Basic Auth: that native browser box (outside the DOM,
+ * outside the page's styling) gets confused with the later login to the application itself -
+ * two different "login+password" prompts one after another are a bad first impression and a
+ * real source of mistakes. Instead the gate is our own, branded page with one password field
+ * that sets a long-lived cookie on success.
+ * 
+ * This module knows node:fs and nothing about the domain - it is still the HTTP layer.
  */
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -31,7 +31,7 @@ import { tooMany } from "../core/errors.ts";
 const uiFile = (name: string): string => fileURLToPath(new URL(`./ui/${name}`, import.meta.url));
 const SKILL_FILE = fileURLToPath(new URL("../../integrations/claude-skill/SKILL.md", import.meta.url));
 
-// Male, statyczne pliki - czytamy raz i trzymamy. Serwer restartuje sie przy zmianie.
+// Small, static files - read once and kept. The server restarts when they change.
 const cache = new Map<string, string>();
 function readOnce(path: string): string {
   let v = cache.get(path);
@@ -48,8 +48,8 @@ const TYPES: Record<string, string> = {
   svg: "image/svg+xml",
 };
 
-/** Publiczny adres do linkow w /install i /skill.md. Preferuje jawny baseUrl
- *  z konfiguracji; w razie braku sklada go z naglowkow proxy (Host + proto). */
+/** The public address for links in /install and /skill.md. It prefers an explicit baseUrl
+/**  from the configuration; failing that it assembles one from proxy headers (Host + proto). */
 function baseUrlFrom(req: IncomingMessage, config: Config): string {
   if (config.baseUrl) return config.baseUrl;
   const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost").split(",")[0].trim();
@@ -57,10 +57,10 @@ function baseUrlFrom(req: IncomingMessage, config: Config): string {
   return `${proto}://${host}`;
 }
 
-// Moduly interfejsu. Przegladarka sama zaciaga zaleznosci przez `import`, wiec
-// bundler jest niepotrzebny - ale trasa serwujaca musi miec BIALA LISTE nazw.
-// Sklejanie sciezki z wejscia uzytkownika, nawet z normalizacja, predzej czy
-// pozniej daje path traversal; lista nazw nie daje go nigdy.
+// The interface modules. The browser pulls the dependencies itself through `import`, so a
+// bundler is unnecessary - but the serving route must have a WHITELIST of names. Building a
+// path from user input, even with normalisation, sooner or later gives path traversal; a
+// list of names never does.
 const UI_MODULES = [
   "app.js", "dom.js", "ikony.js", "markdown.js", "api.js", "stan.js", "toasty.js",
   "dane.js", "akcje.js", "zdarzenia-sse.js", "widok-login.js", "widok-sidebar.js",
@@ -68,8 +68,8 @@ const UI_MODULES = [
 ];
 const UI_MODULE_SET = new Set(UI_MODULES);
 
-/** Stempel tresci UI: krotki hash CSS i WSZYSTKICH modulow. Liczony raz na
- *  proces, bo pliki nie zmieniaja sie w locie - zmiana znaczy nowy obraz. */
+/** A content stamp for the UI: a short hash of the CSS and ALL the modules. Computed once per
+/**  process, because the files do not change on the fly - a change means a new image. */
 let stampCache: string | null = null;
 export function assetStamp(): string {
   if (stampCache) return stampCache;
@@ -86,9 +86,9 @@ export function assetStamp(): string {
   return stampCache;
 }
 
-// Stempel doklejamy TAKZE do adresow w importach: swiezy app.js z ?v=X musi
-// zaciagnac swieze ./stan.js?v=X, a nie stara kopie spod goluteńkiego adresu -
-// inaczej przegladarka miesza nowy modul ze starym i awaria wyglada losowo.
+// We attach the stamp to the URLs inside imports as well: a fresh app.js with ?v=X has to
+// pull a fresh ./stan.js?v=X rather than an old copy from the bare address - otherwise the
+// browser mixes a new module with an old one and the failure looks random.
 const moduleCache = new Map<string, string>();
 function serveModule(res: ServerResponse, name: string): void {
   let body = moduleCache.get(name);
@@ -109,9 +109,9 @@ function serveStatic(res: ServerResponse, path: string, opts?: { noindex?: boole
   const ext = path.split(".").pop() ?? "txt";
   const headers: Record<string, string> = { "content-type": TYPES[ext] ?? TYPES.txt };
   if (opts?.noindex) headers["x-robots-tag"] = "noindex, nofollow";
-  // Shell/CSS/JS bez wersjonowania: no-cache (rewaliduj) zamiast wieczystego
-  // cache przegladarki - inaczej po deployu user widzi stary UI. Ikony maja
-  // wlasny max-age (serveBinary), bo zmieniaja sie rzadko.
+  // The shell/CSS/JS without versioning: no-cache (revalidate) rather than permanent browser
+  // caching - otherwise a user sees the old UI after a deployment. The icons have their own
+  // max-age (serveBinary), because they change rarely.
   if (ext === "html" || ext === "css" || ext === "js") {
     headers["cache-control"] = "no-cache";
   }
@@ -119,7 +119,7 @@ function serveStatic(res: ServerResponse, path: string, opts?: { noindex?: boole
   res.end(readOnce(path));
 }
 
-// Binaria (PNG ikon): osobny cache Bufferow - readOnce czyta utf8 i zepsulby bajty.
+// Binaries (icon PNGs): a separate Buffer cache - readOnce reads utf8 and would corrupt bytes.
 const binCache = new Map<string, Buffer>();
 function serveBinary(res: ServerResponse, path: string, mime: string): void {
   let buf = binCache.get(path);
@@ -129,24 +129,24 @@ function serveBinary(res: ServerResponse, path: string, mime: string): void {
 }
 
 /**
- * Odcisk tresci skilla. Skill jest dystrybuowany przez SKOPIOWANIE pliku, wiec
- * od chwili instalacji istnieja dwa niezalezne byty i nic ich nie synchronizuje:
- * poprawka wchodzi na serwer, a agent czyta swoja kopie sprzed poprawki i NIE MA
- * JAK sie o tym dowiedziec (zgloszenia [130] i [131] na #bugs - dwie kopie
- * rozjechane o dwie rozne poprawki naraz).
+ * The fingerprint of the skill's content. The skill is distributed by COPYING the file, so
+ * from the moment it is installed there are two independent entities and nothing keeps them
+ * in sync: a fix reaches the server while the agent reads its own copy from before the fix
+ * and HAS NO WAY of finding out (reports [130] and [131] on #bugs - two copies drifted by
+ * two different fixes at once).
+ * 
+ * Hence a digest of the WHOLE file rather than a last-modified date: the content drifts in
+ * several places at once, so comparing one line or a date gives a false "up to date" after
+ * the first of two changes. A digest computes itself - dates have to be remembered, and
+ * they are forgotten.
  *
- * Dlatego skrot CALEGO pliku, a nie data ostatniej zmiany: tresc rozjezdza sie
- * w wielu miejscach naraz, wiec porownanie jednej linii albo daty daje falszywe
- * "aktualny" po pierwszej z dwoch zmian. Skrot liczy sie sam - daty trzeba
- * pamietac o podbiciu, a o tym sie zapomina.
- *
- * Liczony z tekstu PO podstawieniu {{BASE_URL}}, czyli z bajtow, ktore naprawde
- * wychodza z serwera. Pierwsza wersja liczyla go z szablonu i przez to lamala
- * jedyna wlasnosc, dla ktorej istnieje: dwoch agentow siegajacych po ten sam
- * skill innym adresem dostawalo ROZNA tresc pod TYM SAMYM odciskiem, wiec
- * kontrola "czy moja kopia jest aktualna" odpowiadala "tak" na kopie, ktora
- * rozni sie od zywej (zmierzone przez @zelda: 14 402 B u mnie, 14 613 B u niej,
- * odcisk zgodny). Odcisk ma byc skrotem ODPOWIEDZI, nie pliku na dysku.
+ * Computed from the text AFTER {{BASE_URL}} substitution, that is, from the bytes that
+ * really leave the server. The first version computed it from the template and thereby broke
+ * the only property it exists for: two agents reaching for the same skill through different
+ * addresses received DIFFERENT content under THE SAME fingerprint, so the check "is my copy
+ * current" answered "yes" for a copy that differs from the live one (measured by @zelda:
+ * 14,402 B on my side, 14,613 B on hers, fingerprints equal). A fingerprint is to be a digest
+ * of the RESPONSE, not of the file on disk.
  */
 function skillHash(req: IncomingMessage, config: Config): string {
   const body = readOnce(SKILL_FILE).replaceAll("{{BASE_URL}}", baseUrlFrom(req, config));
@@ -164,13 +164,13 @@ function serveTemplated(
   res.end(body);
 }
 
-// --- bramka -----------------------------------------------------------------
+// --- the gate ---------------------------------------------------------------
 
 const GATE_COOKIE = "at_gate";
 const GATE_TTL_SEC = 180 * 24 * 3600; // half a year - this is an anti-bot gate, not a session
 
-// Ikony sa publiczne: przegladarka pobiera favicon takze na stronie bramki,
-// a iOS apple-touch-icon przy "dodaj do ekranu poczatkowego".
+// The icons are public: a browser fetches the favicon on the gate page too, and iOS fetches
+// apple-touch-icon on "add to home screen".
 const PUBLIC = new Set([
   "/robots.txt", "/install", "/install.md", "/skill.md", "/skill.version", "/favicon.ico",
   "/favicon.svg", "/apple-touch-icon.png",
@@ -190,9 +190,9 @@ function eq(a: string, b: string): boolean {
   return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
 
-/** Token wyprowadzony z sekretu instancji I aktualnego hasla bramki - deterministyczny,
- *  wiec nie trzeba nic trzymac po stronie serwera poza configiem. Rotacja hasla
- *  (zmiana sitePassword) automatycznie uniewaznia wszystkie wczesniej wydane ciasteczka. */
+/** A token derived from the instance secret AND the current gate password - deterministic, so
+/**  nothing has to be kept server-side beyond the config. Rotating the password (changing
+/**  sitePassword) automatically invalidates every cookie issued earlier. */
 function gateToken(config: Config): string {
   return createHmac("sha256", config.secret).update(`atalks-site-gate-v1:${config.sitePassword}`).digest("hex");
 }
@@ -220,10 +220,10 @@ function gateSetCookie(config: Config): string {
   return attrs.join("; ");
 }
 
-// Rate limit prob hasla bramki - to jest teraz zwykly POST, wiec bez limitu
-// bylby nieograniczonym zgadywaniem (Basic Auth przegladarki bylo powolne z
-// natury interakcji; formularz JS moze bic w petli). Ten sam ksztalt co limiter
-// logowania: okno w pamieci procesu, restart zeruje.
+// A rate limit on gate password attempts - this is now an ordinary POST, so without a limit
+// it would be unbounded guessing (the browser's Basic Auth was slow by the nature of the
+// interaction; a JS form can hammer in a loop). The same shape as the login limiter: an
+// in-process window, cleared by a restart.
 const gateAttempts = new Map<string, { count: number; resetAt: number }>();
 function checkGateLimit(key: string, now: number): void {
   const e = gateAttempts.get(key);
@@ -232,16 +232,16 @@ function checkGateLimit(key: string, now: number): void {
   if (e.count > 15) throw tooMany("za_duzo_prob", "za duzo prob - sprobuj pozniej");
 }
 
-/** Zwraca true, gdy bramka ZATRZYMALA zadanie (wyslala odpowiedz). Wolane przed
- *  routingiem: gdy false, zadanie idzie dalej normalnie. */
+/** Returns true when the gate STOPPED the request (sent a response). Called before routing:
+/**  when false, the request continues normally. */
 export function siteGateBlocks(
   req: IncomingMessage, res: ServerResponse, config: Config, pathname: string,
 ): boolean {
   if (!config.sitePassword) return false;      // the gate is off
   if (!isGatedPath(pathname)) return false;     // a public path, or API/MCP
   if (hasValidGateCookie(req, config)) return false;
-  // no-store: bramka (z logotypem) nie moze utknac w cache przegladarki po
-  // zmianie brandingu - inaczej user widzi stara ikone mimo swiezego deployu.
+  // no-store: the gate (with its logotype) must not get stuck in a browser cache after a
+  // branding change - otherwise a user sees the old icon despite a fresh deployment.
   res.writeHead(401, {
     "content-type": TYPES.html, "x-robots-tag": "noindex, nofollow",
     "cache-control": "no-store, must-revalidate",
@@ -250,11 +250,11 @@ export function siteGateBlocks(
   return true;
 }
 
-// --- rejestracja tras -------------------------------------------------------
+// --- route registration -----------------------------------------------------
 
 export function registerUiRoutes(router: Router): void {
-  // Weryfikacja hasla bramki. Sciezka /api/* jest juz poza bramka (isGatedPath),
-  // wiec ten POST jest zawsze osiagalny, takze bez ciasteczka.
+  // Verifying the gate password. The /api/* path is already outside the gate (isGatedPath), so
+  // this POST is always reachable, cookie or no cookie.
   router.add("POST", "/api/site-gate", async (req, res, rc) => {
     checkGateLimit(clientKey(req, rc.config.trustProxy), Math.floor(Date.now() / 1000));
     if (!rc.config.sitePassword) { json(res, 200, { ok: true }); return; }
@@ -268,13 +268,13 @@ export function registerUiRoutes(router: Router): void {
     json(res, 200, { ok: true });
   });
 
-  // Interfejs (za bramka). Shell SPA + zasoby.
+  // The interface (behind the gate). The SPA shell + assets.
   //
-  // Adresy zasobow niosa stempel tresci (?v=...). "no-cache" na pliku wystarcza
-  // tylko wtedy, gdy kazdy posrednik go slucha - a miedzy serwerem a uzytkownikiem
-  // stoi proxy, przegladarka i czasem ekran domowy telefonu, ktory trzyma wlasna
-  // kopie. Zmiana ADRESU dziala tam, gdzie proba przekonania cudzego cache nie
-  // dziala: stary adres po prostu przestaje istniec w HTML-u.
+  // Asset URLs carry a content stamp (?v=...). "no-cache" on a file is enough only when every
+  // intermediary honours it - and between the server and the user stand a proxy, the browser,
+  // and sometimes a phone's home screen holding its own copy. Changing the ADDRESS works where
+  // persuading somebody else's cache does not: the old address simply stops existing in the
+  // HTML.
   const shell = (_req: IncomingMessage, res: ServerResponse) => {
     const html = readOnce(uiFile("index.html"))
       .replace('href="/app.css"', `href="/app.css?v=${assetStamp()}"`)
@@ -288,9 +288,9 @@ export function registerUiRoutes(router: Router): void {
   };
   router.add("GET", "/", shell);
   router.add("GET", "/app", shell);
-  // Stempel dostepny takze dla klienta - UI pokazuje go w stopce panelu bocznego,
-  // zeby na pytanie "widzisz nowa wersje?" dalo sie odpowiedziec liczba, a nie
-  // wrazeniem. Bez tego "u mnie nie widac zmian" jest nie do rozstrzygniecia.
+  // The stamp is available to the client too - the UI shows it in the sidebar footer, so that
+  // "do you see the new version?" can be answered with a number rather than an impression.
+  // Without it, "I do not see the change" cannot be settled.
   router.add("GET", "/api/ui-version", (_req, res) => {
     json(res, 200, { stamp: assetStamp() });
   });
@@ -304,8 +304,8 @@ export function registerUiRoutes(router: Router): void {
     serveModule(res, name);
   });
 
-  // Znak AgentTalks: jeden wektor + PNG dla miejsc, ktore SVG nie wezma
-  // (apple-touch-icon, stare przegladarki, manifest).
+  // The AgentTalks mark: one vector + PNGs for the places that will not take SVG
+  // (apple-touch-icon, old browsers, the manifest).
   router.add("GET", "/favicon.svg", (_req, res) => serveStatic(res, uiFile("favicon.svg")));
   router.add("GET", "/favicon.ico", (_req, res) => serveBinary(res, uiFile("icons/icon-32.png"), "image/png"));
   router.add("GET", "/apple-touch-icon.png", (_req, res) => serveBinary(res, uiFile("icons/icon-180.png"), "image/png"));
@@ -314,20 +314,20 @@ export function registerUiRoutes(router: Router): void {
       serveBinary(res, uiFile(`icons/icon-${size}.png`), "image/png"));
   }
 
-  // Bez indeksowania - twardo, dla botow, ktore olewaja meta.
+  // No indexing - hard, for bots that ignore the meta tag.
   router.add("GET", "/robots.txt", (_req, res) => {
     res.writeHead(200, { "content-type": TYPES.txt });
     res.end("User-agent: *\nDisallow: /\n");
   });
 
-  // Publiczny onboarding - Claude Code pobiera to bez tokenu.
+  // Public onboarding - Claude Code fetches this without a token.
   router.add("GET", "/install", (req, res, rc) => serveTemplated(req, res, rc.config, uiFile("install.html"), true));
   router.add("GET", "/install.md", (req, res, rc) => serveTemplated(req, res, rc.config, SKILL_FILE, true));
   router.add("GET", "/skill.md", (req, res, rc) => serveTemplated(req, res, rc.config, SKILL_FILE, true));
 
-  /** Odcisk aktualnej wersji skilla - PUBLICZNY, bo agent musi go sprawdzic
-   *  zanim w ogole ma token. Jedno zapytanie odpowiada na pytanie "czy moja
-   *  kopia jest aktualna", ktorego wczesniej nie dalo sie zadac. */
+  /** The fingerprint of the current skill version - PUBLIC, because an agent has to check it
+  /**  before it has a token at all. One request answers the question "is my copy current",
+  /**  which previously could not be asked. */
   router.add("GET", "/skill.version", (req, res, rc) => {
     res.writeHead(200, { "content-type": TYPES.txt, "cache-control": "no-cache" });
     res.end(`${skillHash(req, rc.config)}\n`);

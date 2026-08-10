@@ -1,9 +1,9 @@
 /**
- * Uwierzytelnianie: bearer dla agentow, podpisane cookie dla ludzi.
+ * Authentication: bearer for agents, a signed cookie for humans.
  *
- * Klient NIGDY nie deklaruje, kim jest. To jest cala roznica wobec prototypu, gdzie
- * `execFile(TALK_BIN, args, { env: { TALK_SID: asSid } })` pozwalal serwerowi (i kazdemu
- * procesowi z dostepem do katalogu) pisac w cudzym imieniu.
+ * A client NEVER declares who it is. That is the whole difference from the prototype, where
+ * `execFile(TALK_BIN, args, { env: { TALK_SID: asSid } })` let the server (and any process
+ * with access to the directory) write on somebody else's behalf.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Ctx } from "../core/ctx.ts";
@@ -24,15 +24,14 @@ function sign(secret: string, payload: string): string {
 }
 
 /**
- * Wartosc cookie: "<actorId>.<wygasa>.<epoka>.<hmac>". Nadal bez tabeli sesji po
- * stronie serwera, ale JUZ ODWOLYWALNE: `epoka` to licznik z wiersza aktora,
- * podbijany przy zmianie hasla i przy wylaczeniu konta, wiec stare ciasteczka
- * przestaja pasowac do podpisu. Bez tego "zmienilem haslo" nie znaczylo
- * "wyrzucilem tamta sesje".
+ * The cookie value: "<actorId>.<expires>.<epoch>.<hmac>". Still with no session table on the
+ * server side, but ALREADY REVOCABLE: `epoch` is a counter in the actor's row, bumped on a
+ * password change and on disabling the account, so old cookies stop matching the signature.
+ * Without it, "I changed my password" did not mean "I threw that session out".
  *
- * `secure` przychodzi z zewnatrz, bo tylko wywolujacy wie, czy zadanie przyszlo
- * po HTTPS: sama flaga trustProxy nie wystarcza, a cookie sesji bez atrybutu
- * Secure moze wyciec przez pierwsze zadanie po http.
+ * `secure` comes from outside, because only the caller knows whether the request arrived over
+ * HTTPS: the trustProxy flag alone is not enough, and a session cookie without the Secure
+ * attribute can leak through the first request over http.
  */
 export function makeCookie(
   ctx: Ctx,
@@ -55,8 +54,8 @@ export function makeCookie(
   return attrs.join("; ");
 }
 
-/** Czy to zadanie przyszlo po HTTPS. Za proxy prawde niesie X-Forwarded-Proto;
- *  bezposrednio - obecnosc gniazda TLS. */
+/** Whether this request arrived over HTTPS. Behind a proxy the truth is in X-Forwarded-Proto;
+/**  directly - the presence of a TLS socket. */
 export function requestIsSecure(req: Req): boolean {
   const proto = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0].trim();
   if (proto) return proto === "https";
@@ -88,8 +87,8 @@ function actorFromCookie(ctx: Ctx, config: Config, raw: string | undefined): Act
   if (Number(expiryPart) <= Math.floor(Date.now() / 1000)) return null;
   const actor = getActor(ctx, Number(idPart));
   if (!actor || actor.disabledAt) return null;
-  // Epoka z podpisu musi zgadzac sie z biezaca: rozjazd znaczy, ze aktor
-  // zmienil haslo albo zostal wylaczony po wydaniu tego ciasteczka.
+  // The epoch from the signature has to match the current one: a mismatch means the actor
+  // changed their password or was disabled after this cookie was issued.
   if (Number(epochPart) !== sessionEpoch(ctx, actor.id)) return null;
   return actor;
 }
@@ -106,10 +105,10 @@ export function authenticate(ctx: Ctx, config: Config, req: Req): Auth | null {
 }
 
 /**
- * Diagnoza dla ODRZUCONEGO bearera, ktory kiedys byl wazny. Bez niej martwy token
- * daje to samo 401 co brak tokenu, a agent bez pamieci sesji wyciaga z tego
- * najgorszy mozliwy wniosek: "wykupie nowe zaproszenie" - i na kanale robi sie
- * druga tozsamosc tej samej osoby (a nastepnym razem trzecia).
+ * A diagnosis for a REJECTED bearer that was once valid. Without it a dead token gives the
+ * same 401 as no token at all, and an agent with no session memory draws the worst possible
+ * conclusion from that: "I will redeem a new invite" - and the channel gains a second
+ * identity of the same person (and a third one next time).
  */
 export function authFailureNote(
   ctx: Ctx,
@@ -148,9 +147,9 @@ export function requireAdmin(rc: RouteCtx): Auth {
 }
 
 /**
- * CSRF dotyczy WYLACZNIE sesji na cookie: przegladarka dokleja cookie sama, wiec obca
- * strona moglaby wywolac mutacje. Zadanie z bearerem nie ma tego problemu, bo naglowka
- * Authorization nikt nie doklei za klienta.
+ * CSRF applies ONLY to cookie sessions: a browser attaches the cookie itself, so another site
+ * could trigger a mutation. A request with a bearer does not have that problem, because
+ * nobody attaches the Authorization header on the client's behalf.
  */
 export function assertCsrf(rc: RouteCtx, req: Req): void {
   if (rc.auth?.via !== "cookie") return;
@@ -162,10 +161,10 @@ export function assertCsrf(rc: RouteCtx, req: Req): void {
   }
 }
 
-/** Token CSRF wyprowadzony z wartosci cookie sesji. Cookie jest HttpOnly, wiec
- *  klient NIE liczy go sam - dostaje go w odpowiedzi logowania i odsyla w naglowku.
- *  Obca strona nie zna wartosci cookie, wiec nie policzy tokenu; wlasny frontend
- *  zna go z logowania. Jeden sekret wystarcza, bo wejscie juz jest tajne. */
+/** A CSRF token derived from the session cookie's value. The cookie is HttpOnly, so the client
+/**  does NOT compute it itself - it receives it in the login response and sends it back in a
+/**  header. Another site does not know the cookie's value, so it cannot compute the token; our
+/**  own frontend knows it from login. One secret is enough, because the input is already secret. */
 export function csrfFor(sessionCookieValue: string): string {
   return createHmac("sha256", "at-csrf").update(sessionCookieValue).digest("hex").slice(0, 32);
 }
