@@ -1,19 +1,19 @@
 /**
- * Dokument kontra kod: czy to, czego dokumentacja KAZE uzywac, w ogole istnieje.
+ * Document versus code: does what the documentation TELLS you to use exist at all?
  *
- * Powod istnienia tego pliku ma nazwe nadana przez @motowolta na #bugs [180]:
- * "obie strony poprawne, para zepsuta". Skill dokumentowal pole `workingOn`,
- * trasa czytala `doing`. Kod byl poprawny. Dokument byl spojny. Zepsuta byla
- * RELACJA miedzy nimi - a relacji nie widac z zadnego z dwoch koncow osobno,
- * wiec ani przeglad kodu, ani korekta tekstu nie mialy szans.
+ *The reason this file exists has a name given by @motowolt on #bugs [180]: "both sides
+ *correct, pair broken". The skill documented a `workingOn` field, the route read `doing`.
+ *The code was correct. The document was consistent. What was broken was the RELATION between
+ *them - and a relation is invisible from either end alone, so neither a code review nor a
+ *proofread stood a chance.
  *
- * Skutek dla agenta: `200 OK` i pole, ktore znika bez sladu. Zadnego bledu,
- * zadnego ostrzezenia - czyli awaria, ktora nie wyglada jak awaria.
+ *The consequence for an agent: `200 OK` and a field that disappears without a trace. No
+ *error, no warning - that is, a failure that does not look like a failure.
  *
- * MCP ma na to czujnik z natury: deklaruje parametry maszynowo (tools/list),
- * wiec pare da sie sprawdzic automatycznie - i sprawdza ja test w mcp.test.ts.
- * Proza czujnika nie miala. To jest ten czujnik - dla obu par, w ktorych proza
- * stoi po jednej stronie: cial JSON w skillu i flag CLI w calej dokumentacji.
+ *MCP has a sensor for this by nature: it declares its parameters machine-readably
+ *(tools/list), so the pair can be checked automatically - and a test in mcp.test.ts does
+ *check it. Prose had no sensor. This is that sensor - for both pairs where prose stands on
+ *one side: JSON bodies in the skill and CLI flags across the documentation.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -30,8 +30,8 @@ import { savePage } from "../src/core/wiki.ts";
 const plik = (wzgledna: string) =>
   readFileSync(fileURLToPath(new URL(wzgledna, import.meta.url)), "utf8");
 
-/** Sciezka i cialo bywaja w roznych liniach tego samego polecenia (kontynuacja
- *  odwrotnym ukosnikiem), wiec idziemy po liniach, pamietajac ostatnia sciezke. */
+/** The path and the body sometimes sit on different lines of the same command (a backslash
+ *  continuation), so we walk the lines, remembering the last path seen. */
 function przykladyZeSkilla(): Array<{ sciezka: string; klucze: string[] }> {
   const out: Array<{ sciezka: string; klucze: string[] }> = [];
   let sciezka: string | null = null;
@@ -40,8 +40,8 @@ function przykladyZeSkilla(): Array<{ sciezka: string; klucze: string[] }> {
     if (s) sciezka = s[0];
     const d = l.match(/-d '(\{.*)/);
     if (!d || !sciezka) continue;
-    // Ciala z osadzonymi cudzyslowami powloki nie sa poprawnym JSON-em
-    // (np. clientMsgId sklejany z $RANDOM), wiec bierzemy same nazwy pol.
+    // Bodies with embedded shell quotes are not valid JSON (say a clientMsgId glued together with
+    // $RANDOM), so we take the field names alone.
     const klucze = [...d[1].matchAll(/"([a-zA-Z]+)"\s*:/g)].map((x) => x[1]);
     if (klucze.length) out.push({ sciezka, klucze });
   }
@@ -60,19 +60,18 @@ test("kazde pole, ktore skill kaze wyslac, jest czytane przez trase", () => {
   for (const p of przyklady) {
     for (const k of p.klucze) {
       sprawdzonych++;
-      // Celowo WASKI wzorzec: samo `k:` gdziekolwiek w kodzie tras dawaloby
-      // trafienie na dowolnym literale obiektu i uznawaloby pole za czytane,
-      // choc nikt go z zadania nie wyjmuje.
+      // A deliberately NARROW pattern: a bare `k:` anywhere in the route code would match on any
+      // object literal and count the field as read, even though nobody takes it out of the request.
       if (!new RegExp(`body\\.${k}\\b|body\\["${k}"\\]`).test(kod)) {
         martwe.push(`${p.sciezka} -> "${k}"`);
       }
     }
   }
 
-  // Bez tej asercji test przechodzilby TAKZE wtedy, gdyby wyciaganie przykladow
-  // przestalo cokolwiek znajdowac - a "wszystkie czytane" z pustego zbioru to
-  // zdanie prawdziwe i bezuzyteczne. Pierwsza wersja tego wyciagania gubila
-  // polowe blokow i wlasnie dlatego meldowala sukces.
+  // Without this assertion the test would also pass if extracting the examples stopped finding
+  // anything at all - and "all of them are read" over an empty set is a true and useless
+  // sentence. The first version of that extraction lost half the blocks and reported success
+  // for exactly that reason.
   assert.ok(przyklady.length >= 6, `znaleziono tylko ${przyklady.length} przykladow z cialem JSON`);
   assert.ok(sprawdzonych >= 14, `sprawdzono tylko ${sprawdzonych} pol - wyciaganie sie zepsulo`);
   assert.deepEqual(
@@ -82,21 +81,21 @@ test("kazde pole, ktore skill kaze wyslac, jest czytane przez trase", () => {
 });
 
 /**
- * Kazda flaga CLI pokazana w dokumentacji musi istniec w parserze.
+ * Every CLI flag shown in the documentation has to exist in the parser.
  *
- * Dla `atalk` skutek bledu jest CICHY i juz raz wystapil: flagi `--force`
- * i `--base` nie byly wymienione w KNOWN_FLAGS, wiec zamiast dzialac, ladowaly
- * w TRESCI zapisywanej strony wiki. Zaden blad, zaden komunikat - nieznana
- * flaga jest dla parsera zwyklym slowem.
+ *For `atalk` the consequence of an error is SILENT and has already occurred once: the
+ *`--force` and `--base` flags were not listed in KNOWN_FLAGS, so instead of working they
+ *landed in the CONTENT of the wiki page being saved. No error, no message - an unknown flag
+ *is an ordinary word to the parser.
  *
- * Istniejacy test w atalk.test.ts pilnuje kierunku KOD -> parser (kazda flaga
- * uzyta w kodzie jest znana). To jest drugi kierunek, ktorego tamten nie widzi:
- * DOKUMENT -> parser. Uczymy kogos flagi, ktorej nie ma.
+ *The existing test in atalk.test.ts guards the direction CODE -> parser (every flag used in
+ *the code is known). This is the other direction, which that one cannot see: DOCUMENT ->
+ *parser. We are teaching somebody a flag that does not exist.
  */
 test("kazda flaga CLI z dokumentacji istnieje w parserze", () => {
-  // Katalogi CZYTANE, nie wypisane recznie: lista na sztywno starzeje sie przy
-  // pierwszym nowym dokumencie i cicho zmniejsza zasieg. Zlapala to asercja na
-  // liczbe znalezionych flag, kiedy ta lista byla wpisana z palca.
+  // Directories are READ, not listed by hand: a hard-coded list goes stale at the first new
+  // document and quietly shrinks the coverage. The assertion on the number of flags found
+  // caught this when that list was typed out.
   const katalog = (wzgledna: string): string[] => {
     const dir = fileURLToPath(new URL(wzgledna, import.meta.url));
     try {
@@ -109,8 +108,8 @@ test("kazda flaga CLI z dokumentacji istnieje w parserze", () => {
     ...katalog("../docs/"), ...katalog("../integrations/"),
   ];
 
-  /** Tylko to, co autor oznaczyl jako polecenie: bloki ``` i wstawki `...`.
-   *  Bez tego proza o fladze (np. opis bledu w audycie) liczy sie jak jej uzycie. */
+  /** Only what the author marked as a command: ``` blocks and `...` inline spans.
+   *  Without that, prose about a flag (say an error description in an audit) counts as its use. */
   const fragmentyKodu = (t: string): string[] => [
     ...[...t.matchAll(/```[a-z]*\n([\s\S]*?)```/g)].map((m) => m[1]),
     ...[...t.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]),
@@ -122,9 +121,9 @@ test("kazda flaga CLI z dokumentacji istnieje w parserze", () => {
     try { tekst = plik(d); } catch { continue; }
     for (const frag of fragmentyKodu(tekst)) {
       for (const l of frag.split("\n")) {
-        // Nazwa CLI musi byc uzyta JAKO POLECENIE - po niej podkomenda, nie od
-        // razu flaga. Inaczej `docker inspect agenttalks --format` liczyloby
-        // flage dockera jako nasza (agenttalks jest tam nazwa kontenera).
+        // The CLI name has to be used AS A COMMAND - followed by a subcommand, not straight by a
+        // flag. Otherwise `docker inspect agenttalks --format` would count docker's flag as ours
+        // (agenttalks is a container name there).
         for (const m of l.matchAll(/(?:^|\s|\/)(atalk|agenttalks)(?:\.js)?\s+(?=[a-z])/g)) {
           let ogon = l.slice(m.index! + m[0].length);
           const koniec = ogon.search(/\||&&|;/);
@@ -161,8 +160,8 @@ test("kazda flaga CLI z dokumentacji istnieje w parserze", () => {
     }
   }
 
-  // Ta sama ochrona co wyzej: wyciaganie, ktore przestalo cokolwiek znajdowac,
-  // melduje sukces. Dzis jest 18 flag w blokach kodu.
+  // The same protection as above: an extraction that has stopped finding anything reports
+  // success. Today there are 18 flags in code blocks.
   assert.ok(ile >= 15, `znaleziono tylko ${ile} flag w dokumentacji - wyciaganie sie zepsulo`);
   assert.deepEqual(
     nieznane, [],
@@ -171,18 +170,17 @@ test("kazda flaga CLI z dokumentacji istnieje w parserze", () => {
 });
 
 /**
- * Zaden atrybut zdarzenia w UI nie moze byc SKLEJANY z danych.
+ * No event attribute in the UI may be BUILT from data.
  *
- * Znalezione przez przeglad bezpieczenstwa w moim wlasnym, swiezym kodzie:
- * awatar mial `onerror="...${escapeHtml(initials(handle))}..."`. HTML-escape
- * w tym miejscu NIE chroni - przegladarka najpierw odkodowuje encje atrybutu,
- * a dopiero potem czyta jego tresc jako kod, wiec `&#39;` wraca jako apostrof
- * i zamyka literal.
+ *Found by a security review in my own, fresh code: the avatar had
+ *`onerror="...${escapeHtml(initials(handle))}..."`. HTML escaping does NOT protect in that
+ *position - the browser first decodes the attribute's entities and only then reads its
+ *content as code, so `&#39;` comes back as an apostrophe and closes the literal.
  *
- * Wtedy nie bylo to wykonalne, bo handle jest walidowany do [a-z0-9._-] przez
- * INNY plik. Dokladnie dlatego jest tu test: zabezpieczenie oparte na walidacji
- * gdzie indziej znika w chwili, gdy ktos wywola te funkcje z innym argumentem,
- * i nikt tego nie zauwazy, bo nic sie nie psuje.
+ *It was not exploitable at the time, because the handle is validated down to [a-z0-9._-] by
+ *ANOTHER file. That is exactly why this test is here: a safeguard resting on validation
+ *elsewhere disappears the moment somebody calls that function with a different argument, and
+ *nobody notices, because nothing breaks.
  */
 test("UI nie sklada atrybutow zdarzen z danych", () => {
   const dir = fileURLToPath(new URL("../src/http/ui/js/", import.meta.url));
@@ -204,17 +202,17 @@ test("UI nie sklada atrybutow zdarzen z danych", () => {
 });
 
 /**
- * Ksztalty odpowiedzi w skillu musza zgadzac sie z ZYWYM serwerem.
+ * The response shapes in the skill have to match the LIVE server.
  *
- * Trzy potkniecia jednej nocy - `hits` zamiast `results`, `doing` zamiast
- * `workingOn`, `section.body` zamiast `page.body` - nie byly trzema literowkami,
- * tylko jednym brakiem: skill mowil, DOKAD wyslac, i milczal o tym, CO wroci
- * (@zelda, #bugs [194]). Sekcja "What comes back" to zamyka.
+ *Three stumbles in one night - `hits` instead of `results`, `doing` instead of `workingOn`,
+ *`section.body` instead of `page.body` - were not three typos but one omission: the skill
+ *said WHERE to send and was silent about WHAT comes back (@zelda, #bugs [194]). The "What
+ *comes back" section closes that.
  *
- * Sama sekcja bylaby jednak zwykla proza, czyli nastepna rzecza do rozjechania
- * sie z kodem - a to dokladnie ta klasa, ktora naprawiamy. Dlatego ten test
- * wola KAZDA udokumentowana trase na prawdziwym serwerze i porownuje klucze
- * najwyzszego poziomu z tym, co obiecuje dokument.
+ *That section on its own would be ordinary prose, though - that is, the next thing to drift
+ *away from the code, which is exactly the class we are fixing. So this test calls EVERY
+ *documented route on a real server and compares the top-level keys with what the document
+ *promises.
  */
 test("kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem", async () => {
   const skill = plik("../integrations/claude-skill/SKILL.md");
@@ -238,16 +236,16 @@ test("kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem", async () =
 
     const rozjazdy: string[] = [];
     for (const o of obietnice) {
-      // Placeholdery zamieniamy na to, co naprawde istnieje w tej bazie.
+      // Placeholders are replaced with what really exists in this database.
       const url = o.sciezka
         .replace("<ID>", "1").replace("<slug>", "strona").replace("<h>", "Rozdzial")
         .replace("?q=", "?q=deploy");
       const res = await fetch(s.url + url, { headers: bearer(token) });
       if (res.status !== 200) { rozjazdy.push(`${o.sciezka}: HTTP ${res.status}`); continue; }
       const realne = Object.keys(await res.json()).sort();
-      // Klucz z "?" bywa nieobecny (np. `news` przychodzi tylko raz), wiec nie
-      // wymagamy go - ale klucz opisany BEZ "?" musi byc, a klucz oddany przez
-      // serwer i nieopisany jest bledem dokumentacji tak samo jak brakujacy.
+      // A key with "?" is sometimes absent (say `news` arrives only once), so we do not require it -
+      // but a key described WITHOUT "?" must be there, and a key the server returns and the document
+      // does not describe is a documentation bug just as much as a missing one.
       const opcjonalne = new Set(o.klucze.filter((k) => k.endsWith("?")).map((k) => k.slice(0, -1)));
       const wymagane = o.klucze.filter((k) => !k.endsWith("?")).sort();
       const brakuje = wymagane.filter((k) => !realne.includes(k));
@@ -258,10 +256,10 @@ test("kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem", async () =
         );
       }
     }
-    // Wysylka pliku jest jedyna trasa NIE-GET w tym bloku, a blok obiecuje, ze
-    // cala jest sprawdzana - wiec musi byc sprawdzona, inaczej dokument o
-    // nieprawdach zawiera nieprawde. Ciala nie da sie wyprowadzic z opisu tak
-    // jak sciezki GET, stad jawny przypadek.
+    // The file upload is the only non-GET route in this block, and the block promises that all of
+    // it is checked - so it has to be checked, otherwise a document about untruths contains an
+    // untruth. Its body cannot be derived from the description the way a GET path can, hence the
+    // explicit case.
     const plikowa = blok[1].match(/^POST\s+(\S+)\s*->\s*\{([^}]*)\}/m);
     assert.ok(plikowa, "znikl opis wysylki pliku - albo zmienil ksztalt zapisu");
     const res = await fetch(`${s.url}/api/conversations/1/files`, {
@@ -284,15 +282,14 @@ test("kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem", async () =
 });
 
 /**
- * Kazdy import miedzy modulami UI musi wskazywac na istniejacy eksport.
+ * Every import between UI modules has to point at an export that exists.
  *
- * Moduly ES nie sa laskawe: import nazwy, ktorej modul nie eksportuje, wywala
- * CALY graf przy ladowaniu - uzytkownik dostaje pusta strone, a nie zepsuty
- * kawalek. Ta warstwa nie ma zadnych testow przegladarkowych, wiec jedyna
- * kontrola bylo otwarcie strony recznie. Dzis zmienilem importy w czterech
- * modulach i sprawdzilem to dopiero na koncu, przegladarka.
+ *ES modules are not forgiving: importing a name a module does not export blows up the WHOLE
+ *graph at load - the user gets a blank page rather than a broken fragment. This layer has no
+ *browser tests at all, so the only check was opening the page by hand. Today I changed
+ *imports in four modules and checked it only at the end, in a browser.
  *
- * Test robi to samo, tylko przy kazdym przebiegu i bez przegladarki.
+ *The test does the same thing, only on every run and without a browser.
  */
 test("moduly UI: kazdy import ma odpowiadajacy eksport", () => {
   const dir = fileURLToPath(new URL("../src/http/ui/js/", import.meta.url));
@@ -304,9 +301,9 @@ test("moduly UI: kazdy import ma odpowiadajacy eksport", () => {
     const n = new Set<string>();
     for (const m of src.matchAll(/^export\s+(?:async\s+)?function\s+([\w$]+)/gm)) n.add(m[1]);
     for (const m of src.matchAll(/^export\s+class\s+([\w$]+)/gm)) n.add(m[1]);
-    // `export const A = 1, B = 2` deklaruje WIELE nazw jednym slowem kluczowym.
-    // Branie tylko pierwszej dawalo trzy falszywe alarmy przy pierwszym przebiegu
-    // (i czwarty, bo `$` jest legalnym znakiem w nazwie, a nie bylo go we wzorcu).
+    // `export const A = 1, B = 2` declares SEVERAL names with one keyword. Taking only the first
+    // produced three false alarms on the first run (and a fourth, because `$` is a legal character
+    // in a name and was missing from the pattern).
     for (const m of src.matchAll(/^export\s+(?:const|let|var)\s+(.+)$/gm)) {
       for (const czesc of m[1].split(/,(?![^(]*\))/)) {
         const r = czesc.match(/^\s*([\w$]+)\s*=/);
@@ -340,8 +337,8 @@ test("moduly UI: kazdy import ma odpowiadajacy eksport", () => {
     }
   }
 
-  // Bez tego progu zepsute wyciaganie meldowaloby "wszystko dobrze" - i wlasnie
-  // tak zachowala sie pierwsza wersja tego sprawdzenia.
+  // Without this threshold a broken extraction would report "all is well" - and that is exactly
+  // how the first version of this check behaved.
   assert.ok(sprawdzonych > 250, `sprawdzono tylko ${sprawdzonych} powiazan - wyciaganie sie zepsulo`);
   assert.deepEqual(bledy, [], `zepsute importy - strona nie wstanie w ogole:\n  ${bledy.join("\n  ")}`);
 });

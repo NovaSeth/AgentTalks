@@ -1,14 +1,14 @@
 /**
- * Testy klienta `atalk` - tego, ktorego uzywaja agenci.
+ * Tests for the `atalk` client - the one agents use.
  *
- * Powstaly, bo ich brak realnie kosztowal: flagi `--force` i `--base` przy
- * `wiki write` nie byly wymienione w liscie znanych flag, wiec zamiast dzialac,
- * ladowaly w TRESCI zapisywanej strony, a zabezpieczenie przed nadpisaniem
- * cicho nie dzialalo. Zaden test tego nie zlapal, bo klient nie mial zadnego.
+ *They exist because their absence really cost: the `--force` and `--base` flags on
+ *`wiki write` were not listed among the known flags, so instead of working they landed in
+ *the CONTENT of the page being saved, while the guard against overwriting silently did not
+ *apply. No test caught it, because the client had none.
  *
- * Zasada, ktora z tego wynika i ktorej pilnuje pierwszy test: kazda flaga uzyta
- * w kodzie MUSI byc w KNOWN_FLAGS. Rozjazd jest niewidoczny w dzialaniu -
- * program nie zglasza bledu, tylko po cichu robi co innego.
+ *The rule that follows, and that the first test enforces: every flag used in the code MUST
+ *be in KNOWN_FLAGS. A mismatch is invisible in operation - the program reports no error, it
+ *quietly does something else.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -57,13 +57,13 @@ test("parser argumentow: nieznana flaga zostaje trescia, terminator konczy flagi
 });
 
 /**
- * Uruchamia atalk z konfiguracja ze zmiennych srodowiskowych i zwraca kod wyjscia.
+ * Runs atalk with its configuration from environment variables and returns the exit code.
  *
- * CELOWO nie podmieniamy `process.stdout` - to przechwytuje takze wyjscie samego
- * runnera testow i sprawia, ze przebieg wyglada na zawieszony (sprawdzone).
- * Zamiast czytac to, co klient wypisal, sprawdzamy SKUTKI przez HTTP: czy
- * wiadomosc powstala, czy strona ma wlasciwa tresc. Skutek jest mocniejszym
- * dowodem niz komunikat, bo komunikat moze byc prawdziwy przy zlym dzialaniu.
+ *We DELIBERATELY do not replace `process.stdout` - that also captures the test runner's own
+ *output and makes the run look hung (verified). Instead of reading what the client printed,
+ *we check the EFFECTS over HTTP: whether the message exists, whether the page has the right
+ *content. An effect is stronger evidence than a message, because a message can be truthful
+ *about behaviour that is wrong.
  */
 async function uruchom(argv: string[], env: Record<string, string>): Promise<number> {
   const przed = { url: process.env.AGENTTALKS_URL, token: process.env.AGENTTALKS_TOKEN };
@@ -89,7 +89,7 @@ test("atalk mowi do zywego serwera: whoami, say, read", async () => {
   assert.equal(await uruchom(["whoami"], env), 0);
   assert.equal(await uruchom(["say", "czesc", "z", "testu"], env), 0);
 
-  // Tresc ma dojsc W CALOSCI - w tym slowa, ktore wygladaja jak flagi.
+  // The content has to arrive IN FULL - including words that look like flags.
   assert.equal(await uruchom(["say", "raport:", "padlo", "na", "--coverage"], env), 0);
   const lista = await (await fetch(`${s.url}/api/conversations/1/messages`, {
     headers: { authorization: `Bearer ${token}` },
@@ -111,9 +111,9 @@ test("atalk wiki write --force dziala jako FLAGA, a nie jako tresc strony", asyn
     body: JSON.stringify({ title: "Plan", body: "tresc ali" }),
   });
 
-  // Bob nadpisuje ja SWIADOMIE, przez --force. Gdyby flaga byla nieznana,
-  // slowo "--force" wyladowaloby w tresci strony, a zapis poszedlby bez
-  // wymuszenia i zostalby odrzucony (409) - czyli objaw byly dwa naraz.
+  // Bob overwrites it DELIBERATELY, through --force. If the flag were unknown, the word
+  // "--force" would land in the page's content and the save would go through without forcing
+  // and be rejected (409) - two symptoms at once.
   const kod = await uruchom(
     ["wiki", "write", "plan", "--title", "Plan", "--force", "tresc boba"],
     { AGENTTALKS_URL: s.url, AGENTTALKS_TOKEN: tokenB },
@@ -135,31 +135,30 @@ test("atalk bez tokenu konczy sie kodem bledu, a nie wyjatkiem", async () => {
 
 test("flaga logiczna nie polyka nastepnego slowa", () => {
   const znane = new Set(["title", "force", "stdin"]);
-  // To jest dokladnie ten przypadek, ktory cicho psul `wiki write --force`:
-  // parser brał "tresc" za WARTOSC flagi, wiec wymuszenie nie dzialalo,
-  // a pierwsze slowo tresci znikalo.
+  // This is exactly the case that quietly broke `wiki write --force`: the parser took the
+  // content as the flag's VALUE, so forcing did not happen and the first word of the content
+  // disappeared.
   const a = parseArgs(["wiki", "write", "plan", "--force", "tresc", "strony"], znane);
   assert.equal(a.flags.force, true);
   assert.deepEqual(a.positional, ["wiki", "write", "plan", "tresc", "strony"]);
 
-  // Flaga z wartoscia dziala jak dotad.
+  // A flag with a value works as before.
   const b = parseArgs(["wiki", "write", "plan", "--title", "Plan"], znane);
   assert.equal(b.flags.title, "Plan");
 });
 
 /**
- * Skill uczy `export ATALKS_TOKEN` / `ATALKS_URL` (uzywa ich we wlasnych
- * przykladach curl), a zaraz potem pokazuje `atalk status`. Klient czytal
- * wylacznie `AGENTTALKS_*`, wiec agent, ktory wykonal jedno i drugie, dostawal
- * "brak tokenu" TUZ PO ustawieniu tokenu - i nie mial z czego wywnioskowac, ze
- * chodzi o inna nazwe tej samej rzeczy.
- *
- * Test idzie przez OSOBNY PROCES z podmienionym HOME, i to nie jest ozdoba:
- * sciezka konfiguracji liczy sie z homedir() raz, przy ladowaniu modulu, wiec
- * w procesie testow nie da sie jej odciac. Pierwsza wersja tego testu wolala
- * atalkMain() w miejscu i przechodzila TAKZE bez naprawy - bo `whoami` udawalo
- * sie z ZAPISANEJ konfiguracji tej maszyny, a nie ze zmiennych, ktore ustawiala.
- * Sprawdzala wiec, czy na tym komputerze jest plik z tokenem.
+ * The skill teaches `export ATALKS_TOKEN` / `ATALKS_URL` (it uses them in its own curl
+ * examples) and then immediately shows `atalk status`. The client read only `AGENTTALKS_*`,
+ * so an agent that did both got "no token" RIGHT AFTER setting the token - with nothing to
+ * deduce that this is a different name for the same thing.
+ * 
+ * The test goes through a SEPARATE PROCESS with a replaced HOME, and that is not decoration:
+ * the configuration path is computed from homedir() once, at module load, so it cannot be cut
+ * off inside the test process. The first version of this test called atalkMain() in place and
+ * passed EVEN WITHOUT the fix - because `whoami` succeeded from this machine's SAVED
+ * configuration rather than from the variables it was setting. It was therefore checking
+ * whether this computer has a file with a token.
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -176,10 +175,11 @@ test("atalk przyjmuje ATALKS_* obok AGENTTALKS_*, kanoniczne wygrywa", async () 
     createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
     const token = mintToken(s.ctx, ala.id, "test").token;
     const bin = fileURLToPath(new URL("../../bin/atalk.js", import.meta.url));
-    // Pusty HOME **oraz** pusty katalog roboczy: konfiguracja ma DWA zrodla poza
-    // srodowiskiem - globalny plik w HOME i `.agenttalks.json` szukany w gore od
-    // cwd (a repo taki ma). Odciecie tylko jednego zostawia drugie i test bada
-    // wtedy zawartosc dysku, nie zmienne. Zlapala to asercja kontrolna nizej.
+    // An empty HOME **and** an empty working directory: the configuration has TWO sources outside
+    // the environment - the global file in HOME and `.agenttalks.json` looked up upwards from cwd
+    // (and this repository has one). Cutting off only one leaves the other, and the test then
+    // examines the disk's contents rather than the variables. The control assertion below caught
+    // this.
     const HOME = mkdtempSync(sciezka(tmpdir(), "atalk-home-"));
 
     const uruchomOsobno = async (env: Record<string, string>) => {
@@ -192,8 +192,8 @@ test("atalk przyjmuje ATALKS_* obok AGENTTALKS_*, kanoniczne wygrywa", async () 
       }
     };
 
-    // Kontrola: bez zadnej zmiennej ma sie NIE udac. Bez tego test moglby
-    // przechodzic z powodu, ktorego nie bada.
+    // A control: with no variable at all it has to FAIL. Without this the test could pass for a
+    // reason it is not examining.
     assert.notEqual(await uruchomOsobno({}), 0, "bez tokenu klient nie moze dzialac");
 
     // Same nazwy ze skilla.
@@ -202,8 +202,8 @@ test("atalk przyjmuje ATALKS_* obok AGENTTALKS_*, kanoniczne wygrywa", async () 
       "nazwy, ktorych uczy skill, nie dzialaja w kliencie",
     );
 
-    // Obie naraz: wygrywa kanoniczna. Inaczej zachowanie zalezaloby od tego,
-    // ktora zostala w srodowisku po poprzedniej sesji.
+    // Both at once: the canonical one wins. Otherwise the behaviour would depend on which one was
+    // left in the environment by a previous session.
     assert.equal(
       await uruchomOsobno({
         AGENTTALKS_URL: s.url, AGENTTALKS_TOKEN: token,
