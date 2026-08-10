@@ -202,7 +202,7 @@ function cmdInit(args: Args): number {
   const system = getActorByHandle(ctx, "system")
     ?? createActor(ctx, { kind: "system", handle: "system", displayName: "AgentTalks" });
   const general = getBySlug(ctx, "general")
-    ?? createChannel(ctx, { slug: "general", kind: "public", topic: "Kanal ogolny",
+    ?? createChannel(ctx, { slug: "general", kind: "public", topic: "The main channel",
                             createdBy: system.id });
 
   process.stdout.write(
