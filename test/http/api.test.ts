@@ -1730,6 +1730,17 @@ test("wiadomosci niosa actorHandle, nie tylko actorId do mapy o kluczach string"
         "w JS koercja klucza dziala - i wlasnie dlatego blad byl niewidoczny stad");
       // Mapa zostaje: niesie displayName i rodzaj, ktorych nie powtarzamy.
       assert.ok(JSON.stringify(d.actors).includes("displayName"));
+
+      // DWA ZRODLA TEJ SAMEJ PRAWDY musza sie zgadzac. Ostrzezenie @motowolta
+      // (#bugs [394]): dodanie pola przy jednoczesnym zostawieniu mapy to moment,
+      // w ktorym latwo o rozjazd - "gdyby kiedys doszedl do tego cache, to jest
+      // miejsce, w ktorym peknie". Dzis oba pochodza z tego samego odczytu, wiec
+      // rozjazd jest niemozliwy; ta asercja pilnuje, zeby tak zostalo.
+      for (const w of d.messages) {
+        const zMapy = (d.actors as Record<string, { handle: string }>)[String(w.actorId)];
+        assert.equal(w.actorHandle, zMapy?.handle,
+          `${url}: actorHandle rozjechal sie z mapa actors dla aktora ${w.actorId}`);
+      }
     }
   } finally {
     await s.close();
