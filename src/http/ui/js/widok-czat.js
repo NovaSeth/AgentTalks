@@ -12,16 +12,16 @@ import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, czy
 import { showError, showToast } from "./toasty.js";
 import { openWikiPage, renderWikiMain } from "./widok-wiki.js";
 
-// Popularny zestaw do popovera "dodaj reakcje" - kazda wartosc idzie przez to
-// samo API co dowolna inna reakcja, wiec paleta jest tylko wygoda UI.
+// A popular set for the "add a reaction" popover - every value goes through the same API as
+// any other reaction, so the palette is only a UI convenience.
 const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "👏", "✅", "🤔", "😢", "💯", "🙏", "👋", "⭐", "🙌"];
 
-// ------------------------------------------------------- wejscie do rozmowy
+// ------------------------------------------------- entering a conversation
 export async function openConversation(id, focusMessageId) {
   saveDraft();                       // szkic POPRZEDNIEJ rozmowy, zanim cokolwiek przerysujemy
   const poprzednia = state.activeId;
-  // Kreska "nowe wiadomosci" znika dopiero przy WYJSCIU z rozmowy - inaczej
-  // gubi sie w trakcie czytania to jedyne miejsce, ktore mowilo "tu skonczyles".
+  // The "new messages" line disappears only on LEAVING a conversation - otherwise the one place
+  // that said "this is where you stopped" gets lost while you are still reading.
   if (poprzednia && poprzednia !== id) delete state.readMark[poprzednia];
   state.view = "chat";
   state.activeId = id;
@@ -33,9 +33,9 @@ export async function openConversation(id, focusMessageId) {
   const draft = loadDraft(id);
   state.pendingFiles = draft?.files ?? [];
   state.replyTo = draft?.replyTo ?? null;
-  // Znacznik "dotad przeczytane" zamrozony RAZ, PRZED oznaczeniem przeczytanego:
-  // po 500 ms serwer przesuwa go na koniec i informacja "od ktorego miejsca to
-  // nowe" przestaje istniec takze po odswiezeniu.
+  // The "read up to here" marker is frozen ONCE, BEFORE marking anything read: after 500 ms the
+  // server moves it to the end and the information "from which point this is new" stops
+  // existing, including after a refresh.
   if (state.readMark[id] === undefined) {
     state.readMark[id] = state.memberships[id]?.lastReadMessageId ?? 0;
   }
@@ -56,7 +56,8 @@ export async function openConversation(id, focusMessageId) {
   }
   renderMain();
   refreshQuestions(id);
-  // Piny sa potrzebne od razu: bez nich menu wiadomosci nie wie, czy proponowac
+  // Pins are needed straight away: without them the message menu does not know whether to offer
+  // "Pin" or "Unpin". Previously only the details panel fetched them.
   // "Przypnij" czy "Odepnij". Wczesniej pobieral je wylacznie panel szczegolow.
   state.convPins = [];
   loadPins(id);
@@ -68,17 +69,17 @@ export async function openConversation(id, focusMessageId) {
       setTimeout(() => el.classList.remove("flash"), 1600);
     }
   } else {
-    // Wejscie ustawia sie na KRESCE nieprzeczytanych, gdy jakas jest - "doczytanie
-    // zaleglosci" ma byc czynnoscia skonczona, a nie przewijaniem w gore na wyczucie.
+    // Entering positions itself on the unread LINE when there is one - "catching up on the
+    // backlog" is meant to be a finite action, not scrolling upwards by feel.
     const linia = document.querySelector("#messages .newline");
     if (linia) linia.scrollIntoView({ block: "start", behavior: zachowanieScrolla(false) });
     else scrollToBottom(false);
   }
-  // Dwa powody, dla ktorych to NIE jest bezwarunkowe:
-  // 1) serwerowy markRead dopisuje do kanalu, wiec podglad kanalu z sekcji
-  //    "Do odkrycia" po cichu zapisywalby nas do niego (i budzil przy @all);
-  // 2) skok do konkretnej wiadomosci to zajrzenie w jedno miejsce, a nie
-  //    oswiadczenie "przeczytalem cala reszte" - od tego jest dojechanie na dol.
+  // Two reasons why this is NOT unconditional:
+  // 1) the server's markRead joins the channel, so previewing a channel from the "Discoverable"
+  //    section would quietly enrol us in it (and wake us on @all);
+  // 2) a jump to a particular message is a look at one place, not a statement of "I read all
+  //    the rest" - reaching the bottom is what does that.
   if (state.memberships[id] && !focusMessageId) markReadDebounced(id, lastMessageId(id));
 }
 
@@ -95,9 +96,9 @@ export async function openThread(rootId) {
   renderThread();
 }
 
-/** Zerwany strumien zdarzen jako PASEK NAD ROZMOWA, a nie drobny druk pod cala
- *  lista kanalow. "Nie widzisz nowych wiadomosci" to nie jest informacja tej
- *  samej wagi co numer wersji interfejsu - a dokladnie tam wczesniej stala. */
+/** A broken event stream as a BAR ABOVE THE CONVERSATION, not as fine print under the whole
+/**  channel list. "You are not seeing new messages" is not information of the same weight as
+/**  the interface version number - and that is exactly where it used to stand. */
 export function offlineBarHtml() {
   if (state.online) return "";
   return `<div class="offbar" role="status" id="offbar">
@@ -106,8 +107,8 @@ export function offlineBarHtml() {
   </div>`;
 }
 
-/** Pasek offline pojawia sie i znika poza pelnym renderem (strumien zdarzen
- *  zrywa sie w dowolnym momencie), wiec ma wlasna, punktowa aktualizacje. */
+/** The offline bar appears and disappears outside a full render (the event stream breaks
+ *  at any moment), so it has its own pointwise update. */
 export function updateOfflineBar() {
   const main = document.getElementById("main");
   if (!main) return;
@@ -125,9 +126,8 @@ export function renderMain() {
   if (state.view === "notifications") { widok.powiadomienia(); return; }
   if (state.view === "wiki") { renderWikiMain(); return; }
   if (!state.activeId) {
-    // Pusty stan mowi, co zrobic, i daje na to przycisk - "wybierz rozmowę" bez
-    // niczego wiecej zostawialo czlowieka przy pustym ekranie i liscie, ktora
-    // tez bywa pusta pierwszego dnia.
+    // An empty state says what to do and gives a button for it - "choose a conversation" with
+    // nothing more left a human at an empty screen and a list that is often empty on day one.
     el.innerHTML = emptyStateHtml(iconChat(2.6), t("You have no conversation open yet"),
       t("Enter a channel from the list on the left, or write to somebody privately."),
       { id: "empty-new", label: t("Start a conversation") });
@@ -205,8 +205,8 @@ export async function refreshDetailsData() {
     ]);
     state.convMembers = convData.members || [];
     state.convPins = pinsData.pins || [];
-    // Cache aktorow zna tylko autorow wiadomosci - czlonek, ktory nic nie napisal,
-    // mialby "@?"; dociagamy katalog raz.
+    // The actor cache knows only the authors of messages - a member who has written nothing
+    // would show as "@?"; we fetch the directory once.
     const missing = state.convMembers.some((m) => !state.actorsCache[m.actorId]);
     if (missing) await ensureActors({ force: true });
   } catch (e) { showError(e); }
@@ -398,8 +398,8 @@ export function renderTopbar() {
   if (!c || state.view !== "chat") return;
   const isDirect = c.kind === "dm" || c.kind === "group";
   if (isDirect) {
-    // Rozmowcy z serwera (`others`) sa dostepni od pierwszej klatki, wiec naglowek
-    // ma nazwe i kropke obecnosci jeszcze zanim przyjdzie pierwsza wiadomosc.
+    // The participants from the server (`others`) are available from the first frame, so the
+    // header has a name and a presence dot before the first message arrives.
     const inni = dmOthers(c);
     const online = inni.length > 0 && inni.some((o) => handleOnline(o.handle));
     bar.innerHTML = `<span class="ppresence big ${online ? "on" : ""}"></span> ${escapeHtml(dmLabel(c))}`;
@@ -409,11 +409,11 @@ export function renderTopbar() {
   }
 }
 
-// ------------------------------------------------------------- pasek obecnosci
-// "pisze..." (czlowiek, kropki jak iMessage) vs "pracuje" (agent, zebatka) -
-// dwa ROZNE sygnaly, celowo rozna forma.
-/** Piszacy w danym miejscu ("c:<id>" / "w:<slug>"), po jednym na aktora.
- *  Sygnal bez miejsca (starsi klienci) liczy sie wszedzie. */
+// -------------------------------------------------------- the presence bar
+// "typing..." (a human, dots as in iMessage) versus "working" (an agent, a cog) - two
+// DIFFERENT signals, deliberately in different shapes.
+/** Who is writing in a given place ("c:<id>" / "w:<slug>"), one per actor.
+/**  A signal with no place (older clients) counts everywhere. */
 function typersAt(loc) {
   const seen = new Set();
   const out = [];
@@ -426,9 +426,8 @@ function typersAt(loc) {
   return out;
 }
 
-/** Kuleczki piszacych: DOKLADNIE ten sam wyglad co mini-awatary przy pasku
- *  watku (rozmiar, inicjaly, kolor aktora) - jedna kuleczka na aktora,
- *  podskakujaca z przesunieciem fazy. */
+/** The typing bubbles: EXACTLY the same look as the mini-avatars on the thread bar (size,
+/**  initials, actor colour) - one bubble per actor, bouncing with a phase offset. */
 export function typingFacesHtml(loc) {
   const typers = typersAt(loc);
   if (!typers.length) return "";
@@ -458,18 +457,18 @@ export function renderPresenceBar() {
   el.classList.toggle("on", parts.length > 0);
 }
 
-/** Podpiete raz na render listy: sledzi pozycje scrolla i steruje pillem. */
+/** Attached once per list render: tracks the scroll position and drives the pill. */
 function bindScrollWatch(el) {
   el.addEventListener("scroll", () => {
     updateJumpPill();
-    // Oznaczenie przeczytanego nalezy do TEGO warunku: dojechales na dol, wiec
-    // naprawde widzisz najnowsze. Podglad kanalu, do ktorego nie nalezysz, nie
-    // moze zapisywac Cie do niego przez sam scroll.
+    // Marking as read belongs to THIS condition: you reached the bottom, so you really do see the
+    // newest. Previewing a channel you do not belong to must not enrol you in it by scrolling
+    // alone.
     if (isScrolledToBottom() && state.activeId && state.memberships[state.activeId]) {
       markReadDebounced(state.activeId, lastMessageId(state.activeId));
     }
-    // Doczytywanie starszych: bez klikania, gdy zblizasz sie do gory listy.
-    // Prog 300 px, zeby paczka zdazyla dojsc, zanim uderzysz w sufit.
+    // Loading older ones: without clicking, as you approach the top of the list. A 300 px
+    // threshold, so the batch has time to arrive before you hit the ceiling.
     if (el.scrollTop < 300 && state.activeId && state.hasMore[state.activeId]) {
       loadOlderMessages(state.activeId);
     }
@@ -526,8 +525,8 @@ export function renderMessages() {
     if (others.length) dmMembersCache[c.id] = others;
   }
 
-  // Starsze doczytuja sie same przy przewijaniu w gore; przycisk zostaje jako
-  // droga awaryjna (np. gdy paczka nie wypelnila ekranu i nie ma czego scrollowac).
+  // Older messages load themselves as you scroll up; the button stays as an escape route (say,
+  // when a batch did not fill the screen and there is nothing to scroll).
   let html = state.hasMore[state.activeId]
     ? `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>` : "";
   const idx = threadIndex(state.activeId);
@@ -537,8 +536,8 @@ export function renderMessages() {
   for (const m of list) {
     const day = dayKey(m.ts);
     if (day !== lastDay) { html += `<div class="day">${dayLabel(m.ts)}</div>`; lastDay = day; lastAuthor = null; }
-    // Kreska "nowe wiadomosci": jedno miejsce, ktore mowi "tu skonczyles czytac".
-    // Serwer podaje lastReadMessageId od zawsze, a UI nie uzywal go ani razu.
+    // The "new messages" line: the one place that says "this is where you stopped reading". The
+    // server has supplied lastReadMessageId all along, and the UI never used it once.
     if (!kreska && mark && typeof m.id === "number" && m.id > mark && m.actorId !== state.actor.id) {
       html += `<div class="newline"><span>${t("New messages")}</span></div>`;
       kreska = true;
@@ -546,8 +545,8 @@ export function renderMessages() {
     }
     const cont = m.actorId === lastAuthor && (m.ts - lastTs) < 300 && !m.deletedAt && m.kind !== "ask";
     html += messageHtml(m, cont, { threads: idx });
-    // Pytanie ma wlasna, wyrozniona rame - nic sie z nim nie skleja (ani ono
-    // z poprzednim, ani nastepna wiadomosc z nim), inaczej gubi sie autor.
+    // A question has its own, distinct frame - nothing merges with it (neither it with the
+    // previous message, nor the next message with it), otherwise the author gets lost.
     lastAuthor = m.kind === "ask" ? null : m.actorId;
     lastTs = m.ts;
   }
@@ -555,15 +554,15 @@ export function renderMessages() {
   bindMessageEvents(el);
   const lm = el.querySelector("#btn-loadmore");
   if (lm) lm.addEventListener("click", () => { lm.disabled = true; loadOlderMessages(state.activeId); });
-  // Pozycja czytania: podmiana dzieci zeruje scrollTop, wiec albo trzymamy dol
-  // (bo tam bylismy), albo wracamy tam, gdzie uzytkownik faktycznie patrzyl.
+  // Reading position: replacing the children resets scrollTop, so we either hold the bottom
+  // (because that is where we were) or return to where the user was actually looking.
   el.scrollTop = trzymajDol ? el.scrollHeight : scrollTop;
   odtworzOtwartaEdycje(el, edycja);
 }
 
-/** Punktowa podmiana JEDNEGO dymka - domyslna sciezka dla zdarzen na zywo.
- *  Pelny render listy przy kazdej wiadomosci, reakcji i odswiezeniu pytan
- *  kasowal caly stan zyjacy w DOM i kosztowal tyle, co cala rozmowa. */
+/** A pointwise replacement of ONE bubble - the default path for live events.
+/**  A full list render on every message, reaction and question refresh erased all the state
+/**  living in the DOM and cost as much as the whole conversation. */
 export function upsertMessageNode(msg) {
   if (!msg || state.view !== "chat") return;
   const el = document.getElementById("messages");
@@ -572,16 +571,16 @@ export function upsertMessageNode(msg) {
   const stary = el.querySelector(`[data-msg="${msg.id}"]`);
   const idx = threadIndex(state.activeId);
   if (stary) {
-    // Dymek, w ktorym uzytkownik wlasnie pisze, jest nietykalny.
+    // The bubble the user is writing in right now is untouchable.
     if (stary.querySelector(".inline-edit")) return;
     const tmp = document.createElement("div");
     tmp.innerHTML = messageHtml(msg, stary.classList.contains("cont"), { threads: idx });
     stary.replaceWith(tmp.firstElementChild);
     return;
   }
-  // Dokladamy TYLKO na koniec i tylko, gdy lista faktycznie jest na ekranie.
-  // Wstawka w srodku (dosylka po przerwie) idzie normalnym renderem, zeby nie
-  // popsuc kolejnosci ani separatorow dni.
+  // We append ONLY at the end, and only when the list really is on screen. An insertion in the
+  // middle (a replay after a break) goes through a normal render, so as not to break the order
+  // or the day separators.
   const lista = widoczneWiadomosci(state.activeId);
   const i = lista.findIndex((x) => x.id === msg.id);
   if (i !== lista.length - 1 || !el.querySelector("[data-msg]")) { renderMessages(); return; }
@@ -596,8 +595,8 @@ export function upsertMessageNode(msg) {
 function reactionChipsHtml(m) {
   const r = state.reactions[m.id];
   if (!r) return "";
-  // Wartosc reakcji to niezaufane wejscie innego aktora (normalizeEmoji dopuszcza
-  // kazdy krotki token) - MUSI byc escapowana takze przy wyswietlaniu.
+  // A reaction's value is untrusted input from another actor (normalizeEmoji admits any short
+  // token) - it MUST be escaped when displayed as well.
   return Object.entries(r).map(([emoji, handles]) => {
     const mine = handles.includes(state.actor.handle);
     const safeEmoji = escapeHtml(emoji);
@@ -606,12 +605,12 @@ function reactionChipsHtml(m) {
   }).join("");
 }
 
-/** Pasek watku jak w Slacku: awatary uczestnikow + liczba odpowiedzi + czas
- *  ostatniej. Widoczny zawsze, gdy watek istnieje - to on robi watki
- *  odkrywalnymi (ikona w hover-menu tylko go ZAKLADA). */
-/** Mapa "korzen watku -> odpowiedzi", liczona RAZ na render. Wczesniej kazda
- *  wiadomosc filtrowala w tym celu cala tablice rozmowy, czyli koszt rosl
- *  z kwadratem liczby wiadomosci - przy kazdym zdarzeniu SSE. */
+/** A thread bar as in Slack: the participants' avatars + the number of replies + the time of
+/**  the last one. Always visible when a thread exists - it is what makes threads discoverable
+/**  (the icon in the hover menu only CREATES one). */
+/** A "thread root -> replies" map, computed ONCE per render. Previously every message filtered
+/**  the whole conversation array for this, so the cost grew with the square of the number of
+/**  messages - on every SSE event. */
 function threadIndex(convId) {
   const map = new Map();
   for (const m of state.msgs[convId] || []) {
@@ -660,10 +659,10 @@ function attachmentHtml(m) {
   </a>`;
 }
 
-/** Status doreczenia po ludzku. To jedna z najlepszych rzeczy w produkcie -
- *  nigdzie indziej nie wiesz, czy rozmowca w ogole ma szanse to przeczytac -
- *  a mowila po inzyniersku ("cisza 47 min - obudzalny", "nieosiagalny"). Teraz
- *  kazdy wiersz jest zdaniem: co jest teraz i co z tego wynika. */
+/** Delivery status in human terms. This is one of the best things in the product - nowhere
+/**  else do you know whether the person you are writing to has any chance of reading it - and
+/**  it spoke like an engineer ("silent 47 min - wakeable", "unreachable"). Now every line is a
+/**  sentence: what is true now and what follows from it. */
 function deliveryHtml(m) {
   const d = state.lastDelivery;
   if (!d || d.conversationId !== m.conversationId || d.messageId !== m.id) return "";
@@ -679,17 +678,17 @@ function deliveryHtml(m) {
   return `<div class="delivery">${parts.join(" · ")}</div>`;
 }
 
-/* Animacja wejscia tylko przy PIERWSZYM renderze wiadomosci. Kazdy re-render
-   (reakcja, edycja, odczyt) przerysowuje cala liste i bez tej pamieci wszystkie
-   dymki odgrywaly "wjazd" od nowa. */
+/* The entry animation only on a message's FIRST render. Every re-render (a reaction,
+   an edit, a read) redraws the whole list, and without this memory every bubble
+   replayed its "slide in" from scratch. */
 
 function messageHtml(m, cont, opts = {}) {
   const handle = actorHandle(m.actorId);
   const kind = actorKind(m.actorId);
   const mine = m.actorId === state.actor.id;
-  // Wpis w locie: ten sam ksztalt dymka, ale wyszarzony i bez akcji, ktorych
-  // serwer jeszcze nie zna. Przy bledzie tresc ZOSTAJE na ekranie z ponowieniem -
-  // w tym momencie jest to jedyna kopia tego, co uzytkownik napisal.
+  // An in-flight entry: the same bubble shape, but greyed out and without the actions the server
+  // does not know about yet. On an error the content STAYS on screen with a retry - at that
+  // moment it is the only copy of what the user wrote.
   if (m.pending || m.failed) {
     return `
     <div class="msg ${cont ? "cont" : ""} ${m.failed ? "failed" : "sending"}" data-msg="${m.id}">
@@ -717,25 +716,25 @@ function messageHtml(m, cont, opts = {}) {
   const askOpen = isAsk && qid !== undefined;
   const chips = m.deletedAt ? "" : reactionChipsHtml(m);
   const resolved = !!m.resolvedAt;
-  // Dwa RÓŻNE twierdzenia, wiec dwa rozne znaczki: "naprawione" mowi ten, kto
-  // zmienil kod, "potwierdzone" - ten, kto zglosil (albo admin). Jeden znaczek
-  // na oba czytaloby sie jak weryfikacja, a znaczyloby "ktos twierdzi, ze zrobil".
+  // Two DIFFERENT claims, so two different badges: "fixed" is said by whoever changed the code,
+  // "confirmed" by whoever reported it (or an admin). One badge for both would read as a
+  // verification while meaning "somebody claims they did it".
   const fixed = !!m.fixedAt && !resolved;
-  // Rozwiazac moze autor, admin instancji, albo admin kanalu (jak na serwerze).
+  // Resolving is for the author, the instance admin, or a channel admin (as on the server).
   const myMem = state.memberships[m.conversationId];
-  // ...ale POKAZUJEMY to tylko przy wiadomosci, ktora jest zgloszeniem: albo juz
-  // krazy w tym obiegu (ma fixedAt/resolvedAt), albo ktos jawnie powiedzial
-  // "potraktuj jako zgłoszenie". Wczesniej klucz i check wisialy przy kazdej
-  // cudzej wiadomosci, takze w rozmowie prywatnej o obiedzie - a przypadkowy
-  // klik wysylal komus prosbe o potwierdzenie czegos, czego nie zglaszal.
+  // ...but we SHOW it only next to a message that is a report: either it is already circulating
+  // in that cycle (it has fixedAt/resolvedAt), or somebody explicitly said "treat as a report".
+  // Previously the wrench and the check hung next to EVERY message from somebody else, including
+  // in a private conversation about lunch - and an accidental click sent somebody a request to
+  // confirm something they had never reported.
   const zgloszenie = czyZgloszenie(m);
   const canResolve = zgloszenie && !m.deletedAt && m.kind !== "answer"
     && (mine || state.actor.isAdmin || (myMem && myMem.role === "admin"));
   const canFix = zgloszenie && !mine && m.kind === "text" && !m.deletedAt;
   const przypieta = state.convPins.some((p) => p.messageId === m.id);
   const fresh = !animatedMsgs.has(m.id);
-  // Zbior rosl przez cale zycie karty. Reset po przekroczeniu progu kosztuje
-  // jedna niepotrzebna animacje wejscia i oddaje pamiec.
+  // The set grew for the whole life of the tab. A reset past a threshold costs one unnecessary
+  // entry animation and gives the memory back.
   if (animatedMsgs.size > 5000) animatedMsgs.clear();
   if (fresh) animatedMsgs.add(m.id);
   return `
@@ -762,8 +761,8 @@ function messageHtml(m, cont, opts = {}) {
           <button class="answerbtn" data-answer="${qid}" data-msg-ref="${m.id}">${iconReply()} ${t("Answer")}</button>
         </div>` : ""}
         ${(() => {
-          // Jeden staly wiersz pod wpisem, jak w Slacku: chipy reakcji,
-          // za nimi widoczny przycisk "dodaj reakcje", a odpowiedzi watku po prawej.
+          // One fixed row under an entry, as in Slack: the reaction chips, then a visible "add a
+          // reaction" button, and the thread replies on the right.
           if (m.deletedAt) return "";
           const tlink = !m.threadId && !opts.noThreadLink ? threadLinkHtml(m, opts.threads) : "";
           return `<div class="reacts">${chips}
@@ -784,10 +783,9 @@ function messageHtml(m, cont, opts = {}) {
     </div>`;
 }
 
-// JEDEN delegowany sluchacz na kontener zamiast dwunastu przebiegow
-// querySelectorAll po kazdym renderze. Dzieki temu podmiana pojedynczego dymka
-// nie wymaga podpinania czegokolwiek na nowo - a listy wiadomosci nie trzeba
-// przerysowywac tylko po to, zeby przyciski znowu dzialaly.
+// ONE delegated listener on the container instead of a dozen querySelectorAll passes after
+// every render. Thanks to that, replacing a single bubble requires re-attaching nothing - and
+// the message list does not have to be redrawn just to make the buttons work again.
 const PODPIETE = new WeakSet();
 
 export function bindMessageEvents(scope) {
@@ -836,7 +834,7 @@ export function bindMessageEvents(scope) {
       e.preventDefault();
       const slug = b.dataset.wikilink;
       if (state.wiki.pages.some((p) => p.slug === slug)) { openWikiPage(slug); return; }
-      // Czerwony link: strony nie ma - otwieramy edytor nowej pod tym slugiem.
+      // A red link: the page does not exist - we open the editor for a new one under that slug.
       state.view = "wiki";
       state.wiki.slug = slug;
       state.wiki.page = null;
@@ -849,8 +847,8 @@ export function bindMessageEvents(scope) {
       renderWikiMain();
     }
   });
-  // Dotyk nie zna hover, a pasek akcji zyl wylacznie na hoverze. Dlugie
-  // przytrzymanie wiadomosci (500 ms) odslania go tak samo jak w Slacku.
+  // Touch has no hover, and the action bar lived only on hover. A long press on a message
+  // (500 ms) reveals it exactly as in Slack.
   let holdTimer = null;
   scope.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse") return;
@@ -867,11 +865,11 @@ export function bindMessageEvents(scope) {
   scope.addEventListener("pointermove", anuluj, { passive: true });
 }
 
-// --------------------------------------------------- menu "więcej" wiadomosci
-// Czynnosci rzadkie, nieoczywiste albo nieodwracalne maja miec PELNA NAZWE i
-// jedno miejsce. Pasek na hover zostaje dla trzech najczestszych; reszta -
-// przypinanie (API bylo, przycisku nie), wejscie w obieg zgloszen, kasowanie -
-// mieszka tutaj, gdzie kazda pozycja jest zdaniem, a nie piktogramem.
+// --------------------------------------------------- the message "more" menu
+// Rare, non-obvious or irreversible actions get a FULL NAME and one place. The hover bar stays
+// for the three most frequent ones; the rest - pinning (the API existed, the button did not),
+// entering the report cycle, deleting - lives here, where every item is a sentence rather than
+// a pictogram.
 let closeMsgMenu = null;
 
 function openMessageMenu(messageId, anchor) {
@@ -945,10 +943,10 @@ function openMessageMenu(messageId, anchor) {
 }
 
 // ------------------------------------------------------- edycja inline
-/** @param scope kontener, z ktorego przyszedl klik. Ta sama wiadomosc bywa
- *  w dokumencie DWA razy (glowna lista + korzen watku), wiec szukanie po calym
- *  dokumencie zawsze trafialo w pierwsze wystapienie - czyli otwieralo pole
- *  edycji w kopii, ktorej uzytkownik w tej chwili nie widzi. */
+/** @param scope the container the click came from. The same message is sometimes in the
+/**  document TWICE (the main list + the thread root), so searching the whole document always
+/**  hit the first occurrence - that is, it opened the edit field in the copy the user cannot
+/**  see at that moment. */
 function startInlineEdit(messageId, scope) {
   const holder = (scope || document).querySelector(`[data-text="${messageId}"]`);
   if (!holder) return;
@@ -975,7 +973,7 @@ function startInlineEdit(messageId, scope) {
   autos(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
 }
 
-// ------------------------------------------------------- odpowiedz na pytanie
+// ------------------------------------------------------ answering a question
 function startInlineAnswer(questionId, messageId, scope) {
   const cta = (scope || document).querySelector(`[data-answer-cta="${messageId}"]`);
   if (!cta) return;
@@ -1010,9 +1008,8 @@ function openLightbox(url) {
   overlay.innerHTML = `<img src="${url}" alt="${t("Enlarged attachment")}">`;
   document.body.appendChild(overlay);
   const wrocDo = document.activeElement;
-  // Sluchacz zdejmowany w JEDNYM miejscu: wczesniej wychodzilo tylko galezia
-  // Escape, wiec zamkniecie klikiem zostawialo zywe domkniecie z referencja
-  // do usunietego elementu.
+  // The listener is removed in ONE place: previously only the Escape branch exited, so closing
+  // by a click left a live close handler holding a reference to a removed element.
   const close = () => {
     overlay.remove();
     document.removeEventListener("keydown", onKey);
@@ -1068,12 +1065,12 @@ let draftTimer = null;
 
 function zapiszSzkicPozniej() { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 400); }
 
-/** Wspolne wejscie dla plikow z dialogu, ze schowka i z przeciagniecia. */
+/** A shared entry point for files from the dialog, from the clipboard and from a drag. */
 function dodajPliki(files) {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   for (const file of files) {
-    // Zrzut ekranu ze schowka przychodzi bez sensownej nazwy ("image.png"),
-    // a na liscie zalacznikow ma sie dac go pozniej rozpoznac.
+    // A screenshot from the clipboard arrives with no sensible name ("image.png"), and it has to
+    // be recognisable later in the attachment list.
     const nazwany = file.name && file.name !== "image.png"
       ? file
       : new File([file], `wklejone-${stamp}.${file.type.split("/")[1] || "png"}`, { type: file.type });
@@ -1097,8 +1094,8 @@ function odswiezPrzyciskWyslij() {
   send.classList.toggle("ready", can);
 }
 
-/** Upuszczenie pliku na CALY obszar rozmowy, jak w Slacku - trzy kroki (zapisz
- *  na dysk, otworz dialog, znajdz plik) zamieniaja sie w jeden. */
+/** Dropping a file onto the WHOLE conversation area, as in Slack - three steps (save to disk,
+/**  open the dialog, find the file) turn into one. */
 function bindDropZone(el) {
   if (el.dataset.dropbound) return;
   el.dataset.dropbound = "1";
@@ -1118,8 +1115,8 @@ export function renderComposer() {
   if (!el) return;
   const replyMsg = state.replyTo ? findMsgById(state.replyTo) : null;
   const c = state.conversations.find((x) => x.id === state.activeId);
-  // Pytanie ma sens tylko na kanale: w rozmowie prywatnej "otwarte pytanie"
-  // nie ma komu lezec na liscie do podjecia.
+  // A question only makes sense on a channel: in a direct conversation an "open question" has
+  // nobody's list to lie on.
   const kanal = !!c && (c.kind === "public" || c.kind === "private");
   const ask = kanal && state.askMode;
   el.innerHTML = `
@@ -1148,8 +1145,8 @@ export function renderComposer() {
   if (cancel) cancel.addEventListener("click", () => { state.replyTo = null; renderComposer(); focusComposer(); });
   const askBtn = document.getElementById("composer-ask");
   if (askBtn) askBtn.addEventListener("click", () => {
-    // Pytanie i odpowiedz w watku wykluczaja sie: pytanie idzie do kanalu, a nie
-    // pod czyjas wypowiedz.
+    // A question and a thread reply are mutually exclusive: a question goes to the channel, not
+    // under somebody's utterance.
     state.askMode = !state.askMode;
     if (state.askMode) state.replyTo = null;
     renderComposer(); focusComposer();
@@ -1165,15 +1162,14 @@ export function renderComposer() {
     send.disabled = !can;
     send.classList.toggle("ready", can);
   };
-  // Szkic wraca do pola razem z rozmowa (i przezywa F5 - tekst siedzi w localStorage).
+  // The draft returns to the field with the conversation (and survives F5 - the text is in localStorage).
   const draft = state.drafts[state.activeId];
   if (draft?.text) ta.value = draft.text;
   ta.addEventListener("input", () => { autosize(); signalTyping(); mentionAutocomplete(ta); zapiszSzkicPozniej(); });
   ta.addEventListener("keydown", (e) => {
     if (mentionKeydown(e, ta)) return;
-    // Slackowe ArrowUp na PUSTYM polu: edycja ostatniej wlasnej wiadomosci.
-    // Bez tego literowke poprawia sie wylacznie trafiajac w ikone 1.8rem,
-    // widoczna tylko przy najechaniu myszka.
+    // Slack's ArrowUp on an EMPTY field: edit your own last message. Without it a typo can be
+    // fixed only by hitting a 1.8rem icon that is visible only on hover.
     if (e.key === "ArrowUp" && !ta.value.trim() && !state.pendingFiles.length) {
       const mine = [...widoczneWiadomosci(state.activeId)].reverse()
         .find((m) => m.actorId === state.actor.id && m.kind === "text" && !m.deletedAt && !m.pending && !m.failed);
@@ -1181,8 +1177,8 @@ export function renderComposer() {
     }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
   });
-  // Wklejenie zrzutu ekranu wprost do rozmowy - najczestsza forma zalacznika
-  // w narzedziu dla programistow i agentow; wczesniej Ctrl+V nie robilo nic.
+  // Pasting a screenshot straight into the conversation - the most common form of attachment in
+  // a tool for programmers and agents; previously Ctrl+V did nothing.
   ta.addEventListener("paste", (e) => {
     const files = [...(e.clipboardData?.files || [])];
     if (!files.length) return;
@@ -1201,7 +1197,7 @@ export function renderComposer() {
     const v = ta.value.trim();
     if (!v && !state.pendingFiles.length) return;
     closeMentionPopover();
-    // Pytanie do kanalu idzie osobna trasa i nie niesie zalacznikow.
+    // A question to the channel goes by a separate route and carries no attachments.
     if (ask) {
       if (!v) return;
       ta.value = ""; autosize();
@@ -1211,8 +1207,8 @@ export function renderComposer() {
     }
     const files = state.pendingFiles; state.pendingFiles = [];
     ta.value = ""; renderPreviews(); autosize();
-    // Plik, ktorego nie udalo sie wyslac, WRACA do podgladow - inaczej znikalby
-    // razem z jedyna kopia wyboru, ktorego uzytkownik dokonal.
+    // A file that failed to send RETURNS to the previews - otherwise it would disappear together
+    // with the only copy of the choice the user made.
     const nieudane = [];
     for (const p of files) {
       const ok = await uploadAttachment(p);
@@ -1229,10 +1225,10 @@ export function renderComposer() {
 /** Opcje pliku pod podgladem. Ida jako naglowki x-sensitive / x-burn / x-ttl.
  *
  *  Byly trzema nieopisanymi piktogramami (tarcza, plomien, lista) - w tym
- *  "spal po odczycie", czynnoscia NIEODWRACALNA, uruchamiana jednym klikiem
- *  w obrazek. Teraz to zwiniete menu z pelnymi etykietami i zdaniem o skutku;
- *  domyslnie zamkniete, wiec zwykle wyslanie pliku nie robi sie trudniejsze,
- *  ale nikt nie spali zalacznika, nie przeczytawszy, co robi. */
+ *  "burn after reading", an IRREVERSIBLE action triggered by one click on a picture. Now it is
+ *  a collapsed menu with full labels and a sentence about the consequence; closed by default,
+ *  so sending a file normally does not get harder, but nobody burns an attachment without
+ *  having read what it does. */
 function wybraneOpcje(p) {
   return [
     p.sensitive ? t("sensitive") : null,
@@ -1288,8 +1284,8 @@ function renderPreviews() {
     odswiezPrzyciskWyslij();
     saveDraft();
   }));
-  // Podsumowanie w naglowku odswiezamy PUNKTOWO, zamiast przerysowywac podglady:
-  // pelny render zamykalby wlasnie otwarte menu przy kazdym kliknieciu w opcje.
+  // We refresh the summary in the header POINTWISE rather than redrawing the previews: a full
+  // render would close the menu that was just opened, on every click on an option.
   const odswiezPodsumowanie = (id) => {
     const p = state.pendingFiles.find((x) => x.id === id);
     const sum = box.querySelector(`[data-pvopts="${id}"] > summary`);
@@ -1354,11 +1350,11 @@ async function mentionAutocomplete(ta) {
   const m = upto.match(/(^|[\s(])@([a-z0-9._-]{0,24})$/i);
   if (!m) { closeMentionPopover(); return; }
   mentionStart = upto.length - m[2].length - 1;
-  // Jedna regula odswiezania katalogu (TTL) zamiast trzech roznych - inaczej
-  // agent, ktory dolaczyl minute temu, nie istnial dla podpowiedzi.
+  // One rule for refreshing the directory (a TTL) instead of three different ones - otherwise an
+  // agent that joined a minute ago did not exist for the suggestions.
   await ensureActors();
   const q = m[2].toLowerCase();
-  // @all na gorze listy, gdy pasuje - jedno ogloszenie budzi caly kanal.
+  // @all at the top of the list when it matches - one announcement wakes the whole channel.
   const allItem = { handle: "all", displayName: t("everybody on the channel"), kind: "all" };
   const showAll = (!q || "all".startsWith(q) || "wszyscy".startsWith(q));
   mentionItems = [
@@ -1382,13 +1378,13 @@ async function mentionAutocomplete(ta) {
       <span class="kindtag ${a.kind === "all" ? "" : a.kind}">${a.kind === "all" ? t("the whole channel") : a.kind === "human" ? t("human") : t("agent")}</span>
     </button>`).join("");
 
-  // Ustawienie POZYCJI, przyciete do widocznego obszaru.
+  // Setting the POSITION, clamped to the visible area.
   //
-  // Na telefonie klawiatura zabiera dol ekranu, a `position:fixed` liczy sie
-  // wzgledem calego okna, nie tego, co widac - wiec lista wyliczona "nad polem"
-  // potrafila wyladowac pod klawiatura albo za krawedzia. Objaw dla uzytkownika:
-  // wpisuje @ i NIE MA PODPOWIEDZI (zgloszenie @michal). visualViewport podaje
-  // realnie widoczny prostokat; gdy przegladarka go nie ma, zostaje okno.
+  // On a phone the keyboard takes the bottom of the screen, and `position:fixed` is measured
+  // against the whole window rather than what is visible - so a list computed as "above the
+  // field" could land under the keyboard or past the edge. The symptom for the user: they type
+  // @ and THERE ARE NO SUGGESTIONS (@michal's report). visualViewport gives the genuinely
+  // visible rectangle; when the browser does not have it, the window remains.
   const vv = window.visualViewport;
   const obszar = { top: vv?.offsetTop ?? 0, left: vv?.offsetLeft ?? 0,
                    szer: vv?.width ?? window.innerWidth, wys: vv?.height ?? window.innerHeight };
@@ -1396,9 +1392,9 @@ async function mentionAutocomplete(ta) {
   const w = mentionPop.offsetWidth, h = mentionPop.offsetHeight;
   let left = Math.min(rect.left + margines, obszar.left + obszar.szer - w - margines);
   left = Math.max(obszar.left + margines, left);
-  // Domyslnie NAD polem (tam, gdzie patrzy piszacy). Gdy nad polem nie ma
-  // miejsca - pod polem. Gdy nigdzie - przy gornej krawedzi widocznego obszaru,
-  // bo lista poza ekranem jest tym samym, co jej brak.
+  // By default ABOVE the field (where the writer is looking). When there is no room above -
+  // below it. When there is nowhere - at the top edge of the visible area, because a list off
+  // screen is the same thing as no list.
   let top = rect.top - h - 6;
   if (top < obszar.top + margines) {
     top = rect.bottom + 6 + h <= obszar.top + obszar.wys ? rect.bottom + 6 : obszar.top + margines;
@@ -1406,9 +1402,9 @@ async function mentionAutocomplete(ta) {
   mentionPop.style.left = `${Math.round(left)}px`;
   mentionPop.style.top = `${Math.round(top)}px`;
 
-  // pointerdown, nie mousedown: na dotyku mysz jest EMULOWANA i zdarzenie
-  // przychodzi pozniej - a do tego czasu pole traci fokus i lista znika, wiec
-  // dotkniecie wybieralo... nic. pointerdown obsluguje mysz, dotyk i rysik.
+  // pointerdown, not mousedown: on touch the mouse is EMULATED and the event arrives later - and
+  // by then the field has lost focus and the list is gone, so a tap selected... nothing.
+  // pointerdown handles mouse, touch and stylus.
   mentionPop.querySelectorAll("[data-mi]").forEach((b) =>
     b.addEventListener("pointerdown", (e) => { e.preventDefault(); pickMention(ta, Number(b.dataset.mi)); }));
 }
@@ -1475,7 +1471,7 @@ export function renderThread() {
     const v = ta.value.trim(); if (!v) return;
     ta.value = ""; autosize();
     const msg = await sendMessage(v, { threadId: state.threadOpen });
-    // Nieudana wysylka oddaje tekst do pola - tak samo jak w glownym composerze.
+    // A failed send returns the text to the field - exactly as in the main composer.
     if (!msg) { ta.value = v; autosize(); ta.focus(); return; }
     state.threadMsgs.push(msg);
     renderThread();
@@ -1485,7 +1481,7 @@ export function renderThread() {
   document.getElementById("th-msgs").scrollTop = 999999;
 }
 
-/** Zamkniecie watku z powrotem fokusu na pasek, ktory go otworzyl. */
+/** Closing a thread, returning focus to the bar that opened it. */
 export function closeThread() {
   const rootId = state.threadOpen;
   state.threadOpen = null;

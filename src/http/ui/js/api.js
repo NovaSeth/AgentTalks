@@ -35,7 +35,7 @@ export async function api(method, path, body) {
 // ------------------------------------------------------------ error dictionary
 // The server speaks to an AGENT: it gives codes, route names and openly suggests
 // curl. Those are good messages - for a program. A human used to get them raw in
-// a toast that vanished after four seconds ("nie ma konwersacji 12"). We translate
+// a toast that vanished after four seconds (a raw "no such conversation 12"). We translate
 // them here, in ONE place: a sentence and, where it makes sense, a pointer to the
 // next move. An unknown code falls back to the server text - better than nothing.
 //
