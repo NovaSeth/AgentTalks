@@ -22,8 +22,8 @@ test("openDb tworzy schemat i ustawia wersje", () => {
 });
 
 test("openDb jest idempotentne na TYM SAMYM pliku", () => {
-  // Dwie bazy :memory: sa niezalezne i niczego nie dowodza - migracje musza
-  // przejsc "juz zmigrowana" sciezke na wspolnym pliku.
+  // Two :memory: databases are independent and prove nothing - migrations have to go through the
+  // "already migrated" path on a shared file.
   const path = join(mkdtempSync(join(tmpdir(), "at-db-")), "test.sqlite");
   const db1 = openDb(path);
   assert.equal(schemaVersion(db1), SCHEMA_VERSION);
@@ -101,14 +101,14 @@ test("tx wycofuje wszystko przy bledzie w srodku", () => {
 });
 
 test("migracja wielokrokowa: stara baza dochodzi do biezacej wersji, z danymi", () => {
-  // Poprzednia wersja tego testu tylko OTWIERALA swieza baze i sprawdzala, ze
-  // ma kolumny - czyli testowala instalacje od zera pod nazwa "migracja", i nie
-  // mogla zawiesc przy zepsutej migracji. Tutaj naprawde zaczynamy od schematu
-  // sprzed lat: pierwsza migracja, dane w srodku, a potem pelny przebieg do
-  // biezacej wersji. Dane MUSZA przezyc - to jest jedyne, co migracja obiecuje.
+  // The previous version of this test only OPENED a fresh database and checked that it has the
+  // columns - that is, it tested a from-scratch installation under the name "migration", and
+  // could not fail on a broken migration. Here we really start from a schema from years back:
+  // the first migration, data inside it, and then a full run up to the current version. The data
+  // MUST survive - that is the only thing a migration promises.
   const path = join(mkdtempSync(join(tmpdir(), "at-mig-")), "test.sqlite");
 
-  // 1. Baza w stanie po M1 i tylko po M1.
+  // 1. The database in the state after M1 and only M1.
   const stara = new DatabaseSync(path);
   stara.exec("PRAGMA foreign_keys = ON");
   stara.exec(MIGRATIONS[0]);
@@ -117,7 +117,7 @@ test("migracja wielokrokowa: stara baza dochodzi do biezacej wersji, z danymi", 
     .run("agent", "stary-agent", "stary-agent", 1000);
   stara.close();
 
-  // 2. Otwarcie przez openDb ma dociagnac WSZYSTKIE pozostale migracje.
+  // 2. Opening through openDb has to pull in ALL the remaining migrations.
   const db = openDb(path);
   assert.equal(schemaVersion(db), SCHEMA_VERSION, "migracja nie doszla do biezacej wersji");
 
@@ -127,7 +127,7 @@ test("migracja wielokrokowa: stara baza dochodzi do biezacej wersji, z danymi", 
     | undefined;
   assert.equal(kto?.handle, "stary-agent", "migracja zgubila dane sprzed niej");
 
-  // 4. Kolumny i tabele z pozniejszych migracji faktycznie sa.
+  // 4. Columns and tables from later migrations really are there.
   const kolumny = (tabela: string) =>
     (db.prepare(`PRAGMA table_info(${tabela})`).all() as Array<{ name: string }>).map((c) => c.name);
   assert.ok(kolumny("messages").includes("dedup_key"), "brak dedup_key (M2)");

@@ -51,9 +51,9 @@ function uzyteKlucze(): Map<string, string[]> {
 
 test("kazde zdanie interfejsu ma tlumaczenie, a kazde tlumaczenie jest uzywane", async () => {
   const uzyte = uzyteKlucze();
-  // Straznik przed cicha awaria samego czujnika: gdy wyrazenie przestanie pasowac
-  // (inna nazwa funkcji, inny cudzyslow), zbior bedzie pusty i test przejdzie,
-  // NIE sprawdziwszy niczego. Ten prog byl juz powodem falszywej zieleni tutaj.
+  // A guard against a silent failure of the sensor itself: when the expression stops matching
+  // (a different function name, a different quote), the set will be empty and the test will
+  // pass HAVING CHECKED NOTHING. That threshold has already been the cause of false green here.
   assert.ok(uzyte.size > 400, `wyciagnieto tylko ${uzyte.size} kluczy - czujnik przestal widziec kod`);
 
   const { PL } = await import("../src/http/ui/js/i18n-pl.js");
@@ -69,9 +69,9 @@ test("kazde zdanie interfejsu ma tlumaczenie, a kazde tlumaczenie jest uzywane",
 test("formy mnogie pokrywaja kategorie, o ktore pyta polski Intl.PluralRules", async () => {
   const { PL } = await import("../src/http/ui/js/i18n-pl.js");
   const rules = new Intl.PluralRules("pl");
-  // Liczby dobrane tak, zeby wypadly wszystkie trzy kategorie polskiego: 1 -> one,
-  // 2..4 -> few, 5+ i 0 -> many. Pytamy Intl, a nie siebie - to on wybiera forme
-  // w czasie dzialania, wiec to jego zdanie jest wiazace.
+  // The numbers are chosen so that all three Polish categories occur: 1 -> one, 2..4 -> few,
+  // 5+ and 0 -> many. We ask Intl rather than ourselves - it is what picks the form at runtime,
+  // so its opinion is the binding one.
   const kategorie = new Set([0, 1, 2, 3, 5, 11, 22, 25, 101].map((n) => rules.select(n)));
   assert.ok(kategorie.size >= 3, `polski powinien miec >=3 kategorie, jest ${[...kategorie]}`);
 
@@ -99,22 +99,22 @@ test("t() tlumaczy, wybiera forme i wraca do angielskiego przy braku wpisu", asy
 
   i18n.setLang("pl");
   assert.equal(i18n.t("Sign in"), "Wejdź");
-  // Trzy formy, nie dwie - to jest cala roznica miedzy tym mechanizmem a ternarnym
-  // `n === 1 ? a : b`, ktory stal tu wczesniej i mowil "2 nieprzeczytanych".
+  // Three forms, not two - that is the whole difference between this mechanism and the ternary
+  // `n === 1 ? a : b` that stood here before and said "2 nieprzeczytanych".
   assert.equal(i18n.t("{n} unread", { n: 1 }), "1 nieprzeczytana");
   assert.equal(i18n.t("{n} unread", { n: 2 }), "2 nieprzeczytane");
   assert.equal(i18n.t("{n} unread", { n: 5 }), "5 nieprzeczytanych");
-  // Podstawienie nie ucieka HTML-a i tak ma byc - wywolujacy podaja juz
-  // przepuszczone przez escapeHtml (patrz komentarz na gorze i18n.js).
+  // The substitution does not escape HTML and that is intended - callers pass values already
+  // put through escapeHtml (see the note at the top of i18n.js).
   assert.equal(i18n.t("Write to @{handle} privately", { handle: "a&b" }), "Napisz do @a&b prywatnie");
-  // Brak wpisu = widac angielski, a nie "missing.key" ani pustka.
+  // A missing entry = English shows through, not "missing.key" and not emptiness.
   assert.equal(i18n.t("A sentence nobody translated"), "A sentence nobody translated");
   i18n.setLang("en");
 });
 
 test("zaden plik UI nie przykrywa importowanego t() wlasnym `t`", () => {
-  // Wzorce, ktore faktycznie wystapily przy tlumaczeniu interfejsu: `const t =`
-  // (pole tytulu, pasek), `(t)` i `(t,` (parametr w map/forEach - token, zakladka).
+  // The patterns that actually occurred while translating the interface: `const t =` (a title
+  // field, a bar), `(t)` and `(t,` (a parameter in map/forEach - a token, a tab).
   const PRZYKRYCIE = /\bconst\s+t\b|\blet\s+t\b|\bvar\s+t\b|\(\s*t\s*\)\s*=>|\(\s*t\s*,/;
   const winne: string[] = [];
   let sprawdzonych = 0;

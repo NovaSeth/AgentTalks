@@ -214,15 +214,15 @@ test("postMessage publikuje zdarzenie do czlonkow konwersacji", () => {
   const seen: Event[] = [];
   ctx.bus.subscribe(b.id, (e) => seen.push(e));
   postMessage(ctx, { conversationId: d.id, actorId: a.id, body: "hej" });
-  // DM daje odbiorcy dwa zdarzenia: sama wiadomosc i powiadomienie (osobny
-  // mechanizm z wlasnym znacznikiem odczytu), wiec sprawdzamy oba, a nie liczbe.
+  // A DM gives the recipient two events: the message itself and a notification (a separate
+  // mechanism with its own read marker), so we check both rather than the count.
   assert.deepEqual(seen.map((e) => e.type).sort(), ["message", "notification"]);
 });
 
 test("zdarzenie widzi wiadomosc juz zapisana w bazie (odczyt DRUGIM polaczeniem)", () => {
-  // Ten sam uchwyt SQLite widzi wlasna niezacommitowana transakcje, wiec czytanie
-  // nim nie odroznia publikacji przed commitem od publikacji po. Drugie polaczenie
-  // do wspolnego pliku widzi wylacznie dane zatwierdzone - i to jest wlasciwy sedzia.
+  // The same SQLite handle sees its own uncommitted transaction, so reading through it does not
+  // distinguish publishing before a commit from publishing after one. A second connection to a
+  // shared file sees only committed data - and that is the right judge.
   const path = joinPath(mkdtempSync(joinPath(tmpdir(), "at-msg-")), "test.sqlite");
   const ctx = createCtx(openDb(path), new EventBus(), () => 1_000_000);
   const reader = openDb(path);

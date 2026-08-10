@@ -1,10 +1,10 @@
 /**
- * Narzedzia do testow HTTP: zywy serwer na losowym porcie i minimalny klient SSE.
+ * Tools for HTTP tests: a live server on a random port and a minimal SSE client.
  *
- * Testy ida przez PRAWDZIWE gniazdo, a nie przez wywolanie handlera z atrapami.
- * Lekcja z prototypu: sprawdzanie `curl`-em warstwy, ktora sie nie psula, i nazywanie
- * tego testowaniem interfejsu, przepuscilo piec klas bledow. Kontrakt HTTP ma byc
- * sprawdzany jako kontrakt HTTP.
+ *The tests go through a REAL socket, not through calling a handler with stubs. A lesson from
+ *the prototype: checking with `curl` a layer that did not break, and calling that interface
+ *testing, let five classes of bug through. An HTTP contract is to be checked as an HTTP
+ *contract.
  */
 import type { AddressInfo } from "node:net";
 import { randomBytes } from "node:crypto";
@@ -22,9 +22,9 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     filesDir: "/tmp/agenttalks-test/files",
     host: "127.0.0.1",
     port: 0,
-    // Sekret UNIKALNY na serwer testowy: limitery sa kluczowane sekretem
-    // instancji, wiec wspolny sekret oznaczalby wspoldzielone liczniki miedzy
-    // testami - i test, ktory celowo wyczerpuje limit, blokowalby nastepny.
+    // A secret UNIQUE per test server: the limiters are keyed by the instance secret, so a shared
+    // secret would mean shared counters between tests - and a test that deliberately exhausts the
+    // limit would block the next one.
     secret: `sekret-testowy-${randomBytes(8).toString("hex")}`,
     trustProxy: false,
     allowPublicBind: false,
@@ -32,9 +32,9 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     maxMessageBytes: 65536,
     maxFileBytes: 1024 * 1024,
     sessionTtlSec: 3600,
-    // Pola opcjonalne w Config sa STRINGAMI (pusty = wylaczone), wiec domyslne
-    // musza byc jawnie puste - inaczej `...overrides` typu Partial<Config>
-    // wstrzykuje `undefined` tam, gdzie typ obiecuje string.
+    // Optional fields in Config are STRINGS (empty = off), so the defaults have to be explicitly
+    // empty - otherwise `...overrides` of type Partial<Config> injects `undefined` where the type
+    // promises a string.
     sitePassword: "",
     baseUrl: "",
     ...overrides,
@@ -48,24 +48,24 @@ export type TestServer = {
   close: () => Promise<void>;
 };
 
-/** Serwer testowy z mozliwoscia nadpisania konfiguracji. Bez tego parametru
- *  bramka anty-bot byla NIETESTOWALNA (wlacza sie tylko przy ustawionym hasle),
- *  wiec kontrola dostepu do calego interfejsu nie miala ani jednego testu. */
+/** A test server with the option to override the configuration. Without that parameter the
+ *  anti-bot gate was UNTESTABLE (it only turns on when a password is set), so access control
+ *  for the whole interface had not a single test. */
 export async function startTestServer(overrides: Partial<Config> = {}): Promise<TestServer> {
   const ctx = createCtx(openDb(":memory:"), new EventBus());
   const config = testConfig(overrides);
   const server = createServer(ctx, config);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  // unref: gniazdo nasluchujace NIE trzyma petli zdarzen przy zyciu.
+  // unref: a listening socket does NOT keep the event loop alive.
   //
-  // Bez tego test, ktory upadnie przed swoim `close()` (czyli KAZDY nieudany test
-  // z asercja w srodku), zostawia zywy serwer i proces nigdy nie konczy pracy.
-  // Runner nie wypisuje wtedy ani jednej linii - porazka wyglada jak zawieszenie,
-  // a nie jak porazka, wiec szuka sie nieskonczonej petli zamiast przeczytac
-  // asercje. Kosztowalo mnie to dwa razy w jedna noc.
+  //Without it a test that fails before its `close()` (that is, EVERY failing test with an
+  //assertion in the middle) leaves a live server and the process never finishes. The runner
+  //then prints not a single line - a failure looks like a hang rather than a failure, so you go
+  //looking for an infinite loop instead of reading the assertion. It cost me twice in one
+  //night.
   //
-  // Testy i tak czekaja na swoje odpowiedzi, wiec brak uchwytu na petli niczego
-  // nie skraca; zmienia sie tylko to, ze po ostatnim tescie proces MOZE wyjsc.
+  //The tests wait for their responses anyway, so having no handle on the loop shortens nothing;
+  //the only change is that after the last test the process CAN exit.
   server.unref();
   const { port } = server.address() as AddressInfo;
   return {
@@ -85,7 +85,7 @@ export const bearer = (token: string) => ({
   "content-type": "application/json",
 });
 
-/** Naglowki dla sesji na cookie, razem z tokenem CSRF wyliczonym tak jak w kliencie. */
+/** Headers for a cookie session, together with a CSRF token computed as in the client. */
 export function cookieAuth(setCookie: string): Record<string, string> {
   const value = setCookie.split(";")[0];
   return {
@@ -100,7 +100,7 @@ export type SseClient = {
   close: () => void;
 };
 
-/** Minimalny klient SSE. Nie ma potrzeby zaleznosci: format to trzy pola tekstowe. */
+/** A minimal SSE client. No dependency needed: the format is three text fields. */
 export async function openSse(url: string, token: string): Promise<SseClient> {
   const controller = new AbortController();
   const res = await fetch(url, {

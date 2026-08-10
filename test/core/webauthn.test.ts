@@ -1,6 +1,6 @@
-/** Passkeys: pelna petla rejestracja -> logowanie na SYNTETYCZNYM
- *  authenticatorze (node:crypto gra role Secure Enclave). Weryfikujemy
- *  wlasny parser CBOR/COSE i weryfikacje podpisu - bez przegladarki. */
+/** Passkeys: the full registration -> login loop on a SYNTHETIC authenticator (node:crypto
+ *  plays the part of the Secure Enclave). We verify our own CBOR/COSE parser and the signature
+ *  verification - without a browser. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, createSign, generateKeyPairSync, randomBytes } from "node:crypto";
@@ -14,7 +14,7 @@ import {
   verifyAssertion,
 } from "../../src/core/webauthn.ts";
 
-// --- minimalny ENKODER CBOR (tylko na potrzeby testu) -----------------------
+// --- a minimal CBOR ENCODER (for the test only) -----------------------------
 
 function cborInt(n: number, major: number): Buffer {
   const m = major << 5;
@@ -131,7 +131,7 @@ test("passkey: zly origin, powtorzony challenge i zepsuty podpis sa odrzucane", 
 
   const ch = issueChallenge("login", null);
   assert.equal(assertLogin(ctx, auth, { challenge: ch, count: 1 }), michal.id);
-  // ten sam challenge drugi raz = replay
+  // the same challenge a second time = a replay
   assert.throws(() => assertLogin(ctx, auth, { challenge: ch, count: 2 }), /wyzwanie/);
 
   assert.throws(() => assertLogin(ctx, auth, { count: 3, tamper: true }), /podpis/);
@@ -144,7 +144,7 @@ test("passkey: cofniety licznik podpisow jest odrzucany (klon klucza)", () => {
   register(ctx, michal.id, auth);
   assert.equal(assertLogin(ctx, auth, { count: 5 }), michal.id);
   assert.throws(() => assertLogin(ctx, auth, { count: 4 }), /licznik/);
-  // Apple (licznik zawsze 0) nie wpada w te pulapke
+  // Apple (a counter always at 0) does not fall into this trap
   const apple = makeAuthenticator();
   register(ctx, michal.id, apple);
   assert.equal(assertLogin(ctx, apple, { count: 0 }), michal.id);

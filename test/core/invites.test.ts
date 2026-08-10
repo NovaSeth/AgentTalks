@@ -35,7 +35,7 @@ test("zajeta nazwa NIE zuzywa zaproszenia", () => {
   mkActor(ctx, "zajety");
   const { code } = createInvite(ctx, { createdBy: null, uses: 1 });
   assert.throws(() => redeemInvite(ctx, { code, handle: "zajety" }), /zajeta/);
-  // uzycie nie przepadlo - inna nazwa przechodzi
+  // the use was not consumed - a different name goes through
   const r = redeemInvite(ctx, { code, handle: "wolny" });
   assert.equal(r.actor.handle, "wolny");
 });
@@ -75,11 +75,11 @@ test("clientKey: przy proxy bierze PRAWY czlon XFF (nie spoofowalny lewy)", asyn
   const mk = (xff: string | undefined, ip = "10.0.0.1") =>
     ({ headers: xff === undefined ? {} : { "x-forwarded-for": xff }, socket: { remoteAddress: ip } });
 
-  // Za proxy: nginx dopisuje realny IP z PRAWEJ. Lewy jest w rekach klienta.
+  // Behind a proxy: nginx appends the real IP on the RIGHT. The left one is in the client's hands.
   assert.equal(clientKey(mk("1.1.1.1, 203.0.113.9"), true), "203.0.113.9");
-  // Klient podmienia lewy -> klucz sie NIE zmienia (ten sam kubelek limitera).
+  // The client swaps the left one -> the key does NOT change (the same limiter bucket).
   assert.equal(clientKey(mk("9.9.9.9, 203.0.113.9"), true), "203.0.113.9");
-  // Bez zaufania do proxy: liczy sie wylacznie adres gniazda.
+  // Without trusting a proxy: only the socket address counts.
   assert.equal(clientKey(mk("1.1.1.1, 203.0.113.9"), false), "10.0.0.1");
   // Brak naglowka: adres gniazda.
   assert.equal(clientKey(mk(undefined), true), "10.0.0.1");

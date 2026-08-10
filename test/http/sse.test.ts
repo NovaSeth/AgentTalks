@@ -98,8 +98,8 @@ test("long-poll budzi sie na wiadomosc NATYCHMIAST, nie przez timeout", async ()
   });
   const r = await (await pending).json();
   const elapsed = Date.now() - t0;
-  // Zepsute wybudzanie tez zwroci wiadomosc - ale dopiero po 10 s timeoutu.
-  // Dowodem dziala wybudzanie jest CZAS, nie sama tresc odpowiedzi.
+  // Broken waking would also return the message - but only after a 10 s timeout.
+  // The proof that waking works is the TIME, not the content of the response.
   assert.ok(elapsed < 5000, `long-poll wrocil po ${elapsed} ms - to byl timeout, nie wybudzenie`);
   assert.equal(r.messages.length, 1);
   assert.equal(r.messages[0].body, "w trakcie");
@@ -145,7 +145,7 @@ test("wznowienie SSE dosyla message_updated dla edycji sprzed kursora", async ()
   const m = (await (await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "pierwotna" }),
   })).json()).message;
-  // klient widzial wiadomosc (kursor za nia), rozlaczyl sie, autor edytowal
+  // the client saw the message (its cursor is past it), disconnected, the author edited it
   await fetch(`${s.url}/api/messages/${m.id}`, {
     method: "PATCH", headers: bearer(tokenA), body: JSON.stringify({ body: "po edycji" }),
   });

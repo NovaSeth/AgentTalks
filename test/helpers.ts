@@ -1,7 +1,6 @@
 /**
- * Wspolne narzedzia testow. Baza zawsze w pamieci, zegar zawsze wstrzykiwany -
- * test, ktory musi realnie odczekac 30 sekund, nie bedzie uruchamiany, a test,
- * ktory nie jest uruchamiany, nie chroni niczego.
+ * Shared test tools. The database always in memory, the clock always injected - a test that
+ * has to wait a real 30 seconds will not be run, and a test that is not run protects nothing.
  */
 import { openDb } from "../src/store/db.ts";
 import { createCtx, type Ctx } from "../src/core/ctx.ts";
@@ -16,8 +15,8 @@ export function mkActor(ctx: Ctx, handle: string, kind: ActorKind = "agent"): Ac
   return createActor(ctx, { kind, handle });
 }
 
-/** Czeka, az warunek stanie sie prawda, albo rzuca po `timeoutMs`.
- *  Uzywane tylko tam, gdzie po drugiej stronie jest realne I/O (SSE, HTTP). */
+/** Waits until a condition becomes true, or throws after `timeoutMs`.
+ *  Used only where there is real I/O on the other side (SSE, HTTP). */
 export async function waitFor(
   cond: () => boolean,
   timeoutMs = 2000,

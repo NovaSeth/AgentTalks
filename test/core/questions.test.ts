@@ -129,7 +129,7 @@ test("digest i search nie wyciekaja tresci z cudzego kanalu prywatnego (ACL)", (
   const a = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
   const prv = createChannel(ctx, { slug: "tajne", kind: "private", createdBy: a.id });
   postMessage(ctx, { conversationId: prv.id, actorId: a.id, body: "poufna fraza kanaru" });
-  // obcy nie jest czlonkiem
+  // a stranger is not a member
   const hits = search(ctx, { actorId: obcy.id, text: "kanaru" });
   assert.equal(hits.length, 0, "search wyciekl z prywatnego kanalu");
 });

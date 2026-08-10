@@ -160,7 +160,7 @@ test("updateConversation: admin kanalu zmienia temat i slug, zwykly czlonek nie"
     () => updateConversation(ctx, { convId: c.id, actorId: b.id, isInstanceAdmin: false, topic: "hack" }),
     /zarzadza/,
   );
-  // admin instancji moze mimo braku roli w kanale
+  // the instance admin can, despite having no role in the channel
   const upd2 = updateConversation(ctx, { convId: c.id, actorId: b.id, isInstanceAdmin: true, topic: "od admina" });
   assert.equal(upd2.topic, "od admina");
 });
@@ -204,7 +204,7 @@ test("removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie", async
   const c = createChannel(ctx, { slug: "priv", kind: "private", createdBy: a.id });
   join(ctx, c.id, b.id);
   join(ctx, c.id, c3.id);
-  // zwykly czlonek nie wyrzuca innych
+  // an ordinary member does not throw others out
   assert.throws(
     () => removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: c3.id, isInstanceAdmin: false }),
     /zarzadza/,

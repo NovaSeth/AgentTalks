@@ -1,9 +1,9 @@
 /**
- * Pelna droga przez zywy serwer: czlowiek zaklada rozmowe grupowa, jeden agent pisze,
- * drugi dostaje to pushem, a liczniki rozrozniaja "cos nowego" od "dotyczy CIEBIE".
- *
- * To jest test, ktory bylby niemozliwy w prototypie: nie bylo ani rozmow grupowych,
- * ani uwierzytelnienia, ani pusha do agenta.
+ * The full path through a live server: a human creates a group conversation, one agent writes,
+ * the other receives it by push, and the counters tell "something new" from "concerns YOU".
+ * 
+ * This is a test that would have been impossible in the prototype: there were no group
+ * conversations, no authentication and no push to an agent.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ test("czlowiek i dwoch agentow rozmawiaja przez zywy serwer", async () => {
   const tn = mintToken(s.ctx, nestor.id, "vps").token;
   const te = mintToken(s.ctx, eipa.id, "mac").token;
 
-  // 1. Czlowiek loguje sie haslem i dostaje sesje na cookie.
+  // 1. The human logs in with a password and gets a cookie session.
   const login = await fetch(s.url + "/api/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -30,7 +30,7 @@ test("czlowiek i dwoch agentow rozmawiaja przez zywy serwer", async () => {
   assert.equal(login.status, 200);
   const auth = cookieAuth(login.headers.get("set-cookie")!);
 
-  // 2. Zaklada rozmowe we trojke. Sam jest jej uczestnikiem bez podawania siebie.
+  // 2. Creates a conversation for three. They are a participant without naming themselves.
   const created = await fetch(s.url + "/api/conversations", {
     method: "POST",
     headers: auth,
@@ -40,7 +40,7 @@ test("czlowiek i dwoch agentow rozmawiaja przez zywy serwer", async () => {
   const conv = (await created.json()).conversation;
   assert.equal(conv.kind, "group");
 
-  // 3. Eipa slucha przez SSE, Nestor pisze ze wzmianka.
+  // 3. Eipa listens over SSE, Nestor writes with a mention.
   const es = await openSse(s.url + "/api/events", te);
   const posted = await fetch(`${s.url}/api/conversations/${conv.id}/messages`, {
     method: "POST",
@@ -65,12 +65,12 @@ test("czlowiek i dwoch agentow rozmawiaja przez zywy serwer", async () => {
   })).json();
   assert.equal(thread.messages.length, 2);
 
-  // 5. Liczniki: w rozmowie prywatnej kazda wiadomosc jest plakietka.
+  // 5. Counters: in a direct conversation every message is a badge.
   const unread = await (await fetch(s.url + "/api/unread", { headers: bearer(te) })).json();
   const row = unread.rows.find((r: any) => r.conversationId === conv.id);
   assert.equal(row.badge, 1, "wzmianka w grupie ma dawac plakietke");
 
-  // 6. Czlowiek widzi te sama rozmowe i to samo, co agenci - parytet interfejsow.
+  // 6. The human sees the same conversation and the same content as the agents - interface parity.
   const me = await (await fetch(s.url + "/api/me", { headers: auth })).json();
   assert.ok(me.conversations.some((c: any) => c.id === conv.id));
   const widok = await (await fetch(`${s.url}/api/conversations/${conv.id}/messages`, {

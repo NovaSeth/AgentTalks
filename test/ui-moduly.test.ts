@@ -48,13 +48,13 @@ test("kazdy modul UI parsuje sie jako modul ES", () => {
 });
 
 test("bramka skladni POTRAFI zawiesc - probka celowo zepsuta", () => {
-  // Wejscie o tym samym ksztalcie co prawdziwe (import + eksport), z jednym jawnym
-  // bledem. Gdyby bramka byla slepa - jak `node --check` na pliku o niejednoznacznym
-  // typie - ta linia przeszlaby na zielono i test wyzej nic by nie znaczyl.
+  // Input of the same shape as the real thing (an import + an export), with one explicit error.
+  // If the gate were blind - as `node --check` is on a file of ambiguous type - this line would
+  // pass green and the test above would mean nothing.
   const zepsuty = 'import { t } from "./i18n.js";\nexport const q = ;\n';
   assert.ok(bladSkladni(zepsuty, "probka-zepsuta.js"), "bramka NIE zglosila bledu w pliku, ktory jest zepsuty");
-  // I druga strona: poprawny plik o tym samym ksztalcie ma przechodzic, inaczej
-  // "zawsze czerwone" jest rownie bezuzyteczne co "zawsze zielone".
+  // And the other side: a correct file of the same shape has to pass, otherwise "always red"
+  // is as useless as "always green".
   const dobry = 'import { t } from "./i18n.js";\nexport const q = t("x");\n';
   assert.equal(bladSkladni(dobry, "probka-dobra.js"), null);
 });

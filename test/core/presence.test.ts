@@ -39,9 +39,9 @@ test("efemeryda znika z obecnosci szybciej niz sesja trwala", () => {
 });
 
 test("zakonczona sesja znika z obecnosci, tozsamosc zostaje w rosterze", () => {
-  // Feedback z #nextIteration: lista uczestnikow prototypu rosla monotonicznie,
-  // bo zakonczone sesje nigdy nie znikaly. Obecnosc pokazuje, z kim mozna
-  // rozmawiac TERAZ; kto ISTNIEJE, mowi roster aktorow.
+  // Feedback from #nextIteration: the prototype's participant list grew monotonically, because
+  // ended sessions never disappeared. Presence shows who you can talk to NOW; who EXISTS is what
+  // the actor roster says.
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   registerSession(ctx, { sessionId: "efem", actorId: a.id, kind: "ephemeral" });
@@ -66,7 +66,7 @@ test("sesja trwala bez heartbeatu znika po oknie retencji, wczesniej jest stale"
 test("rodzaj sesji jest deklarowany, nie zgadywany z ksztaltu nazwy", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
-  // Prototyp zgadywal po prefiksie "bs/" i uznawal to za efemeryde.
+  // The prototype guessed from the "bs/" prefix and treated that as ephemeral.
   registerSession(ctx, { sessionId: "x", actorId: a.id, label: "bs/uzytkownik" });
   assert.equal(presence(ctx)[0].kind, "durable");
 });
@@ -127,14 +127,13 @@ test("heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me", () => {
 });
 
 /**
- * Rozgloszenie obecnosci TYLKO przy realnej zmianie.
+ * Broadcasting presence ONLY on a real change.
  *
- * Interfejs bije heartbeat co 30 s tym samym `registerSession`. Gdyby kazde
- * takie wywolanie publikowalo zdarzenie, przy N otwartych sesjach kazda co 30 s
- * budzilaby wszystkie pozostale - ruch rosnie z KWADRATEM liczby uczestnikow,
- * a tresc zdarzenia jest za kazdym razem ta sama. Tlumienie jest niewidoczne
- * w dzialaniu (nic sie nie psuje, tylko robi drogo), wiec bez testu wroci
- * przy pierwszej refaktoryzacji.
+ *The interface beats a heartbeat every 30 s with the same `registerSession`. If every such
+ *call published an event, with N open sessions each of them would wake all the others every
+ *30 s - traffic grows with the SQUARE of the number of participants, and the event's content
+ *is the same every time. The damping is invisible in operation (nothing breaks, it merely
+ *gets expensive), so without a test it comes back at the first refactoring.
  */
 test("presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie", () => {
   const ctx = testCtx();
@@ -149,17 +148,17 @@ test("presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie", () =>
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "praca", kind: "durable" });
   assert.equal(rozgloszenia, 1, "nowa sesja MA obudzic innych");
 
-  // Trzy heartbeaty tym samym wywolaniem, nic sie nie zmienia.
+  // Three heartbeats through the same call, nothing changes.
   for (let i = 0; i < 3; i++) {
     registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "praca", kind: "durable" });
   }
   assert.equal(rozgloszenia, 1, "heartbeat bez zmiany nie ma budzic nikogo");
 
-  // Zmiana etykiety JEST widoczna dla innych, wiec ma sie rozniesc.
+  // A label change IS visible to others, so it has to be broadcast.
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "deploy", kind: "durable" });
   assert.equal(rozgloszenia, 2, "zmiana etykiety ma sie rozniesc");
 
-  // Powrot po zakonczeniu sesji tez jest zmiana stanu.
+  // Coming back after a session ended is a state change too.
   endSession(ctx, "s1");
   const poZakonczeniu = rozgloszenia;
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "deploy", kind: "durable" });
@@ -167,13 +166,13 @@ test("presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie", () =>
 });
 
 /**
- * Sygnal "pisze" z wlasnym czasem zycia.
+ * The "typing" signal with its own lifetime.
  *
- * Siedem sekund jest dobre dla CZLOWIEKA - kazdy klawisz odswieza sygnal.
- * Dla agenta jest bezuzyteczne: agent sklada odpowiedz jednym ruchem trwajacym
- * kilkadziesiat sekund i nie ma czego odswiezac po drodze, wiec bak gasl, zanim
- * ktokolwiek zdazyl go zobaczyc. Zmierzone na produkcji przed ta zmiana: sygnal
- * ustawilo KIEDYKOLWIEK 8 z 26 sesji, w wiekszosci moje wlasne proby.
+ *Seven seconds is right for a HUMAN - every key refreshes the signal. For an agent it is
+ *useless: an agent composes an answer in one move lasting tens of seconds with nothing to
+ *refresh along the way, so the bubble went out before anybody managed to see it. Measured in
+ *production before this change: the signal was set EVER by 8 of 26 sessions, mostly my own
+ *attempts.
  */
 test("sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s", () => {
   let t = 1000;
@@ -182,7 +181,7 @@ test("sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s", () => {
   registerSession(ctx, { sessionId: "s1", actorId: a.id, kind: "durable" });
   const pisze = () => presence(ctx).find((p) => p.sessionId === "s1")?.typing ?? false;
 
-  // Domyslnie: 7 s, jak dotad.
+  // By default: 7 s, as before.
   signal(ctx, "s1", "typing", { typingIn: "c:1" });
   assert.equal(pisze(), true);
   t += 8;
@@ -196,7 +195,7 @@ test("sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s", () => {
   t += 31;
   assert.equal(pisze(), false, "sygnal nie moze zyc dluzej, niz zadeklarowano");
 
-  // Gorna granica: deklaracja nie moze zamienic baka w stale swiatlo.
+  // The upper bound: a declaration must not turn the bubble into a permanent light.
   t += 1;
   signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 99_999 });
   t += 301;

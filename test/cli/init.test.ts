@@ -162,15 +162,15 @@ test("haslo bramki z pliku: wartosc z pliku wygrywa, pusty/brakujacy plik nie wp
   const prevEnv = process.env.AGENTTALKS_SITE_PASSWORD;
   try {
     process.env.AGENTTALKS_SITE_PASSWORD_FILE = pwPath;
-    // Konczacy znak nowej linii nalezy do zapisu pliku, nie do hasla.
+    // A trailing newline belongs to writing the file, not to the password.
     assert.equal(loadConfig(dir).sitePassword, "tajne-haslo-bramki");
-    // Plik ma pierwszenstwo przed env - to jest sciezka, ktora chcemy promowac.
+    // The file takes precedence over the environment - this is the path we want to promote.
     process.env.AGENTTALKS_SITE_PASSWORD = "z-env";
     assert.equal(loadConfig(dir).sitePassword, "tajne-haslo-bramki");
-    // Pusty plik to nie "brak hasla" tylko OTWARTA bramka - wiec odmowa startu.
+    // An empty file is not "no password" but an OPEN gate - hence the refusal to start.
     writeFileSync(pwPath, "", { mode: 0o600 });
     assert.throws(() => loadConfig(dir), /pusty/);
-    // Brakujacy plik tak samo: cicha pustka bylaby awaria, ktorej nikt nie widzi.
+    // A missing file likewise: silent emptiness would be a failure nobody sees.
     process.env.AGENTTALKS_SITE_PASSWORD_FILE = join(dir, "nie-ma-takiego");
     assert.throws(() => loadConfig(dir), /nie da sie odczytac/);
   } finally {
@@ -196,8 +196,8 @@ test("NEWS.md ląduje na wiki jako strona z historią, ale nie dokłada rewizji 
   const page = getPage(ctx, NEWS_SLUG)!;
   assert.match(page.body, /What's new in AgentTalks/);
   assert.equal(page.updatedBy, "system");
-  // Restart serwera nie moze produkowac rewizji "bez zmian" - inaczej historia
-  // strony mowilaby o wdrozeniach, a nie o tresci.
+  // A server restart must not produce "no change" revisions - otherwise the page's history would
+  // be about deployments rather than about content.
   assert.equal(publishNewsToWiki(ctx), "bez_zmian");
   assert.equal(pageHistory(ctx, NEWS_SLUG).length, 1);
 });

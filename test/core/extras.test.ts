@@ -209,9 +209,9 @@ test("DM budzi nieobecnego adresata podpisanym ladunkiem", async () => {
 test("aktor z zywym SSE nie jest budzony - push juz dotarl", async () => {
   const { ctx, ala, bob, dm, delivered } = wakeSetup();
   setWake(ctx, bob.id, "https://most.example/wake");
-  // Zywe SSE to zarejestrowany STRUMIEN (openStream), nie zwykla subskrypcja -
-  // long-poll i MCP talk_read subskrybuja szyne na chwile i nie liczą sie jako
-  // "agent trzyma polaczenie".
+  // A live SSE is a registered STREAM (openStream), not an ordinary subscription - a long-poll
+  // and MCP talk_read subscribe to the bus briefly and do not count as "an agent is holding a
+  // connection".
   const off = ctx.bus.openStream(bob.id);
   postMessage(ctx, { conversationId: dm.id, actorId: ala.id, body: "jestes online" });
   await new Promise((r) => setTimeout(r, 30));
@@ -256,7 +256,7 @@ test("po serii porazek wake gasnie i wlasciciel dostaje systemowy DM", async () 
     await new Promise((r) => setTimeout(r, 10));
   }
   await waitFor(() => getWake(ctx, bob.id)?.disabledAt != null, 2000);
-  // systemowy DM do boba o wylaczeniu
+  // a system DM to bob about being disabled
   const sysMsg = ctx.db.prepare(
     "SELECT body FROM messages WHERE kind = 'system' ORDER BY id DESC LIMIT 1",
   ).get() as { body: string } | undefined;
@@ -381,23 +381,23 @@ test("plik sensitive z ttl=0 dostaje domyslny TTL, nie staje sie wieczny", () =>
 });
 
 test("wake httpDeliver ODMAWIA polaczenia na adres prywatny przy strzale (SSRF rebinding)", async () => {
-  // Nazwa przechodzi rejestracje (setWake nie robi DNS), ale przy strzale nasz
-  // guardedLookup rozwiazuje ja i ODMAWIA, bo IP jest prywatne. Uzywamy prawdziwego
-  // httpDeliver (registerWake bez wstrzyknietego deliver) i hosta wskazujacego 127.0.0.1.
+  // The name passes registration (setWake does no DNS), but at firing time our guardedLookup
+  // resolves it and REFUSES, because the IP is private. We use the real httpDeliver (registerWake
+  // without an injected deliver) and a host pointing at 127.0.0.1.
   const ctx = testCtx();
   createActor(ctx, { kind: "system", handle: "system" });
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
   const dm = ensureDirect(ctx, [ala.id, bob.id]);
-  // localtest.me i podobne rozwiazuja sie na 127.0.0.1; wstawiamy wprost do bazy,
-  // omijajac setWake (ktory i tak by to odrzucil na etapie nazwy) - testujemy
-  // WARSTWE PRZY STRZALE.
+  // localtest.me and the like resolve to 127.0.0.1; we insert directly into the database,
+  // bypassing setWake (which would reject it at the name stage anyway) - we are testing THE
+  // LAYER AT FIRING TIME.
   ctx.db.prepare(
     "UPDATE actors SET wake_kind='webhook', wake_target=?, wake_secret='s' WHERE id=?",
   ).run("http://localtest.me:59999/wake", bob.id);
   registerWake(ctx); // prawdziwy httpDeliver
   postMessage(ctx, { conversationId: dm.id, actorId: ala.id, body: "obudz sie" });
-  // Po chwili wake_failures powinno wzrosnac (dostarczenie odrzucone), a nie
-  // nastapic polaczenie z lokalnym adresem.
+  // After a moment wake_failures should have grown (delivery refused), rather than a connection
+  // to a local address having happened.
   await waitFor(() => {
     const r = ctx.db.prepare("SELECT wake_failures FROM actors WHERE id=?").get(bob.id) as
       { wake_failures: number };
@@ -450,8 +450,8 @@ test("wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie", async () => {
   assert.equal(p.title, "Projekt X");
   assert.equal(p.createdBy, "ala");
   assert.equal(p.revisions, 1);
-  // Bob dopisuje sie do CUDZEJ strony - najpierw ja czyta (inaczej serwer nie
-  // wpusci zapisu, bo nie wiadomo, czy Bob wie, co nadpisuje).
+  // Bob appends to SOMEBODY ELSE'S page - reading it first (otherwise the server will not admit
+  // the write, because it does not know whether Bob knows what he is overwriting).
   markPageSeen(ctx, "projekt-x", b.id);
   savePage(ctx, { slug: "projekt-x", title: "Projekt X", body: "poprawka od boba", actorId: b.id, note: "doprecyzowanie" });
   p = getPage(ctx, "projekt-x")!;
@@ -469,13 +469,13 @@ test("wiki: kazdy zalogowany moze edytowac (wspolna wiedza), ale nie na slepo", 
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
   savePage(ctx, { slug: "s", title: "S", body: "od ali", actorId: a.id });
-  // Zapis bez przeczytania cudzej strony to nadpisanie w ciemno - odmowa niesie
-  // numer rewizji, zeby dalo sie ja przeczytac.
+  // A write without reading somebody else's page is a blind overwrite - the refusal carries the
+  // revision id so that it can be read.
   assert.throws(
     () => savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: obcy.id }),
     /konflikt|nie czytales/,
   );
-  // "obcy" nie jest niczyim czlonkiem, a i tak moze pisac - wiki jest publiczna
+  // "a stranger" is nobody's member, and can still write - the wiki is public
   markPageSeen(ctx, "s", obcy.id);
   savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: obcy.id });
   assert.equal(getPage(ctx, "s")!.body, "od obcego");
@@ -499,10 +499,10 @@ test("wiki drzewo: podstrona, przenoszenie, undefined nie rusza polozenia", asyn
   savePage(ctx, { slug: "infra", title: "Infra", body: "korzen", actorId: a.id });
   savePage(ctx, { slug: "vps", title: "VPS", body: "pod infra", actorId: a.id, parentSlug: "infra" });
   assert.equal(getPage(ctx, "vps")!.parentSlug, "infra");
-  // edycja bez pola parentSlug zostawia strone tam, gdzie byla
+  // an edit with no parentSlug field leaves the page where it was
   savePage(ctx, { slug: "vps", title: "VPS", body: "edycja tresci", actorId: a.id });
   assert.equal(getPage(ctx, "vps")!.parentSlug, "infra");
-  // null przenosi do korzenia
+  // null moves it to the root
   savePage(ctx, { slug: "vps", title: "VPS", body: "edycja tresci", actorId: a.id, parentSlug: null });
   assert.equal(getPage(ctx, "vps")!.parentSlug, null);
 });
@@ -538,11 +538,11 @@ test("wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie", a
   assert.equal(listPages(ctx, b.id)[0].unseen, 1);
   markPageSeen(ctx, "notatki", b.id);
   assert.equal(listPages(ctx, b.id)[0].unseen, 0);
-  // kolejna edycja ali podbija bobowi licznik, ali nie
+  // another edit by ala bumps bob's counter, not ala's
   savePage(ctx, { slug: "notatki", title: "Notatki", body: "v2", actorId: a.id });
   assert.equal(listPages(ctx, b.id)[0].unseen, 1);
   assert.equal(listPages(ctx, a.id)[0].unseen, 0);
-  // edycja boba: jego znacznik idzie na koniec (0), a ala widzi cudza rewizje
+  // bob's edit: his marker goes to the end (0), while ala sees somebody else's revision
   markPageSeen(ctx, "notatki", b.id); // Bob nadraza zaleglosc, zanim pisze
   savePage(ctx, { slug: "notatki", title: "Notatki", body: "v3 od boba", actorId: b.id });
   assert.equal(listPages(ctx, b.id)[0].unseen, 0);
@@ -583,7 +583,7 @@ test("wiki: zalacznik jest publiczny dla kazdego zalogowanego", async () => {
   const pid = pageId(ctx, "s")!;
   const f = storeWikiFile(ctx, dir, { actorId: a.id, wikiPageId: pid, name: "diagram.txt",
     data: Buffer.from("schemat"), maxBytes: 1024 });
-  // obcy, nie autor, nie czlonek zadnej rozmowy - a i tak widzi zalacznik wiki
+  // a stranger, not the author, not a member of any conversation - and still sees the wiki attachment
   assert.ok(getFileInfo(ctx, f.id, obcy.id), "zalacznik wiki nie jest publiczny");
   assert.equal(readFile(ctx, f.id, obcy.id).data.toString(), "schemat");
 });
@@ -608,18 +608,18 @@ test("heartbeat sesji NIE budzi wszystkich - rozgloszenie tylko przy realnej zmi
   const zdarzenia: string[] = [];
   ctx.bus.subscribe(bob.id, (e) => zdarzenia.push(e.type));
 
-  // Pierwsza rejestracja to realna zmiana - Bob ma sie o niej dowiedziec.
+  // The first registration is a real change - Bob should learn about it.
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "vps" });
   assert.equal(zdarzenia.length, 1);
 
-  // Kolejne heartbeaty tej samej sesji nie zmieniaja NICZEGO, co ktokolwiek
-  // widzi. Wczesniej kazdy z nich budzil wszystkich: przy N sesjach ruch rosl
-  // z kwadratem N, a tresc zdarzenia byla za kazdym razem ta sama.
+  // Further heartbeats of the same session change NOTHING anybody can see. Previously each of
+  // them woke everybody: with N sessions the traffic grew with N squared, and the event's
+  // content was the same every time.
   registerSession(ctx, { sessionId: "s1", actorId: ala.id });
   registerSession(ctx, { sessionId: "s1", actorId: ala.id });
   assert.equal(zdarzenia.length, 1, "heartbeat rozglasza mimo braku zmiany");
 
-  // Zmiana etykiety JEST widoczna, wiec ma sie rozejsc.
+  // A label change IS visible, so it has to spread.
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "laptop" });
   assert.equal(zdarzenia.length, 2);
 });
