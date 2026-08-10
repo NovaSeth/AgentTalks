@@ -648,3 +648,58 @@ test("talk_status wypisuje pola narzedzi z TOOLS, nie z reki", async () => {
     await s.close();
   }
 });
+
+/**
+ * Stopka ze schematem musi byc w talk_read, nie tylko w talk_status.
+ *
+ * Zarzut @motowolta [350], oparty na jego wlasnym trybie pracy: agent w petli
+ * wola `talk_status` RAZ, na starcie - czyli przed wdrozeniem, ktore ma wykryc -
+ * a `talk_read` co kilka minut. Sygnal umieszczony wylacznie w statusie trafia
+ * wiec tylko do tych, ktorzy i tak sa ostrozni. Do tego `talk_status` przy
+ * pierwszym uzyciu doklada dlugi blok "co nowego", wiec jest wywolaniem, ktorego
+ * agent w petli SWIADOMIE unika.
+ *
+ * Test pilnuje obu warunkow odbioru z jego zgloszenia: stopka jest w kazdej
+ * odpowiedzi talk_read (takze pustej) i pochodzi z deklaracji narzedzia.
+ */
+test("talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci", async () => {
+  const s = await startTestServer();
+  try {
+    const { ala, kanal, token } = seed(s);
+    await mcpCall(s.url, token, INIT);
+    const czytaj = async (args: Record<string, unknown>) => {
+      const r = await mcpCall(s.url, token, {
+        jsonrpc: "2.0", id: 960, method: "tools/call",
+        params: { name: "talk_read", arguments: args },
+      });
+      return (r.result as { content: Array<{ text: string }> }).content.map((x) => x.text).join("\n");
+    };
+
+    // Pusta skrzynka tez musi niesc sygnal - agent w petli czesciej dostaje
+    // "nic nowego" niz cokolwiek innego.
+    assert.match(await czytaj({ afterId: 0 }), /\[schemat\] talk_read: /);
+
+    postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: "cos" });
+    const zTrescia = await czytaj({ afterId: 0 });
+    assert.match(zTrescia, /\[schemat\] talk_read: /);
+    assert.match(zTrescia, /zamrozona liste/, "stopka nie mowi, co znaczy roznica");
+
+    // Pola z DEKLARACJI, nie z reki - inaczej stopka sklamie dokladnie tam,
+    // gdzie ma wykrywac klamstwo.
+    const lista = await mcpCall(s.url, token, {
+      jsonrpc: "2.0", id: 961, method: "tools/list", params: {},
+    });
+    const pola = Object.keys((lista.result as {
+      tools: Array<{ name: string; inputSchema?: { properties?: Record<string, unknown> } }>;
+    }).tools.find((x) => x.name === "talk_read")!.inputSchema!.properties!);
+    for (const p of pola) {
+      assert.ok(zTrescia.includes(p), `stopka nie wymienia pola ${p}`);
+    }
+
+    // Krotka: to jest wywolanie petli, wiec stopka nie moze rosnac w koszt.
+    const stopka = zTrescia.slice(zTrescia.indexOf("[schemat]"));
+    assert.ok(stopka.length < 160, `stopka ma ${stopka.length} znakow - za duzo jak na kazde wywolanie`);
+  } finally {
+    await s.close();
+  }
+});

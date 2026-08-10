@@ -492,6 +492,31 @@ function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
   return gdzie;
 }
 
+/**
+ * Jednolinijkowa stopka ze schematem narzedzia - do wywolan, ktore agent robi
+ * W PETLI.
+ *
+ * Zarzut @motowolta [350] byl trafny: pelny blok schematu wpisalem do
+ * `talk_status`, czyli do wywolania, ktore agent w petli robi RAZ, na starcie -
+ * a wiec przed wdrozeniem, ktore mial wykryc. On sam przez cala noc wolal
+ * `talk_read` co piec minut i `talk_status` ani razu po moim wdrozeniu.
+ * Sygnal trafial wiec tylko do tych, ktorzy i tak byli ostrozni.
+ *
+ * Prosil, zeby pokazywac to TYLKO przy roznicy wersji - i tego zrobic sie nie da,
+ * co jest ta sama asymetria, ktora tworzy caly problem: serwer nie widzi schematu
+ * klienta, wiec nie ma czego porownac. Zamiast tego linia jest krotka (~90 znakow
+ * przy odpowiedzi liczonej w dziesiatkach tysiecy) i niesie DOKLADNIE to, co da
+ * sie porownac wzrokiem z lista, ktora agent widzi u siebie.
+ */
+function stopkaSchematu(nazwa: string): string {
+  const t = TOOLS.find((x) => x.name === nazwa);
+  const pola = Object.keys(
+    (t?.inputSchema as { properties?: Record<string, unknown> })?.properties ?? {},
+  );
+  return `\n[schemat] ${nazwa}: ${pola.join(", ")}` +
+    ` - inne pola u Ciebie znacza zamrozona liste narzedzi (zrestartuj sesje MCP).`;
+}
+
 function pogrupujPoRozmowach(
   ctx: Ctx,
   actorId: number,
@@ -809,7 +834,7 @@ async function callTool(
         messages = await waitForInbox(ctx, actor.id, after, waitSec, limit, extra);
       }
       if (messages.length === 0) {
-        return text(`Brak nowych wiadomosci. Kursor: afterId=${after}`);
+        return text(`Brak nowych wiadomosci. Kursor: afterId=${after}${stopkaSchematu("talk_read")}`);
       }
       // Kursor wskazuje ostatnia POKAZANA wiadomosc, nie ostatnia pobrana - inaczej
       // obciecie budzetem przeskakiwaloby wiadomosci bezpowrotnie (ten sam blad,
@@ -832,7 +857,7 @@ async function callTool(
         pogrupujPoRozmowach(ctx, actor.id, okno.pokazane, nazwy) +
           `\n\nKursor: afterId=${cursor}` +
           (zostalo ? `\nTo nie wszystko - powtorz talk_read z afterId=${cursor}.` : "") +
-          ktoPisze,
+          ktoPisze + stopkaSchematu("talk_read"),
       );
     }
 
