@@ -29,7 +29,16 @@ RUN mkdir -p /data && chown -R node:node /data /app
 VOLUME /data
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Zmierzone w kontenerze, nie oszacowane: sama sonda (start Node + strip TS + otwarcie
+# bazy + zadanie HTTP) trwa 0,9-1,4 s na CIEPLYM kontenerze, a na zimnym starcie wiecej.
+# Limit 3 s dawal wiec sondzie okolo dwoch razy tyle, ile potrzebuje w najlepszym
+# przypadku - i przy pierwszej probie po `up -d` potrafil ja uciac. Kontener zostawal
+# wtedy w stanie `starting` az do nastepnego przebiegu, czyli 30 s pozniej, a wdrozenie
+# meldowalo STOP przy serwerze, ktory od dawna odpowiadal.
+#
+# interval 15 s zamiast 30 s z tego samego powodu: chodzi o to, zeby werdykt USTALIL SIE
+# szybciej niz cierpliwosc skryptu wdrozeniowego, a nie o czestsze pytanie.
+HEALTHCHECK --interval=15s --timeout=10s --start-period=20s --retries=3 \
   CMD node bin/agenttalks.js healthcheck
 
 USER node

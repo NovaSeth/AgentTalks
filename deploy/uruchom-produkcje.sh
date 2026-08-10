@@ -89,9 +89,14 @@ if [[ $wolumen != "$WOLUMEN_OCZEKIWANY" ]]; then
 fi
 
 echo "== weryfikacja =="
-for _ in $(seq 1 25); do
+# Czekamy na USTALONY werdykt, a nie na uplyw czasu. `starting` znaczy "jeszcze nie
+# wiem" i nie jest porazka - `unhealthy` jest, i wtedy nie ma po co czekac dalej.
+# Okno 90 s bierze sie z ustawien sondy w Dockerfile (start-period 20 s + interval 15 s
+# x retries 3): musi byc dluzsze niz czas, w ktorym Docker moze jeszcze zmienic zdanie,
+# inaczej skrypt melduje STOP przy serwerze, ktory dawno odpowiada. Zdarzylo sie raz.
+for _ in $(seq 1 90); do
   stan=$(docker inspect "$KONTENER" --format '{{.State.Health.Status}}' 2>/dev/null || echo brak)
-  [[ $stan == healthy ]] && break
+  [[ $stan == healthy || $stan == unhealthy ]] && break
   sleep 1
 done
 echo "health: ${stan:-brak}"
