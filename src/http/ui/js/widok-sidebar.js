@@ -15,6 +15,17 @@ import { openConversation, openNewConversationModal, openQuestionsPanel } from "
 import { bindLangSwitch, doLogout, langSwitchHtml } from "./widok-login.js";
 import { newWikiPageModal, openWikiPage } from "./widok-wiki.js";
 
+// Idle thresholds for "Who is here" (proposed by @michal on #general [677]): two weeks of
+// silence fades the row, three months folds it into the archive. Milliseconds, because they
+// are compared against Date.now() minus a seconds-based lastActiveAt * 1000.
+const FADE_PO_MS = 14 * 24 * 3600 * 1000;
+const ARCHIWUM_PO_MS = 90 * 24 * 3600 * 1000;
+// Whether the archive <details> is unfolded survives re-renders (the sidebar redraws on every
+// presence tick, which would otherwise slam it shut under the reader's cursor) and page loads.
+let archiwumOtwarte = (() => {
+  try { return localStorage.getItem("atalks_arch_open") === "1"; } catch { return false; }
+})();
+
 // ------------------------------------------------------------- sidebar
 export function renderSidebar() {
   const el = document.getElementById("sidebar");
@@ -143,23 +154,42 @@ export function renderSidebarList() {
   const ludzieHtml = () => {
     const lista = state.actorsList.filter((a) => a.handle !== state.actor.handle && a.kind !== "system");
     if (!lista.length) return sidebarEmptyHtml(t("You are alone here for now. Invite an agent or a human."));
-    // The present first, then the rest - "who can I talk to now" is the first question.
-    const wg = [...lista].sort((a, b) => {
-      const oa = handleOnline(a.handle), ob = handleOnline(b.handle);
-      if (oa !== ob) return oa ? -1 : 1;
-      return a.handle.localeCompare(b.handle, "pl");
-    });
-    return wg.map((a) => {
+    // "Who is here" should measure PRESENCE, not the length of the roster: an actor silent for
+    // two weeks fades, one silent for three months folds into a collapsed archive at the bottom.
+    // Both states are computed from lastActiveAt and undo themselves on the actor's next sign of
+    // life - nothing is stored, so there is no second account and no admin action to revert.
+    // Being online right now always wins over any age of the last trace.
+    const teraz = Date.now();
+    const bezczynnoscMs = (a) => (a.lastActiveAt ? teraz - a.lastActiveAt * 1000 : 0);
+    const osobaHtml = (a, wyblakly) => {
       const online = handleOnline(a.handle);
       return `
-      <button class="conv person" data-person="${escapeHtml(a.handle)}"
+      <button class="conv person${wyblakly ? " faded" : ""}" data-person="${escapeHtml(a.handle)}"
         title="${t("Write to @{handle} privately", { handle: escapeHtml(a.handle) })}"
-        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`} - ${t("write privately")}">
+        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`}${wyblakly ? `, ${t("no activity for over two weeks")}` : ""} - ${t("write privately")}">
         <span class="conv-face">${avatarHtml(a.handle, 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>
         <span class="nm">@${escapeHtml(a.handle)}</span>
         <span class="kindtag ${a.kind}">${a.kind === "human" ? t("human") : t("agent")}</span>
       </button>`;
-    }).join("");
+    };
+    const biezacy = [], archiwum = [];
+    for (const a of lista) {
+      (!handleOnline(a.handle) && bezczynnoscMs(a) >= ARCHIWUM_PO_MS ? archiwum : biezacy).push(a);
+    }
+    // The present first, then the rest - "who can I talk to now" is the first question.
+    const wg = [...biezacy].sort((a, b) => {
+      const oa = handleOnline(a.handle), ob = handleOnline(b.handle);
+      if (oa !== ob) return oa ? -1 : 1;
+      return a.handle.localeCompare(b.handle, "pl");
+    });
+    const glowni = wg.map((a) => osobaHtml(a, !handleOnline(a.handle) && bezczynnoscMs(a) >= FADE_PO_MS)).join("");
+    if (!archiwum.length) return glowni;
+    archiwum.sort((a, b) => a.handle.localeCompare(b.handle, "pl"));
+    return `${glowni}
+      <details class="arch" id="sb-arch"${archiwumOtwarte ? " open" : ""}>
+        <summary>${t("Archive ({n})", { n: archiwum.length })}</summary>
+        ${archiwum.map((a) => osobaHtml(a, true)).join("")}
+      </details>`;
   };
 
   // The wiki is a tree: a parent page plays the role of a directory. Collapsed branches are
@@ -278,6 +308,10 @@ export function renderSidebarList() {
   el.scrollTop = scrollTop;
   el.querySelectorAll("[data-person]").forEach((b) =>
     b.addEventListener("click", () => startDirect(b.dataset.person)));
+  el.querySelector("#sb-arch")?.addEventListener("toggle", (e) => {
+    archiwumOtwarte = e.target.open;
+    try { localStorage.setItem("atalks_arch_open", archiwumOtwarte ? "1" : "0"); } catch { /* prywatny tryb */ }
+  });
   el.querySelector("#sb-new-chan")?.addEventListener("click", () => openNewConversationModal("channel"));
   el.querySelector("#sb-new-dm")?.addEventListener("click", () => openNewConversationModal("dm"));
   el.querySelector("#sb-new-wiki")?.addEventListener("click", newWikiPageModal);
