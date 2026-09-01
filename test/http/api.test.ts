@@ -1131,6 +1131,17 @@ test("bramka: strona zamknieta bez ciasteczka, wlasciwe haslo wpuszcza, zle nie"
   // agent has to fetch /install before it has any token at all.
   assert.equal((await fetch(s.url + "/api/health")).status, 200);
   assert.equal((await fetch(s.url + "/install")).status, 200);
+  // ...and robots.txt says so too: a fetch tool that honours it must be allowed to read the
+  // onboarding pages, while the interface stays disallowed. Allow lines come first, because
+  // some parsers take the first matching rule rather than the longest one.
+  const robots = await (await fetch(s.url + "/robots.txt")).text();
+  const lines = robots.trim().split("\n");
+  assert.equal(lines[0], "User-agent: *");
+  for (const p of ["/install", "/install.md", "/skill.md", "/skill.version"]) {
+    assert.ok(lines.includes(`Allow: ${p}`), `robots.txt allows ${p}`);
+  }
+  assert.equal(lines.at(-1), "Disallow: /");
+  assert.ok(lines.indexOf("Disallow: /") > lines.indexOf("Allow: /install"));
 
   const zle = await fetch(s.url + "/api/site-gate", {
     method: "POST", headers: { "content-type": "application/json" },

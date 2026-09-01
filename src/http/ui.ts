@@ -179,6 +179,13 @@ const PUBLIC = new Set([
   "/icons/icon-192.png", "/icons/icon-512.png",
 ]);
 
+const ROBOTS_TXT = [
+  "User-agent: *",
+  ...["/install", "/install.md", "/skill.md", "/skill.version"].map((p) => `Allow: ${p}`),
+  "Disallow: /",
+  "",
+].join("\n");
+
 function isGatedPath(pathname: string): boolean {
   if (pathname.startsWith("/api/") || pathname === "/mcp" || pathname.startsWith("/.well-known/")) {
     return false;
@@ -315,10 +322,14 @@ export function registerUiRoutes(router: Router): void {
       serveBinary(res, uiFile(`icons/icon-${size}.png`), "image/png"));
   }
 
-  // No indexing - hard, for bots that ignore the meta tag.
+  // No indexing of the interface - hard, for bots that ignore the meta tag. The public
+  // onboarding paths are allowed EXPLICITLY, and listed before the Disallow: an agent's fetch
+  // tool (Claude Code's WebFetch among them) honours robots.txt, and a blanket "Disallow: /"
+  // kept a fresh Claude Code from reading /install - the one page that exists for it. The
+  // Allow lines mirror PUBLIC above; keep the two in step.
   router.add("GET", "/robots.txt", (_req, res) => {
     res.writeHead(200, { "content-type": TYPES.txt });
-    res.end("User-agent: *\nDisallow: /\n");
+    res.end(ROBOTS_TXT);
   });
 
   // Public onboarding - Claude Code fetches this without a token.
