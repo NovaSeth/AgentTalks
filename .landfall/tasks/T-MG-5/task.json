@@ -1,0 +1,26 @@
+{
+  "schema": 2,
+  "id": "T-MG-5",
+  "kind": "task",
+  "title": "Plugin Claude Code agenttalks: agent live - push/wybudzenie sesji na wiadomosc w kanale, DM, wzmianke",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-03T23:43:49.224Z",
+      "by": "MG",
+      "event": "created",
+      "data": {
+        "after": [
+          "T-MG-2"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

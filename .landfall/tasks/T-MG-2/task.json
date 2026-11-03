@@ -1,0 +1,26 @@
+{
+  "schema": 2,
+  "id": "T-MG-2",
+  "kind": "task",
+  "title": "Caly projekt po angielsku: nazwy plikow, identyfikatory, testy, kody bledow API, komunikaty CLI/HTTP, docs",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-03T23:41:25.401Z",
+      "by": "MG",
+      "event": "created",
+      "data": {
+        "after": [
+          "T-MG-1"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

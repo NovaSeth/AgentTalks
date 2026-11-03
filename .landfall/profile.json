@@ -1,0 +1,70 @@
+{
+  "schema": 2,
+  "facts": {
+    "llm": {
+      "value": true,
+      "source": "observed",
+      "evidence": "package.json: @modelcontextprotocol/sdk",
+      "confidence": 0.9,
+      "at": "2026-11-03T23:23:08.332Z"
+    },
+    "stack": {
+      "value": [
+        "node",
+        "typescript"
+      ],
+      "source": "observed",
+      "evidence": "package.json, tsconfig.json",
+      "confidence": 0.9,
+      "at": "2026-11-03T23:23:08.332Z"
+    },
+    "ci": {
+      "value": "github-actions",
+      "source": "observed",
+      "evidence": ".github/workflows/ci.yml",
+      "confidence": 0.9,
+      "at": "2026-11-03T23:23:08.332Z"
+    },
+    "otherHarnesses": {
+      "value": [],
+      "source": "observed",
+      "evidence": "none found",
+      "confidence": 0.9,
+      "at": "2026-11-03T23:23:08.332Z"
+    }
+  },
+  "gates": [
+    {
+      "name": "test",
+      "cmd": "NODE_OPTIONS=\"$NODE_OPTIONS --test-reporter=tap\" npm run test",
+      "timeoutS": 1800,
+      "kind": "test"
+    },
+    {
+      "name": "typecheck",
+      "cmd": "npm run typecheck",
+      "timeoutS": 1800,
+      "kind": "typecheck"
+    }
+  ],
+  "riskPaths": [
+    "**/auth/**",
+    "**/payment*/**",
+    "**/migrations/**",
+    "**/security/**",
+    ".github/workflows/**",
+    "**/*.sql",
+    ".claude/**",
+    "**/CLAUDE.md",
+    "**/AGENTS.md",
+    "**/GEMINI.md",
+    "**/SKILL.md",
+    "**/agents/*.md",
+    "**/prompts/**",
+    "bin/**"
+  ],
+  "lastScan": {
+    "head": "945674fc7c4d84d8dc307c4d45925f4d6ee7636c",
+    "at": "2026-11-03T23:23:08.332Z"
+  }
+}

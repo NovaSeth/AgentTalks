@@ -1,0 +1,69 @@
+{
+  "schema": 2,
+  "id": "T-MG-1",
+  "kind": "gate",
+  "title": "Area gate: weryfikacja calego projektu AgentTalks (calosc od 877e20e do HEAD)",
+  "lane": null,
+  "owner": "MG",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: matches risk glob bin/**; matches risk glob .github/workflows/**; matches risk glob **/SKILL.md; flag migration; flag public-api; flag security; flag data-write; 25139 LOC > 400",
+      "at": "2026-11-03T23:24:42.214Z"
+    }
+  ],
+  "status": "dispatched",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-03T23:24:36.675Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-03T23:24:42.214Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:8f42976ee3c19720",
+          "risk-path:b803fcb7f17ed923",
+          "risk-path:5445e7dd8e840133",
+          "risk-flag:migration",
+          "risk-flag:public-api",
+          "risk-flag:security",
+          "risk-flag:data-write",
+          "loc-over",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-03T23:25:15.432Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-1-weryfikacja",
+        "base": "877e20e3136a48edfa5112bbcb4031d18c7bc179",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-1",
+        "note": "gate: base = root commit (same docs), range obejmuje caly kod"
+      }
+    },
+    {
+      "at": "2026-11-03T23:37:05.471Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:reviewer",
+        "base": "877e20e3136a48edfa5112bbcb4031d18c7bc179",
+        "note": "r1: 7 Claude slices (s1,s2 security; core; uicode; tests-docs; a2a fable; ux fable) + codex-T-MG-1-reviewer-1"
+      }
+    }
+  ],
+  "base": "877e20e3136a48edfa5112bbcb4031d18c7bc179",
+  "branch": "task/T-MG-1-weryfikacja"
+}

@@ -1,0 +1,26 @@
+{
+  "schema": 2,
+  "id": "T-MG-3",
+  "kind": "task",
+  "title": "UI dla ludzi na wzor Slacka: backlog z recenzji UX (T-MG-1 G1-UX)",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-03T23:41:25.636Z",
+      "by": "MG",
+      "event": "created",
+      "data": {
+        "after": [
+          "T-MG-2"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

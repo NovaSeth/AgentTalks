@@ -1,0 +1,40 @@
+{
+  "schema": 2,
+  "id": "T-MG-4",
+  "kind": "task",
+  "title": "PR #1 (@tars): awatary w sidebarze + fade cichych agentow po 14 dniach - recenzja, dokonczenie archiwizacji, merge",
+  "lane": null,
+  "owner": "MG",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 5 files > 2; 91 LOC > 30",
+      "at": "2026-11-03T23:43:59.056Z"
+    }
+  ],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-03T23:43:17.914Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-03T23:43:59.056Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}
