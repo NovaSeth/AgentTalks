@@ -282,8 +282,10 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
 
   const count = authData.readUInt32BE(33);
   // The signature counter grows on devices that support it; a regression MAY mean a cloned
-  // key. Apple keeps zero - then we do not compare.
-  if (count !== 0 && row.sign_count !== 0 && count <= row.sign_count) {
+  // key. Only an authenticator that always reports zero (stored 0 and received 0) is exempt.
+  // Once either side is non-zero the counter has to strictly increase: a received 0 after a
+  // stored 5 must not reset clone detection, and the stored value is never lowered.
+  if ((row.sign_count > 0 || count > 0) && count <= row.sign_count) {
     throw unauthorized("webauthn_licznik", "licznik podpisow sie cofnal - poswiadczenie odrzucone");
   }
   ctx.db.prepare(
