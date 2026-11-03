@@ -61,3 +61,19 @@ test("deploy: the site password becomes valid JSON even with quotes and backslas
   const out = execFileSync("bash", ["-c", `${fn}\npassword_json "$1"`, "probe", file], { encoding: "utf8" });
   assert.deepEqual(JSON.parse(out), { password: tricky });
 });
+
+test("deploy: without python3 the helper fails loudly instead of sending an empty body (T-MG-9 review F1)", () => {
+  const script = read("deploy/uruchom-produkcje.sh");
+  const fn = script.match(/^password_json\(\)\s*\{[\s\S]*?^\}/m)?.[0];
+  assert.ok(fn, "deploy/uruchom-produkcje.sh defines no password_json() function");
+  let failed = false;
+  let stderr = "";
+  try {
+    execFileSync("/bin/bash", ["-c", `${fn}\npassword_json /nonexistent`], { encoding: "utf8", env: { PATH: "/nonexistent-bin" }, stdio: "pipe" });
+  } catch (e) {
+    failed = true;
+    stderr = String((e as { stderr?: string }).stderr ?? "");
+  }
+  assert.ok(failed, "password_json succeeded without python3");
+  assert.match(stderr, /python3 is required/);
+});

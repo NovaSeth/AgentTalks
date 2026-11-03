@@ -31,6 +31,10 @@ z_env() { grep -E "^$1=" "$ENV_PLIK" 2>/dev/null | cut -d= -f2- || true; }
 # and the post-deploy check then failed with a misleading STOP. The password is read
 # from the file by python itself, so it never appears on a command line (ps).
 password_json() {
+  # Fail loudly: under `set -euo pipefail` a failing helper inside $( ... | curl ) stops the
+  # script with THIS message, instead of curl sending an empty body and the check below
+  # reporting a misleading "the gate rejects the right password".
+  command -v python3 >/dev/null 2>&1 || { echo "STOP: python3 is required to build the gate request body (password_json)." >&2; return 1; }
   python3 -c 'import json, sys; print(json.dumps({"password": open(sys.argv[1], encoding="utf-8").read().rstrip("\n")}))' "$1"
 }
 
