@@ -13,7 +13,7 @@
       "at": "2026-11-03T23:54:02.236Z"
     }
   ],
-  "status": "new",
+  "status": "dispatched",
   "round": 0,
   "events": [
     {
@@ -37,8 +37,27 @@
           "flag:new-dependency"
         ]
       }
+    },
+    {
+      "at": "2026-11-03T23:54:02.766Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-10-fix-b-mcp-agent-surface",
+        "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-10"
+      }
+    },
+    {
+      "at": "2026-11-03T23:54:42.439Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce",
+  "branch": "task/T-MG-10-fix-b-mcp-agent-surface"
 }
