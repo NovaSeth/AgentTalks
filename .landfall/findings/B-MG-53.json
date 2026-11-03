@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-53",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-10",
+  "severity": "minor",
+  "path": "src/http/routes/messages.ts",
+  "line": 108,
+  "rule": "OWA-1",
+  "text": "Low: GET /api/presence returns every actor's session ids, cwd and typingIn ('c:<id>') to all signed-in actors, revealing activity in private conversations the caller cannot read. Fix: filter typingIn/doing by canRead.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

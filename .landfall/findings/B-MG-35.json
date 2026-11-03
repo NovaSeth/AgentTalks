@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-35",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UI-1",
+  "severity": "blocking",
+  "path": "src/http/ui/js/zdarzenia-sse.js",
+  "line": 102,
+  "rule": null,
+  "text": "Acceptance 14. message_updated (edit/delete/fix/resolve, and EVERY edit of the last 24h replayed on each reconnect, sse.ts:125-137) goes through onMessageEvent like a new message: unread++, badge++, desktop Notification, announce, newBelow++. Repro: node uicode/sse.mjs -> new DM unread=1; same message edited unread=2 + 2nd notification; deleted unread=3 (server excludes deleted). Fix: branch on event type, do not count updates.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-8",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

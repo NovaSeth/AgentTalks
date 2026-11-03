@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-42",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UI-8",
+  "severity": "minor",
+  "path": "src/http/ui/js/toasty.js",
+  "line": 42,
+  "rule": null,
+  "text": "Polish strings a user sees that inventory may miss: toasty.js:42 'Zamknij', dane.js:261 'Powiadomienia, N nowych', markdown.js title 'Kopiuj'/'strona wiki', app.css:974 'Upusc, zeby zalaczyc', gate.html:79,86 button reset to 'Dalej'. Also api.js ERRORS keyed by Polish server codes: T-MG-2 renaming codes silently breaks the map.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

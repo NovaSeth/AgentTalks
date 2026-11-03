@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-50",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-7",
+  "severity": "minor",
+  "path": "src/http/sse.ts",
+  "line": 181,
+  "rule": "OWA-7",
+  "text": "Low: long-poll (GET /api/messages?wait=300) authenticates once and delivers on wake with no re-check, so a token revoked mid-wait still receives messages for up to 300 s (SSE rechecks every 20 s). Fix: re-authenticate in finish().",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

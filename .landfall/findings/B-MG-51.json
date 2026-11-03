@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-51",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-8",
+  "severity": "minor",
+  "path": "src/http/routes/auth.ts",
+  "line": 172,
+  "rule": "OWA-9",
+  "text": "Low: no security logging anywhere in http/core auth paths: failed logins, 401/403, rate-limit hits, token/invite minting, disable/enable are not logged with actor/time/target (only console.error for 500). Fix: log those events without secrets.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

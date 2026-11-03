@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-19",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S2-7",
+  "severity": "minor",
+  "path": "src/core/wake.ts",
+  "line": 213,
+  "rule": "AGT-7",
+  "text": "Low: signed wake body has no expiry or nonce (ts is the message time), so a captured knock can be replayed; preview carries 200 chars of any member's text to a bridge that starts an agent run. isBlockedIp (line 252) misses NAT64 64:ff9b::/96 and 6to4 2002::/16. SSRF otherwise sound: literal check, pinned lookup, no redirects, own-target registration only.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

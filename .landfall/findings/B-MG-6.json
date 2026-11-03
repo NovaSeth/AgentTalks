@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-6",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F6",
+  "severity": "blocking",
+  "path": "src/core/presence.ts",
+  "line": 309,
+  "rule": "SEC-8",
+  "text": "Acceptance 1: whoIsTyping exposes private typing locations to every other actor; MCP resolves them into private channel names. In-memory test: Alice types in private-review-room, Bob is not a member, and Bob calls talk_read for a public message => privateReadable=false, privateSlugReturned=true. Filter typing locations through canRead for the requesting actor before returning presence or resolving names.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

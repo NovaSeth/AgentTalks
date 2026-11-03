@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-11",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F11",
+  "severity": "blocking",
+  "path": "src/mcp/server.ts",
+  "line": 857,
+  "rule": "LLM-10",
+  "text": "Acceptance 13: talk_read discards the truncated renderings from wBudzecie and formats the original messages again through pogrupujPoRozmowach. In-memory test: post a 60,000-character body, then talk_read => output length=60228 and containsAll60000=true despite BUDZET_ZNAKOW=40000. Group the budgeted renderings or enforce the limit on the final output while preserving a recoverable cursor.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

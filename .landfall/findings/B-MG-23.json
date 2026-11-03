@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-23",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "CORE-1",
+  "severity": "blocking",
+  "path": "src/core/messages.ts",
+  "line": 291,
+  "rule": "REV-4",
+  "text": "editMessage/deleteMessage check only authorship, never canRead/archived: a member removed from a private channel can still rewrite its own old messages, and the edit emits message_updated and an @mention notification to current members (acc. 1,7; GC5). Repro: core/exmember.test.ts -> after removeMember, bob canRead=false, editMessage succeeds, alice gets event+notification. Fix: assertCanRead (and archived check for edit) first.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

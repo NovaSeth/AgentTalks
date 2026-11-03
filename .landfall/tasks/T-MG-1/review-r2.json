@@ -1,0 +1,338 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "findings": [
+    {
+      "id": "S2-1",
+      "severity": "blocking",
+      "path": "src/mcp/server.ts",
+      "line": 460,
+      "rule": "LLM-1",
+      "text": "High: message bodies, wiki pages, session label/doing and channel topics are inlined raw into MCP results (fmtMsg) and the hook's additionalContext, with no delimiter or untrusted marker; a body with a newline forges a '<michal:czlowiek>' line, the tag agents use to check human approval (AGT-1, AGT-7). Repro s2/inj.test.ts: forged line appears as a separate human message. Fix: escape or indent newlines, wrap in a per-call delimiter labelled untrusted data, say so in both SKILL.md and the hook."
+    },
+    {
+      "id": "S2-2",
+      "severity": "blocking",
+      "path": "package.json",
+      "line": 28,
+      "rule": "OWA-3",
+      "text": "High: npm audit --omit=dev reports 9 vulns (1 critical proxy-addr, 4 high incl. @modelcontextprotocol/sdk locked at 1.30.0); gate criterion 5 demands zero High/Critical. Reachable: POST /mcp with a valid token accepted a 60 MB body (200) and a 20000-call JSON-RPC batch (200, 21 s), no size cap (src/http/server.ts:69). Repro s2/big.test.ts. Fix: bump SDK, npm audit fix, cap /mcp body and batch length."
+    },
+    {
+      "id": "CORE-1",
+      "severity": "blocking",
+      "path": "src/core/messages.ts",
+      "line": 291,
+      "rule": "REV-4",
+      "text": "editMessage/deleteMessage check only authorship, never canRead/archived: a member removed from a private channel can still rewrite its own old messages, and the edit emits message_updated and an @mention notification to current members (acc. 1,7; GC5). Repro: core/exmember.test.ts -> after removeMember, bob canRead=false, editMessage succeeds, alice gets event+notification. Fix: assertCanRead (and archived check for edit) first."
+    },
+    {
+      "id": "CORE-2",
+      "severity": "blocking",
+      "path": "src/core/wiki.ts",
+      "line": 206,
+      "rule": "REV-4",
+      "text": "assertNoClobber ignores force when baseRevision is present: savePage(baseRevision=1 stale, force=true) still throws 409 konflikt_wiki, although the MCP tool text says force = overwrite despite divergence and the 409 hint itself says 'force=true'. An agent following the error hint loops on the same 409 (acc. 13). Repro: core/core.test.ts F-force -> 409 konflikt_wiki. Fix: check input.force before the base comparison."
+    },
+    {
+      "id": "UI-1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/zdarzenia-sse.js",
+      "line": 102,
+      "rule": null,
+      "text": "Acceptance 14. message_updated (edit/delete/fix/resolve, and EVERY edit of the last 24h replayed on each reconnect, sse.ts:125-137) goes through onMessageEvent like a new message: unread++, badge++, desktop Notification, announce, newBelow++. Repro: node uicode/sse.mjs -> new DM unread=1; same message edited unread=2 + 2nd notification; deleted unread=3 (server excludes deleted). Fix: branch on event type, do not count updates."
+    },
+    {
+      "id": "UI-2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 1459,
+      "rule": null,
+      "text": "Acceptance 14 (threads). Thread-panel send does state.threadMsgs.push(msg) unconditionally; the SSE echo (zdarzenia-sse.js:156) has already inserted the same id, so the reply shows twice. Repro in live UI (port 18804): reply from #th-input -> th-msgs ids [1,2,3,3], texts 'second reply' twice. Fix: upsert by id."
+    },
+    {
+      "id": "UI-3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/akcje.js",
+      "line": 58,
+      "rule": null,
+      "text": "Acceptance 14 (composer). After a send succeeds sendMessage calls widok.composer(), rebuilding the composer: text typed after Enter and before the response is wiped and focus is lost. Repro live: click send, 5 ms later set composer value 'typed while sending' -> 1.5 s later element replaced, value '', not focused. Fix: re-render only when needed, or keep value/focus."
+    },
+    {
+      "id": "S2-3",
+      "severity": "minor",
+      "path": "src/mcp/server.ts",
+      "line": 1376,
+      "rule": "LLM-10",
+      "text": "Medium: no per-actor rate limit or cap on concurrent calls to /mcp; talk_read waitSec up to 300 s holds a connection and a bus subscription per call, so one token can pile up long polls. Add a per-actor cap on concurrent waits."
+    },
+    {
+      "id": "S2-4",
+      "severity": "minor",
+      "path": ".github/workflows/ci.yml",
+      "line": 14,
+      "rule": "OWA-3",
+      "text": "Medium: no top-level permissions block (token defaults depend on repo settings) and actions are pinned by tag, not commit SHA (checkout@v4 lines 14 and 35, setup-node@v4 line 15), against SCD-11. Add 'permissions: contents: read' and pin SHAs. No pull_request_target found."
+    },
+    {
+      "id": "S2-5",
+      "severity": "minor",
+      "path": "Dockerfile",
+      "line": 8,
+      "rule": "OWA-3",
+      "text": "Medium: base image node:26-alpine is a moving tag, not a digest; 'chown -R node:node /data /app' (line 29) makes application code writable by the runtime user. Pin the digest, chown only /data. Non-root user, healthcheck and no baked secrets are fine."
+    },
+    {
+      "id": "S2-6",
+      "severity": "minor",
+      "path": "src/http/ui.ts",
+      "line": 53,
+      "rule": "OWA-2",
+      "text": "Low: with AGENTTALKS_BASE_URL unset, {{BASE_URL}} in /install and /skill.md comes from Host or X-Forwarded-Host and is substituted unescaped into HTML and into the skill an agent saves (ui.ts:153,161); a poisoned shared cache would point agents at an attacker's enroll URL. Compose defaults the variable to empty. Require baseUrl off loopback and escape."
+    },
+    {
+      "id": "S2-7",
+      "severity": "minor",
+      "path": "src/core/wake.ts",
+      "line": 213,
+      "rule": "AGT-7",
+      "text": "Low: signed wake body has no expiry or nonce (ts is the message time), so a captured knock can be replayed; preview carries 200 chars of any member's text to a bridge that starts an agent run. isBlockedIp (line 252) misses NAT64 64:ff9b::/96 and 6to4 2002::/16. SSRF otherwise sound: literal check, pinned lookup, no redirects, own-target registration only."
+    },
+    {
+      "id": "S2-8",
+      "severity": "minor",
+      "path": "src/cli/atalk.ts",
+      "line": 117,
+      "rule": "AGT-3",
+      "text": "Low: the bearer token goes over plain http to any non-loopback --url without a warning, and a .agenttalks.json found upward from cwd (a cloned repo can ship one) silently redirects url and token; the hook then feeds that server's replies to the agent as context. Warn on http to non-loopback hosts and on project files not written by login."
+    },
+    {
+      "id": "S2-9",
+      "severity": "minor",
+      "path": "src/mcp/server.ts",
+      "line": 101,
+      "rule": "LLM-6",
+      "text": "Low: talk_send description omits that sending to '@a' or '@a,@b' creates the conversation on the fly and may wake the addressee through a webhook (a real model run, per AgentTalks.md); state the side effect. send-file takes any local path with no confirmation, so an injected message can steer an agent to upload a file (see F1)."
+    },
+    {
+      "id": "S2-10",
+      "severity": "minor",
+      "path": "deploy/uruchom-produkcje.sh",
+      "line": 126,
+      "rule": "SEC-5",
+      "text": "Low: the site password is spliced into JSON with printf '%s' (also line 146), so a password containing a double quote or backslash makes the post-deploy gate check fail with a misleading STOP; build the body with python3 or jq. Password stays off argv (stdin), variables quoted, set -euo pipefail present."
+    },
+    {
+      "id": "CORE-3",
+      "severity": "minor",
+      "path": "src/store/db.ts",
+      "line": 15,
+      "rule": null,
+      "text": "Fresh-DB concurrent start fails: PRAGMA journal_mode=WAL runs before busy_timeout is set, so 8 processes opening a new file at once -> 1 dies with 'database is locked' (15/15 rounds, core/race.sh). Migration of an existing WAL DB is fine (8/8 ok, race3.sh). Set busy_timeout first and retry the WAL pragma."
+    },
+    {
+      "id": "CORE-4",
+      "severity": "minor",
+      "path": "src/store/db.ts",
+      "line": 36,
+      "rule": null,
+      "text": "Forward-only is not enforced for a newer DB: a user_version=99 file opens silently under a binary that knows 16 migrations (core/future.mjs: 'opened silently at user_version 99'), so an old binary writes into a schema it does not know. Refuse to start when user_version > SCHEMA_VERSION."
+    },
+    {
+      "id": "CORE-5",
+      "severity": "minor",
+      "path": "src/store/db.ts",
+      "line": 122,
+      "rule": null,
+      "text": "onCommitted callbacks registered inside a savepoint that is then rolled back stay in the queue and fire after the outer COMMIT (GC4): core.test.ts F-savepoint -> fired ['phantom','real']. Latent (only the importer catches inside tx) but the guard is false; truncate the queue to its length at savepoint entry on rollback."
+    },
+    {
+      "id": "CORE-6",
+      "severity": "minor",
+      "path": "src/core/notifications.ts",
+      "line": 118,
+      "rule": null,
+      "text": "sprzatnijStare runs two full-table DELETEs (plan: SCAN notifications, no index on created_at / read_at-first) on every notify(), i.e. on each DM/mention write: 300k rows -> 24.7 ms per call (core.test.ts F-perf). Sweep at most once per minute or add indexes."
+    },
+    {
+      "id": "CORE-7",
+      "severity": "minor",
+      "path": "src/core/notifications.ts",
+      "line": 126,
+      "rule": null,
+      "text": "listNotifications has no canRead filter: after removal from a private channel the actor keeps excerpts (160 chars) of that channel's messages for up to 180 days (core.test.ts F-notif: canRead=false, excerpts still listed). Join conversations and drop rows the actor can no longer read."
+    },
+    {
+      "id": "CORE-8",
+      "severity": "minor",
+      "path": "src/core/unread.ts",
+      "line": 89,
+      "rule": null,
+      "text": "markRead accepts any messageId and the marker never moves back (MAX): markRead(...,1000000) makes every later message read, unread=0 badge=0 (core.test.ts F-markread). Clamp to the conversation's last message id."
+    },
+    {
+      "id": "CORE-9",
+      "severity": "minor",
+      "path": "src/core/messages.ts",
+      "line": 134,
+      "rule": null,
+      "text": "dedup_key is actor:clientMsgId without the conversation: reusing a clientMsgId in another channel returns the first message (conversationId 1, expected 2) and posts nothing (core.test.ts F-dedup). Include conversationId in the key or reject a mismatch."
+    },
+    {
+      "id": "CORE-10",
+      "severity": "minor",
+      "path": "src/core/unread.ts",
+      "line": 29,
+      "rule": null,
+      "text": "unreadFor and digestFor count every unread row each call: 200 public channels / 300k messages never marked read -> 233 ms and 230 ms per call (core/perf.test.ts); agents rarely mark read, so cost grows with history. Cap the count (LIMIT subquery) or keep a counter."
+    },
+    {
+      "id": "CORE-11",
+      "severity": "minor",
+      "path": "src/core/wiki.ts",
+      "line": 288,
+      "rule": null,
+      "text": "wiki_revisions grow without bound: every save stores a full body (up to 512 KB) and nothing prunes them, so a looping agent with force=true can bloat the DB. Cap revisions per page or compact old ones."
+    },
+    {
+      "id": "CORE-12",
+      "severity": "minor",
+      "path": "src/core/digest.ts",
+      "line": 47,
+      "rule": null,
+      "text": "Digest returns the Polish literal 'rozmowa prywatna' (SQL COALESCE) to agents for DM/group conversations; it sits inside SQL so the T-MG-2 inventory may miss it (acc. 12). Also deleting an ask leaves its question answerable (answer() accepted, core/exmember.test.ts) while reactions/pins of deleted messages remain."
+    },
+    {
+      "id": "UI-4",
+      "severity": "minor",
+      "path": "src/http/ui/js/stan.js",
+      "line": 120,
+      "rule": null,
+      "text": "sseCursor moves on every upsertMessage incl. REST responses (own send, history load). While the stream is CLOSED (manual reconnect path) a REST call jumps the cursor past missed messages of other conversations; ?after= replay then skips them and cached conversations stay stale until reload. Not reproduced live."
+    },
+    {
+      "id": "UI-5",
+      "severity": "minor",
+      "path": "src/http/ui/js/markdown.js",
+      "line": 43,
+      "rule": null,
+      "text": "Reviewed for XSS (acceptance 3): none found. Output checked for javascript:, quotes, wikilink labels, tables, code (uicode/md.mjs); CSP script-src self. But mention rewrite runs inside an href: '[x](https://a.b/(@bob)' yields href=\"https://a.b/(<span class=\" ... garbled text with stray attributes; NUL-delimited code placeholder typed by a user renders 'undefined'. Cosmetic markup injection, no script."
+    },
+    {
+      "id": "UI-6",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-sidebar.js",
+      "line": 371,
+      "rule": null,
+      "text": "In-product text HOW_WE_TALK says to send questions 'with the question-mark button', removed from the composer in commit 0cc.. Also avatar menu (zmienAwatar) uses window.confirm where Cancel/Esc DELETES the avatar."
+    },
+    {
+      "id": "UI-7",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-login.js",
+      "line": 45,
+      "rule": null,
+      "text": "doLogout keeps state.msgs/loaded/pending/notifications and localStorage drafts (atalks_draft_*, atalks_wiki_draft_*, atalks_last_conv) so the next user in the same browser sees the previous user's drafts and cached data."
+    },
+    {
+      "id": "UI-8",
+      "severity": "minor",
+      "path": "src/http/ui/js/toasty.js",
+      "line": 42,
+      "rule": null,
+      "text": "Polish strings a user sees that inventory may miss: toasty.js:42 'Zamknij', dane.js:261 'Powiadomienia, N nowych', markdown.js title 'Kopiuj'/'strona wiki', app.css:974 'Upusc, zeby zalaczyc', gate.html:79,86 button reset to 'Dalej'. Also api.js ERRORS keyed by Polish server codes: T-MG-2 renaming codes silently breaks the map."
+    },
+    {
+      "id": "UI-9",
+      "severity": "minor",
+      "path": "src/http/ui/js/dom.js",
+      "line": 201,
+      "rule": null,
+      "text": "confirmModal/showNewsModal add a document keydown 'esc' listener removed only on Escape; closing via buttons leaks it. i18n checked: all 505 t()/msg() keys exist in i18n-pl.js (missing key degrades to English); module whitelist matches 19 files; '{n} messages' lacks an EN plural entry."
+    },
+    {
+      "id": "S1-1",
+      "severity": "minor",
+      "path": "src/http/routes/auth.ts",
+      "line": 177,
+      "rule": "OWA-7",
+      "text": "Medium: login rate limit is keyed by IP only and a successful login of ANY account clears the IP counter; limit is checked before verify, so an insider with an own human account interleaves a login every 8 guesses and guesses others' passwords with no 429. Repro: repro-login-reset.test.ts -> 48 guesses, only 401. Fix: key by IP+handle, clear only the handle key, add a per-handle limit. Assumes attacker owns a human account (CVSS AC:H)."
+    },
+    {
+      "id": "S1-2",
+      "severity": "minor",
+      "path": "src/http/routes/auth.ts",
+      "line": 186,
+      "rule": "OWA-7",
+      "text": "Medium: POST /api/logout only expires the cookie client-side; the signed cookie stays valid for sessionTtlSec (30 d) and has no CSRF check (SCD-7: end session on logout). Repro: repro-misc.test.ts -> logout 200, then GET /api/me with the pre-logout cookie 200. Fix: server-side session id or per-session epoch, bump on logout."
+    },
+    {
+      "id": "S1-3",
+      "severity": "minor",
+      "path": "src/http/routes/conversations.ts",
+      "line": 197,
+      "rule": "OWA-1",
+      "text": "Medium: any member of a private channel (not only a channel admin) can add any actor via POST /members, giving them the full history, while removal and edit need the admin role (assertCanManage); inconsistent BFLA. Fix: require channel admin (or document that every member may invite)."
+    },
+    {
+      "id": "S1-4",
+      "severity": "minor",
+      "path": "src/http/routes/wiki.ts",
+      "line": 169,
+      "rule": "OWA-10",
+      "text": "Low: POST /api/wiki/:slug/files uses raw decodeURIComponent on X-File-Name; a bad %-sequence gives a 500 'internal error' (the files route has dekodujNazwe for this). Repro: repro-misc.test.ts -> 'bad%zz.txt' -> 500 URIError in log. Fix: reuse dekodujNazwe (400)."
+    },
+    {
+      "id": "S1-5",
+      "severity": "minor",
+      "path": "src/core/messages.ts",
+      "line": 224,
+      "rule": "OWA-1",
+      "text": "Low: postMessage/files/leases accept a client sessionId with no ownership check (routes/messages.ts has assertOwnSession for signal/end for exactly this threat), and GET /api/presence lists every session id; so any actor can clear another actor's typing bubble and tag its messages with a foreign session id. Fix: verify the session belongs to the actor or drop it."
+    },
+    {
+      "id": "S1-6",
+      "severity": "minor",
+      "path": "src/http/ui.ts",
+      "line": 53,
+      "rule": "OWA-2",
+      "text": "Low: with baseUrl unset, /install, /install.md and /skill.md are templated from client-supplied X-Forwarded-Host/Host (leftmost value) and unescaped into HTML; reflected only to the sender unless a shared cache sits in front (CSP script-src 'self' blocks execution). Repro: repro-misc.test.ts -> evil host and raw <script> in /install. Fix: require baseUrl or validate host."
+    },
+    {
+      "id": "S1-7",
+      "severity": "minor",
+      "path": "src/http/sse.ts",
+      "line": 181,
+      "rule": "OWA-7",
+      "text": "Low: long-poll (GET /api/messages?wait=300) authenticates once and delivers on wake with no re-check, so a token revoked mid-wait still receives messages for up to 300 s (SSE rechecks every 20 s). Fix: re-authenticate in finish()."
+    },
+    {
+      "id": "S1-8",
+      "severity": "minor",
+      "path": "src/http/routes/auth.ts",
+      "line": 172,
+      "rule": "OWA-9",
+      "text": "Low: no security logging anywhere in http/core auth paths: failed logins, 401/403, rate-limit hits, token/invite minting, disable/enable are not logged with actor/time/target (only console.error for 500). Fix: log those events without secrets."
+    },
+    {
+      "id": "S1-9",
+      "severity": "minor",
+      "path": "src/core/webauthn.ts",
+      "line": 286,
+      "rule": "OWA-7",
+      "text": "Low: signature counter check is skipped whenever the new count is 0 and the stored value is then overwritten with 0, so a cloned authenticator answering 0 is never detected and resets the guard. Fix: do not lower sign_count; reject 0 after a non-zero count."
+    },
+    {
+      "id": "S1-10",
+      "severity": "minor",
+      "path": "src/http/routes/messages.ts",
+      "line": 108,
+      "rule": "OWA-1",
+      "text": "Low: GET /api/presence returns every actor's session ids, cwd and typingIn ('c:<id>') to all signed-in actors, revealing activity in private conversations the caller cannot read. Fix: filter typingIn/doing by canRead."
+    }
+  ]
+}

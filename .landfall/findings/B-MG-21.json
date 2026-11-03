@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-21",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S2-9",
+  "severity": "minor",
+  "path": "src/mcp/server.ts",
+  "line": 101,
+  "rule": "LLM-6",
+  "text": "Low: talk_send description omits that sending to '@a' or '@a,@b' creates the conversation on the fly and may wake the addressee through a webhook (a real model run, per AgentTalks.md); state the side effect. send-file takes any local path with no confirmation, so an injected message can steer an agent to upload a file (see F1).",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

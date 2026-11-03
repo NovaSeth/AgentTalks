@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-9",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F9",
+  "severity": "blocking",
+  "path": "src/store/db.ts",
+  "line": 109,
+  "rule": "REV-4",
+  "text": "Acceptance 4/11, GC4: rolling back a nested savepoint leaves its onCommitted callbacks queued. In-memory test: outer tx catches an inner tx that posts a message then throws, and commits => stored=null but delivered=['rolled-back synthetic message']. Subscribers receive content that never committed. Record the callback queue length at each savepoint and discard callbacks registered within any rolled-back scope.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

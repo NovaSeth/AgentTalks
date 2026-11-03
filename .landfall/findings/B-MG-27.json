@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-27",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "CORE-5",
+  "severity": "minor",
+  "path": "src/store/db.ts",
+  "line": 122,
+  "rule": null,
+  "text": "onCommitted callbacks registered inside a savepoint that is then rolled back stay in the queue and fire after the outer COMMIT (GC4): core.test.ts F-savepoint -> fired ['phantom','real']. Latent (only the importer catches inside tx) but the guard is false; truncate the queue to its length at savepoint entry on rollback.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

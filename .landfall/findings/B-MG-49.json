@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-49",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-6",
+  "severity": "minor",
+  "path": "src/http/ui.ts",
+  "line": 53,
+  "rule": "OWA-2",
+  "text": "Low: with baseUrl unset, /install, /install.md and /skill.md are templated from client-supplied X-Forwarded-Host/Host (leftmost value) and unescaped into HTML; reflected only to the sender unless a shared cache sits in front (CSP script-src 'self' blocks execution). Repro: repro-misc.test.ts -> evil host and raw <script> in /install. Fix: require baseUrl or validate host.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

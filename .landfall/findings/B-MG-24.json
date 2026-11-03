@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-24",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "CORE-2",
+  "severity": "blocking",
+  "path": "src/core/wiki.ts",
+  "line": 206,
+  "rule": "REV-4",
+  "text": "assertNoClobber ignores force when baseRevision is present: savePage(baseRevision=1 stale, force=true) still throws 409 konflikt_wiki, although the MCP tool text says force = overwrite despite divergence and the 409 hint itself says 'force=true'. An agent following the error hint loops on the same 409 (acc. 13). Repro: core/core.test.ts F-force -> 409 konflikt_wiki. Fix: check input.force before the base comparison.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

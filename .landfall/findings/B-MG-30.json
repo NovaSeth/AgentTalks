@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-30",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "CORE-8",
+  "severity": "minor",
+  "path": "src/core/unread.ts",
+  "line": 89,
+  "rule": null,
+  "text": "markRead accepts any messageId and the marker never moves back (MAX): markRead(...,1000000) makes every later message read, unread=0 badge=0 (core.test.ts F-markread). Clamp to the conversation's last message id.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

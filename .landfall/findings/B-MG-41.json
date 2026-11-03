@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-41",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UI-7",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-login.js",
+  "line": 45,
+  "rule": null,
+  "text": "doLogout keeps state.msgs/loaded/pending/notifications and localStorage drafts (atalks_draft_*, atalks_wiki_draft_*, atalks_last_conv) so the next user in the same browser sees the previous user's drafts and cached data.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-8",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

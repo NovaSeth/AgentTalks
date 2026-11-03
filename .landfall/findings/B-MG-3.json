@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-3",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F3",
+  "severity": "blocking",
+  "path": "src/core/wake.ts",
+  "line": 193,
+  "rule": "AGT-10",
+  "text": "Acceptance 2: disabling an actor leaves its wake webhook active and sends new private content. In-memory test with injected delivery: setWake(Bob), setDisabled(Bob,true), then post a private @bob mention => wakeable=true and sent=['@bob synthetic content after disabling']. No network request was made. Check actors.disabled_at in isWakeable and immediately before dispatch; disabling must stop outbound deliveries.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

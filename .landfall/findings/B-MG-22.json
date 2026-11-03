@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-22",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S2-10",
+  "severity": "minor",
+  "path": "deploy/uruchom-produkcje.sh",
+  "line": 126,
+  "rule": "SEC-5",
+  "text": "Low: the site password is spliced into JSON with printf '%s' (also line 146), so a password containing a double quote or backslash makes the post-deploy gate check fail with a misleading STOP; build the body with python3 or jq. Password stays off argv (stdin), variables quoted, set -euo pipefail present.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-9",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

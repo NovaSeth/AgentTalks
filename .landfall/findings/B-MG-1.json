@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-1",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F1",
+  "severity": "blocking",
+  "path": "src/core/notifications.ts",
+  "line": 138,
+  "rule": "SEC-8",
+  "text": "Acceptance 1: notification reads ignore current conversation access. In-memory test: mention Bob in a private channel, remove Bob, then listNotifications(ctx,bob.id) => canRead=false but excerpt='@bob synthetic private notice'. Revoked membership still exposes private content. Filter notification results and unread counts by current access before returning them.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

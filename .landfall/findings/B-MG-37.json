@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-37",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UI-3",
+  "severity": "blocking",
+  "path": "src/http/ui/js/akcje.js",
+  "line": 58,
+  "rule": null,
+  "text": "Acceptance 14 (composer). After a send succeeds sendMessage calls widok.composer(), rebuilding the composer: text typed after Enter and before the response is wiped and focus is lost. Repro live: click send, 5 ms later set composer value 'typed while sending' -> 1.5 s later element replaced, value '', not focused. Fix: re-render only when needed, or keep value/focus.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-8",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-45",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-2",
+  "severity": "minor",
+  "path": "src/http/routes/auth.ts",
+  "line": 186,
+  "rule": "OWA-7",
+  "text": "Medium: POST /api/logout only expires the cookie client-side; the signed cookie stays valid for sessionTtlSec (30 d) and has no CSRF check (SCD-7: end session on logout). Repro: repro-misc.test.ts -> logout 200, then GET /api/me with the pre-logout cookie 200. Fix: server-side session id or per-session epoch, bump on logout.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

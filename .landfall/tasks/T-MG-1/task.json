@@ -62,6 +62,26 @@
         "base": "877e20e3136a48edfa5112bbcb4031d18c7bc179",
         "note": "r1: 7 Claude slices (s1,s2 security; core; uicode; tests-docs; a2a fable; ux fable) + codex-T-MG-1-reviewer-1"
       }
+    },
+    {
+      "at": "2026-11-03T23:45:20.064Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-03T23:46:23.524Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "claude"
+      }
     }
   ],
   "base": "877e20e3136a48edfa5112bbcb4031d18c7bc179",

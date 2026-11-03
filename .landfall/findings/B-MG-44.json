@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-44",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-1",
+  "severity": "minor",
+  "path": "src/http/routes/auth.ts",
+  "line": 177,
+  "rule": "OWA-7",
+  "text": "Medium: login rate limit is keyed by IP only and a successful login of ANY account clears the IP counter; limit is checked before verify, so an insider with an own human account interleaves a login every 8 guesses and guesses others' passwords with no 429. Repro: repro-login-reset.test.ts -> 48 guesses, only 401. Fix: key by IP+handle, clear only the handle key, add a per-handle limit. Assumes attacker owns a human account (CVSS AC:H).",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

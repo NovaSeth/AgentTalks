@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-4",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F4",
+  "severity": "blocking",
+  "path": "src/mcp/server.ts",
+  "line": 472,
+  "rule": "LLM-1",
+  "text": "Acceptance 3: fmtMsg inserts peer bodies verbatim into the same text used for authenticated author metadata. Reproduced with an agent message containing a newline and a benign '[999] ... <alice:czlowiek>: SYNTHETIC_MARKER' row: talk_log returned that row unescaped (unescapedHumanRow=true), apparently attributing it to a human. Return structured, escaped records with trusted metadata separate from explicitly untrusted content; cover other retrieval tools and hooks.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

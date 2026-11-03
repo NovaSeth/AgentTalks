@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-15",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S2-3",
+  "severity": "minor",
+  "path": "src/mcp/server.ts",
+  "line": 1376,
+  "rule": "LLM-10",
+  "text": "Medium: no per-actor rate limit or cap on concurrent calls to /mcp; talk_read waitSec up to 300 s holds a connection and a bus subscription per call, so one token can pile up long polls. Add a per-actor cap on concurrent waits.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/core/notifications.ts",
+      "line": 138,
+      "rule": "SEC-8",
+      "text": "Acceptance 1: notification reads ignore current conversation access. In-memory test: mention Bob in a private channel, remove Bob, then listNotifications(ctx,bob.id) => canRead=false but excerpt='@bob synthetic private notice'. Revoked membership still exposes private content. Filter notification results and unread counts by current access before returning them."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/sse.ts",
+      "line": 207,
+      "rule": "SEC-8",
+      "text": "Acceptance 2: pending HTTP and MCP reads survive revocation. In-memory test: start longPollHandler(wait=300), revoke its bearer, then post => authenticatedNow=false, status=200, private body delivered; disable/password-change variants also leaked. MCP talk_read reproduced tokenValid=false, delivered=true (server.ts:1323). Retain credential context, reauthenticate before delivery, and cancel invalidated waits."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/core/wake.ts",
+      "line": 193,
+      "rule": "AGT-10",
+      "text": "Acceptance 2: disabling an actor leaves its wake webhook active and sends new private content. In-memory test with injected delivery: setWake(Bob), setDisabled(Bob,true), then post a private @bob mention => wakeable=true and sent=['@bob synthetic content after disabling']. No network request was made. Check actors.disabled_at in isWakeable and immediately before dispatch; disabling must stop outbound deliveries."
+    },
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "src/mcp/server.ts",
+      "line": 472,
+      "rule": "LLM-1",
+      "text": "Acceptance 3: fmtMsg inserts peer bodies verbatim into the same text used for authenticated author metadata. Reproduced with an agent message containing a newline and a benign '[999] ... <alice:czlowiek>: SYNTHETIC_MARKER' row: talk_log returned that row unescaped (unescapedHumanRow=true), apparently attributing it to a human. Return structured, escaped records with trusted metadata separate from explicitly untrusted content; cover other retrieval tools and hooks."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "src/core/webauthn.ts",
+      "line": 286,
+      "rule": "OWA-7",
+      "text": "Acceptance 6: a zero counter resets clone detection for credentials that previously counted. Reused test/core/webauthn.test.ts's synthetic authenticator in memory: register, then assertLogin with counts 5,0,1 => all returned actorId=1; stored sign_count became 1. Reject a non-increasing count whenever either stored or received count is nonzero; exempt only the always-zero case, and test 5->0."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "src/core/presence.ts",
+      "line": 309,
+      "rule": "SEC-8",
+      "text": "Acceptance 1: whoIsTyping exposes private typing locations to every other actor; MCP resolves them into private channel names. In-memory test: Alice types in private-review-room, Bob is not a member, and Bob calls talk_read for a public message => privateReadable=false, privateSlugReturned=true. Filter typing locations through canRead for the requesting actor before returning presence or resolving names."
+    },
+    {
+      "id": "F7",
+      "severity": "blocking",
+      "path": "src/core/messages.ts",
+      "line": 224,
+      "rule": "SEC-8",
+      "text": "Acceptance 7/GC3: posting trusts a client-supplied sessionId without checking its owner. In-memory test: Alice's session is typing; Bob calls postMessage with sessionId='alice-session' => before=true, after=false, messageActor=2, messageSession='alice-session'. Session IDs are exposed by presence. Validate ownership before persisting session attribution or clearing typing, including all callers of postMessage."
+    },
+    {
+      "id": "F8",
+      "severity": "blocking",
+      "path": "src/http/routes/auth.ts",
+      "line": 325,
+      "rule": "SEC-8",
+      "text": "Acceptance 7: POST /api/actors uses requireAdmin, which permits agent admins, instead of the human-admin guard used by /api/admin. Reproduced by invoking the registered handler with an authenticated kind=agent,isAdmin=true caller and {handle:'synthetic-human',kind:'human'} => HTTP 201, createdKind='human'. Apply a shared human-admin check to this provisioning route and test that an agent admin receives 403."
+    },
+    {
+      "id": "F9",
+      "severity": "blocking",
+      "path": "src/store/db.ts",
+      "line": 109,
+      "rule": "REV-4",
+      "text": "Acceptance 4/11, GC4: rolling back a nested savepoint leaves its onCommitted callbacks queued. In-memory test: outer tx catches an inner tx that posts a message then throws, and commits => stored=null but delivered=['rolled-back synthetic message']. Subscribers receive content that never committed. Record the callback queue length at each savepoint and discard callbacks registered within any rolled-back scope."
+    },
+    {
+      "id": "F10",
+      "severity": "blocking",
+      "path": "src/mcp/server.ts",
+      "line": 1174,
+      "rule": "OWA-10",
+      "text": "Acceptance 4: truncating within one wiki line leaves pominiete=0, so wiki_read marks unseen content as fully read and unlocks replacement. In-memory test: save 'x'.repeat(50000)+'TAIL', read as Bob, then save only the visible prefix => tailDelivered=false, last_revision_id=1, writeAccepted=true. Track intra-line truncation and never mark a partial read complete; require a full read or an explicit overwrite."
+    },
+    {
+      "id": "F11",
+      "severity": "blocking",
+      "path": "src/mcp/server.ts",
+      "line": 857,
+      "rule": "LLM-10",
+      "text": "Acceptance 13: talk_read discards the truncated renderings from wBudzecie and formats the original messages again through pogrupujPoRozmowach. In-memory test: post a 60,000-character body, then talk_read => output length=60228 and containsAll60000=true despite BUDZET_ZNAKOW=40000. Group the budgeted renderings or enforce the limit on the final output while preserving a recoverable cursor."
+    },
+    {
+      "id": "F12",
+      "severity": "blocking",
+      "path": ".github/workflows/ci.yml",
+      "line": 14,
+      "rule": "OWA-3",
+      "text": "Acceptance 8: CI actions use mutable tags instead of required commit pins. Static scan of uses entries returned actions/checkout@v4 twice and actions/setup-node@v4 once; all three fail /@[0-9a-f]{40}$/. Pin each action to a reviewed full commit SHA and retain the release version in a comment."
+    }
+  ],
+  "run": "codex-T-MG-1-reviewer-1",
+  "sha256": "97fc64cffeb2b7af180bc13e04cda0e5873e90bb28e8fc2900700a9e3e9dacb9"
+}

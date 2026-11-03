@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-52",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-9",
+  "severity": "minor",
+  "path": "src/core/webauthn.ts",
+  "line": 286,
+  "rule": "OWA-7",
+  "text": "Low: signature counter check is skipped whenever the new count is 0 and the stored value is then overwritten with 0, so a cloned authenticator answering 0 is never detected and resets the guard. Fix: do not lower sign_count; reject 0 after a non-zero count.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

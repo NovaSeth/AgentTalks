@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-14",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S2-2",
+  "severity": "blocking",
+  "path": "package.json",
+  "line": 28,
+  "rule": "OWA-3",
+  "text": "High: npm audit --omit=dev reports 9 vulns (1 critical proxy-addr, 4 high incl. @modelcontextprotocol/sdk locked at 1.30.0); gate criterion 5 demands zero High/Critical. Reachable: POST /mcp with a valid token accepted a 60 MB body (200) and a 20000-call JSON-RPC batch (200, 21 s), no size cap (src/http/server.ts:69). Repro s2/big.test.ts. Fix: bump SDK, npm audit fix, cap /mcp body and batch length.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

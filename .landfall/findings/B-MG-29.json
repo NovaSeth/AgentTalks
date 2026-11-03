@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-29",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "CORE-7",
+  "severity": "minor",
+  "path": "src/core/notifications.ts",
+  "line": 126,
+  "rule": null,
+  "text": "listNotifications has no canRead filter: after removal from a private channel the actor keeps excerpts (160 chars) of that channel's messages for up to 180 days (core.test.ts F-notif: canRead=false, excerpts still listed). Join conversations and drop rows the actor can no longer read.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-34",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "CORE-12",
+  "severity": "minor",
+  "path": "src/core/digest.ts",
+  "line": 47,
+  "rule": null,
+  "text": "Digest returns the Polish literal 'rozmowa prywatna' (SQL COALESCE) to agents for DM/group conversations; it sits inside SQL so the T-MG-2 inventory may miss it (acc. 12). Also deleting an ask leaves its question answerable (answer() accepted, core/exmember.test.ts) while reactions/pins of deleted messages remain.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

@@ -1,0 +1,41 @@
+{
+  "schema": 2,
+  "id": "T-MG-6",
+  "kind": "task",
+  "title": "Fix A1: auth i sesje - long-poll po odwolaniu, wake wylaczonego, WebAuthn, admin-czlowiek, limit logowan, logout, logi",
+  "lane": null,
+  "owner": "MG",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: flag security",
+      "at": "2026-11-03T23:49:26.815Z"
+    }
+  ],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-03T23:49:15.112Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-03T23:49:26.815Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-flag:security",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-46",
+  "status": "dropped",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-3",
+  "severity": "minor",
+  "path": "src/http/routes/conversations.ts",
+  "line": 197,
+  "rule": "OWA-1",
+  "text": "Medium: any member of a private channel (not only a channel admin) can add any actor via POST /members, giving them the full history, while removal and edit need the admin role (assertCanManage); inconsistent BFLA. Fix: require channel admin (or document that every member may invite).",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": "2026-11-03T23:49:14.887Z",
+  "closedBy": "D-MG-10",
+  "reason": "Slack parity (Michal 2026-11-04: UI ma w pelni odwzorowywac Slacka): w Slacku kazdy czlonek kanalu prywatnego moze dodac innych; to swiadome zachowanie, nie BFLA. Opisac w docs w T-MG-2."
+}

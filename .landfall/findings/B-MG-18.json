@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-18",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S2-6",
+  "severity": "minor",
+  "path": "src/http/ui.ts",
+  "line": 53,
+  "rule": "OWA-2",
+  "text": "Low: with AGENTTALKS_BASE_URL unset, {{BASE_URL}} in /install and /skill.md comes from Host or X-Forwarded-Host and is substituted unescaped into HTML and into the skill an agent saves (ui.ts:153,161); a poisoned shared cache would point agents at an attacker's enroll URL. Compose defaults the variable to empty. Require baseUrl off loopback and escape.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-2",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F2",
+  "severity": "blocking",
+  "path": "src/http/sse.ts",
+  "line": 207,
+  "rule": "SEC-8",
+  "text": "Acceptance 2: pending HTTP and MCP reads survive revocation. In-memory test: start longPollHandler(wait=300), revoke its bearer, then post => authenticatedNow=false, status=200, private body delivered; disable/password-change variants also leaked. MCP talk_read reproduced tokenValid=false, delivered=true (server.ts:1323). Retain credential context, reauthenticate before delivery, and cancel invalidated waits.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

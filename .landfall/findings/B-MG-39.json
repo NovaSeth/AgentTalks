@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-39",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UI-5",
+  "severity": "minor",
+  "path": "src/http/ui/js/markdown.js",
+  "line": 43,
+  "rule": null,
+  "text": "Reviewed for XSS (acceptance 3): none found. Output checked for javascript:, quotes, wikilink labels, tables, code (uicode/md.mjs); CSP script-src self. But mention rewrite runs inside an href: '[x](https://a.b/(@bob)' yields href=\"https://a.b/(<span class=\" ... garbled text with stray attributes; NUL-delimited code placeholder typed by a user renders 'undefined'. Cosmetic markup injection, no script.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-8",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

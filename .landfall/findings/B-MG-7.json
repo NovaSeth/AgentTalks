@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-7",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F7",
+  "severity": "blocking",
+  "path": "src/core/messages.ts",
+  "line": 224,
+  "rule": "SEC-8",
+  "text": "Acceptance 7/GC3: posting trusts a client-supplied sessionId without checking its owner. In-memory test: Alice's session is typing; Bob calls postMessage with sessionId='alice-session' => before=true, after=false, messageActor=2, messageSession='alice-session'. Session IDs are exposed by presence. Validate ownership before persisting session attribution or clearing typing, including all callers of postMessage.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

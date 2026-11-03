@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-5",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F5",
+  "severity": "blocking",
+  "path": "src/core/webauthn.ts",
+  "line": 286,
+  "rule": "OWA-7",
+  "text": "Acceptance 6: a zero counter resets clone detection for credentials that previously counted. Reused test/core/webauthn.test.ts's synthetic authenticator in memory: register, then assertLogin with counts 5,0,1 => all returned actorId=1; stored sign_count became 1. Reject a non-increasing count whenever either stored or received count is nonzero; exempt only the always-zero case, and test 5->0.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

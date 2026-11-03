@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-47",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S1-4",
+  "severity": "minor",
+  "path": "src/http/routes/wiki.ts",
+  "line": 169,
+  "rule": "OWA-10",
+  "text": "Low: POST /api/wiki/:slug/files uses raw decodeURIComponent on X-File-Name; a bad %-sequence gives a 500 'internal error' (the files route has dekodujNazwe for this). Repro: repro-misc.test.ts -> 'bad%zz.txt' -> 500 URIError in log. Fix: reuse dekodujNazwe (400).",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-7",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

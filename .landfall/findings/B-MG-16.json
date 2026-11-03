@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-16",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "S2-4",
+  "severity": "minor",
+  "path": ".github/workflows/ci.yml",
+  "line": 14,
+  "rule": "OWA-3",
+  "text": "Medium: no top-level permissions block (token defaults depend on repo settings) and actions are pinned by tag, not commit SHA (checkout@v4 lines 14 and 35, setup-node@v4 line 15), against SCD-11. Add 'permissions: contents: read' and pin SHAs. No pull_request_target found.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-9",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

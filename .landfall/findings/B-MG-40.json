@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-40",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 2,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UI-6",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-sidebar.js",
+  "line": 371,
+  "rule": null,
+  "text": "In-product text HOW_WE_TALK says to send questions 'with the question-mark button', removed from the composer in commit 0cc.. Also avatar menu (zmienAwatar) uses window.confirm where Cancel/Esc DELETES the avatar.",
+  "filedAt": "2026-11-03T23:48:36.696Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

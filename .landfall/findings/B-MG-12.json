@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-12",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F12",
+  "severity": "blocking",
+  "path": ".github/workflows/ci.yml",
+  "line": 14,
+  "rule": "OWA-3",
+  "text": "Acceptance 8: CI actions use mutable tags instead of required commit pins. Static scan of uses entries returned actions/checkout@v4 twice and actions/setup-node@v4 once; all three fail /@[0-9a-f]{40}$/. Pin each action to a reviewed full commit SHA and retain the release version in a comment.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-9",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

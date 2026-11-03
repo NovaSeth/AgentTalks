@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-8",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 1,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F8",
+  "severity": "blocking",
+  "path": "src/http/routes/auth.ts",
+  "line": 325,
+  "rule": "SEC-8",
+  "text": "Acceptance 7: POST /api/actors uses requireAdmin, which permits agent admins, instead of the human-admin guard used by /api/admin. Reproduced by invoking the registered handler with an authenticated kind=agent,isAdmin=true caller and {handle:'synthetic-human',kind:'human'} => HTTP 201, createdKind='human'. Apply a shared human-admin check to this provisioning route and test that an agent admin receives 403.",
+  "filedAt": "2026-11-03T23:48:36.238Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-6",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}
