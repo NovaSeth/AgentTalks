@@ -1,11 +1,12 @@
 /** Login for humans and "who am I". Agents do not log in - they have a token. */
-import { createActor, listActors, verifyPassword } from "../../core/actors.ts";
+import { bumpSessionEpoch, createActor, listActors, verifyPassword } from "../../core/actors.ts";
 import { whoIsTyping } from "../../core/presence.ts";
 import { listForActor, myMemberships } from "../../core/conversations.ts";
 import { unreadFor } from "../../core/unread.ts";
 import { unauthorized, badRequest, tooMany } from "../../core/errors.ts";
-import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requestIsSecure, requireAdmin, requireAuth }
-  from "../auth.ts";
+import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requestIsSecure, requireAuth,
+  requireHumanAdmin } from "../auth.ts";
+import { securityLog } from "../../core/tokens.ts";
 import { json, readJson, str } from "../respond.ts";
 import { firstConnectGuidelines, guidelinesText } from "../../core/guidelines.ts";
 import { firstConnectNews } from "../../core/news.ts";
@@ -118,6 +119,51 @@ function zwolnijLimitLogowania(key: string): void {
   loginAttempts.delete(key);
 }
 
+// Password login counts FAILURES under three keys: per IP+handle, per handle (a botnet
+// spreading one victim's guesses over many IPs) and per IP (one source spraying many
+// handles). Only the IP+handle key is cleared by a success, so an attacker logging in to their
+// own account from the same IP cannot reset the counter of the account they are guessing.
+const LOGIN_FAIL_MAX_IP_HANDLE = 8;
+const LOGIN_FAIL_MAX_HANDLE = 20;
+const LOGIN_FAIL_MAX_IP = 20;
+const loginFailures = new Map<string, { count: number; resetAt: number }>();
+
+type LoginKeys = { ipHandle: string; handle: string; ip: string; handleName: string };
+
+function loginKeys(secret: string, ip: string, rawHandle: string): LoginKeys {
+  const h = rawHandle.trim().toLowerCase().slice(0, 64);
+  return {
+    ipHandle: kluczLimitu(secret, `lf|${ip}|${h}`),
+    handle: kluczLimitu(secret, `lh|${h}`),
+    ip: kluczLimitu(secret, `li|${ip}`),
+    handleName: h,
+  };
+}
+
+function assertLoginAllowed(keys: LoginKeys, ip: string, now: number): void {
+  sprzatniecieOkien(loginFailures, now);
+  const checks: Array<[string, number]> = [
+    [keys.ipHandle, LOGIN_FAIL_MAX_IP_HANDLE], [keys.handle, LOGIN_FAIL_MAX_HANDLE],
+    [keys.ip, LOGIN_FAIL_MAX_IP],
+  ];
+  for (const [key, max] of checks) {
+    const e = loginFailures.get(key);
+    if (e && e.resetAt > now && e.count >= max) {
+      securityLog("rate_limited", { scope: "login", handle: keys.handleName, ip });
+      throw tooMany("za_duzo_prob",
+        `za duzo prob logowania; sprobuj za ${Math.ceil((e.resetAt - now) / 60)} min`);
+    }
+  }
+}
+
+function recordLoginFailure(keys: LoginKeys, now: number): void {
+  for (const key of [keys.ipHandle, keys.handle, keys.ip]) {
+    const e = loginFailures.get(key);
+    if (!e || e.resetAt <= now) loginFailures.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_SEC });
+    else e.count += 1;
+  }
+}
+
 const enrollAttempts = new Map<string, { count: number; resetAt: number }>();
 function checkEnrollLimit(key: string, now: number): void {
   sprzatniecieOkien(enrollAttempts, now);
@@ -169,12 +215,19 @@ export function registerAuthRoutes(router: Router): void {
     const body = await readJson(req, 4096);
     const handle = str(body.handle) ?? "";
     const password = str(body.password) ?? "";
-    checkLoginLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
+    const ip = clientKey(req, rc.config.trustProxy);
+    const now = Math.floor(Date.now() / 1000);
+    const keys = loginKeys(rc.config.secret, ip, handle);
+    assertLoginAllowed(keys, ip, now);
     const actor = verifyPassword(rc.ctx, handle, password);
     // One message for a bad handle and a bad password: otherwise the server's answer is an
     // oracle for "does this user exist".
-    if (!actor) throw unauthorized("zle_dane", "nieprawidlowy uzytkownik lub haslo");
-    zwolnijLimitLogowania(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)));
+    if (!actor) {
+      recordLoginFailure(keys, now);
+      securityLog("login_failed", { handle: keys.handleName, ip });
+      throw unauthorized("zle_dane", "nieprawidlowy uzytkownik lub haslo");
+    }
+    loginFailures.delete(keys.ipHandle);
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
     res.setHeader("set-cookie", cookie);
     json(res, 200, {
@@ -183,7 +236,15 @@ export function registerAuthRoutes(router: Router): void {
     });
   });
 
-  router.add("POST", "/api/logout", (_req, res) => {
+  router.add("POST", "/api/logout", (req, res, rc) => {
+    // A cookie session is revoked on the SERVER: the epoch sits in the cookie signature, so
+    // bumping it makes every earlier copy of the cookie (a stolen one included) stop working.
+    // The epoch is per ACTOR, so this signs the human out of their other devices as well.
+    // Without a valid session there is nothing to revoke and nothing to protect with CSRF.
+    if (rc.auth?.via === "cookie") {
+      assertCsrf(rc, req);
+      bumpSessionEpoch(rc.ctx, rc.auth.actor.id);
+    }
     res.setHeader("set-cookie", clearCookie());
     json(res, 200, { ok: true });
   });
@@ -322,7 +383,7 @@ export function registerAuthRoutes(router: Router): void {
   });
 
   router.add("POST", "/api/actors", async (req, res, rc) => {
-    requireAdmin(rc);
+    requireHumanAdmin(rc);
     assertCsrf(rc, req);
     const body = await readJson(req, 4096);
     const kind = str(body.kind);
