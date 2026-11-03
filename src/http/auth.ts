@@ -10,7 +10,7 @@ import type { Ctx } from "../core/ctx.ts";
 import type { Config } from "../config.ts";
 import type { Actor } from "../core/actors.ts";
 import { getActor, sessionEpoch } from "../core/actors.ts";
-import { tokenTrouble, verifyToken } from "../core/tokens.ts";
+import { securityLog, tokenTrouble, verifyToken } from "../core/tokens.ts";
 import { forbidden, unauthorized } from "../core/errors.ts";
 import type { Req, RouteCtx } from "./router.ts";
 
@@ -142,8 +142,33 @@ export function requireAuth(rc: RouteCtx): Auth {
 
 export function requireAdmin(rc: RouteCtx): Auth {
   const auth = requireAuth(rc);
-  if (!auth.actor.isAdmin) throw forbidden("nie_admin", "ta operacja wymaga uprawnien admina");
+  if (!auth.actor.isAdmin) {
+    securityLog("admin_denied", { actorId: auth.actor.id, guard: "admin" });
+    throw forbidden("nie_admin", "ta operacja wymaga uprawnien admina");
+  }
   return auth;
+}
+
+/** Admin operations that create or change HUMAN accounts: an admin flag on an agent is not
+ *  enough, the caller has to be a human admin (the same guard as /api/admin). */
+export function requireHumanAdmin(rc: RouteCtx): Auth {
+  const auth = requireAuth(rc);
+  if (!auth.actor.isAdmin || auth.actor.kind !== "human") {
+    securityLog("admin_denied", { actorId: auth.actor.id, guard: "human_admin" });
+    throw forbidden("tylko_admin_czlowiek", "ta operacja jest dla zalogowanego czlowieka-admina");
+  }
+  return auth;
+}
+
+/**
+ * Re-checks, right before something private is delivered, that the credential which started a
+ * long wait still holds: the same check SSE does on every ping. Returns null when the request
+ * no longer authenticates, or authenticates as somebody else. The long-poll uses it, and so
+ * can the MCP talk_read wait.
+ */
+export function stillAuthenticated(ctx: Ctx, config: Config, req: Req, actorId: number): Auth | null {
+  const now = authenticate(ctx, config, req);
+  return now && now.actor.id === actorId ? now : null;
 }
 
 /**
