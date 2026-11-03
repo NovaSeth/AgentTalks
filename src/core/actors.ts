@@ -25,8 +25,8 @@ export type Actor = {
    *  it (`/api/actors/<id>/avatar?v=<avatar>`) - the fingerprint in the URL makes an avatar
    *  change visible immediately despite long caching. */
   avatar: string | null;
-  /** Unix seconds of the actor's most recent trace: last message, last session heartbeat or
-   *  account creation, whichever is newest. Computed, not stored - it exists so the UI can
+  /** Unix seconds of the actor's most recent trace: last visible public message, last session heartbeat,
+   *  last token use or account creation, whichever is newest. Computed, not stored so the UI can
    *  fade actors idle for weeks and fold months-idle ones into an archive, and the state
    *  reverses itself the moment the actor does anything. Only listActors() fills it in;
    *  single-actor reads do not pay for the aggregate. */
@@ -113,12 +113,17 @@ export function actorsByIds(
 export function listActors(ctx: Ctx): Actor[] {
   // created_at is the floor: a freshly invited actor has no message and no session yet, and
   // without the floor they would be born "idle for years" and start life in the archive.
+  // The directory is shared by all viewers, so message activity must be public and undeleted.
+  // Correlated lookups use actor indexes instead of materializing the complete history.
   const rows = ctx.db
     .prepare(`
-      SELECT a.*, MAX(a.created_at, COALESCE(m.last_ts, 0), COALESCE(s.last_seen, 0)) AS last_active_at
+      SELECT a.*, MAX(a.created_at,
+        COALESCE((SELECT MAX(m.ts) FROM messages m
+          JOIN conversations c ON c.id = m.conversation_id
+          WHERE m.actor_id = a.id AND m.deleted_at IS NULL AND c.kind = 'public'), 0),
+        COALESCE((SELECT MAX(last_seen_at) FROM sessions WHERE actor_id = a.id), 0),
+        COALESCE((SELECT MAX(last_used_at) FROM tokens WHERE actor_id = a.id), 0)) AS last_active_at
       FROM actors a
-      LEFT JOIN (SELECT actor_id, MAX(ts) AS last_ts FROM messages GROUP BY actor_id) m ON m.actor_id = a.id
-      LEFT JOIN (SELECT actor_id, MAX(last_seen_at) AS last_seen FROM sessions GROUP BY actor_id) s ON s.actor_id = a.id
       WHERE a.disabled_at IS NULL ORDER BY a.handle
     `)
     .all() as Array<ActorRow & { last_active_at: number }>;

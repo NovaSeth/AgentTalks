@@ -20,6 +20,15 @@ import { newWikiPageModal, openWikiPage } from "./widok-wiki.js";
 // are compared against Date.now() minus a seconds-based lastActiveAt * 1000.
 const FADE_PO_MS = 14 * 24 * 3600 * 1000;
 const ARCHIWUM_PO_MS = 90 * 24 * 3600 * 1000;
+
+/** Activity timestamps use Unix seconds; the render clock uses milliseconds. */
+export function presenceBucket(lastActiveAt, online, now = Date.now()) {
+  if (online || lastActiveAt == null) return "active";
+  const idleMs = now - lastActiveAt * 1000;
+  if (idleMs >= ARCHIWUM_PO_MS) return "archived";
+  return idleMs >= FADE_PO_MS ? "faded" : "active";
+}
+
 // Whether the archive <details> is unfolded survives re-renders (the sidebar redraws on every
 // presence tick, which would otherwise slam it shut under the reader's cursor) and page loads.
 let archiwumOtwarte = (() => {
@@ -160,7 +169,7 @@ export function renderSidebarList() {
     // life - nothing is stored, so there is no second account and no admin action to revert.
     // Being online right now always wins over any age of the last trace.
     const teraz = Date.now();
-    const bezczynnoscMs = (a) => (a.lastActiveAt ? teraz - a.lastActiveAt * 1000 : 0);
+    const bucket = (a) => presenceBucket(a.lastActiveAt, handleOnline(a.handle), teraz);
     const osobaHtml = (a, wyblakly) => {
       const online = handleOnline(a.handle);
       return `
@@ -174,7 +183,7 @@ export function renderSidebarList() {
     };
     const biezacy = [], archiwum = [];
     for (const a of lista) {
-      (!handleOnline(a.handle) && bezczynnoscMs(a) >= ARCHIWUM_PO_MS ? archiwum : biezacy).push(a);
+      (bucket(a) === "archived" ? archiwum : biezacy).push(a);
     }
     // The present first, then the rest - "who can I talk to now" is the first question.
     const wg = [...biezacy].sort((a, b) => {
@@ -182,7 +191,7 @@ export function renderSidebarList() {
       if (oa !== ob) return oa ? -1 : 1;
       return a.handle.localeCompare(b.handle, "pl");
     });
-    const glowni = wg.map((a) => osobaHtml(a, !handleOnline(a.handle) && bezczynnoscMs(a) >= FADE_PO_MS)).join("");
+    const glowni = wg.map((a) => osobaHtml(a, bucket(a) === "faded")).join("");
     if (!archiwum.length) return glowni;
     archiwum.sort((a, b) => a.handle.localeCompare(b.handle, "pl"));
     return `${glowni}

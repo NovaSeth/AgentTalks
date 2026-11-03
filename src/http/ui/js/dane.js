@@ -142,7 +142,10 @@ export async function ensureActors(opts = {}) {
         // `avatar` MUST travel into the cache: avatarUrl() reads ONLY the cache, so dropping
         // the field here rendered every uploaded avatar as initials across the whole UI -
         // sidebar, messages, typing bubbles - while the API kept serving the image correctly.
-        state.actorsCache[a.id] = { handle: a.handle, displayName: a.displayName, kind: a.kind, avatar: a.avatar ?? null };
+        state.actorsCache[a.id] = {
+          handle: a.handle, displayName: a.displayName, kind: a.kind,
+          avatar: a.avatar ?? null, lastActiveAt: a.lastActiveAt,
+        };
       }
       state.actorsAt = Date.now();
       return state.actorsList;
