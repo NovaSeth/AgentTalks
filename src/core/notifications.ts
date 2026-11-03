@@ -123,6 +123,20 @@ function sprzatnijStare(ctx: Ctx): void {
     .run(now - WSZYSTKIE_DNI * 24 * 3600);
 }
 
+/**
+ * canRead at READ time, in SQL (the same rule as conversations.canRead: a public channel or
+ * a current membership). A notification is written while the recipient has access; without
+ * this filter an actor removed from a private channel kept its excerpts for up to 180 days.
+ * A notification without a conversation (wiki) is not restricted. Takes one parameter: the
+ * reading actor's id.
+ */
+const READABLE_NOW = `(n.conversation_id IS NULL OR EXISTS (
+    SELECT 1 FROM conversations c
+     WHERE c.id = n.conversation_id
+       AND (c.kind = 'public'
+            OR EXISTS (SELECT 1 FROM members m
+                        WHERE m.conversation_id = c.id AND m.actor_id = ?))))`;
+
 export function listNotifications(
   ctx: Ctx,
   actorId: number,
@@ -136,17 +150,21 @@ export function listNotifications(
          FROM notifications n
          LEFT JOIN actors a ON a.id = n.from_actor_id
         WHERE n.actor_id = ?${opts.unreadOnly ? " AND n.read_at IS NULL" : ""}
+          AND ${READABLE_NOW}
         ORDER BY n.id DESC
         LIMIT ?`,
     )
-    .all(actorId, limit) as Row[];
+    .all(actorId, actorId, limit) as Row[];
   return rows.map(toNotification);
 }
 
 export function unreadNotificationCount(ctx: Ctx, actorId: number): number {
   const r = ctx.db
-    .prepare("SELECT COUNT(*) AS n FROM notifications WHERE actor_id = ? AND read_at IS NULL")
-    .get(actorId) as { n: number };
+    .prepare(
+      `SELECT COUNT(*) AS n FROM notifications n
+        WHERE n.actor_id = ? AND n.read_at IS NULL AND ${READABLE_NOW}`,
+    )
+    .get(actorId, actorId) as { n: number };
   return r.n;
 }
 

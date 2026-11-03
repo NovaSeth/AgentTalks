@@ -16,6 +16,7 @@
  */
 import type { Ctx } from "./ctx.ts";
 import { badRequest } from "./errors.ts";
+import { ownSessionOrNull } from "./presence.ts";
 
 export const DEFAULT_LEASE_TTL = 120;
 export const MAX_LEASE_TTL = 24 * 3600;
@@ -91,7 +92,8 @@ export function acquire(
          expires_at = excluded.expires_at
        WHERE leases.expires_at <= :now OR leases.actor_id = excluded.actor_id`,
     )
-    .run({ res: resource, actor: input.actorId, sess: input.sessionId ?? null,
+    // A foreign sessionId is dropped, not trusted: the lease would name somebody else's session.
+    .run({ res: resource, actor: input.actorId, sess: ownSessionOrNull(ctx, input.sessionId, input.actorId),
            note: input.note ?? null, now, exp: expires });
 
   const row = ctx.db.prepare("SELECT * FROM leases WHERE resource = ?").get(resource) as
