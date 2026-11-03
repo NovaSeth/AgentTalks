@@ -1,0 +1,20 @@
+# Fix C: web UI defects (T-MG-8)
+Executor: implementer (codex through landfall exec). Class: standard. Review: landfall:reviewer.
+Worktree: /Users/michal/Documents/Code/AgentTalks-wt/T-MG-8 (branch task/T-MG-8-fix-c-ui from main at 0561f866f0737576cc087c30a3cdaff79a1ed8b3; npm ci done). Base for the gate range: 0561f866f0737576cc087c30a3cdaff79a1ed8b3.
+Budget: 45 minutes.
+Common part (rules, tests, git, gate, report): /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-1/fix-common.md - read it first. The UI is plain ES modules served from src/http/ui/js/ (no build step); tests load them under node as test/ui-moduly.test.ts and test/ui-start.test.ts show. Reproduction scripts from the review: /private/tmp/claude-501/-Users-michal-Documents-Code-AgentTalks/9dfeb82b-2d22-46c9-bb1d-d218d405c517/scratchpad/reviews/uicode/ (sse.mjs, md.mjs) and uicode.json.repro.md.
+
+## Scope
+Modify: src/http/ui/js/zdarzenia-sse.js, widok-czat.js, akcje.js, stan.js, markdown.js, widok-login.js, dom.js. Tests: new files test/fixes/t-mg-8-*.test.ts. NOT widok-sidebar.js or dane.js (PR #1 changes them), NOT i18n files, NOT server code.
+
+## Findings (full text: `landfall findings show <ID>`)
+1. B-MG-35 (blocking): zdarzenia-sse.js ~102: `message_updated` (edit, delete, fix, resolve, and every edit of the last 24 h replayed on each reconnect) is handled like a NEW message: unread++, badge++, desktop notification, announce, "new below"++. Fix: branch on the event type; an update replaces the message in place and changes no counter and raises no notification. Test: feed a new DM event then a message_updated for the same id -> unread stays 1, one notification.
+2. B-MG-36 (blocking): widok-czat.js ~1459: thread-panel send pushes the reply unconditionally although the SSE echo already inserted it -> the reply shows twice. Fix: upsert by id. Test: SSE echo then send response for the same id -> one entry.
+3. B-MG-37 (blocking): akcje.js ~58: after a successful send, sendMessage rebuilds the composer, wiping text typed after Enter and losing focus. Fix: clear only the text that was sent (compare and keep what was typed since), keep focus; do not rebuild the composer element. Test: send, type "next" before the response, resolve the response -> composer value "next", focused element unchanged.
+4. B-MG-38: stan.js ~120: sseCursor advances on REST upserts; while the stream is down a REST call can skip missed messages. Fix: advance the cursor ONLY from SSE-delivered events. Test.
+5. B-MG-39: markdown.js ~43: mention rewriting runs inside link hrefs (garbled markup) and a user-typed NUL placeholder renders 'undefined'. Fix: do not rewrite mentions inside an href or code; escape/strip the placeholder delimiter from input. Test with the two inputs from the finding; keep XSS-safety tests passing.
+6. B-MG-41: widok-login.js ~45: logout keeps in-memory state and localStorage drafts (atalks_draft_*, atalks_wiki_draft_*, atalks_last_conv) -> the next user sees them. Fix: clear state and those keys on logout. Test.
+7. B-MG-43: dom.js ~201: confirmModal/showNewsModal leak a document keydown listener when closed by a button. Fix: remove the listener on every close path. Test: open/close by button 3 times -> listener count back to baseline.
+
+## Report
+/Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-8/report.md (if your sandbox cannot write there, print the whole report as your final output).

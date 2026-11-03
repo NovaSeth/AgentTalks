@@ -1,0 +1,44 @@
+{
+  "schema": 2,
+  "id": "T-MG-10",
+  "kind": "task",
+  "title": "Fix B: MCP i powierzchnia agentow - framing tresci (injection), limity /mcp, SDK, budzet, skill REST, talk_typing, bledy",
+  "lane": null,
+  "owner": "MG",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: matches risk glob **/SKILL.md; flag security; 500 LOC > 400",
+      "at": "2026-11-03T23:54:02.236Z"
+    }
+  ],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-03T23:54:01.911Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-03T23:54:02.236Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:5445e7dd8e840133",
+          "risk-flag:security",
+          "loc-over",
+          "files-over-trivial",
+          "loc-over-trivial",
+          "flag:new-dependency"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

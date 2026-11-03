@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-10",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-1",
   "round": 1,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "Acceptance 4: truncating within one wiki line leaves pominiete=0, so wiki_read marks unseen content as fully read and unlocks replacement. In-memory test: save 'x'.repeat(50000)+'TAIL', read as Bob, then save only the visible prefix => tailDelivered=false, last_revision_id=1, writeAccepted=true. Track intra-line truncation and never mark a partial read complete; require a full read or an explicit overwrite.",
   "filedAt": "2026-11-03T23:48:36.238Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-10",
   "closedAt": null,
   "closedBy": null,
   "reason": null

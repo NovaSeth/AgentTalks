@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-13",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-1",
   "round": 2,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "High: message bodies, wiki pages, session label/doing and channel topics are inlined raw into MCP results (fmtMsg) and the hook's additionalContext, with no delimiter or untrusted marker; a body with a newline forges a '<michal:czlowiek>' line, the tag agents use to check human approval (AGT-1, AGT-7). Repro s2/inj.test.ts: forged line appears as a separate human message. Fix: escape or indent newlines, wrap in a per-call delimiter labelled untrusted data, say so in both SKILL.md and the hook.",
   "filedAt": "2026-11-03T23:48:36.696Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-10",
   "closedAt": null,
   "closedBy": null,
   "reason": null
