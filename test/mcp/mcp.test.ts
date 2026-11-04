@@ -51,7 +51,7 @@ function seed(s: TestServer) {
   return { ala, bob, kanal, token: mintToken(s.ctx, bob.id, "mcp").token };
 }
 
-test("MCP bez tokenu daje 401, z tokenem odpowiada na initialize", async () => {
+test("MCP returns 401 without a token and answers initialize with a token", async () => {
   const s = await startTestServer();
   const { token } = seed(s);
   const noAuth = await fetch(s.url + "/mcp", {
@@ -67,7 +67,7 @@ test("MCP bez tokenu daje 401, z tokenem odpowiada na initialize", async () => {
   await s.close();
 });
 
-test("tools/list zwraca komplet narzedzi talk_*", async () => {
+test("tools/list returns the full set of talk_* tools", async () => {
   const s = await startTestServer();
   const { token } = seed(s);
   const r = await mcpCall(s.url, token, {
@@ -81,7 +81,7 @@ test("tools/list zwraca komplet narzedzi talk_*", async () => {
   await s.close();
 });
 
-test("talk_send przez MCP pisze jako aktor z tokenu i wraca z id wiadomosci", async () => {
+test("talk_send over MCP posts as the token actor and returns the message id", async () => {
   const s = await startTestServer();
   const { bob, token } = seed(s);
   const r = await mcpCall(s.url, token, {
@@ -89,7 +89,7 @@ test("talk_send przez MCP pisze jako aktor z tokenu i wraca z id wiadomosci", as
     params: { name: "talk_send", arguments: { to: "#general", body: "z mcp" } },
   });
   const content = (r.result as { content: Array<{ text: string }> }).content[0].text;
-  assert.match(content, /wyslane \[\d+\]/);
+  assert.match(content, /sent \[\d+\]/);
   const row = s.ctx.db.prepare("SELECT actor_id, body FROM messages ORDER BY id DESC LIMIT 1")
     .get() as { actor_id: number; body: string };
   assert.equal(row.actor_id, bob.id, "wiadomosc MCP ma byc podpisana aktorem z tokenu");
@@ -97,7 +97,7 @@ test("talk_send przez MCP pisze jako aktor z tokenu i wraca z id wiadomosci", as
   await s.close();
 });
 
-test("talk_log numerem cudzej prywatnej konwersacji jest odrzucone", async () => {
+test("talk_log rejects the id of another actor's private conversation", async () => {
   const s = await startTestServer();
   const { ala, token } = seed(s);
   const prywatny = createChannel(s.ctx, { slug: "tajne", kind: "private", createdBy: ala.id });
@@ -113,7 +113,7 @@ test("talk_log numerem cudzej prywatnej konwersacji jest odrzucone", async () =>
   await s.close();
 });
 
-test("talk_claim i talk_release przechodza pelny cykl dzierzawy", async () => {
+test("talk_claim and talk_release complete the full lease cycle", async () => {
   const s = await startTestServer();
   const { ala, token } = seed(s);
   const tokenAla = mintToken(s.ctx, ala.id, "t").token;
@@ -139,7 +139,7 @@ test("talk_claim i talk_release przechodza pelny cykl dzierzawy", async () => {
   await s.close();
 });
 
-test("KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad protokolu", async () => {
+test("EVERY declared MCP tool can be called and returns content, not a protocol error", async () => {
   const s = await startTestServer();
   const { ala, bob, kanal, token } = seed(s);
   const wiadomosc = postMessage(s.ctx, {
@@ -221,7 +221,7 @@ test("KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad 
  *   - a character budget is not enough, because without a cursor pointing at the LAST MESSAGE
  *     SHOWN, truncation silently skips the rest.
  */
-test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomosci", async () => {
+test("talk_read: batches, character budget, and a cursor after the last SHOWN message", async () => {
   const s = await startTestServer();
   const { ala, kanal, token } = seed(s);
   // 60 messages of ~2 kB: ~120 kB in total, that is, above the 40,000-character budget.
@@ -240,7 +240,7 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
 
   const pierwszy = await wynik({ afterId: 0 });
   assert.ok(pierwszy.length < 60_000, `wynik ma ${pierwszy.length} znakow - budzet nie zadzialal`);
-  assert.match(pierwszy, /To nie wszystko - powtorz talk_read z afterId=(\d+)\./);
+  assert.match(pierwszy, /More messages remain - repeat talk_read with afterId=(\d+)\./);
   const kursor = Number(pierwszy.match(/afterId=(\d+)\./)![1]);
 
   // The cursor MUST point at a message the agent really saw. If it pointed at the last one
@@ -255,16 +255,16 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
   let cursor = 0;
   for (let obrot = 0; obrot < 20; obrot++) {
     const t = await wynik({ afterId: cursor });
-    if (t.startsWith("Brak nowych")) break;
+    if (t.startsWith("No new messages")) break;
     for (const id of idWyniku(t)) widziane.add(id);
-    cursor = Number(t.match(/Kursor: afterId=(\d+)/)![1]);
-    if (!t.includes("To nie wszystko")) break;
+    cursor = Number(t.match(/Cursor: afterId=(\d+)/)![1]);
+    if (!t.includes("More messages remain")) break;
   }
   assert.equal(widziane.size, 60, `petla po kursorze zobaczyla ${widziane.size} z 60 wiadomosci`);
 
   // An explicit `limit` sets the page size - this is the field MCP was missing.
   const maly = await wynik({ afterId: 0, limit: 3 });
-  assert.match(maly, /^3 nowych w \d+ rozmow/m);
+  assert.match(maly, /^3 new messages in \d+ conversations/m);
   await s.close();
 });
 
@@ -273,7 +273,7 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
  * truncated read also unlocked it, an agent sending back "what I read plus my paragraph" would
  * delete the missing part and nobody would find out.
  */
-test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
+test("wiki_read: a truncated page does NOT unlock writing", async () => {
   const s = await startTestServer();
   try {
     const { ala, token } = seed(s);
@@ -288,8 +288,8 @@ test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
     });
     const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
     assert.ok(t.length < 60_000, `wiki_read oddal ${t.length} znakow`);
-    assert.match(t, /przycieto/);
-    assert.match(t, /NIE zapisuj/);
+    assert.match(t, /truncated/);
+    assert.match(t, /DO NOT save/);
 
     // Bob saw only a fragment, so the write has to bounce off the overwrite protection.
     const zapis = await mcpCall(s.url, token, {
@@ -313,7 +313,7 @@ test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
  * The test enforces that the order of the blocks carries that answer: a personal conversation
  * before a channel with a mention, that before the rest.
  */
-test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", async () => {
+test("talk_read groups by conversation and puts messages waiting for you first", async () => {
   const s = await startTestServer();
   try {
     const { ala, bob, kanal, token } = seed(s);
@@ -334,12 +334,12 @@ test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", 
     });
     const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
 
-    assert.match(t, /^3 nowych w 3 rozmowach:/m);
-    const kolejnosc = [...t.matchAll(/^=== (.+?) \((\d+) nowych(.*?)\) ===$/gm)];
+    assert.match(t, /^3 new messages in 3 conversations:/m);
+    const kolejnosc = [...t.matchAll(/^=== (.+?) \((\d+) new(.*?)\) ===$/gm)];
     assert.equal(kolejnosc.length, 3);
     assert.match(kolejnosc[0][1], /^\[dm:/, "rozmowa osobista ma byc pierwsza");
     assert.equal(kolejnosc[1][1], "#general");
-    assert.match(kolejnosc[1][3], /1 do Ciebie/, "kanal ze wzmianka ma to mowic w naglowku");
+    assert.match(kolejnosc[1][3], /1 for you/, "kanal ze wzmianka ma to mowic w naglowku");
     assert.equal(kolejnosc[2][1], "#cichy");
     assert.equal(kolejnosc[2][3], "", "kanal bez wzmianki nie udaje pilnego");
 
@@ -368,7 +368,7 @@ test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", 
  *The first two versions of this test passed EVEN WITHOUT the fix (verified by reverting it) -
  *which is why this version is verified in both directions.
  */
-test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
+test("talk_read: limit also applies to long-poll results", async () => {
   const s = await startTestServer();
   try {
     const { ala, kanal, token } = seed(s);
@@ -389,9 +389,9 @@ test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
 
     const r = await wolanie;
     const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
-    const ile = Number(t.match(/^(\d+) nowych/m)![1]);
+    const ile = Number(t.match(/^(\d+) new messages/m)![1]);
     assert.ok(ile <= 2, `long-poll oddal ${ile} wiadomosci mimo limit: 2:\n${t.slice(0, 300)}`);
-    assert.match(t, /To nie wszystko - powtorz talk_read z afterId=/);
+    assert.match(t, /More messages remain - repeat talk_read with afterId=/);
   } finally {
     await s.close();
   }
@@ -410,7 +410,7 @@ test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
  *is exactly the class nobody reports. The threshold of 60 is loose (today it is 11), because
  *the test is to catch the RETURN of linear cost, not to police a number.
  */
-test("talk_read nie odpytuje bazy raz na kazda linie", async () => {
+test("talk_read does not query the database once per line", async () => {
   const s = await startTestServer();
   try {
     const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
@@ -435,7 +435,7 @@ test("talk_read nie odpytuje bazy raz na kazda linie", async () => {
       params: { name: "talk_read", arguments: { afterId: 0 } },
     });
     const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
-    assert.match(t, /50 nowych/, "test ma mierzyc pelna liste, a nie przycieta");
+    assert.match(t, /50 new messages/, "test ma mierzyc pelna liste, a nie przycieta");
     assert.ok(
       zapytania < 60,
       `${zapytania} zapytan na 50 wiadomosci - koszt znowu rosnie z dlugoscia listy`,
@@ -457,7 +457,7 @@ test("talk_read nie odpytuje bazy raz na kazda linie", async () => {
  *code - otherwise the test would be checking the code against itself. The same reason the
  *tool coverage test asks the server rather than a file.
  */
-test("kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge", async () => {
+test("every declared MCP tool parameter is read by its handler", async () => {
   const s = await startTestServer();
   try {
     const { token } = seed(s);
@@ -506,14 +506,14 @@ test("kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge", as
  *
  *MCP returns text, so every fragment a machine reaches for is an interface with no schema.
  *This is not theory: @motowolt wrote a cursor loop that night (#bugs [163]), extracting the
- *number from "Kursor: afterId=N" and stopping when "To nie wszystko" disappeared. Rewording
+ *number from "Cursor: afterId=N" and stopping when "More messages remain" disappeared. Rewording
  *those sentences - an ordinary style fix - would have stopped his loop at the first page,
  *with NO error: he would have got the first 50 messages and concluded that was all.
  *
  *This test exists so that such a change is DELIBERATE. It does not forbid it - it requires
  *somebody to change this sentence here as well, and to see whose loop stops working.
  */
-test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
+test("MCP: machine-parsed sentences have a stable format", async () => {
   const s = await startTestServer();
   try {
     const { ala, kanal, token } = seed(s);
@@ -527,28 +527,28 @@ test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
     };
 
     // An empty inbox still MUST return a cursor - otherwise the loop has nothing to start from.
-    assert.match(await czytaj({ afterId: 0 }), /Kursor: afterId=\d+/);
+    assert.match(await czytaj({ afterId: 0 }), /Cursor: afterId=\d+/);
 
     for (let i = 0; i < 5; i++) {
       postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: `w ${i}` });
     }
     const odcinek = await czytaj({ afterId: 0, limit: 2 });
-    assert.match(odcinek, /Kursor: afterId=(\d+)/, "znika kursor - petla po nim traci zaczepienie");
+    assert.match(odcinek, /Cursor: afterId=(\d+)/, "znika kursor - petla po nim traci zaczepienie");
     assert.match(
-      odcinek, /To nie wszystko - powtorz talk_read z afterId=\d+\./,
+      odcinek, /More messages remain - repeat talk_read with afterId=\d+\./,
       "znika sygnal 'jest tego wiecej' - agent uzna odcinek za calosc i zgubi reszte",
     );
 
     // And most importantly: the number next to the cursor has to be the ID OF THE LAST MESSAGE
     // SHOWN, because that is what the next turn of the loop builds on.
-    const kursor = Number(odcinek.match(/Kursor: afterId=(\d+)/)![1]);
+    const kursor = Number(odcinek.match(/Cursor: afterId=(\d+)/)![1]);
     const pokazane = [...odcinek.matchAll(/^[>\s]*\[(\d+)\] /gm)].map((m) => Number(m[1]));
     assert.equal(kursor, Math.max(...pokazane));
 
     // When nothing is left, the sentence about the remainder must NOT be there - otherwise the
     // loop would spin forever.
     const koniec = await czytaj({ afterId: kursor + 99 });
-    assert.doesNotMatch(koniec, /To nie wszystko/);
+    assert.doesNotMatch(koniec, /More messages remain/);
   } finally {
     await s.close();
   }
@@ -566,7 +566,7 @@ test("MCP: zdania czytane maszynowo maja staly ksztalt", async () => {
  *We do not reject such a call: rejecting breaks forward compatibility, because an older
  *server has to tolerate a newer field. We only take away the silence.
  */
-test("MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna", async () => {
+test("MCP reports parameters the tool does not recognize", async () => {
   const s = await startTestServer();
   try {
     const { token } = seed(s);
@@ -581,16 +581,16 @@ test("MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna", async () => {
     };
 
     const zle = await wolaj({ afterId: 0, limitt: 2 });
-    assert.match(zle, /nie zna pola: limitt/);
-    assert.match(zle, /ZIGNOROWANE/, "uwaga ma mowic o SKUTKU, nie tylko o nazwie");
+    assert.match(zle, /does not recognize fields: limitt/);
+    assert.match(zle, /IGNORED/, "uwaga ma mowic o SKUTKU, nie tylko o nazwie");
 
     // Known fields must not trigger a warning - otherwise it becomes noise and stops meaning
     // anything.
     const dobre = await wolaj({ afterId: 0, limit: 2, waitSec: 0 });
-    assert.doesNotMatch(dobre, /nie zna pola/);
+    assert.doesNotMatch(dobre, /does not recognize fields/);
 
     // The result is left untouched: the warning APPENDS, it does not replace.
-    assert.match(zle, /Kursor: afterId=/, "ostrzezenie zjadlo wlasciwa odpowiedz");
+    assert.match(zle, /Cursor: afterId=/, "ostrzezenie zjadlo wlasciwa odpowiedz");
   } finally {
     await s.close();
   }
@@ -609,7 +609,7 @@ test("MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna", async () => {
  *first anyway, it gives it something to compare with what it sees on its side. The list is
  *generated from TOOLS, so the test enforces that it was not typed by hand.
  */
-test("talk_status wypisuje pola narzedzi z TOOLS, nie z reki", async () => {
+test("talk_status lists tool fields from TOOLS rather than a handwritten list", async () => {
   const s = await startTestServer();
   try {
     const { token } = seed(s);
@@ -620,8 +620,8 @@ test("talk_status wypisuje pola narzedzi z TOOLS, nie z reki", async () => {
     });
     const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
 
-    assert.match(t, /NARZEDZIA WEDLUG SERWERA/);
-    assert.match(t, /zamrozony schemat/, "brak wyjasnienia, PO CO ta lista");
+    assert.match(t, /TOOLS ACCORDING TO THE SERVER/);
+    assert.match(t, /frozen schema/, "brak wyjasnienia, PO CO ta lista");
 
     // The fields have to come from the tool's declaration - otherwise the list drifts on its own
     // and lies in exactly the place where it is supposed to detect drift.
@@ -656,7 +656,7 @@ test("talk_status wypisuje pola narzedzi z TOOLS, nie z reki", async () => {
  *The test enforces both acceptance conditions from his report: the footer is in every
  *talk_read response (including an empty one) and comes from the tool's declaration.
  */
-test("talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci", async () => {
+test("talk_read includes its tool schema even when there are no new messages", async () => {
   const s = await startTestServer();
   try {
     const { ala, kanal, token } = seed(s);
@@ -671,12 +671,12 @@ test("talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci", 
 
     // An empty inbox has to carry the signal too - an agent in a loop gets "nothing new"
     // more often than anything else.
-    assert.match(await czytaj({ afterId: 0 }), /\[schemat\] talk_read: /);
+    assert.match(await czytaj({ afterId: 0 }), /\[schema\] talk_read: /);
 
     postMessage(s.ctx, { conversationId: kanal.id, actorId: ala.id, body: "cos" });
     const zTrescia = await czytaj({ afterId: 0 });
-    assert.match(zTrescia, /\[schemat\] talk_read: /);
-    assert.match(zTrescia, /zamrozona liste/, "stopka nie mowi, co znaczy roznica");
+    assert.match(zTrescia, /\[schema\] talk_read: /);
+    assert.match(zTrescia, /frozen tool list/, "stopka nie mowi, co znaczy roznica");
 
     // The fields from the DECLARATION, not by hand - otherwise the footer lies in exactly the
     // place where it is supposed to detect a lie.
@@ -691,7 +691,7 @@ test("talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci", 
     }
 
     // Short: this is a loop call, so the footer must not grow into a cost.
-    const stopka = zTrescia.slice(zTrescia.indexOf("[schemat]"));
+    const stopka = zTrescia.slice(zTrescia.indexOf("[schema]"));
     assert.ok(stopka.length < 160, `stopka ma ${stopka.length} znakow - za duzo jak na kazde wywolanie`);
   } finally {
     await s.close();

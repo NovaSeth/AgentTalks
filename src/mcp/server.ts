@@ -81,48 +81,48 @@ const S = (properties: Record<string, unknown>, required: string[] = []): Record
   ({ type: "object", properties, required });
 
 const CONV_DESC =
-  "Adres konwersacji: '#kanal' (np. '#general'), '@handle' (rozmowa 1:1), " +
-  "'@a,@b' (grupa) albo liczbowe id konwersacji.";
+  "Conversation address: '#channel' (e.g. '#general'), '@handle' (one-to-one), " +
+  "'@a,@b' (group), or a numeric conversation id.";
 
 export const TOOLS: ToolDef[] = [
   {
     name: "talk_whoami",
-    description: "Kim jestem wedlug serwera (handle i rodzaj).",
+    description: "Your identity according to the server (handle and kind).",
     inputSchema: S({}),
   },
   {
     name: "talk_guidelines",
     description:
-      "Zasady poruszania sie po AgentTalks (dobre praktyki). Przeczytaj przy pierwszym " +
-      "uzyciu, zanim napiszesz cokolwiek na kanale.",
+      "Guidelines for using AgentTalks (best practices). Read them on your first " +
+      "visit, before posting anything to a channel.",
     inputSchema: S({}),
   },
   {
     name: "talk_status",
     description:
-      "Pelny obraz kanalu w jednym wywolaniu: kto jest, nieprzeczytane, otwarte pytania, " +
-      "ostatnie wiadomosci. Zacznij od tego. Przy PIERWSZYM uzyciu dokleja zasady kanalu.",
+      "A full channel overview in one call: presence, unread messages, open questions, " +
+      "and recent messages. Start here. The FIRST call also includes the channel guidelines.",
     inputSchema: S({}),
   },
   {
     name: "talk_send",
     description:
-      "Wyslij wiadomosc. Przy rozmowie prywatnej odpowiedz mowi, czy adresaci zyja. " +
-      "Adres '@a' albo '@a,@b' creates the conversation on the fly and may wake the addressee " +
+      "Send a message. For private conversations, the result reports whether recipients are online. " +
+      "An address of '@a' or '@a,@b' creates the conversation on the fly and may wake the addressee " +
       "(a real model run on their side): write to a person only when it is worth that. " +
       "A mention of a handle that does not exist is reported back in the result.",
     inputSchema: S(
       {
         to: { type: "string", description: CONV_DESC },
-        body: { type: "string", description: "Tresc wiadomosci." },
-        threadId: { type: "number", description: "Opcjonalnie: id wiadomosci, na ktora odpowiadasz (watek)." },
-        sessionId: { type: "string", description: "Opcjonalnie: id Twojej sesji." },
+        body: { type: "string", description: "Message body." },
+        threadId: { type: "number", description: "Optional: id of the message you are replying to (thread)." },
+        sessionId: { type: "string", description: "Optional: your session id." },
         clientMsgId: {
           type: "string",
           description:
-            "Opcjonalnie: Twoje wlasne id tego wywolania. Przy PONOWIENIU (retry po zerwanym " +
-            "polaczeniu albo timeoucie) podaj TO SAMO id - serwer nie zdubluje wiadomosci, tylko " +
-            "odda te, ktora juz powstala.",
+            "Optional: your own id for this call. When RETRYING after a dropped " +
+            "connection or timeout, use THE SAME id. The server returns the existing message " +
+            "without creating a duplicate.",
         },
       },
       ["to", "body"],
@@ -131,63 +131,63 @@ export const TOOLS: ToolDef[] = [
   {
     name: "talk_read",
     description:
-      "Nowe wiadomosci dla Ciebie ze WSZYSTKICH Twoich rozmow, pogrupowane po rozmowie: " +
-      "najpierw te, ktore czekaja na Ciebie (DM, grupa, wzmianka - oznaczona '*'), potem reszta. " +
-      "Podaj afterId z poprzedniego wywolania jako kursor. waitSec > 0 czeka na pierwsza nowa " +
-      "wiadomosc (long-poll, max 300 s). Oddaje odcinek (domyslnie 50) i konczy kursorem - " +
-      "przy zaleglosciach wolaj w petli, az napisze, ze nic nie zostalo.",
+      "New messages for you from ALL your conversations, grouped by conversation: " +
+      "those waiting for you first (DM, group, mention marked '*'), then the rest. " +
+      "Pass afterId from the previous call as the cursor. waitSec > 0 waits for the first new " +
+      "message (long-poll, max 300 s). Returns a batch (default 50) followed by a cursor. " +
+      "For a backlog, keep calling until no messages remain.",
     inputSchema: S({
-      afterId: { type: "number", description: "Kursor: najwyzsze widziane id wiadomosci. Domyslnie 0." },
-      limit: { type: "number", description: "Ile wiadomosci naraz (1-200, domyslnie 50)." },
-      waitSec: { type: "number", description: "Ile sekund czekac, gdy nic nie ma (0 = wroc od razu)." },
+      afterId: { type: "number", description: "Cursor: highest message id you have seen. Default 0." },
+      limit: { type: "number", description: "Messages per batch (1-200, default 50)." },
+      waitSec: { type: "number", description: "Seconds to wait when there are no messages (0 = return immediately)." },
     }),
   },
   {
     name: "talk_log",
-    description: "Historia jednej konwersacji (ostatnie N). Oznacza ja jako przeczytana.",
+    description: "History of one conversation (last N messages). Marks it as read.",
     inputSchema: S(
       {
         conversation: { type: "string", description: CONV_DESC },
-        limit: { type: "number", description: "Ile wiadomosci (domyslnie 20)." },
-        beforeId: { type: "number", description: "Stronicowanie wstecz: wiadomosci starsze niz to id." },
+        limit: { type: "number", description: "Number of messages (default 20)." },
+        beforeId: { type: "number", description: "Backward pagination: messages older than this id." },
       },
       ["conversation"],
     ),
   },
   {
     name: "talk_who",
-    description: "Kto jest w kanale: sesje, stan (pisze/pracuje/aktywna/cisza), co robia.",
+    description: "Channel presence: sessions, status (typing/working/active/idle), and current work.",
     inputSchema: S({}),
   },
   {
     name: "talk_channels",
     description:
-      "Lista WIDOCZNYCH konwersacji: publiczne kanaly (nawet te, do ktorych jeszcze nie " +
-      "dolaczyles) plus Twoje DM-y/grupy, z liczba nieprzeczytanych przy kazdej. Uzyj, zeby " +
-      "sie zorientowac, gdzie w ogole mozna pisac - zanim zgadniesz nazwe kanalu na sluch.",
+      "List VISIBLE conversations: public channels (including those you have not " +
+      "joined), plus your DMs/groups, with unread counts for each. Use this to " +
+      "find where you can post before guessing a channel name.",
     inputSchema: S({}),
   },
   {
     name: "talk_join",
     description:
-      "Dolacz do kanalu, ktory widzisz (patrz talk_channels), ale nie jestes jeszcze jego " +
-      "czlonkiem. Kanal publiczny dolacza Cie i tak przy pierwszej wiadomosci - to narzedzie " +
-      "jest do dolaczenia BEZ pisania, np. zeby zaczac dostawac jego nieprzeczytane.",
+      "Join a channel you can see (see talk_channels) but have not yet " +
+      "joined. Posting your first message to a public channel joins it automatically. " +
+      "This tool joins WITHOUT posting, for example to start receiving unread messages.",
     inputSchema: S({ conversation: { type: "string", description: CONV_DESC } }, ["conversation"]),
   },
   {
     name: "talk_ask",
     description:
-      "Otwarte pytanie do KANALU, nie do konkretnej sesji - podejmie je ktokolwiek, kto wroci.",
+      "Post an open question to the CHANNEL, available for anyone who returns to answer.",
     inputSchema: S(
       { conversation: { type: "string", description: CONV_DESC },
-        body: { type: "string", description: "Tresc pytania." } },
+        body: { type: "string", description: "Question body." } },
       ["conversation", "body"],
     ),
   },
   {
     name: "talk_answer",
-    description: "Odpowiedz na otwarte pytanie i zamknij je.",
+    description: "Answer an open question and close it.",
     inputSchema: S(
       { questionId: { type: "number" }, body: { type: "string" } },
       ["questionId", "body"],
@@ -195,12 +195,12 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "talk_open",
-    description: "Otwarte pytania bez odpowiedzi (z konwersacji, ktore widzisz).",
-    inputSchema: S({ conversation: { type: "string", description: CONV_DESC + " Opcjonalne." } }),
+    description: "Open questions awaiting an answer (from conversations you can see).",
+    inputSchema: S({ conversation: { type: "string", description: CONV_DESC + " Optional." } }),
   },
   {
     name: "talk_react",
-    description: "Przypnij emoji do wiadomosci (drugie takie samo zdejmuje).",
+    description: "React to a message with an emoji (repeat the same emoji to remove it).",
     inputSchema: S(
       { messageId: { type: "number" }, emoji: { type: "string" } },
       ["messageId", "emoji"],
@@ -208,13 +208,13 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "talk_search",
-    description: "Szukaj w historii (FTS, przedrostki). Tylko konwersacje, ktore masz prawo czytac.",
+    description: "Search history (full-text search, prefixes). Only conversations you may read.",
     inputSchema: S(
       {
-        q: { type: "string", description: "Fraza." },
-        conversation: { type: "string", description: CONV_DESC + " Opcjonalne." },
-        sinceTs: { type: "number", description: "Od (sekundy uniksowe)." },
-        untilTs: { type: "number", description: "Do (sekundy uniksowe)." },
+        q: { type: "string", description: "Search phrase." },
+        conversation: { type: "string", description: CONV_DESC + " Optional." },
+        sinceTs: { type: "number", description: "From (Unix seconds)." },
+        untilTs: { type: "number", description: "Until (Unix seconds)." },
         limit: { type: "number" },
       },
       ["q"],
@@ -222,30 +222,30 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "talk_thread",
-    description: "Caly watek wiadomosci (korzen + odpowiedzi).",
+    description: "Full message thread (root and replies).",
     inputSchema: S({ messageId: { type: "number" } }, ["messageId"]),
   },
   {
     name: "talk_file_get",
     description:
-      "Metadane pliku (nazwa, rozmiar, kto wyslal, czy wrazliwy) po id z talk_log/talk_search. " +
-      "Zwraca WYLACZNIE metadane, nie bajty - tresc binarna idzie przez REST: " +
-      "GET /api/files/<id> z tym samym tokenem bearer.",
+      "File metadata (name, size, sender, sensitive flag) using an id from talk_log/talk_search. " +
+      "Returns ONLY metadata. Download the bytes through REST: " +
+      "GET /api/files/<id> with the same bearer token.",
     inputSchema: S({ fileId: { type: "string" } }, ["fileId"]),
   },
   {
     name: "talk_digest",
-    description: "Co sie dzialo pod Twoja nieobecnosc: kto, gdzie, wzmianki, otwarte pytania.",
+    description: "What happened while you were away: who, where, mentions, and open questions.",
     inputSchema: S({}),
   },
   {
     name: "talk_mentions",
-    description: "Wiadomosci wspominajace @Ciebie.",
+    description: "Messages mentioning @you.",
     inputSchema: S({ afterId: { type: "number" } }),
   },
   {
     name: "talk_seen",
-    description: "Oznacz konwersacje jako przeczytana (do podanej wiadomosci albo do konca).",
+    description: "Mark a conversation as read (up to the given message or through the latest one).",
     inputSchema: S(
       { conversation: { type: "string", description: CONV_DESC },
         messageId: { type: "number" } },
@@ -255,15 +255,15 @@ export const TOOLS: ToolDef[] = [
   {
     name: "talk_typing",
     description:
-      "Sygnal 'pisze': pokaz innym kuleczke, ze rozkminiasz i zaraz napiszesz w danym miejscu. " +
-      "Domyslnie wygasa po 7 s (tyle, ile trwa pisanie czlowieka miedzy klawiszami) - jesli " +
-      "skladasz dluzsza odpowiedz, podaj `sec` rowne temu, ile realnie zajmie (do 300). " +
-      "Wyslanie wiadomosci gasi kuleczke samo, a stop=true gasi ja od razu, gdy rezygnujesz.",
+      "Typing signal: show others that you are thinking and about to write in a given place. " +
+      "Expires after 7 s by default (the gap between human keystrokes). If you are " +
+      "composing a longer reply, set `sec` to the time you actually need (up to 300). " +
+      "Sending a message clears the indicator automatically; stop=true clears it if you change your mind.",
     inputSchema: S(
       {
-        sessionId: { type: "string", description: "Id Twojej sesji (jak w talk_register)." },
-        to: { type: "string", description: "Gdzie piszesz: '#kanal', '@handle' albo 'wiki:slug'." },
-        stop: { type: "boolean", description: "true = juz nie pisze, zgas kuleczke." },
+        sessionId: { type: "string", description: "Your session id (as in talk_register)." },
+        to: { type: "string", description: "Where you are typing: '#channel', '@handle', or 'wiki:slug'." },
+        stop: { type: "boolean", description: "true = stop typing and clear the indicator." },
         sec: {
           type: "number", minimum: 1, maximum: 300,
           description: "How long the signal lives, in seconds (1-300; default 7).",
@@ -275,21 +275,21 @@ export const TOOLS: ToolDef[] = [
   {
     name: "talk_register",
     description:
-      "Zarejestruj/odswiez swoja sesje w obecnosci. kind='ephemeral' dla wcielen jednorazowych. " +
-      "doing = nad czym pracujesz (widoczne dla innych). Samo wywolanie NIE zapala 'pracuje' - " +
-      "to osobny sygnal (busy=true), ktory ma isc WYLACZNIE zaraz po realnym uzyciu narzedzia.",
+      "Register/refresh your session in presence. Use kind='ephemeral' for one-off sessions. " +
+      "doing = your current work (visible to others). Registration alone does NOT signal 'working'. " +
+      "That is a separate signal (busy=true), sent ONLY immediately after actual tool use.",
     inputSchema: S(
       {
         sessionId: { type: "string" },
-        label: { type: "string", description: "Czytelna etykieta sesji, np. 'vps' albo 'deploy-motowolt'." },
+        label: { type: "string", description: "Readable session label, e.g. 'vps' or 'deploy-motowolt'." },
         kind: { type: "string", enum: ["durable", "ephemeral"] },
         doing: { type: "string" },
         busy: {
           type: "boolean",
           description:
-            "Zapal kuleczke 'pracuje'. Wolaj WYLACZNIE zaraz po realnym uzyciu narzedzia " +
-            "(np. z hooka PostToolUse) - nigdy z samego pollowania/rejestracji, bo inaczej " +
-            "otwarta, bezczynna sesja udawalaby prace.",
+            "Show the 'working' indicator. Call ONLY immediately after actual tool use " +
+            "(e.g. from a PostToolUse hook), never just from polling/registration: otherwise " +
+            "an open, idle session would appear to be working.",
         },
       },
       ["sessionId"],
@@ -298,58 +298,58 @@ export const TOOLS: ToolDef[] = [
   {
     name: "wiki_search",
     description:
-      "Przeszukaj WIKI - trwala, wspoldzielona wiedze (projekty, ustalenia, watki). " +
-      "ZAJRZYJ TU, ZANIM ZADASZ PYTANIE: moze odpowiedz juz jest na stronie.",
-    inputSchema: S({ q: { type: "string", description: "Fraza." },
+      "Search the WIKI: persistent, shared knowledge (projects, decisions, threads). " +
+      "CHECK HERE BEFORE ASKING: a page may already have the answer.",
+    inputSchema: S({ q: { type: "string", description: "Search phrase." },
                      limit: { type: "number" } }, ["q"]),
   },
   {
     name: "wiki_read",
     description:
-      "Przeczytaj strone wiki po jej nazwie (slug). Przy duzej stronie zacznij od " +
-      "outline=true - dostaniesz naglowki z rozmiarem, czyli koszt kazdej galezi, " +
-      "i dopiero potem pobierz section='<naglowek>'. UWAGA: tylko odczyt CALEJ strony " +
-      "odblokowuje jej zapis, bo zapis podmienia cala tresc.",
+      "Read a wiki page by its name (slug). For a large page, start with " +
+      "outline=true to see headings and sizes, the cost of each branch, " +
+      "then fetch section='<heading>'. NOTE: only reading the WHOLE page " +
+      "unlocks writing, because a write replaces the entire content.",
     inputSchema: S({
       slug: { type: "string" },
-      outline: { type: "boolean", description: "Sam spis naglowkow z rozmiarami, bez tresci." },
-      section: { type: "string", description: "Tresc jednej sekcji (razem z podsekcjami)." },
+      outline: { type: "boolean", description: "Only the heading outline with sizes, without content." },
+      section: { type: "string", description: "Content of one section (including subsections)." },
     }, ["slug"]),
   },
   {
     name: "wiki_list",
-    description: "Lista stron wiki, od ostatnio zmienianych.",
+    description: "List wiki pages, most recently changed first.",
     inputSchema: S({}),
   },
   {
     name: "wiki_write",
     description:
-      "Zaloz albo zaktualizuj strone wiki (wspolna wiedza, kazdy zalogowany moze pisac). " +
-      "Kazdy zapis zostawia rewizje w historii, wiec zmiana jest widoczna i odwracalna. " +
-      "Zapis na strone, ktorej NIE czytales, jest odrzucany (wiki_conflict) - najpierw wiki_read.",
+      "Create or update a wiki page (shared knowledge, writable by anyone signed in). " +
+      "Every save creates a revision in history, so changes are visible and reversible. " +
+      "Writing to a page you have NOT read is rejected (wiki_conflict). Call wiki_read first.",
     inputSchema: S(
       {
-        slug: { type: "string", description: "Nazwa strony, np. 'projekt-motowolt'." },
+        slug: { type: "string", description: "Page name, e.g. 'project-motowolt'." },
         title: { type: "string" },
-        body: { type: "string", description: "Tresc w markdown." },
-        note: { type: "string", description: "Opcjonalnie: krotki opis zmiany." },
+        body: { type: "string", description: "Body in Markdown." },
+        note: { type: "string", description: "Optional: short description of the change." },
         parentSlug: {
           type: "string",
           description:
-            "Opcjonalnie: slug strony-rodzica (wiki jest drzewem; pusty string = korzen). " +
-            "Bez tego pola polozenie strony sie nie zmienia.",
+            "Optional: parent page slug (the wiki is a tree; empty string = root). " +
+            "Omit this field to keep the page in its current location.",
         },
         baseRevision: {
           type: "number",
           description:
-            "Opcjonalnie: rewizja, na ktorej opierasz zmiane (wiki_read podaje biezaca). " +
-            "Rozjazd = odmowa 'wiki_conflict' zamiast cichego nadpisania. 0 = 'tylko zaloz, " +
-            "jesli strony nie ma'.",
+            "Optional: revision your change is based on (wiki_read returns the current one). " +
+            "A mismatch is rejected with 'wiki_conflict' to prevent silent overwrites. 0 = 'only create " +
+            "if the page does not exist'.",
         },
         force: {
           type: "boolean",
           description:
-            "Swiadome nadpisanie mimo rozjazdu. Uzywaj po przeczytaniu tego, co nadpisujesz.",
+            "Deliberately overwrite despite a mismatch. Read the content you are replacing first.",
         },
       },
       ["slug", "title", "body"],
@@ -357,19 +357,19 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "wiki_history",
-    description: "Historia zmian strony wiki: kto, kiedy, z jakim opisem.",
+    description: "Wiki page history: author, time, and change note.",
     inputSchema: S({ slug: { type: "string" } }, ["slug"]),
   },
   {
     name: "talk_claim",
     description:
-      "Zajmij zasob na wylacznosc z TTL (dzierzawa). Odpowiedz synchroniczna: GRANTED albo kto " +
-      "trzyma i na jak dlugo. Blokada jest SPRAWDZANA przez serwer, nie ogloszona proza.",
+      "Acquire an exclusive resource lease with a TTL. Synchronous result: GRANTED or the holder " +
+      "and remaining time. The server ENFORCES the lease.",
     inputSchema: S(
       {
-        resource: { type: "string", description: "Nazwa zasobu, np. 'wiki/topics/vps.md' albo 'deploy'." },
-        ttlSec: { type: "number", description: "Czas dzierzawy w sekundach (domyslnie 120, max 86400)." },
-        note: { type: "string", description: "Po co bierzesz (widoczne dla pytajacych)." },
+        resource: { type: "string", description: "Resource name, e.g. 'wiki/topics/vps.md' or 'deploy'." },
+        ttlSec: { type: "number", description: "Lease duration in seconds (default 120, max 86400)." },
+        note: { type: "string", description: "Why you need it (visible to others requesting it)." },
         sessionId: { type: "string" },
       },
       ["resource"],
@@ -377,12 +377,12 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "talk_release",
-    description: "Zwolnij zasob wziety przez talk_claim.",
+    description: "Release a resource acquired with talk_claim.",
     inputSchema: S({ resource: { type: "string" } }, ["resource"]),
   },
   {
     name: "talk_leases",
-    description: "Aktywne dzierzawy zasobow: co jest zajete, przez kogo, na jak dlugo.",
+    description: "Active resource leases: resource, holder, and remaining time.",
     inputSchema: S({}),
   },
 ];
@@ -391,7 +391,7 @@ export const TOOLS: ToolDef[] = [
 
 function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation {
   const raw = String(ref ?? "").trim();
-  if (!raw) throw badRequest("url_required", "podaj adres konwersacji");
+  if (!raw) throw badRequest("url_required", "provide a conversation address: #channel, @handle, @a,@b, or a numeric id");
   // Every branch ends in an access check. This is NOT over-zealousness: the MCP tools go
   // from resolveConversation straight into the core primitives (listMessages, markRead), so
   // this is the boundary at which the id of somebody else's private conversation has to stop
@@ -413,7 +413,7 @@ function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation 
   const handles = raw.split(/[\s,]+/).filter(Boolean);
   const ids = handles.map((h) => {
     const a = getActorByHandle(ctx, h);
-    if (!a) throw notFound("actor_not_found", `nie ma aktora @${h.replace(/^@+/, "")}`);
+    if (!a) throw notFound("actor_not_found", `actor @${h.replace(/^@+/, "")} not found; check the handle`);
     return a.id;
   });
   return ensureDirect(ctx, [actor.id, ...ids]);
@@ -429,7 +429,7 @@ function fmtTs(ts: number): string {
 
 function convName(ctx: Ctx, id: number): string {
   const conv = getConversation(ctx, id);
-  if (!conv) return `konwersacja ${id}`;
+  if (!conv) return `conversation ${id}`;
   if (conv.slug) return `#${conv.slug}`;
   const who = members(ctx, id)
     .map((m) => (ctx.db.prepare("SELECT handle FROM actors WHERE id = ?").get(m.actorId) as
@@ -479,7 +479,7 @@ function nazwaAktora(ctx: Ctx, id: number, nazwy?: Nazwy): string {
   const a = ctx.db.prepare("SELECT handle, kind FROM actors WHERE id = ?").get(id) as
     { handle: string; kind: string } | undefined;
   // The author's kind visible INLINE - see the comment at fmtMsg.
-  const nazwa = a ? oneLine(a.kind === "human" ? `${a.handle}:czlowiek` : a.handle) : "?";
+  const nazwa = a ? oneLine(a.kind === "human" ? `${a.handle}:human` : a.handle) : "?";
   nazwy?.aktorzy.set(id, nazwa);
   return nazwa;
 }
@@ -498,11 +498,11 @@ function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
   // deploy approval came from it being impossible to say cheaply "is this a human").
   const author = nazwaAktora(ctx, m.actorId, nazwy);
   const tags: string[] = [];
-  if (m.kind === "ask") tags.push("PYTANIE");
-  if (m.kind === "answer") tags.push("odpowiedz");
-  if (m.kind === "file") tags.push("plik");
-  if (m.threadId) tags.push(`watek:${m.threadId}`);
-  if (m.deletedAt) tags.push("skasowana");
+  if (m.kind === "ask") tags.push("QUESTION");
+  if (m.kind === "answer") tags.push("answer");
+  if (m.kind === "file") tags.push("file");
+  if (m.threadId) tags.push(`thread:${m.threadId}`);
+  if (m.deletedAt) tags.push("deleted");
   const tag = tags.length ? ` (${tags.join(", ")})` : "";
   // The header line carries only trusted metadata; the body follows as quoted lines, so a body
   // can never open a line that looks like a header of somebody else's message.
@@ -532,7 +532,7 @@ function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
 
 /**
  * A one-line footer with the tool's schema - for the calls an agent makes IN A LOOP.
- * W PETLI.
+ * On every loop iteration.
  *
  * @motowolt's objection in [350] was right: I put the full schema block into
  * `talk_status`, that is, into the call an agent makes ONCE in its loop, at startup -
@@ -551,8 +551,8 @@ function stopkaSchematu(nazwa: string): string {
   const pola = Object.keys(
     (t?.inputSchema as { properties?: Record<string, unknown> })?.properties ?? {},
   );
-  return `\n[schemat] ${nazwa}: ${pola.join(", ")}` +
-    ` - inne pola u Ciebie znacza zamrozona liste narzedzi (zrestartuj sesje MCP).`;
+  return `\n[schema] ${nazwa}: ${pola.join(", ")}` +
+    ` - different fields mean a frozen tool list (restart the MCP session).`;
 }
 
 function pogrupujPoRozmowach(
@@ -602,11 +602,11 @@ function pogrupujPoRozmowach(
     return b.msgs[b.msgs.length - 1].id - a.msgs[a.msgs.length - 1].id;
   });
 
-  const out: string[] = [`${messages.length} nowych w ${kolejnosc.length} rozmowach:`];
+  const out: string[] = [`${messages.length} new messages in ${kolejnosc.length} conversations:`];
   for (const b of kolejnosc) {
-    const czeka = b.doMnie > 0 ? `, ${b.doMnie} do Ciebie` : "";
+    const czeka = b.doMnie > 0 ? `, ${b.doMnie} for you` : "";
     const nazwaBloku = nazwaRozmowy(ctx, b.conv, nazwy);
-    out.push("", `=== ${nazwaBloku} (${b.msgs.length} nowych${czeka}) ===`);
+    out.push("", `=== ${nazwaBloku} (${b.msgs.length} new${czeka}) ===`);
     // The conversation name is already in the block header - repeating it on every line
     // costs context and adds nothing.
     for (const m of b.msgs) {
@@ -621,26 +621,26 @@ function pogrupujPoRozmowach(
 
 function renderStatus(ctx: Ctx, actor: Actor): string {
   const nazwy = nowySlownik();
-  const out: string[] = [`Jestes @${actor.handle}.`];
+  const out: string[] = [`You are @${actor.handle}.`];
   const rows = presenceFor(ctx, actor.id);
-  out.push("", "=== KTO JEST ===");
-  if (rows.length === 0) out.push("  (nikogo)");
+  out.push("", "=== WHO IS HERE ===");
+  if (rows.length === 0) out.push("  (nobody)");
   for (const p of rows) {
-    const state = p.typing ? "PISZE" : p.busy ? "pracuje" : p.online ? "aktywna" : "cisza";
+    const state = p.typing ? "TYPING" : p.busy ? "working" : p.online ? "active" : "idle";
     out.push(
       `  [${state}] @${p.handle} (${oneLine(p.label)})` +
-        (p.doing ? ` - robi: ${oneLine(p.doing)}` : ""),
+        (p.doing ? ` - doing: ${oneLine(p.doing)}` : ""),
     );
   }
   const unread = unreadFor(ctx, actor.id).filter((r) => r.unread > 0);
-  out.push("", "=== NIEPRZECZYTANE ===");
-  if (unread.length === 0) out.push("  (nic)");
+  out.push("", "=== UNREAD ===");
+  if (unread.length === 0) out.push("  (none)");
   for (const r of unread) {
-    out.push(`  ${r.unread} (plakietki: ${r.badge}) w ${convName(ctx, r.conversationId)}`);
+    out.push(`  ${r.unread} (badges: ${r.badge}) in ${convName(ctx, r.conversationId)}`);
   }
   const open = openQuestions(ctx, { actorId: actor.id });
-  out.push("", "=== OTWARTE PYTANIA ===");
-  if (open.length === 0) out.push("  (nic)");
+  out.push("", "=== OPEN QUESTIONS ===");
+  if (open.length === 0) out.push("  (none)");
   for (const q of open) out.push(`  [q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
   // The window we REALLY read from (below we show only the last 8 of it).
   // The cursor for talk_read MUST point at the start of THAT window, not at the global
@@ -648,15 +648,15 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   // that skips the remaining 32 IRREVERSIBLY (audit #1: talk_read(afterId) never goes back
   // below the given id). windowStart may rewind talk_read to a few messages already shown -
   // that is the safe side of the error, unlike losing data.
-  // utraty danych.
+  // Keep the cursor safe from data loss.
   const windowStart = Math.max(0, lastMessageId(ctx) - 200);
   const last = inboxAfter(ctx, actor.id, windowStart).slice(-8);
-  out.push("", "=== OSTATNIE WIADOMOSCI DO CIEBIE ===");
-  if (last.length === 0) out.push("  (nic nowego)");
+  out.push("", "=== RECENT MESSAGES FOR YOU ===");
+  if (last.length === 0) out.push("  (nothing new)");
   for (const m of last) out.push(`  ${fmtMsg(ctx, m, nazwy)}`);
   const wn = wikiPageCount(ctx);
   if (wn > 0) {
-    out.push("", `=== WIKI ===`, `  ${wn} stron wiedzy - zanim zapytasz, sprawdz: wiki_search`);
+    out.push("", `=== WIKI ===`, `  ${wn} knowledge pages; before asking, check wiki_search`);
   }
   // The tool schema ACCORDING TO THE SERVER - the only way for an agent to detect that its
   // client has a frozen tool list.
@@ -673,20 +673,20 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   // in the call it makes first anyway. The list is generated from TOOLS, so it cannot go
   // stale.
   const wLoopie = ["talk_read", "talk_send", "wiki_read"];
-  out.push("", "=== NARZEDZIA WEDLUG SERWERA ===");
+  out.push("", "=== TOOLS ACCORDING TO THE SERVER ===");
   for (const nazwa of wLoopie) {
     const t = TOOLS.find((x) => x.name === nazwa);
     const pola = Object.keys(
       (t?.inputSchema as { properties?: Record<string, unknown> })?.properties ?? {},
     );
-    out.push(`  ${nazwa}: ${pola.join(", ") || "(bez parametrow)"}`);
+    out.push(`  ${nazwa}: ${pola.join(", ") || "(no parameters)"}`);
   }
   out.push(
-    "  Jesli Twoj klient pokazuje INNE pola, ma zamrozony schemat z chwili startu",
-    "  sesji: Twoje nowe pola sa wycinane, ZANIM tu dotra, i nikt tego nie widzi.",
-    "  Restart sesji MCP pobiera liste na nowo.",
+    "  If your client shows DIFFERENT fields, it has a frozen schema from session startup.",
+    "  Your new fields are stripped BEFORE they reach the server, without any warning.",
+    "  Restart the MCP session to refresh the list.",
   );
-  out.push("", `Kursor do talk_read: afterId=${windowStart}`);
+  out.push("", `Cursor for talk_read: afterId=${windowStart}`);
   return out.join("\n");
 }
 
@@ -738,7 +738,7 @@ function wBudzecie<T>(
     let tniete = 0;
     if (l.length > BUDZET_ZNAKOW) {
       tniete = l.length - BUDZET_ZNAKOW;
-      l = l.slice(0, BUDZET_ZNAKOW) + `\n[...tresc przycieta: ${tniete} znakow - calosc przez REST]`;
+      l = l.slice(0, BUDZET_ZNAKOW) + `\n[...content truncated: ${tniete} characters - read the full content through REST]`;
     }
     if (pokazane.length > 0 && uzyte + l.length > BUDZET_ZNAKOW) break;
     linie.push(l);
@@ -785,10 +785,10 @@ function dopiszNieznanePola(
       ...wynik.content.slice(0, -1),
       {
         type: "text",
-        text: `${ostatnia.text}\n\n[uwaga] ${name} nie zna pola: ${nieznane.join(", ")}. ` +
-          `Zostalo ZIGNOROWANE - wynik wyzej go nie uwzglednia. Jesli spodziewales sie ` +
-          `innego zachowania, sprawdz nazwe w tools/list; przy starym schemacie w kliencie ` +
-          `pomaga restart sesji.`,
+        text: `${ostatnia.text}\n\n[warning] ${name} does not recognize fields: ${nieznane.join(", ")}. ` +
+          `IGNORED - the result above does not account for them. If you expected ` +
+          `different behavior, check the names in tools/list; if your client has an old schema, ` +
+          `restart the session.`,
       },
     ],
   };
@@ -816,7 +816,7 @@ async function callTool(
 
   switch (name) {
     case "talk_guidelines":
-      return text(guidelinesText() || "(brak pliku zasad w tej instalacji)");
+      return text(guidelinesText() || "(guidelines file missing from this installation; ask the server admin to restore AgentTalks.md)");
 
     case "talk_status": {
       // The first connection: the guidelines + a prompt BEFORE the picture of the channel.
@@ -851,7 +851,7 @@ async function callTool(
         // Idempotency: a retry with the same clientMsgId returns the existing message instead of
         // duplicating it (postMessage has full dedup by dedup_key) - MCP is exactly the interface
         // where a client retries after a broken stream (audit #9).
-        // (audyt #9).
+        // Keep the same id across retries.
         clientMsgId: strv(args.clientMsgId) ?? null,
         maxBytes: config.maxMessageBytes,
       });
@@ -865,12 +865,12 @@ async function callTool(
             const live = actorLiveness(ctx, m.actorId);
             const wakeable = isWakeable(ctx, m.actorId);
             const state = live.online
-              ? "zywa"
+              ? "online"
               : wakeable
-                ? `nieobecna, ale OBUDZE przez webhook`
+                ? `offline, but WILL WAKE via webhook`
                 : live.lastSeenAt
-                  ? `cisza ${Math.round((ctx.now() - live.lastSeenAt) / 60)} min, BEZ wake - nie dojdzie teraz`
-                  : "NIEOBECNA i BEZ wake - wiadomosc czeka, nikt jej nie zobaczy";
+                  ? `idle for ${Math.round((ctx.now() - live.lastSeenAt) / 60)} min, NO wake - will not be seen now`
+                  : "OFFLINE with NO wake - the message will wait until someone returns";
             return `  @${handle}: ${state}`;
           })
           .join("\n");
@@ -879,7 +879,7 @@ async function callTool(
       const mentionNote = nieznane.length
         ? `\nMentions that did not resolve (no such actor, nobody was notified): ${nieznane.map((h) => "@" + h).join(", ")}`
         : "";
-      return text(`wyslane [${message.id}] do ${convName(ctx, conv.id)}${deliveryNote}${mentionNote}`);
+      return text(`sent [${message.id}] to ${convName(ctx, conv.id)}${deliveryNote}${mentionNote}`);
     }
 
     case "talk_read": {
@@ -893,7 +893,7 @@ async function callTool(
         if ((activeWaits.get(actor.id) ?? 0) >= MAX_WAITS_PER_ACTOR) {
           return text(
             `Too many concurrent waits: at most ${MAX_WAITS_PER_ACTOR} concurrent waits per actor. ` +
-              `Finish or cancel one, or poll with waitSec=0.\nKursor: afterId=${after}`,
+              `Finish or cancel one, or poll with waitSec=0.\nCursor: afterId=${after}`,
           );
         }
         activeWaits.set(actor.id, (activeWaits.get(actor.id) ?? 0) + 1);
@@ -911,13 +911,13 @@ async function callTool(
         }
       }
       if (messages.length === 0) {
-        return text(`Brak nowych wiadomosci. Kursor: afterId=${after}${stopkaSchematu("talk_read")}`);
+        return text(`No new messages. Cursor: afterId=${after}${stopkaSchematu("talk_read")}`);
       }
       // The cursor points at the last message SHOWN, not at the last one fetched - otherwise
       // truncation by budget would skip messages irreversibly (the same bug audit #1 caught
       // with the global MAX(id)). We compute the budget BEFORE grouping, chronologically, so
       // that the cursor keeps meaning "you have seen everything up to this id".
-      // widziales".
+      // The cursor only advances past messages actually shown.
       const nazwy = nowySlownik();
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy));
       // The grouped list below must print THESE (already budgeted) renderings, not format the
@@ -931,12 +931,12 @@ async function callTool(
       // #general [226]).
       const pisza = whoIsTyping(ctx, actor.id);
       const ktoPisze = pisza.length === 0 ? "" :
-        `\nTeraz pisza: ${pisza.map((p) => `@${oneLine(p.handle)}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
-          .join(", ")} - rozwaz, czy Twoja odpowiedz nadal jest potrzebna.`;
+        `\nTyping now: ${pisza.map((p) => `@${oneLine(p.handle)}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
+          .join(", ")} - consider whether your reply is still needed.`;
       return text(untrusted(
         pogrupujPoRozmowach(ctx, actor.id, okno.pokazane, nazwy) +
-          `\n\nKursor: afterId=${cursor}` +
-          (zostalo ? `\nTo nie wszystko - powtorz talk_read z afterId=${cursor}.` : "") +
+          `\n\nCursor: afterId=${cursor}` +
+          (zostalo ? `\nMore messages remain - repeat talk_read with afterId=${cursor}.` : "") +
           ktoPisze + stopkaSchematu("talk_read"),
       ));
     }
@@ -954,7 +954,7 @@ async function callTool(
       // Without beforeId the last message shown is the newest in the conversation anyway, so
       // behaviour does not change in the typical case.
       if (messages.length) markRead(ctx, actor.id, conv.id, messages[messages.length - 1].id);
-      if (messages.length === 0) return text(`Pusto w ${convName(ctx, conv.id)}.`);
+      if (messages.length === 0) return text(`No messages in ${convName(ctx, conv.id)}.`);
       // "from the end": this is history, so when not everything fits, the newest entries are
       // the more valuable ones. Fetching older ones already has a cursor - beforeId.
       const nazwy = nowySlownik();
@@ -963,23 +963,23 @@ async function callTool(
       return text(untrusted(
         okno.linie.join("\n") +
           (okno.pominiete > 0
-            ? `\n\n(${okno.pominiete} starszych pominieto, zeby zmiescic sie w limicie - ` +
-              `doczytaj: talk_log {conversation, beforeId: ${glowa.id}})`
+            ? `\n\n(${okno.pominiete} older messages omitted to fit the limit - ` +
+              `read more: talk_log {conversation, beforeId: ${glowa.id}})`
             : ""),
       ));
     }
 
     case "talk_who": {
       const rows = presenceFor(ctx, actor.id);
-      if (rows.length === 0) return text("Nikogo nie ma.");
+      if (rows.length === 0) return text("Nobody is here.");
       return text(untrusted(rows.map((p) => {
-        const state = p.typing ? "PISZE" : p.busy ? "pracuje" : p.online ? "aktywna" : "cisza";
+        const state = p.typing ? "TYPING" : p.busy ? "working" : p.online ? "active" : "idle";
         const age = Math.round((ctx.now() - p.lastSeenAt) / 60);
         const who = ctx.db.prepare("SELECT kind FROM actors WHERE id = ?").get(p.actorId) as
           { kind: string } | undefined;
-        const kindTag = who?.kind === "human" ? " [czlowiek]" : "";
-        return `[${state}] @${p.handle}${kindTag} (${oneLine(p.label)}) ostatnio ${age} min temu` +
-          (p.doing ? ` - robi: ${oneLine(p.doing)}` : "");
+        const kindTag = who?.kind === "human" ? " [human]" : "";
+        return `[${state}] @${p.handle}${kindTag} (${oneLine(p.label)}) last seen ${age} min ago` +
+          (p.doing ? ` - doing: ${oneLine(p.doing)}` : "");
       }).join("\n")));
     }
 
@@ -988,12 +988,12 @@ async function callTool(
       // had no way to discover channels it had not joined yet (audit #5). listForActor shows all
       // public ones plus its own DMs/groups.
       const convs = listForActor(ctx, actor.id);
-      if (convs.length === 0) return text("Brak widocznych konwersacji.");
+      if (convs.length === 0) return text("No visible conversations.");
       const unread = new Map(unreadFor(ctx, actor.id).map((r) => [r.conversationId, r.unread]));
       const lines = convs.map((c) => {
         const flags = [
-          isMember(ctx, c.id, actor.id) ? null : "NIE jestes czlonkiem - talk_join",
-          (unread.get(c.id) ?? 0) > 0 ? `${unread.get(c.id)} nieprzeczytanych` : null,
+          isMember(ctx, c.id, actor.id) ? null : "NOT a member - use talk_join",
+          (unread.get(c.id) ?? 0) > 0 ? `${unread.get(c.id)} unread` : null,
         ].filter(Boolean).join(", ");
         return `  ${convName(ctx, c.id)}${c.topic ? `  - ${oneLine(c.topic)}` : ""}${flags ? `  (${flags})` : ""}`;
       });
@@ -1006,7 +1006,7 @@ async function callTool(
       // with the same error as anywhere else.
       const conv = resolveConversation(ctx, actor, strv(args.conversation) ?? "");
       join(ctx, conv.id, actor.id);
-      return text(`dolaczono do ${convName(ctx, conv.id)}`);
+      return text(`joined ${convName(ctx, conv.id)}`);
     }
 
     case "talk_ask": {
@@ -1014,34 +1014,34 @@ async function callTool(
       const q = ask(ctx, { conversationId: conv.id, actorId: actor.id,
                            body: strv(args.body) ?? "" });
       return text(
-        `otwarte pytanie [q${q.question}] na ${convName(ctx, conv.id)} - ` +
-          `odpowie ktokolwiek: talk_answer(questionId=${q.question})`,
+        `open question [q${q.question}] in ${convName(ctx, conv.id)} - ` +
+          `anyone can answer: talk_answer(questionId=${q.question})`,
       );
     }
 
     case "talk_answer": {
       const r = answer(ctx, { questionId: num(args.questionId) ?? 0, actorId: actor.id,
                               body: strv(args.body) ?? "" });
-      return text(`odpowiedziane, wiadomosc [${r.message.id}]`);
+      return text(`answered, message [${r.message.id}]`);
     }
 
     case "talk_open": {
       const ref = strv(args.conversation);
       const conv = ref ? resolveConversation(ctx, actor, ref) : null;
       const items = openQuestions(ctx, { actorId: actor.id, conversationId: conv?.id });
-      if (items.length === 0) return text("Brak otwartych pytan.");
+      if (items.length === 0) return text("No open questions.");
       const nazwy = nowySlownik();
       const okno = wBudzecie(items, (q) => `[q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
       return text(untrusted(
         okno.linie.join("\n") +
-          (okno.pominiete > 0 ? `\n\n(${okno.pominiete} dalszych pytan pominieto)` : ""),
+          (okno.pominiete > 0 ? `\n\n(${okno.pominiete} more questions omitted)` : ""),
       ));
     }
 
     case "talk_react": {
       const r = react(ctx, { messageId: num(args.messageId) ?? 0, actorId: actor.id,
                              emoji: strv(args.emoji) ?? "" });
-      return text(r.on ? "reakcja dodana" : "reakcja zdjeta");
+      return text(r.on ? "reaction added" : "reaction removed");
     }
 
     case "talk_search": {
@@ -1055,14 +1055,14 @@ async function callTool(
         untilTs: num(args.untilTs),
         limit: num(args.limit),
       });
-      if (hits.length === 0) return text("Brak trafien.");
+      if (hits.length === 0) return text("No matches.");
       const nazwy = nowySlownik();
       const okno = wBudzecie(hits, (m) => fmtMsg(ctx, m, nazwy));
       return text(untrusted(
         okno.linie.join("\n") +
           (okno.pominiete > 0
-            ? `\n\n(${okno.pominiete} dalszych trafien pominieto - zaweź zapytanie ` +
-              `albo podaj limit/sinceTs)`
+            ? `\n\n(${okno.pominiete} more matches omitted - narrow the query ` +
+              `or provide limit/sinceTs)`
             : ""),
       ));
     }
@@ -1083,7 +1083,7 @@ async function callTool(
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy), "konca");
       return text(untrusted(
         okno.linie.join("\n") +
-          (okno.pominiete > 0 ? `\n\n(${okno.pominiete} wczesniejszych w watku pominieto)` : ""),
+          (okno.pominiete > 0 ? `\n\n(${okno.pominiete} earlier messages in the thread omitted)` : ""),
       ));
     }
 
@@ -1093,30 +1093,30 @@ async function callTool(
       // through REST" as an acceptable alternative to transferring the content through MCP).
       const fileId = strv(args.fileId) ?? "";
       const info = getFileInfo(ctx, fileId, actor.id);
-      if (!info) throw notFound("file_not_found", `nie ma pliku ${fileId} (albo brak dostepu, albo wygasl)`);
+      if (!info) throw notFound("file_not_found", `file ${fileId} not found, inaccessible, or expired; check the id and your access`);
       return text(
         `${QUOTE_NOTE}\n[${info.id}] ${oneLine(info.name)}  ${info.size} B  ${oneLine(info.mime, 80)}\n` +
-          `wyslany: ${fmtTs(info.createdAt)}` +
-          `${info.sensitive ? "  [wrazliwy]" : ""}${info.burn ? "  [znika po pobraniu]" : ""}\n` +
-          `Bajty przez REST: GET /api/files/${info.id}  (naglowek: Authorization: Bearer <Twoj token>)`,
+          `uploaded: ${fmtTs(info.createdAt)}` +
+          `${info.sensitive ? "  [sensitive]" : ""}${info.burn ? "  [burn after download]" : ""}\n` +
+          `Download bytes through REST: GET /api/files/${info.id}  (header: Authorization: Bearer <your token>)`,
       );
     }
 
     case "talk_digest": {
       const d = digestFor(ctx, actor.id);
-      if (!d) return text("Nic nowego od Twojej ostatniej aktywnosci.");
+      if (!d) return text("Nothing new since your last activity.");
       const nazwy = nowySlownik();
       const out = [
-        `Pod Twoja nieobecnosc: ${d.count} wiadomosci`,
-        "  kto:    " + d.byWho.map(([k, v]) => `${oneLine(k)} x${v}`).join(", "),
-        "  gdzie:  " + d.byConversation.map(([k, v]) => `${oneLine(k)} x${v}`).join(", "),
+        `While you were away: ${d.count} messages`,
+        "  who:    " + d.byWho.map(([k, v]) => `${oneLine(k)} x${v}`).join(", "),
+        "  where:  " + d.byConversation.map(([k, v]) => `${oneLine(k)} x${v}`).join(", "),
       ];
       if (d.mentions.length) {
-        out.push(`  DOTYCZY CIEBIE (${d.mentions.length}):`);
+        out.push(`  FOR YOU (${d.mentions.length}):`);
         for (const m of d.mentions.slice(-3)) out.push("    " + fmtMsg(ctx, m, nazwy));
       }
       if (d.open.length) {
-        out.push(`  OTWARTE PYTANIA (${d.open.length}):`);
+        out.push(`  OPEN QUESTIONS (${d.open.length}):`);
         for (const q of d.open) out.push(`    [q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
       }
       return text(untrusted(out.join("\n")));
@@ -1124,14 +1124,14 @@ async function callTool(
 
     case "talk_mentions": {
       const ms = mentionsOf(ctx, actor.id, { afterId: num(args.afterId) });
-      if (ms.length === 0) return text("Brak wzmianek.");
+      if (ms.length === 0) return text("No mentions.");
       const nazwy = nowySlownik();
       const okno = wBudzecie(ms, (m) => fmtMsg(ctx, m, nazwy), "konca");
       return text(untrusted(
         okno.linie.join("\n") +
           (okno.pominiete > 0
-            ? `\n\n(${okno.pominiete} starszych wzmianek pominieto - podaj afterId, ` +
-              `zeby przejsc po nich od poczatku)`
+            ? `\n\n(${okno.pominiete} older mentions omitted - provide afterId ` +
+              `to read them from the start)`
             : ""),
       ));
     }
@@ -1139,16 +1139,16 @@ async function callTool(
     case "talk_seen": {
       const conv = resolveConversation(ctx, actor, strv(args.conversation) ?? "");
       markRead(ctx, actor.id, conv.id, num(args.messageId));
-      return text(`oznaczone jako przeczytane: ${convName(ctx, conv.id)}`);
+      return text(`marked as read: ${convName(ctx, conv.id)}`);
     }
 
     case "talk_typing": {
       const sessionId = strv(args.sessionId);
-      if (!sessionId) throw badRequest("session_id_required", "podaj sessionId");
+      if (!sessionId) throw badRequest("session_id_required", "provide sessionId from talk_register");
       const owner = ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?")
         .get(sessionId) as { actor_id: number } | undefined;
       if (owner && owner.actor_id !== actor.id) {
-        throw badRequest("not_your_session", "ta sesja nalezy do innego aktora");
+        throw badRequest("not_your_session", "this session belongs to another actor; use your own sessionId");
       }
       if (!owner) {
         registerSession(ctx, { sessionId, actorId: actor.id, kind: "ephemeral" as SessionKind });
@@ -1156,7 +1156,7 @@ async function callTool(
       const to = strv(args.to) ?? "";
       if (args.stop === true) {
         signal(ctx, sessionId, "typing", { stop: true });
-        return text("kuleczka zgaszona");
+        return text("typing indicator cleared");
       }
       if (to.startsWith("wiki:") && !/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,99}$/u.test(to.slice(5))) {
         throw badRequest("bad_wiki_slug", "wiki target must be 'wiki:<slug>' (letters, digits, . _ -; no spaces or line breaks)");
@@ -1168,17 +1168,17 @@ async function callTool(
       signal(ctx, sessionId, "typing", { typingIn, sec });
       const shownSec = sec === null ? TYPING_TTL : Math.min(Math.max(sec, 1), TYPING_MAX);
       return text(
-        `inni widza, ze piszesz (${oneLine(to)}); gasnie po ${shownSec} s albo po wyslaniu wiadomosci`,
+        `others can see you typing (${oneLine(to)}); clears after ${shownSec} s or when you send a message`,
       );
     }
 
     case "talk_register": {
       const sessionId = strv(args.sessionId);
-      if (!sessionId) throw badRequest("session_id_required", "podaj sessionId");
+      if (!sessionId) throw badRequest("session_id_required", "provide sessionId from talk_register");
       const owner = ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?")
         .get(sessionId) as { actor_id: number } | undefined;
       if (owner && owner.actor_id !== actor.id) {
-        throw badRequest("not_your_session", "ta sesja nalezy do innego aktora");
+        throw badRequest("not_your_session", "this session belongs to another actor; use your own sessionId");
       }
       const kind = strv(args.kind);
       registerSession(ctx, {
@@ -1194,12 +1194,12 @@ async function callTool(
       // request.
       if (args.busy === true) signal(ctx, sessionId, "busy");
       if (args.doing !== undefined) setDoing(ctx, sessionId, strv(args.doing) ?? null);
-      return text(`sesja ${sessionId} zarejestrowana jako @${actor.handle}`);
+      return text(`session ${sessionId} registered as @${actor.handle}`);
     }
 
     case "wiki_search": {
       const hits = searchWiki(ctx, strv(args.q) ?? "", num(args.limit));
-      if (hits.length === 0) return text("Brak trafien w wiki. (Mozesz zalozyc strone: wiki_write)");
+      if (hits.length === 0) return text("No wiki matches. (Create a page with wiki_write.)");
       return text(untrusted(
         hits.map((h) => `[${oneLine(h.slug)}] ${oneLine(h.title)}\n${quote(h.snippet)}`).join("\n"),
       ));
@@ -1207,7 +1207,7 @@ async function callTool(
 
     case "wiki_read": {
       const page = getPage(ctx, strv(args.slug) ?? "");
-      if (!page) throw notFound("page_not_found", `nie ma strony wiki "${strv(args.slug)}"`);
+      if (!page) throw notFound("page_not_found", `wiki page "${strv(args.slug)}" not found; use wiki_list to find a page`);
       // A read unlocks a write (the server will not accept a write to a page you have not seen)
       // - which is why we leave the marker exactly as a GET over HTTP does.
       // The heading outline: it lets you decide what to read BEFORE the page enters the context
@@ -1217,16 +1217,16 @@ async function callTool(
         const spis = pageOutline(page.body);
         if (spis.length === 0) {
           return text(
-            `# ${oneLine(page.title)} (${page.slug}) - ${page.body.length} znakow, bez naglowkow.\n` +
-              `Cala tresc: wiki_read {slug: "${page.slug}"}`,
+            `# ${oneLine(page.title)} (${page.slug}) - ${page.body.length} characters, no headings.\n` +
+              `Full content: wiki_read {slug: "${page.slug}"}`,
           );
         }
         return text(
           QUOTE_NOTE + "\n" +
-          `# ${oneLine(page.title)}  (${page.slug})  ${page.body.length} znakow, rewizja ${page.lastRevisionId}\n` +
-            spis.map((x) => `${"  ".repeat(x.level - 1)}[${x.bytes} zn.] ${oneLine(x.heading)}`).join("\n") +
-            `\n\nFragment: wiki_read {slug: "${page.slug}", section: "<naglowek>"}` +
-            `\nCALOSC (i tylko ona odblokowuje zapis): wiki_read {slug: "${page.slug}"}`,
+          `# ${oneLine(page.title)}  (${page.slug})  ${page.body.length} characters, revision ${page.lastRevisionId}\n` +
+            spis.map((x) => `${"  ".repeat(x.level - 1)}[${x.bytes} chars] ${oneLine(x.heading)}`).join("\n") +
+            `\n\nSection: wiki_read {slug: "${page.slug}", section: "<heading>"}` +
+            `\nWHOLE PAGE (required to unlock writing): wiki_read {slug: "${page.slug}"}`,
         );
       }
 
@@ -1236,15 +1236,15 @@ async function callTool(
         if (tresc === null) {
           throw notFound(
             "section_not_found",
-            `strona "${page.slug}" nie ma sekcji "${sekcja}". Spis: ` +
+            `page "${page.slug}" has no section "${sekcja}". List headings: ` +
               `wiki_read {slug: "${page.slug}", outline: true}`,
           );
         }
         // We do NOT set the read marker - the same rule as for a truncated page: somebody who saw
         // a fragment would overwrite the rest without knowing it.
         return text(
-          `${QUOTE_NOTE}\n# ${oneLine(page.title)} (${page.slug}), fragment "${oneLine(sekcja)}", rewizja ${page.lastRevisionId}\n` +
-            `[to NIE jest cala strona - zapis wymaga wczesniejszego odczytu calosci]\n${quote(tresc)}`,
+          `${QUOTE_NOTE}\n# ${oneLine(page.title)} (${page.slug}), section "${oneLine(sekcja)}", revision ${page.lastRevisionId}\n` +
+            `[this is NOT the whole page - read the full page before writing]\n${quote(tresc)}`,
         );
       }
 
@@ -1265,32 +1265,32 @@ async function callTool(
       if (kompletna) markPageSeen(ctx, page.slug, actor.id);
       const naglowek =
         `${QUOTE_NOTE}\n# ${oneLine(page.title)}  (${page.slug})\n` +
-        `ostatnia zmiana: @${page.updatedBy ?? "?"}, rewizji: ${page.revisions}` +
-        `, biezaca rewizja: ${page.lastRevisionId} (oddaj ja w baseRevision przy zapisie)\n\n`;
+        `last changed by: @${page.updatedBy ?? "?"}, revisions: ${page.revisions}` +
+        `, current revision: ${page.lastRevisionId} (pass this as baseRevision when saving)\n\n`;
       return text(
         naglowek + okno.linie.join("\n") +
           (!kompletna
-            ? `\n\n[...przycieto: ${okno.pominiete} z ${linie.length} linii nie zmiescilo sie ` +
-              `w limicie wyjscia narzedzia${okno.uciete > 0 ? `, a ${okno.uciete} znakow zostalo ucietych wewnatrz dlugich linii` : ""}. ` +
-              `Ten odczyt NIE odblokowuje zapisu. NIE zapisuj tej strony na podstawie tego, co widzisz - ` +
-              `nadpisalbys brakujaca czesc. Reszta: wiki_read {slug: "${page.slug}", outline: true} i ` +
-              `potem section, albo calosc przez REST: GET /api/wiki/${page.slug} (ten odczyt odblokowuje zapis).]`
+            ? `\n\n[...truncated: ${okno.pominiete} of ${linie.length} lines did not fit ` +
+              `within the tool output limit${okno.uciete > 0 ? `, and ${okno.uciete} characters were cut within long lines` : ""}. ` +
+              `This read does NOT unlock writing. DO NOT save this page based on what you see: ` +
+              `you would overwrite the missing content. Read more: wiki_read {slug: "${page.slug}", outline: true}, then ` +
+              `section, or read the whole page through REST: GET /api/wiki/${page.slug} (that read unlocks writing).]`
             : ""),
       );
     }
 
     case "wiki_list": {
       const pages = listPages(ctx, actor.id);
-      if (pages.length === 0) return text("Wiki jest pusta. Zaloz pierwsza strone: wiki_write.");
+      if (pages.length === 0) return text("The wiki is empty. Create the first page with wiki_write.");
       return text(untrusted(pages.map((p) => {
-        const where = p.parentSlug ? `  (pod: ${p.parentSlug})` : "";
-        const fresh = p.unseen > 0 ? `  [${p.unseen} zmian od Twojego wejscia]` : "";
+        const where = p.parentSlug ? `  (under: ${p.parentSlug})` : "";
+        const fresh = p.unseen > 0 ? `  [${p.unseen} changes since your last visit]` : "";
         // A sentence and a SIZE next to every entry: that is the whole difference between
         // "choosing a page" and "fetching forty pages in order to choose".
         const opis = p.summary ? `\n${quote(p.summary)}` : "";
-        const koszt = p.bytes ? `  ${p.bytes} zn.` : "";
-        const czytane = p.readers ? `  (czytali: ${p.readers})` : "  (nikt jeszcze nie czytal)";
-        return `[${oneLine(p.slug)}] ${oneLine(p.title)}${koszt}${czytane}${where}  (zmiana: @${p.updatedBy ?? "?"})${fresh}${opis}`;
+        const koszt = p.bytes ? `  ${p.bytes} chars` : "";
+        const czytane = p.readers ? `  (readers: ${p.readers})` : "  (no readers yet)";
+        return `[${oneLine(p.slug)}] ${oneLine(p.title)}${koszt}${czytane}${where}  (changed by: @${p.updatedBy ?? "?"})${fresh}${opis}`;
       }).join("\n")));
     }
 
@@ -1305,10 +1305,10 @@ async function callTool(
         baseRevision: "baseRevision" in args ? (num(args.baseRevision) ?? null) : undefined,
         force: args.force === true,
       });
-      const where = page.parentSlug ? ` pod [${page.parentSlug}]` : "";
+      const where = page.parentSlug ? ` under [${page.parentSlug}]` : "";
       return text(
-        `zapisane: [${oneLine(page.slug)}] "${oneLine(page.title)}"${where} ` +
-          `(rewizja ${page.lastRevisionId}, ${page.revisions} w historii)`,
+        `saved: [${oneLine(page.slug)}] "${oneLine(page.title)}"${where} ` +
+          `(revision ${page.lastRevisionId}, ${page.revisions} in history)`,
       );
     }
 
@@ -1328,13 +1328,13 @@ async function callTool(
         sessionId: strv(args.sessionId) ?? null,
       });
       if (r.granted) {
-        return text(`GRANTED ${r.lease.resource} do ${fmtTs(r.lease.expiresAt)} ` +
+        return text(`GRANTED ${r.lease.resource} until ${fmtTs(r.lease.expiresAt)} ` +
           `(${r.lease.expiresAt - ctx.now()} s)`);
       }
       return {
         content: [{
           type: "text",
-          text: `HELD-BY @${r.heldBy.handle} jeszcze ${r.heldBy.expiresAt - ctx.now()} s` +
+          text: `HELD-BY @${r.heldBy.handle} for ${r.heldBy.expiresAt - ctx.now()} more s` +
             (r.heldBy.note ? ` (${oneLine(r.heldBy.note)})` : ""),
         }],
         isError: true,
@@ -1345,22 +1345,22 @@ async function callTool(
       const r = release(ctx, { resource: strv(args.resource) ?? "", actorId: actor.id });
       if (r.released) return text("UNLOCKED");
       return {
-        content: [{ type: "text", text: `DENIED - trzyma @${r.heldBy!.handle}` }],
+        content: [{ type: "text", text: `DENIED - held by @${r.heldBy!.handle}` }],
         isError: true,
       };
     }
 
     case "talk_leases": {
       const leases = listLeases(ctx);
-      if (leases.length === 0) return text("Nic nie jest zajete.");
+      if (leases.length === 0) return text("No active leases.");
       return text(untrusted(leases.map((l) =>
-        `${oneLine(l.resource)}  @${l.handle}  jeszcze ${l.expiresAt - ctx.now()} s` +
+        `${oneLine(l.resource)}  @${l.handle}  for ${l.expiresAt - ctx.now()} more s` +
           (l.note ? `  (${oneLine(l.note)})` : ""),
       ).join("\n")));
     }
 
     default:
-      throw badRequest("unknown_tool", `nie ma narzedzia ${name}`);
+      throw badRequest("unknown_tool", `unknown tool ${name}; check tools/list`);
   }
 }
 
@@ -1385,7 +1385,7 @@ function waitForInbox(
 ): Promise<Message[]> {
   if (extra.progressToken === undefined) {
     console.warn(
-      `[mcp] talk_read czeka ${waitSec}s bez progressToken - klient moze zerwac na limicie ciszy`,
+      `[mcp] talk_read waiting ${waitSec}s without progressToken - send a progressToken to avoid a client idle timeout`,
     );
   }
   return new Promise((resolve) => {
@@ -1397,7 +1397,7 @@ function waitForInbox(
             params: {
               progressToken: extra.progressToken,
               progress: ++ticks,
-              message: `czekam na wiadomosci (${ticks * 20}s) - to nie timeout`,
+              message: `waiting for messages (${ticks * 20}s) - the request is still active`,
             },
           }).catch(() => {});
         }, PROGRESS_INTERVAL_MS)
@@ -1461,7 +1461,7 @@ function buildServer(ctx: Ctx, config: Config, actor: Actor, stillValid?: () => 
       // such a value cannot start a line of its own (R1-F6).
       const raw = err instanceof AppError || err instanceof Error ? err.message : String(err);
       const msg = raw.replace(new RegExp(LINE_BREAKS.source, "gu"), " ");
-      return { content: [{ type: "text", text: `blad: ${msg}` }], isError: true };
+      return { content: [{ type: "text", text: `error: ${msg}` }], isError: true };
     }
   });
   return server;

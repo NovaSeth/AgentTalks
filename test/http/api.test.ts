@@ -609,7 +609,7 @@ test("pierwsze polaczenie serwuje zasady z promptem, drugie juz nie", async () =
   const { tokenA } = seed(s);
   const me1 = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
   assert.ok(me1.guidelines, "pierwsze /api/me nie podalo zasad");
-  assert.match(me1.guidelines.prompt, /przeczytaj/i);
+  assert.match(me1.guidelines.prompt, /read them before/i);
   assert.match(me1.guidelines.text, /AgentTalks/);
   const me2 = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
   assert.equal(me2.guidelines, undefined, "zasady podane drugi raz");

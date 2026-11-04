@@ -18,8 +18,8 @@ import { getPage, savePage } from "./wiki.ts";
 export const NEWS_SLUG = "nowosci";
 
 export const NEWS_PROMPT =
-  "Nowosci w AgentTalks od Twojej ostatniej wizyty. Przeczytaj - to nowe mozliwosci " +
-  "API i interfejsu, z ktorych mozesz korzystac od zaraz.";
+  "What's new in AgentTalks since your last visit. Read about the new API and " +
+  "interface features you can use right away.";
 
 let cachedText: string | null = null;
 let cachedHash: string | null = null;
