@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "7bcf3369b8eff311f4a50a48bfd610828c7d312f",
-  "collectedAt": "2026-11-04T20:30:15.057Z",
+  "head": "e1dc1a675775623129fed208853ef3ce50b33b6c",
+  "collectedAt": "2026-11-04T20:40:22.645Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -191,6 +191,31 @@
     },
     {
       "id": "[\"\",\"B-MG-117: the user focusing something else after the submit (a focusin) keeps that focus\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-118 (codex repro): a message held from SSE during the newest-30 refresh keeps its REST reactions\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-118: a held message edited live during the newest-30 refresh still gets its REST reactions\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-118: a reaction refreshed by a live event during the after= page is not overwritten by the older page\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-118: a reaction removed by a live event during the after= page stays removed\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-119 (codex repro): after a failed retry the reconnect refreshes a held gap message older than the newest 30\",1]",
       "file": "",
       "skipped": false
     },
@@ -710,7 +735,32 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"F1 race: the page changes after a whole read: the write is refused by the delivered revision\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F1 race: the page grows between the outline and the full read: not delivered, not writable\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"F1 the channel's beat survives stream reconnects: a stream recycled faster than the interval still beats\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F1/F3: a large page or section is readable in parts with offset, each part within the budget\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F1: a page that fits is delivered whole (its last line included) and then writable\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F1: a page whose framed result exceeds the budget is not delivered, and cannot be written\",1]",
       "file": "",
       "skipped": false
     },
@@ -785,6 +835,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"F2: an outline-only or section-only read never unlocks a write, with or without base_revision\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"F2: sign-out clears only the signing-out account's keys (drafts, wiki, navigation, unsent)\",1]",
       "file": "",
       "skipped": false
@@ -820,12 +875,37 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"F3: read_conversation stays in budget, latest pages back with before, after pages forward\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F3: read_thread of 50 messages of 60 000 characters stays in budget and pages with after\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F3: search, mentions, open_questions, channels, who and leases stay within the budget with a cursor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"F3: with no older messages the empty listing still says nothing matches, without a pager\",1]",
       "file": "",
       "skipped": false
     },
     {
       "id": "[\"\",\"F4 (D-MG-30): on the first run the marker's actor gets nothing either: legacy data is deleted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F4 (T-MG-43): a held gap message edited by a live event during the after= request keeps the live body\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F4 (T-MG-43): a message replaced by a REST reaction refresh during the after= page keeps that newer revision\",1]",
       "file": "",
       "skipped": false
     },
@@ -1711,6 +1791,96 @@
     },
     {
       "id": "[\"\",\"T-MG-41: with only the old atalk on PATH the hook falls back to it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44 r1: messages that arrive while another view (wiki) covers the active conversation are tinted on return\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44 r2 F1: a message read here does not regain its tint after going to another conversation and back\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44 r2 F2: a failed read (503) leaves the rows tinted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44 r2 F2: the fade starts only when the server confirms the read; a rescheduled read posts nothing yet\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44 r2 F3: a rail place switch (goPlace: view = chat, renderShell) tints what arrived while the Activity view was up\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44 r2 F4: messages recovered by the SSE catch-up after returning to a disconnected tab are tinted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44 r2 F5: highlight state and timers do not cross an account change (session generation)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44 r3 F7: later renders never tint a message at or below the server's read watermark\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: a conversation read to the end gets no tint\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: a first visit (mark 0) follows the divider's estimate from the unread count\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: a message that arrives while the tab is hidden is tinted, and stays so on a re-render\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: a message that arrives while the tab is visible and the conversation open is not tinted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: a partial confirmed read fades only up to it; the rest stays tinted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: coming back to the tab tints what landed meanwhile even when it was drawn in a full render\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: highlightUnreadIds names the others' messages above the mark, never mine or deleted ones\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: opening a conversation with others' messages above the read mark tints exactly those rows\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: the highlight is per conversation: a confirmed read in another one touches nothing here\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-44: the tint and the fade use theme tokens; reduced motion disables the transition\",1]",
       "file": "",
       "skipped": false
     },
@@ -2915,6 +3085,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"ask, open_questions, answer, react: round trip; bad ids and empty text are errors\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"at_dev is revoked by a password change, a disable and a logout-everywhere (epoch bump) (B-MG-96)\",1]",
       "file": "",
       "skipped": false
@@ -3051,6 +3226,16 @@
     },
     {
       "id": "[\"\",\"channel: woken for nestor on A, plugin options for bob on B -> no request to B, no reply sent, one line (codex T-MG-14 r1 F1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"channels and who: listed with ids, topics and doing quoted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"claim, release, leases: granted, held by another (holder named), notes quoted\",1]",
       "file": "",
       "skipped": false
     },
@@ -3266,6 +3451,11 @@
     },
     {
       "id": "[\"\",\"every API error code has a translated UI message or an explained agent-only exception\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"every API tool refuses without the principal, and without an api\",1]",
       "file": "",
       "skipped": false
     },
@@ -3680,22 +3870,22 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"integrations/claude-code-plugin/skills/agenttalks/SKILL.md documents every legacy error code with its English replacement\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"integrations/claude-code-plugin/skills/agenttalks/SKILL.md explains the tag, JSON field and compatibility migration\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"integrations/claude-code/skills/agenttalks/SKILL.md documents every legacy error code with its English replacement\",1]",
       "file": "",
       "skipped": false
     },
     {
       "id": "[\"\",\"integrations/claude-code/skills/agenttalks/SKILL.md explains the tag, JSON field and compatibility migration\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"integrations/claude-skill/SKILL.md documents every legacy error code with its English replacement\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"integrations/claude-skill/SKILL.md explains the tag, JSON field and compatibility migration\",1]",
       "file": "",
       "skipped": false
     },
@@ -4475,6 +4665,41 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"r1 F1 (codex repro): a superseded newest-30 page landing late keeps the newer catch-up's reactions and body\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r1 F1: a reaction refresh sent before a newer catch-up and landing after it does not undo that catch-up\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r1 F1: an unstamped write during the after= page (an own edit, applyMessageUpdate) is kept\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r1 F1: when the superseded page lands first, the newer catch-up's page still applies\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r2 F2 (codex repro): a read sent earlier but cut later is not erased by a read sent after it but cut before it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r2 F2: an unstamped reaction write while a page is in flight (a view loader) is kept, then re-read\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r2 F2: while the re-read of an overlap is pending, a late superseded page does not show older state\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"railBadges derives the Activity badge from notifUnread and formats 99+\",1]",
       "file": "",
       "skipped": false
@@ -4501,6 +4726,11 @@
     },
     {
       "id": "[\"\",\"readJson rejects invalid JSON\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"read_conversation and read_thread: messages framed, bad ids are errors\",1]",
       "file": "",
       "skipped": false
     },
@@ -4605,6 +4835,16 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"search and mentions: results framed; empty q and bad limits are errors\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"search beforeId pages past the cap: more than 200 matches in one second, each id once (D-MG-42)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"search does not return content from inaccessible channels\",1]",
       "file": "",
       "skipped": false
@@ -4616,6 +4856,26 @@
     },
     {
       "id": "[\"\",\"search omits deleted messages\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"search: 20 matches then 190 in the next second, limit 30, none lost (codex r3 F7)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"search: 201 matches in one second are all reached once (codex r3 F6)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"search: following the cursor reaches every match exactly once, newest first, even as new matches arrive (T-MG-40 fix 2)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"search: matches arriving between pages add no duplicate and do not loop\",1]",
       "file": "",
       "skipped": false
     },
@@ -4636,6 +4896,11 @@
     },
     {
       "id": "[\"\",\"security lines never contain the handle string a user typed (item 2)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"send: #slug, @handle and an id; bad addresses and empty text are errors\",1]",
       "file": "",
       "skipped": false
     },
@@ -4845,6 +5110,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"the budget is exported and is the spec's 50 000 characters\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"the channel creator is its admin\",1]",
       "file": "",
       "skipped": false
@@ -4876,6 +5146,11 @@
     },
     {
       "id": "[\"\",\"the first connection serves guidelines with a prompt; the second does not\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"the full API skill is bundled in the plugin and is the only copy; /skill.md serves it\",1]",
       "file": "",
       "skipped": false
     },
@@ -5036,6 +5311,11 @@
     },
     {
       "id": "[\"\",\"token use is recorded in last_used_at\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"tool names: the API tools are the spec's 17, and the woken run's set is unchanged\",1]",
       "file": "",
       "skipped": false
     },
@@ -5430,6 +5710,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"wiki_search, wiki_read, wiki_write: framed, a read unlocks a write, a big page asks for a section\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"without authentication the API returns 401 rather than 500\",1]",
       "file": "",
       "skipped": false
@@ -5441,5 +5726,5 @@
     }
   ],
   "failing": [],
-  "sha256": "f6b308dfb6b49c47b82454834b828a0885ad99394a2ee6013a13b1884d7b962a"
+  "sha256": "8d2ba136d556e8c802e49259e1a53c8c51d19cdea7a00156c30525d86830c966"
 }

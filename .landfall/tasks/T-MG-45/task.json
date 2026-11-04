@@ -14,7 +14,7 @@
     }
   ],
   "status": "dispatched",
-  "round": 0,
+  "round": 1,
   "events": [
     {
       "at": "2026-11-04T19:58:13.142Z",
@@ -68,6 +68,55 @@
         "executor": "codex:reviewer",
         "base": "78da1151863e",
         "note": "cross-provider review r1"
+      }
+    },
+    {
+      "at": "2026-11-04T20:36:21.622Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:36:27.037Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:36:27.365Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "78da1151863e",
+        "note": "fix round 1"
+      }
+    },
+    {
+      "at": "2026-11-04T20:40:02.964Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:40:03.840Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "78da1151863e",
+        "note": "scoped re-review r2"
       }
     }
   ],

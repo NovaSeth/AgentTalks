@@ -18,7 +18,7 @@
       "at": "2026-11-04T19:59:34.387Z"
     }
   ],
-  "status": "dispatched",
+  "status": "done",
   "round": 3,
   "events": [
     {
@@ -216,8 +216,69 @@
         "base": "550d269269d0",
         "note": "fix round 3, fresh agent"
       }
+    },
+    {
+      "at": "2026-11-04T20:35:10.390Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 3
+      }
+    },
+    {
+      "at": "2026-11-04T20:35:10.600Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "550d269269d0",
+        "note": "scoped re-review r3"
+      }
+    },
+    {
+      "at": "2026-11-04T20:40:12.138Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:40:22.645Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "e1dc1a675775623129fed208853ef3ce50b33b6c",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:41:23.325Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "e1dc1a675775623129fed208853ef3ce50b33b6c"
+      }
+    },
+    {
+      "at": "2026-11-04T20:41:24.635Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "9c2f7d12ec6b7e3b2fc1387f3c0f198fff93d404",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "31eb6bc211c14807bfb210d2052f5e1b849da7e4"
+      }
     }
   ],
   "base": "550d269269d01a638a3eff95cc7c61d612c8025c",
-  "branch": "task/T-MG-44-unread-highlight"
+  "branch": "task/T-MG-44-unread-highlight",
+  "mergedAt": "2026-11-04T20:41:24.635Z"
 }

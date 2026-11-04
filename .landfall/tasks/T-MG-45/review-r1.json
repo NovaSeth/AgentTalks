@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/scripts/wake-tools.mjs",
+      "line": 186,
+      "rule": "REV-2",
+      "text": "Acceptance 1 fails in a direct-handler test: IDs 100..149, 1,000-char bodies except ID 149 (60,000). read_conversation({conversation_id:3,limit:50}) returns 140..149 and before=140; following with {conversation_id:3,before:140} returns 120..139 without a cursor, leaving 20 requested messages unseen. The default limit hides remaining rows. Preserve pagination state or emit a cursor for full API pages; add mixed-size tests that follow the printed cursor."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/scripts/wake-tools.mjs",
+      "line": 182,
+      "rule": "REV-2",
+      "text": "Acceptance 1: with one 60,000-char message ending END-MARKER, direct calls to read_conversation({conversation_id:3,around:100,limit:1}) and read_thread({message_id:100}) produced tailPresent=false,cursor=false (base: tailPresent=true). Reusing frameItem/budgeted discards the body after roughly 40,000 chars; the REST fallback is unavailable to wake runs. Add a supported continuation for the omitted body within the existing tool set and total budget."
+    }
+  ],
+  "run": "codex-T-MG-45-reviewer-1",
+  "sha256": "d444ce3402ade7bdcdae5b4f00e99e1f74658c3aefa3d3465ac48d1518b97a0b"
+}
