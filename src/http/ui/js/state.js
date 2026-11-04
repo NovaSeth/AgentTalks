@@ -426,17 +426,21 @@ export function persistUnsent(convId, done = []) {
   const owner = storageOwner();
   if (owner == null) return;               // no known account: writing an unattributed entry would leak it
   const gone = new Set(done);
-  try {
-    for (const p of state.pending[convId] || []) {
-      if (!p.clientMsgId || gone.has(p.clientMsgId)) continue;
+  // Removals first and every write on its own: a full storage refusing one write must neither
+  // keep a sent message stored (it would come back as "not sent") nor stop the other writes.
+  for (const id of gone) {
+    try { localStorage.removeItem(UNSENT_KEY(owner, convId, id)); } catch { /* unavailable */ }
+  }
+  for (const p of state.pending[convId] || []) {
+    if (!p.clientMsgId || gone.has(p.clientMsgId)) continue;
+    try {
       localStorage.setItem(UNSENT_KEY(owner, convId, p.clientMsgId), JSON.stringify({
         clientMsgId: p.clientMsgId, body: p.body, threadId: p.threadId ?? null, ts: p.ts,
         // An in-flight entry has no error yet; if it comes back from storage, it was never confirmed.
         error: p.failed ? p.error || null : null,
       }));
-    }
-    for (const id of gone) localStorage.removeItem(UNSENT_KEY(owner, convId, id));
-  } catch { /* private browsing: the memory copy is all there is */ }
+    } catch { /* private browsing or full: the memory copy is all there is */ }
+  }
 }
 
 /** Teardown (a lost session): every entry becomes a failed one and is stored, so the same

@@ -227,6 +227,21 @@ test("F8: an r5 per-conversation list (atalks_unsent_<actor>_<conv>) is split in
   assert.deepEqual(unsentKeys(), ["atalks_unsent_2_5_r1", "atalks_unsent_2_5_r2"]);
 });
 
+test("F8: a full storage refusing one write still removes the sent message and writes the others", async () => {
+  const a = await tab(A);
+  a.state.pending[5] = [{ clientMsgId: "sent", body: "sent", ts: 1, failed: true }]; a.persistUnsent(5);
+  const setItem = storage.setItem;
+  storage.setItem = function (key: string, value: string) {
+    if (key.endsWith("_big")) throw new Error("QuotaExceededError");
+    return setItem.call(this, key, value);
+  };
+  try {
+    a.state.pending[5] = [{ clientMsgId: "big", body: "x", ts: 2, failed: true }, { clientMsgId: "small", body: "y", ts: 3, failed: true }];
+    a.persistUnsent(5, ["sent"]);
+  } finally { storage.setItem = setItem; }
+  assert.deepEqual(unsentKeys(), ["atalks_unsent_1_5_small"], "the sent one is gone, the refused one is only in memory");
+});
+
 test("F8: a sign-out removes only this account's message keys", async () => {
   const a = await tab(A);
   const b = await tab(B);
