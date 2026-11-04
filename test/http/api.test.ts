@@ -1247,7 +1247,7 @@ test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () 
  *measurement on #bugs [164]: the same fingerprint, sizes 14,402 B and 14,613 B.
  */
 test("odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje", async () => {
-  const s = await startTestServer({ sitePassword: "haslo-bramki", trustProxy: true });
+  const s = await startTestServer({ sitePassword: "haslo-bramki", trustProxy: true }); // SYNTH
   try {
     const { createHash } = await import("node:crypto");
     const skrot = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 16);
