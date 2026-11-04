@@ -5,7 +5,7 @@ import { claimLease, releaseLease, startDirect } from "./actions.js";
 import { api, csrf } from "./api.js";
 import { ensureActors, refreshDigestAndLeases } from "./data.js";
 import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
-import { iconCheck, iconChevron, iconDesktop, iconDigest, iconDoc, iconLock, iconMoon, iconOut, iconQuestion, iconSearch, iconSun } from "./icons.js";
+import { iconCheck, iconChevron, iconDesktop, iconDigest, iconDoc, iconLock, iconMoon, iconQuestion, iconSearch, iconSun } from "./icons.js";
 import { msg, t } from "./i18n.js";
 import { THEMES, currentTheme, setTheme } from "./theme.js";
 import { mdToHtml } from "./markdown.js";
@@ -36,6 +36,62 @@ let archiveOpen = (() => {
   try { return localStorage.getItem("atalks_arch_open") === "1"; } catch { return false; }
 })();
 
+// ------------------------------------------------- sections, places, collapse (S1)
+// The sidebar is a list of SECTIONS; the rail picks a PLACE, which is a subset of them.
+// Home shows everything, DMs narrows the list to direct conversations and people.
+const SECTIONS_HOME = ["catchup", "channels", "discover", "directs", "people", "wiki", "leases"];
+const SECTIONS_DMS = ["directs", "people"];
+let sidebarPlace = "home";
+
+export function sectionsFor(place) { return place === "dms" ? SECTIONS_DMS : SECTIONS_HOME; }
+export function getSidebarPlace() { return sidebarPlace; }
+export function setSidebarPlace(place) { sidebarPlace = place === "dms" ? "dms" : "home"; }
+
+// Which sections are folded is remembered per browser under ONE key, as an object of
+// `sectionId -> true`; absent means open. Only `true` is kept so the stored object never grows
+// with stale `false` entries.
+const SB_COLLAPSED_KEY = "atalks_sb_collapsed";
+
+export function collapsedFromStorage(storage) {
+  try {
+    const raw = storage.getItem(SB_COLLAPSED_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out = {};
+    for (const [id, closed] of Object.entries(parsed)) if (closed === true) out[id] = true;
+    return out;
+  } catch { return {}; }
+}
+
+// The module keeps the truth: `resetState()` (login, a lost session) replaces `state.sbCollapsed`
+// with an empty object, and a fold that vanished on every sign-in would read as a bug. The state
+// field is a MIRROR, refreshed by `syncCollapsed()` before each render, so the shared vocabulary
+// (`state.sbCollapsed[sectionId]`) stays true for everybody else.
+const collapsed = collapsedFromStorage(
+  typeof localStorage !== "undefined" ? localStorage : { getItem: () => null });
+
+function syncCollapsed() {
+  for (const id of Object.keys(state.sbCollapsed)) if (!collapsed[id]) delete state.sbCollapsed[id];
+  Object.assign(state.sbCollapsed, collapsed);
+}
+syncCollapsed();
+
+export function setSectionCollapsed(id, isCollapsed) {
+  if (isCollapsed) collapsed[id] = true; else delete collapsed[id];
+  syncCollapsed();
+  try { localStorage.setItem(SB_COLLAPSED_KEY, JSON.stringify(collapsed)); } catch { /* private browsing */ }
+}
+
+/** The rows a section shows. Open: all of them. Collapsed: only the UNREAD ones and the active
+ *  one, so folding a section never hides what is calling for attention or where you are.
+ *  Rows are keyed by `id` (conversations) or `slug` (wiki pages); `unread` maps key -> count. */
+export function visibleRows(section, rows, collapsed, activeId, unread) {
+  if (!collapsed) return rows;
+  const key = (r) => r.id ?? r.slug;
+  return rows.filter((r) => (unread?.[key(r)] || 0) > 0 || (activeId != null && key(r) === activeId));
+}
+
 // ------------------------------------------------------------- sidebar
 export function renderSidebar() {
   const el = document.getElementById("sidebar");
@@ -43,28 +99,27 @@ export function renderSidebar() {
   // refresh regardless of what the user has open. Without this guard the first message arriving
   // while notifications were open blew up the whole render on `el.innerHTML` of `null`.
   if (!el) return;
+  // The header is the WORKSPACE row: its name and the account avatar, with the help mark between
+  // them. Sign out and the language live in the account menu, not as a second row of icons;
+  // the search box stands on its own line underneath, where a full-width field can carry a label.
+  const me = escapeHtml(state.actor.handle);
   el.innerHTML = `
     <div class="sb-head">
-      <div class="who">
-        <button class="me" id="btn-avatar" title="${t("Account menu")}" aria-label="${t("Account menu")}"
-          aria-haspopup="menu" aria-expanded="false">
-          ${avatarHtml(state.actor.handle, 24)}<span class="mename">@${escapeHtml(state.actor.handle)}</span>
-        </button>
-      </div>
-      <button class="iconbtn" id="btn-search" aria-label="${t("Search and switch conversation (Cmd+K)")}" title="${t("Search (Cmd+K)")}">${iconSearch()}</button>
+      <div class="sb-ws" title="AgentTalks"><span class="sb-ws-name">AgentTalks</span></div>
       <button class="iconbtn" id="btn-guidelines" aria-label="${t("How we talk here")}" title="${t("How we talk here")}">${iconQuestion()}</button>
-      <button class="iconbtn" id="btn-logout" aria-label="${t("Sign out")}" title="${t("Sign out")}">${iconOut()}</button>
-      ${langSwitchHtml("sb-lang")}
+      <button class="me" id="btn-avatar" title="@${me} - ${t("Account menu")}" aria-label="${t("Account menu")}: @${me}"
+        aria-haspopup="menu" aria-expanded="false">${avatarHtml(state.actor.handle, 28)}</button>
     </div>
+    <button class="sb-searchbox" id="btn-search" aria-label="${t("Search and switch conversation (Cmd+K)")}" title="${t("Search (Cmd+K)")}">
+      ${iconSearch()}<span class="sb-search-l">${t("Search")}</span><kbd aria-hidden="true">Cmd+K</kbd>
+    </button>
     <div class="sb-scroll" id="sb-scroll"></div>
     <div class="sb-foot" id="sb-foot">
       <span id="sb-ui" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}"></span>
     </div>`;
   document.getElementById("btn-avatar").addEventListener("click", (e) => openAccountMenu(e.currentTarget));
-  document.getElementById("btn-logout").addEventListener("click", doLogout);
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
-  bindLangSwitch("sb-lang");
   // The UI version: what the user sees against what the server sends. A mismatch means a cache
   // somewhere along the way - and this is the only way to see it.
   const foot = document.getElementById("sb-ui");
@@ -205,9 +260,10 @@ export function renderSidebarList() {
 
   // The wiki is a tree: a parent page plays the role of a directory. Collapsed branches are
   // remembered per browser; the badge on a collapsed parent sums its subtree.
-  const wikiTreeHtml = () => {
+  const wikiTreeHtml = (sectionClosed) => {
     const pages = state.wiki.pages;
     if (!pages.length) {
+      if (sectionClosed) return "";
       return sidebarEmptyHtml(t("Nothing here yet. The wiki is shared memory - agents read it before they ask."),
         { id: "sb-new-wiki", label: t("Create the first page") });
     }
@@ -227,9 +283,10 @@ export function renderSidebarList() {
     // not allowed in HTML, cannot be reached with Tab (Enter on the row always opened the page),
     // and a 16 px touch target lying inside another target is not saved even by the spacing
     // exception in WCAG 2.5.8.
-    const row = (p, depth) => {
+    // `flat` draws the page alone, without its twist or its subtree: the folded-section list.
+    const row = (p, depth, flat = false) => {
       const active = state.view === "wiki" && state.wiki.slug === p.slug;
-      const hasKids = kids.has(p.slug);
+      const hasKids = !flat && kids.has(p.slug);
       const closed = hasKids && wikiCollapsed.has(p.slug);
       const unseen = (p.unseen || 0) + (closed ? subtreeUnseen(p.slug) : 0);
       const title = escapeHtml(p.title || p.slug);
@@ -249,6 +306,12 @@ export function renderSidebarList() {
       ${hasKids && !closed ? level(p.slug, depth + 1) : ""}`;
     };
     const level = (key, depth) => (kids.get(key) || []).map((p) => row(p, depth)).join("");
+    if (sectionClosed) {
+      // A folded Wiki keeps the pages with unseen changes and the open one, as a flat list.
+      const unseen = Object.fromEntries(pages.map((p) => [p.slug, p.unseen || 0]));
+      const active = state.view === "wiki" ? state.wiki.slug : null;
+      return visibleRows("wiki", pages, true, active, unseen).map((p) => row(p, 0, true)).join("");
+    }
     return level("", 0);
   };
 
@@ -265,10 +328,33 @@ export function renderSidebarList() {
   // Open questions and the digest went into ONE section: they spoke about the same thing in
   // three languages, in three places, with three counters.
   const hasCatchUp = openCount > 0 || (state.digest && state.digest.count > 0);
-  el.innerHTML = `
-    ${hasCatchUp ? `
-    <div class="sb-group">
-      <h3>${t("To catch up on")}</h3>
+
+  // Every section header is a BUTTON with a caret (S1): a click folds the section, the state
+  // survives a reload, and a folded section still lists its unread rows and the active one.
+  // The header is an <h3> for the outline; the toggle inside it carries aria-expanded and points
+  // at the body it controls. The "+" stays a sibling of the toggle, never inside it.
+  syncCollapsed();
+  const isClosed = (id) => !!state.sbCollapsed[id];
+  const head = (id, label, extra = "", attrs = "") => `
+      <h3${attrs}>
+        <button class="sb-toggle" data-section="${id}" aria-expanded="${isClosed(id) ? "false" : "true"}" aria-controls="sb-sec-${id}">
+          <span class="sb-caret${isClosed(id) ? " closed" : ""}" aria-hidden="true">${iconChevron()}</span>
+          <span class="sb-label">${label}</span>
+        </button>${extra}
+      </h3>`;
+  const group = (id, label, body, { extra = "", attrs = "", cls = "" } = {}) => `
+    <div class="sb-group${cls ? ` ${cls}` : ""}${isClosed(id) ? " closed" : ""}" data-group="${id}">
+      ${head(id, label, extra, attrs)}
+      ${body ? `<div class="sb-body" id="sb-sec-${id}">${body}</div>` : ""}
+    </div>`;
+  const convRows = (id, list, emptyHtml) => {
+    const shown = visibleRows(id, list, isClosed(id), state.view === "chat" ? state.activeId : null, state.unread);
+    if (shown.length) return shown.map(row).join("");
+    return isClosed(id) ? "" : emptyHtml;
+  };
+
+  const sections = {
+    catchup: () => hasCatchUp ? group("catchup", t("To catch up on"), isClosed("catchup") ? "" : `
       ${state.digest && state.digest.count > 0 ? `
       <button class="conv" id="btn-digest">
         <span class="pre">${iconDigest()}</span><span class="nm">${t("What happened while you were away")}</span>
@@ -278,31 +364,19 @@ export function renderSidebarList() {
       <button class="conv qcount" id="btn-questions">
         <span class="pre">?</span><span class="nm">${t("Questions waiting for an answer")}</span>
         <span class="badge coral">${openCount}</span>
-      </button>` : ""}
-    </div>` : ""}
-    <div class="sb-group">
-      <h3>${t("Channels")} ${plus("channel", t("New channel"))}</h3>
-      ${channels.map(row).join("") || sidebarEmptyHtml(t("You are not on any channel yet."),
-        { id: "sb-new-chan", label: t("Create a channel") })}
-    </div>
-    ${discoverable.length ? `<div class="sb-group discover">
-      <h3>${t("Channels you can join")}</h3>${discoverable.map(row).join("")}</div>` : ""}
-    <div class="sb-group">
-      <h3>${t("Direct conversations")} ${plus("dm", t("New direct conversation"))}</h3>
-      ${directs.map(row).join("") || sidebarEmptyHtml(t("You are not talking to anybody in private yet."),
-        { id: "sb-new-dm", label: t("Write to somebody") })}
-    </div>
-    <div class="sb-group">
-      <h3>${t("Who is here")}</h3>
-      ${peopleHtml()}
-    </div>
-    <div class="sb-group">
-      <h3>${t("Wiki")} ${plus("wiki", t("New wiki page"))}</h3>
-      ${wikiTreeHtml()}
-    </div>
-    <div class="sb-group">
-      <h3 title="${t("Before anyone touches something shared (a deployment, a migration, a configuration file), they claim it here. Everybody else sees it is taken and waits - instead of walking into the same thing at the same time.")}">${t("Claimed resources")} ${plus("lease", t("Claim a resource"))}</h3>
-      ${state.leases.length ? state.leases.map((l) => {
+      </button>` : ""}`) : "",
+    channels: () => group("channels", t("Channels"),
+      convRows("channels", channels, sidebarEmptyHtml(t("You are not on any channel yet."), { id: "sb-new-chan", label: t("Create a channel") })),
+      { extra: plus("channel", t("New channel")) }),
+    discover: () => discoverable.length
+      ? group("discover", t("Channels you can join"), convRows("discover", discoverable, ""), { cls: "discover" })
+      : "",
+    directs: () => group("directs", t("Direct conversations"),
+      convRows("directs", directs, sidebarEmptyHtml(t("You are not talking to anybody in private yet."), { id: "sb-new-dm", label: t("Write to somebody") })),
+      { extra: plus("dm", t("New direct conversation")) }),
+    people: () => group("people", t("Who is here"), isClosed("people") ? "" : peopleHtml()),
+    wiki: () => group("wiki", t("Wiki"), wikiTreeHtml(isClosed("wiki")), { extra: plus("wiki", t("New wiki page")) }),
+    leases: () => group("leases", t("Claimed resources"), isClosed("leases") ? "" : (state.leases.length ? state.leases.map((l) => {
         const mine = l.handle === state.actor.handle;
         return `
       <div class="lease-row" title="${t("“{resource}” is held by @{handle}{note}. It releases itself in {left}.", { resource: escapeHtml(l.resource), handle: escapeHtml(l.handle), note: l.note ? ` - ${escapeHtml(l.note)}` : "", left: leaseCountdown(l.expiresAt) })}">
@@ -313,9 +387,12 @@ export function renderSidebarList() {
           aria-label="${t("Release {resource}", { resource: escapeHtml(l.resource) })}" title="${t("Release - others will be able to touch it")}">${t("Release")}</button>` : ""}
       </div>`;
       }).join("") : sidebarEmptyHtml(t("Nobody is blocking anything right now."),
-        { id: "sb-new-lease", label: t("Claim a resource") })}
-    </div>
-  `;
+        { id: "sb-new-lease", label: t("Claim a resource") })),
+      { extra: plus("lease", t("Claim a resource")),
+        attrs: ` title="${t("Before anyone touches something shared (a deployment, a migration, a configuration file), they claim it here. Everybody else sees it is taken and waits - instead of walking into the same thing at the same time.")}"` }),
+  };
+  // The rail's place decides which sections are drawn: Home shows all, DMs only the direct ones.
+  el.innerHTML = sectionsFor(sidebarPlace).map((id) => sections[id]()).join("");
   el.scrollTop = scrollTop;
   el.querySelectorAll("[data-person]").forEach((b) =>
     b.addEventListener("click", () => startDirect(b.dataset.person)));
@@ -346,6 +423,15 @@ export function renderSidebarList() {
       if (wikiCollapsed.has(slug)) wikiCollapsed.delete(slug); else wikiCollapsed.add(slug);
       try { localStorage.setItem("atalks_wiki_collapsed", JSON.stringify([...wikiCollapsed])); } catch { /* ok */ }
       renderSidebarList();
+    }));
+  el.querySelectorAll("[data-section]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const id = b.dataset.section;
+      setSectionCollapsed(id, !state.sbCollapsed[id]);
+      renderSidebarList();
+      // The list is rebuilt, so the focus goes back to the SAME header: keyboard users keep
+      // their place and can toggle again with Enter or Space.
+      el.querySelector(`[data-section="${id}"]`)?.focus();
     }));
   el.querySelectorAll("[data-new]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -514,8 +600,14 @@ function openAccountMenu(anchor) {
       </button>`).join("")}
     </div>
     <div class="mm-sep" role="separator"></div>
+    <div class="mm-head" id="am-lang-head">${escapeHtml(t("Interface language"))}</div>
+    <div class="mm-lang">${langSwitchHtml("am-lang")}</div>
+    <div class="mm-sep" role="separator"></div>
     <button role="menuitem" data-mact="logout" class="danger"><span class="mm-l">${escapeHtml(t("Sign out"))}</span></button>`;
   document.body.appendChild(pop);
+  // The language switch moved here from the sidebar header (S1). Changing the language redraws
+  // the whole shell, so the menu closes with it instead of floating over a new header.
+  bindLangSwitch("am-lang");
   anchor.setAttribute("aria-expanded", "true");
   const rect = anchor.getBoundingClientRect();
   pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
@@ -530,6 +622,7 @@ function openAccountMenu(anchor) {
   const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
   const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
   pop.addEventListener("click", (e) => {
+    if (e.target.closest("[data-lang]")) { close(); return; }
     const th = e.target.closest("[data-theme]");
     if (th && THEMES.includes(th.dataset.theme)) {
       setTheme(th.dataset.theme);

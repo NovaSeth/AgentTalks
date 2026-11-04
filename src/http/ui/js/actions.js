@@ -3,7 +3,7 @@
  * deleting. Drawing goes through the `views` registry.
  */
 import { api } from "./api.js";
-import { loadConversationsList, mySessionId, refreshQuestions } from "./data.js";
+import { loadConversationsList, markReadDebounced, mySessionId, refreshQuestions } from "./data.js";
 import { iconCheck } from "./icons.js";
 import { t } from "./i18n.js";
 import { clearDraft, findMsgById, saveDraft, state, upsertMessage, views } from "./state.js";
@@ -227,6 +227,9 @@ export async function joinChannel(id, btn) {
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`; }
     await api("POST", `/api/conversations/${id}/join`, {});
     if (btn) btn.innerHTML = iconCheck();
+    // Joining IS reading: the history was there before you came, so the row must not light up
+    // as unread the moment you join (S7).
+    markReadDebounced(id);
     await loadConversationsList();
     setTimeout(() => { views.sidebar(); views.main(); }, 350);
   } catch (e) { showError(e); if (btn) { btn.disabled = false; btn.textContent = t("Join"); } }

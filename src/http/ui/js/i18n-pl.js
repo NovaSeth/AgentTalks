@@ -765,12 +765,20 @@ export const PL = {
 
   // T-MG-3 slice blocks: each slice adds its sentences ONLY inside its own marker.
   // === S1 ===
+  "Search": "Szukaj",
+  "Home": "Start",
+  "Direct messages": "Wiadomości prywatne",
+  "DMs": "DM",
+  "Activity": "Aktywność",
+  "Admin": "Admin",
   // === S2 ===
+  "Side panel": "Panel boczny",
   // === S3 ===
   // === S4 ===
   // === S5 ===
   // === S6 ===
   // === S7 ===
+  "Your session ended, your draft is kept": "Twoja sesja wygasła, szkic jest zachowany",
   // === S8 ===
   // === S9 ===
   // === S10 ===

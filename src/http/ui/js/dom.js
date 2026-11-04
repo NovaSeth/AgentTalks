@@ -1,6 +1,7 @@
 /**
  * DOM helpers: HTML escaping, avatars, time formats, modal window, drawer.
  */
+import { badgeText, titleCount } from "./counters.js";
 import { iconMenu } from "./icons.js";
 import { locale, t } from "./i18n.js";
 import { avatarUrl, state } from "./state.js";
@@ -47,10 +48,9 @@ export function announce(text) {
  *  Only notifications with no counterpart in the conversation counters are
  *  added - that is, wiki page changes. */
 export function updateTitleBadge() {
-  const conversations = Object.values(state.unread).reduce((n, v) => n + (v || 0), 0);
-  const wiki = (state.notifications || []).filter((n) => !n.readAt && n.wikiSlug).length;
-  const total = conversations + wiki;
-  document.title = total > 0 ? `(${total > 99 ? "99+" : total}) AgentTalks` : "AgentTalks";
+  // One derivation (counters.js) for the title, the badges and the divider - S7.
+  const total = titleCount(state);
+  document.title = total > 0 ? `(${badgeText(total)}) AgentTalks` : "AgentTalks";
 }
 
 const PALETTE = ["#3b5ce0", "#ff6b3d", "#1fae7a", "#a45ee5", "#e0466b", "#0ea5c4", "#c98a1f", "#5c6bc0"];

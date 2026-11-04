@@ -15,7 +15,7 @@ import {
 } from "./data.js";
 import { $app, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
-import { iconBell, iconChat, iconUsers } from "./icons.js";
+import { iconBell, iconChat, iconSend, iconUsers } from "./icons.js";
 import { lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { showToast } from "./toasts.js";
 import { openSearchPalette } from "./search.js";
@@ -27,7 +27,7 @@ import {
 } from "./view-chat.js";
 import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./view-login.js";
 import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./view-notifications.js";
-import { renderSidebar, renderSidebarList, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
+import { getSidebarPlace, renderSidebar, renderSidebarList, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { connectSSE, ensureSSE } from "./sse-events.js";
 
@@ -49,52 +49,80 @@ function renderShell() {
   // unconditionally, and it took a third of the screen width for a list that leads
   // nowhere in that view (reported by @michal).
   const withSidebar = state.view === "chat" || state.view === "wiki";
+  // The DMs place counts every unread message in a direct or group conversation I belong to.
+  const dmUnread = state.conversations
+    .filter((c) => state.memberships[c.id] && (c.kind === "dm" || c.kind === "group"))
+    .reduce((n, c) => n + (state.unread[c.id] || 0), 0);
   $app.innerHTML = `
     <div class="shell with-rail ${withSidebar ? "" : "without-sidebar"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
       <div class="scrim" id="scrim"></div>
       <nav class="rail" id="rail" aria-label="${t("Main navigation")}">
-        <button class="rail-btn ${state.view === "notifications" ? "on" : ""}" id="rail-notif"
-          ${state.view === "notifications" ? `aria-current="page"` : ""}
-          aria-label="${t("Notifications")}${state.notifUnread ? `, ${t("{n} new", { n: state.notifUnread })}` : ""}"
-          title="${t("Notifications: mentions, direct messages, reactions, changes to your wiki pages")}">
-          ${iconBell()}
-          <span class="rail-badge ${state.notifUnread ? "" : "off"}" id="rail-badge" aria-hidden="true">${state.notifUnread > 99 ? "99+" : state.notifUnread}</span>
-        </button>
-        <button class="rail-btn ${state.view === "chat" || state.view === "wiki" ? "on" : ""}" id="rail-chats"
-          ${state.view === "chat" || state.view === "wiki" ? `aria-current="page"` : ""}
-          aria-label="${t("Conversations and wiki")}" title="${t("Conversations and wiki")}">${iconChat()}</button>
-        ${adminHuman ? `
-        <button class="rail-btn ${state.view === "users" ? "on" : ""}" id="rail-users"
-          ${state.view === "users" ? `aria-current="page"` : ""}
-          aria-label="${t("Accounts and access")}" title="${t("Accounts and access")}">${iconUsers()}</button>` : ""}
+        ${railButton("rail-chats", t("Home"), t("Conversations and wiki"), iconChat(), withSidebar && getSidebarPlace() === "home")}
+        ${railButton("rail-dms", t("DMs"), t("Direct messages"), iconSend(), withSidebar && getSidebarPlace() === "dms",
+          { id: "rail-dm-badge", count: dmUnread, label: t("{n} unread", { n: dmUnread }) }, t("Direct messages"))}
+        ${railButton("rail-notif", t("Activity"), t("Notifications: mentions, direct messages, reactions, changes to your wiki pages"), iconBell(), state.view === "notifications",
+          { id: "rail-badge", count: state.notifUnread, label: t("{n} new", { n: state.notifUnread }) })}
+        ${adminHuman ? railButton("rail-users", t("Admin"), t("Accounts and access"), iconUsers(), state.view === "users") : ""}
       </nav>
       ${withSidebar ? `<aside class="sidebar" id="sidebar" aria-label="${t("Channels, messages and wiki")}"></aside>` : ""}
       <main class="main" id="main"></main>
     </div>`;
   document.getElementById("scrim").addEventListener("click", () => { state.drawerOpen = false; toggleDrawerClass(); });
   document.getElementById("rail-notif").addEventListener("click", openNotificationsView);
-  document.getElementById("rail-chats").addEventListener("click", () => {
-    resetUsersError();
-    if (state.view === "chat") {
-      // On a phone the drawer is the only route to the list, so a click toggles it.
-      // On the desktop the list is always visible and the click did NOTHING - while
-      // the icon looked clickable. We scroll the list to the top: that is the
-      // equivalent of "back to the beginning", which is what people look for here.
-      if (window.matchMedia("(max-width:760px)").matches) {
-        state.drawerOpen = !state.drawerOpen;
-        toggleDrawerClass();
-      } else {
-        document.getElementById("sb-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
-      }
-      return;
-    }
-    state.view = "chat";
-    renderShell();
-  });
+  document.getElementById("rail-chats").addEventListener("click", () => goPlace("home"));
+  document.getElementById("rail-dms").addEventListener("click", () => goPlace("dms"));
   const ru = document.getElementById("rail-users");
   if (ru) ru.addEventListener("click", openUsersView);
   if (withSidebar) renderSidebar();
   renderMain();
+}
+
+/** One rail button: icon, a short label underneath, and (when given) a count badge on the icon.
+ *  The badge hides at zero - an alarm that never stops teaches people to ignore it. */
+function railButton(id, label, title, icon, on, badge, ariaName = label) {
+  const count = badge?.count || 0;
+  return `
+        <button class="rail-btn ${on ? "on" : ""}" id="${id}" ${on ? `aria-current="page"` : ""}
+          aria-label="${ariaName}${count ? `, ${badge.label}` : ""}" title="${title}">
+          <span class="rail-ico">${icon}${badge ? `<span class="rail-badge ${count ? "" : "off"}" id="${badge.id}" aria-hidden="true">${count > 99 ? "99+" : count}</span>` : ""}</span>
+          <span class="rail-l">${label}</span>
+        </button>`;
+}
+
+/** Home and DMs are two PLACES of the same sidebar: Home shows every section, DMs narrows it to
+ *  direct conversations and people. Picking a place from another view returns to the chat. */
+function goPlace(place) {
+  resetUsersError();
+  const withSidebar = state.view === "chat" || state.view === "wiki";
+  const samePlace = getSidebarPlace() === place;
+  setSidebarPlace(place);
+  if (!withSidebar) { state.view = "chat"; renderShell(); return; }
+  if (window.matchMedia("(max-width:760px)").matches) {
+    // On a phone the drawer is the only route to the list: the same place toggles it,
+    // another place opens it with the new filter.
+    state.drawerOpen = samePlace ? !state.drawerOpen : true;
+    toggleDrawerClass();
+    if (samePlace) return;
+  } else if (samePlace) {
+    // On the desktop the list is always visible and a click on the place you are already in
+    // scrolls the list to the top: "back to the beginning", which is what people look for here.
+    document.getElementById("sb-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  paintRail();
+  renderSidebarList();
+}
+
+/** The `on` state of the two places without redrawing the whole shell. */
+function paintRail() {
+  const withSidebar = state.view === "chat" || state.view === "wiki";
+  for (const [id, place] of [["rail-chats", "home"], ["rail-dms", "dms"]]) {
+    const b = document.getElementById(id);
+    if (!b) continue;
+    const on = withSidebar && getSidebarPlace() === place;
+    b.classList.toggle("on", on);
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  }
 }
 
 // ----------------------------------------------------------- view registration

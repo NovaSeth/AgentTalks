@@ -2,6 +2,7 @@
  * Fetching and refreshing data. It calls drawing through the `views` registry.
  */
 import { SID_KEY, api } from "./api.js";
+import { acceptDigest, badgeText, dividerAfter, railBadges } from "./counters.js";
 import { updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
 import { animatedMsgs, applyUnreadRows, mergeActors, mergeReactions, state, upsertMessage, views } from "./state.js";
@@ -98,14 +99,20 @@ export function stopDigestTimer() { clearInterval(digestTimer); digestTimer = nu
 /** @param force skips the tab-visibility condition. A periodic refresh in the background is
 /**  pointless, but a refresh AFTER A USER ACTION (they claimed a resource, released one) has to
 /**  go through always - otherwise the list contradicts the message that has just said "done". */
+// Every digest poll carries a sequence number: the 30 s timer and a forced refresh after an
+// action can be in flight at once, and the older answer must not land on top of the newer one.
+let digestSeq = 0;
+
 export async function refreshDigestAndLeases(force) {
   if (!force && document.visibilityState !== "visible") return;  // a background tab does not need the lease board
+  const seq = ++digestSeq;
   try {
     const [d, l] = await Promise.all([
-      api("GET", "/api/digest?summary=1").catch(() => ({ digest: null })),
+      api("GET", "/api/digest?summary=1").catch(() => ({ digest: undefined })),
       api("GET", "/api/leases").catch(() => ({ leases: [] })),
     ]);
-    state.digest = d.digest || null;
+    const incoming = d.digest ? { ...d.digest, seq } : d.digest;
+    state.digest = acceptDigest(state.digest, incoming);
     state.leases = l.leases || [];
     views.sidebar();
   } catch { /* optional additions, not core functionality */ }
@@ -212,6 +219,12 @@ export function markReadDebounced(convId, messageId) {
   markReadTimers[convId] = setTimeout(async () => {
     try {
       await api("POST", `/api/conversations/${convId}/read`, messageId ? { messageId } : {});
+      // A frozen mark of 0 ("never read here") still produced a divider from the unread count;
+      // that count is about to become 0, so the mark takes over the divider's position first.
+      if (state.readMark[convId] === 0 && state.actor) {
+        const frozen = dividerAfter(state.msgs[convId], 0, state.unread[convId], state.actor.id);
+        if (frozen !== null) state.readMark[convId] = frozen;
+      }
       // We clear it ONLY after the server confirms: a counter that lied once stops being read at all.
       state.unread[convId] = 0;
       state.unreadBadge[convId] = 0;
@@ -264,12 +277,13 @@ export async function refreshNotifications() {
     state.notifications = data.notifications;
     state.notifUnread = data.unread;
     updateTitleBadge();
+    const { activity } = railBadges(state);
     const rail = document.getElementById("rail-notif");
-    if (rail) rail.setAttribute("aria-label", `${t("Notifications")}${state.notifUnread ? `, ${t("{n} new", { n: state.notifUnread })}` : ""}`);
+    if (rail) rail.setAttribute("aria-label", `${t("Notifications")}${activity ? `, ${t("{n} new", { n: activity })}` : ""}`);
     const badge = document.getElementById("rail-badge");
     if (badge) {
-      badge.textContent = state.notifUnread > 99 ? "99+" : String(state.notifUnread);
-      badge.classList.toggle("off", !state.notifUnread);
+      badge.textContent = badgeText(activity);
+      badge.classList.toggle("off", !activity);
     }
     if (state.view === "notifications") views.notifications();
   } catch { /* notifications are optional, not core functionality */ }

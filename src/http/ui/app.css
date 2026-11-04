@@ -978,7 +978,74 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 
 /* ============ T-MG-3 slice blocks (each slice writes ONLY inside its own marker) ============ */
 /* === S1 === */
+/* Sidebar header = the workspace row: name, help mark, account avatar. Sign out and the
+   language switch moved into the account menu, so the row has room for the name. */
+.sb-head{gap:var(--base-size-8);padding:0 var(--base-size-12)}
+.sb-head .sb-ws{min-width:0;flex:1;display:flex;align-items:center;overflow:hidden}
+.sb-head .sb-ws-name{font-family:var(--round);font-weight:var(--base-text-weight-semibold);font-size:var(--text-title-size-small);
+  color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-head .me{flex:0 0 auto;padding:var(--base-size-4);border-radius:var(--radius-full)}
+/* The search box is a full-width, field-shaped button under the header; it opens the switcher. */
+.sb-searchbox{display:flex;align-items:center;gap:var(--base-size-8);flex:0 0 auto;
+  margin:var(--base-size-8) var(--base-size-12) 0;padding:0 var(--base-size-8);height:var(--control-small-size);
+  border:var(--border) solid var(--line);border-radius:var(--radius-sm);background:var(--surface);
+  color:var(--muted);font-size:var(--text-body-size-medium);text-align:left}
+.sb-searchbox:hover{border-color:var(--faint-line);color:var(--ink)}
+.sb-searchbox .octicon{flex:0 0 auto}
+.sb-searchbox .sb-search-l{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-searchbox kbd{font-family:var(--mono);font-size:var(--text-caption-size);line-height:var(--text-caption-lineHeight);
+  color:var(--faint);border:var(--border) solid var(--line);border-radius:var(--radius-xs);padding:0 var(--base-size-4)}
+/* Every section header is a button with a caret; the caret points right when folded. The "+"
+   beside it keeps its own small square from the rule above, so only the toggle is reset here. */
+.sb-group h3 .sb-toggle{flex:1;min-width:0;width:auto;height:auto;display:flex;align-items:center;gap:var(--base-size-4);
+  padding:var(--base-size-4);margin-left:calc(-1 * var(--base-size-4));border-radius:var(--radius-sm);color:var(--faint);
+  font:inherit;text-transform:inherit;letter-spacing:inherit;text-align:left}
+.sb-group h3 .sb-toggle:hover{color:var(--ink);background:var(--surface-2)}
+.sb-group h3 .sb-caret{display:inline-flex;flex:0 0 auto;transform:rotate(90deg);transition:transform .15s}
+.sb-group h3 .sb-caret.closed{transform:none}
+.sb-group h3 .sb-caret .octicon{width:var(--base-size-12);height:var(--base-size-12)}
+.sb-group h3 .sb-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-group.closed{margin-top:var(--base-size-4)}
+@media (prefers-reduced-motion:reduce){.sb-group h3 .sb-caret{transition:none}}
+/* Rail places: the icon with a short label underneath; the badge sits on the icon. */
+.rail-btn{width:100%;height:auto;padding:var(--base-size-4) 0;border-radius:var(--radius-sm);
+  display:flex;flex-direction:column;align-items:center;gap:0}
+.rail-btn .rail-ico{position:relative;display:grid;place-items:center;width:var(--base-size-32);height:var(--base-size-28)}
+.rail-btn .rail-ico .rail-badge{top:calc(-1 * var(--base-size-4));right:calc(-1 * var(--base-size-4))}
+/* The label is a step under caption size so the longest one (the Polish label for Activity) fits the
+   3.4rem rail column; widening the column is a shell-grid change, not S1's. */
+.rail-btn .rail-l{font-size:calc(var(--text-caption-size) * .9);line-height:var(--text-caption-lineHeight);
+  font-weight:var(--base-text-weight-medium);letter-spacing:-.02em;white-space:nowrap;max-width:100%;overflow:hidden}
+@media (max-width:760px){.rail-btn .rail-l{display:none}}
+/* The language switch inside the account menu. */
+.account-menu .mm-lang{padding:var(--base-size-4) var(--base-size-12) var(--base-size-8)}
+.account-menu .mm-lang .langsw{margin:0;justify-content:flex-start}
 /* === S2 === */
+/* Side panel (thread, details; later profile, pinned) and the join bar.
+   Below 1280 px the panel is the drawer it was: the slot is a zero-width anchor at the right edge
+   of the conversation and .thread keeps its absolute geometry. From 1280 px (D3; U2 fallback: change
+   the two queries below) the conversation becomes two grid columns, messages | panel, so a thread
+   never covers text and #btn-details stays in view. The chat view alone is re-laid: other views keep
+   .main's flex column, hence the :has(> .main-col) guard. */
+.main:has(> .main-col){display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+.main-col{display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}
+.side-panel{position:absolute;top:0;right:0;bottom:0;width:0;z-index:5}
+@media (min-width:1280px){
+  .main:has(> .main-col):has(.thread){grid-template-columns:minmax(0,1fr) var(--panel-w,380px)}
+  /* The panel takes the second column; so does a thread host that openThread appended straight
+     to #main (it does that when no host exists yet, without a full render). */
+  .side-panel:has(.thread), .main > #thread-slot, .main > #details-slot{grid-area:1/2;position:relative;
+    width:auto;min-width:0;min-height:0;display:flex;flex-direction:column;z-index:5;
+    border-left:var(--borderWidth-thin) solid var(--line);background:var(--surface)}
+  .side-panel > div{display:flex;flex-direction:column;flex:1;min-height:0}
+  .main:has(> .main-col) .thread{position:relative;inset:auto;width:auto;flex:1;min-height:0;
+    border-left:0;box-shadow:none;animation:none}
+  /* One thing at a time: details replace the thread while both flags are on (closing details brings it back). */
+  .main:has(#details-slot .thread) #thread-slot{display:none}
+}
+/* G20: .dock::before is a positioned pseudo-element and painted above in-flow children; the join bar
+   needs its own stacking position to stay in front of the blur gradient. */
+.joinbar{position:relative;z-index:3;background:var(--surface-2)}
 /* === S3 === */
 /* === S4 === */
 /* === S5 === */

@@ -1,10 +1,36 @@
 /**
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
-import { api } from "./api.js";
-import { ensureActors, loadConversationsList, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions } from "./data.js";
+import { ACTOR_KEY, CSRF_KEY, api, onUnauthorized, setCsrf } from "./api.js";
+import { ensureActors, loadConversationsList, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { announce, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
-import { actorHandle, findMsgById, mentionsMe, state, upsertMessage, views } from "./state.js";
+import { t } from "./i18n.js";
+import { actorHandle, findMsgById, mentionsMe, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
+import { showToast } from "./toasts.js";
+
+// ------------------------------------------------------------ session lost (S7)
+// A 401 from any call (or from the stream, probed below) means the session ended under the
+// user. The old behaviour was a dead interface: every click failed with a raw server sentence.
+// Now: the draft is saved FIRST, the shell goes back to sign-in, and a toast says why. Unlike
+// doLogout this keeps the drafts (memory and localStorage): the user did not choose to leave.
+export function onSessionLost() {
+  if (!state.actor) return;
+  saveDraft();
+  setCsrf(null);
+  sessionStorage.removeItem(CSRF_KEY);
+  sessionStorage.removeItem(ACTOR_KEY);
+  stopPresenceHeartbeat();
+  stopDigestTimer();
+  disconnectSSE();
+  const drafts = state.drafts;
+  resetState();
+  state.drafts = drafts;
+  document.title = "AgentTalks";
+  views.render();
+  showToast(t("Your session ended, your draft is kept"));
+}
+
+onUnauthorized(onSessionLost);
 
 // -------------------------------------------------------------- SSE (live)
 // EventSource resumes BY ITSELF only from a TCP-level break. An HTTP response other than 200
@@ -109,7 +135,12 @@ export function connectSSE() {
     // readyState CONNECTING (0) = the browser is resuming by itself, we do not interfere.
     // CLOSED (2) = the end, nobody will try again - that is our job.
     setOnline(false);
-    if (es && es.readyState === EventSource.CLOSED) scheduleReconnect();
+    if (es && es.readyState === EventSource.CLOSED) {
+      // EventSource hides the status code. A closed stream with a dead session must not loop on
+      // reconnecting forever: one cheap probe - a 401 there fires onSessionLost through api().
+      api("GET", "/api/me").catch(() => {});
+      scheduleReconnect();
+    }
   };
 }
 

@@ -3,6 +3,7 @@
  */
 import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./actions.js";
 import { api, csrf } from "./api.js";
+import { dividerAfter } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
 import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, scrollBehavior } from "./dom.js";
 import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./icons.js";
@@ -140,6 +141,44 @@ export function updateOfflineBar() {
   if (topbar) topbar.insertAdjacentHTML("afterend", offlineBarHtml());
 }
 
+// ------------------------------------------------- the side panel (S2)
+/** What the side panel shows, derived from the open flags: `null`, `{ kind: "thread", id }` or
+ *  `{ kind: "details", id }`. Details win when both are open - the panel hosts one thing. */
+export function sidePanelOf(s) {
+  if (s.detailsOpen) return { kind: "details", id: s.activeId };
+  if (s.threadOpen) return { kind: "thread", id: s.threadOpen };
+  return null;
+}
+
+// The panel last shown, so Mod+. can bring it back after closing it.
+let lastSidePanel = null;
+let sidePanelKeysBound = false;
+
+/** Mod+. : close the open panel, or reopen the one closed last (hook for S8's shortcut table). */
+export async function toggleSidePanel() {
+  const open = sidePanelOf(state);
+  if (open) {
+    lastSidePanel = open;
+    if (open.kind === "details") { state.detailsOpen = false; renderMain(); document.getElementById("btn-details")?.focus(); }
+    else closeThread();
+    return;
+  }
+  if (!lastSidePanel || state.view !== "chat" || !state.activeId) return;
+  if (lastSidePanel.kind === "details") { state.detailsOpen = true; await refreshDetailsData(); renderMain(); return; }
+  if (findMsgById(lastSidePanel.id)) await openThread(lastSidePanel.id);
+}
+
+function bindSidePanelKeys() {
+  if (sidePanelKeysBound) return;
+  sidePanelKeysBound = true;
+  document.addEventListener("keydown", (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key !== "." || !state.actor) return;
+    if (document.querySelector(".overlay")) return;
+    e.preventDefault();
+    toggleSidePanel();
+  });
+}
+
 export function renderMain() {
   const el = document.getElementById("main");
   if (!el) return;
@@ -157,7 +196,14 @@ export function renderMain() {
   }
   const c = state.conversations.find((x) => x.id === state.activeId);
   const isMember = !!state.memberships[state.activeId];
+  // S2: the side panel is ONE slot that is always in the markup. The message column is wrapped
+  // in .main-col so the panel can stand next to it as a grid column from 1280 px (D3) and
+  // overlay it below. The thread/details hosts exist only while open (openThread appends its
+  // own host to #main when it is missing; the S2 CSS lays that host out like the panel).
+  state.sidePanel = sidePanelOf(state);
+  if (state.sidePanel) lastSidePanel = state.sidePanel;
   el.innerHTML = `
+    <div class="main-col" id="main-col">
     <div class="topbar">
       ${hamburgerHtml()}
       <div class="title">
@@ -181,9 +227,14 @@ export function renderMain() {
              <button class="joinbtn" id="btn-join">${t("Join")}</button>
            </div>`}
     </div>
-    ${state.threadOpen ? `<div id="thread-slot"></div>` : ""}
-    ${state.detailsOpen ? `<div id="details-slot"></div>` : ""}
+    </div>
+    <aside class="side-panel" id="side-panel" aria-label="${t("Side panel")}"
+      data-kind="${state.sidePanel ? state.sidePanel.kind : ""}">
+      ${state.threadOpen ? `<div id="thread-slot"></div>` : ""}
+      ${state.detailsOpen ? `<div id="details-slot"></div>` : ""}
+    </aside>
   `;
+  bindSidePanelKeys();
   document.getElementById("btn-menu").addEventListener("click", () => {
     state.drawerOpen = !state.drawerOpen; toggleDrawerClass();
   });
@@ -551,7 +602,9 @@ export function renderMessages() {
   let html = state.hasMore[state.activeId]
     ? `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>` : "";
   const idx = threadIndex(state.activeId);
-  const mark = state.readMark[state.activeId] || 0;
+  // The divider position comes from counters.js: with a read mark it is the mark; on a first
+  // visit (mark 0) the server's unread count says where the new part begins (S7).
+  const mark = dividerAfter(list, state.readMark[state.activeId] || 0, state.unread[state.activeId], state.actor.id);
   let unreadLineShown = false;
   let lastDay = null, lastAuthor = null, lastTs = 0;
   for (const m of list) {
@@ -559,7 +612,7 @@ export function renderMessages() {
     if (day !== lastDay) { html += `<div class="day">${dayLabel(m.ts)}</div>`; lastDay = day; lastAuthor = null; }
     // The "new messages" line: the one place that says "this is where you stopped reading". The
     // server has supplied lastReadMessageId all along, and the UI never used it once.
-    if (!unreadLineShown && mark && typeof m.id === "number" && m.id > mark && m.actorId !== state.actor.id) {
+    if (!unreadLineShown && mark !== null && typeof m.id === "number" && m.id > mark && m.actorId !== state.actor.id) {
       html += `<div class="newline"><span>${t("New messages")}</span></div>`;
       unreadLineShown = true;
       lastAuthor = null;

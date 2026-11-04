@@ -13,6 +13,15 @@ export let csrf = sessionStorage.getItem(CSRF_KEY) || null;
  *  assign to another module's binding - hence the explicit setter. */
 export function setCsrf(v) { csrf = v; }
 
+// The session-lost hook (S7): a 401 from any call except signing in or out means the session
+// ended under the user - the handler saves the draft and returns to the sign-in screen. Set by
+// sse-events.js at load; kept here so that api() does not import the state or the views.
+let unauthorized = null;
+
+export function onUnauthorized(handler) { unauthorized = handler; }
+
+const SESSION_FREE = /^\/api\/(login|logout|webauthn)/;
+
 export async function api(method, path, body) {
   const headers = {};
   if (body !== undefined) headers["content-type"] = "application/json";
@@ -24,9 +33,16 @@ export async function api(method, path, body) {
   let data = null;
   try { data = await res.json(); } catch { /* e.g. 204 */ }
   if (!res.ok) {
+    // `message` is the human sentence (the fail bar, usersError and toasts read it); the raw
+    // server text stays in `serverMessage` for the fallback and for debugging.
     const err = new Error((data && data.error) || `HTTP ${res.status}`);
+    err.serverMessage = err.message;
     err.code = data && englishCode(data.code, res.status);
     err.status = res.status;
+    err.message = describeError(err);
+    if (res.status === 401 && unauthorized && !SESSION_FREE.test(path)) {
+      try { unauthorized(err, path); } catch { /* the caller still gets its error */ }
+    }
     throw err;
   }
   return data;
@@ -268,5 +284,5 @@ export function describeError(e, context) {
   if (e.status && STATUSES[e.status]) return t(STATUSES[e.status]);
   // No network: fetch throws a TypeError with no status - that is not a server error.
   if (!e.status && !e.code) return t("No connection to the server. Check your network and try again.");
-  return e.message || t("Something went wrong.");
+  return e.serverMessage || e.message || t("Something went wrong.");
 }
