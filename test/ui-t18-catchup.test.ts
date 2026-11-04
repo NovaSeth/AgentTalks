@@ -56,9 +56,16 @@ let hold: { match: RegExp; gate: Promise<void> } | null = null;
 let onceHolds: { match: RegExp; gate: Promise<void> }[] = [];
 /** One-shot holds BEFORE the cut (T-MG-43 r2): the request reaches the server only when the gate opens. */
 let preHolds: { match: RegExp; gate: Promise<void> }[] = [];
+/** T-MG-46: one-shot HTTP 500s (the first request matching each entry fails), and a 500 for every match while set. */
+let failOnce: RegExp[] = [];
+let failWhile: RegExp | null = null;
+const http500 = () => ({ ok: false, status: 500, json: async () => ({ error: "boom" }) });
 g.fetch = async (path: string) => {
   requests.push(String(path));
   onRequest?.(String(path));
+  const fail = failOnce.findIndex((r) => r.test(String(path)));
+  if (fail >= 0) { failOnce.splice(fail, 1); return http500(); }
+  if (failWhile && failWhile.test(String(path))) return http500();
   const pre = preHolds.findIndex((h) => h.match.test(String(path)));
   if (pre >= 0) await preHolds.splice(pre, 1)[0].gate;
   const url = new URL(String(path), "https://test.local");
@@ -108,6 +115,8 @@ beforeEach(() => {
   hold = null;
   onceHolds = [];
   preHolds = [];
+  failOnce = [];
+  failWhile = null;
   failAfterOnce = false;
   reactions5 = {};
   Object.assign(state, {
@@ -528,4 +537,205 @@ test("r2 F2: while the re-read of an overlap is pending, a late superseded page 
   await settle();
   assert.equal(bodyOf(1), "edited in outage 2");
   assert.deepEqual(state.reactions[1], thumbs("nestor"));
+});
+
+// ---- T-MG-46 (codex T-MG-43 r3 F3 = B-MG-121, F4 = B-MG-122): owed ranges survive a failed re-read and the round cap
+/** Test 22's overlap up to the moment its re-read of [1, 2] is sent: A (the reaction read of message 1,
+ *  delayed before its cut) and B (a newest-30 read, held after its cut) overlap; message 1 is edited and
+ *  reacted to in between, and 3..32 arrive; A lands, then B, and the stream is down. */
+async function owedOverlap(t: Any) {
+  await heldResume(t, /never/);
+  hold = null;
+  await settle();
+  general();
+  let deliverA!: () => void;
+  preHolds = [{ match: /before=2&limit=1/, gate: new Promise<void>((r) => { deliverA = r; }) }];
+  reacted(1);
+  await settle();
+  let deliverB!: () => void;
+  onceHolds = [{ match: /messages\?limit=30$/, gate: new Promise<void>((r) => { deliverB = r; }) }];
+  last().drop(2);
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  last().drop(2);
+  reactions5 = { 1: thumbs("nestor") };
+  server5[0] = edited(1, "edited in outage");
+  for (let i = 3; i <= 32; i++) server5.push(msg(i));
+  deliverA();
+  await settle();
+  deliverB();
+  await settle();
+}
+const rereads = () => requests.filter((p) => /after=0&limit=2$/.test(p)).length;
+
+test("B-MG-121 (codex repro): a re-read that fails with HTTP 500 keeps its owed range, and the reconnect repairs message 1", async (t) => {
+  await heldResume(t, /never/);
+  hold = null;
+  await settle();
+  general();
+  assert.deepEqual(ids(5), [1, 2]);
+  let deliverA!: () => void;
+  preHolds = [{ match: /before=2&limit=1/, gate: new Promise<void>((r) => { deliverA = r; }) }];
+  reacted(1);
+  await settle();
+  let deliverB!: () => void;
+  onceHolds = [{ match: /messages\?limit=30$/, gate: new Promise<void>((r) => { deliverB = r; }) }];
+  last().drop(2);
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  last().drop(2);
+  reactions5 = { 1: thumbs("nestor") };
+  server5[0] = edited(1, "edited in outage");
+  for (let i = 3; i <= 32; i++) server5.push(msg(i));
+  failOnce = [/after=0&limit=2$/];
+  deliverA();
+  await settle();
+  deliverB();
+  await settle();
+  assert.equal(failOnce.length, 0, "the re-read of [1, 2] was sent and failed");
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  assert.equal(bodyOf(1), "edited in outage");
+  assert.deepEqual(ids(5), range(32));
+});
+
+test("B-MG-121: a failed re-read is retried by its backoff timer alone, once, without a reconnect", async (t) => {
+  failOnce = [/after=0&limit=2$/];
+  await owedOverlap(t);
+  assert.equal(rereads(), 1);
+  await settle();
+  assert.equal(rereads(), 1, "no retry before the backoff ends");
+  assert.equal(bodyOf(1), "m1");
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(rereads(), 2);
+  assert.equal(bodyOf(1), "edited in outage");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  const n = requests.length;
+  t.mock.timers.tick(60000);
+  await settle();
+  assert.equal(requests.length, n + 0, "nothing more is read once the range is repaired (the stream stays closed)");
+});
+
+test("B-MG-121: a reconnect retries a failed re-read before its grown backoff ends", async (t) => {
+  failOnce = [/after=0&limit=2$/, /after=0&limit=2$/];
+  await owedOverlap(t);
+  t.mock.timers.tick(999);
+  await settle();
+  assert.equal(rereads(), 1);
+  t.mock.timers.tick(1);              // the first retry (1 s) fails as well; the next one would wait 2 s
+  await settle();
+  assert.equal(rereads(), 2);
+  assert.equal(bodyOf(1), "m1");
+  last().open();                      // the stream, reconnected by its own 1 s timer, opens: its catch-up lands
+  await settle();
+  general();
+  assert.equal(bodyOf(1), "edited in outage", "repaired before the 2 s backoff ends");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  const n = rereads();
+  t.mock.timers.tick(60000);
+  await settle();
+  assert.equal(rereads(), n, "the pending backoff timer was cancelled");
+});
+
+test("B-MG-121: a re-read that keeps failing is retried on a bounded backoff (1, 2, 4, 8, 16, 30 s), then waits for a landed read", async (t) => {
+  failWhile = /after=0&limit=2$/;
+  await owedOverlap(t);
+  const sent = [rereads()];
+  for (const ms of [1000, 2000, 4000, 8000, 16000, 30000, 30000, 60000, 600000]) {
+    t.mock.timers.tick(ms - 1);
+    await settle();
+    assert.equal(rereads(), sent[sent.length - 1], `no retry ${ms - 1} ms into a ${ms} ms wait`);
+    t.mock.timers.tick(1);
+    await settle();
+    sent.push(rereads());
+  }
+  assert.deepEqual(sent, [1, 2, 3, 4, 5, 6, 7, 7, 7, 7], "six timed retries, then none");
+  assert.equal(bodyOf(1), "m1");
+  failWhile = null;
+  last().open();                      // the range is still owed: the reconnect's catch-up repairs it
+  await settle();
+  general();
+  assert.equal(bodyOf(1), "edited in outage");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+});
+
+const cappedReads = () => requests.filter((p) => /after=0&limit=1$/.test(p)).length;
+/** Holds the next re-read of [1, 1] (after=0&limit=1) before its cut; resolves the gate it returns. */
+const holdReread = () => {
+  let deliver!: () => void;
+  preHolds = [{ match: /after=0&limit=1$/, gate: new Promise<void>((r) => { deliver = r; }) }];
+  return () => deliver();
+};
+/** B-MG-122's three overlapped rounds. In each one the re-read R of [1, 1] is delayed before its cut; a
+ *  reaction refresh X of message 1 is sent after it, cut, and held; message 1 becomes round<k> with a
+ *  reaction of `who`; R lands, then X (sent later, cut earlier) brings back the older state, and both
+ *  owe [1, 1] again. X's landing starts the next round. */
+async function threeOverlappedRounds(t: Any) {
+  await heldResume(t, /never/);
+  hold = null;
+  await settle();
+  general();
+  // Two reaction refreshes of message 1 in the air at once owe [1, 1].
+  let deliver0!: () => void;
+  preHolds = [{ match: /before=2&limit=1/, gate: new Promise<void>((r) => { deliver0 = r; }) }];
+  reacted(1);
+  reacted(1);
+  await settle();
+  let deliverR = holdReread();
+  deliver0();
+  await settle();
+  for (const [k, who] of [[1, "a"], [2, "b"], [3, "c"]] as const) {
+    assert.equal(cappedReads(), k, requests.join(" "));
+    let deliverX!: () => void;
+    onceHolds = [{ match: /before=2&limit=1$/, gate: new Promise<void>((r) => { deliverX = r; }) }];
+    reacted(1);
+    await settle();
+    server5[0] = edited(1, `round${k}`);
+    reactions5 = { 1: thumbs(who) };
+    deliverR();
+    await settle();
+    if (k < 3) deliverR = holdReread();
+    deliverX();
+    await settle();
+  }
+  assert.equal(cappedReads(), 3, requests.join(" "));
+}
+
+test("B-MG-122 (codex repro): an overlap still owed after the third round is repaired later, not dropped", async (t) => {
+  await threeOverlappedRounds(t);
+  last().drop(2);
+  for (let i = 3; i <= 32; i++) server5.push(msg(i));
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  assert.equal(bodyOf(1), "round3");
+  assert.deepEqual(state.reactions[1], thumbs("c"));
+  assert.deepEqual(ids(5), range(32));
+});
+
+test("B-MG-122: past the round cap the next round waits for its backoff timer; a landed read does not start it early", async (t) => {
+  await threeOverlappedRounds(t);
+  assert.equal(bodyOf(1), "round2", "the third round's late refresh brought back round 2");
+  reacted(2);                         // a read of this conversation lands during the backoff
+  await settle();
+  t.mock.timers.tick(999);
+  await settle();
+  assert.equal(cappedReads(), 3, "no fourth round before the backoff ends");
+  t.mock.timers.tick(1);
+  await settle();
+  assert.equal(cappedReads(), 4);
+  assert.equal(bodyOf(1), "round3");
+  assert.deepEqual(state.reactions[1], thumbs("c"));
+  t.mock.timers.tick(60000);
+  await settle();
+  assert.equal(cappedReads(), 4, "a repaired range is not read again");
 });
