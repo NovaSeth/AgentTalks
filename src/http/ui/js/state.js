@@ -221,14 +221,16 @@ export function clearLocalAccountData() {
 /**  Data with no owner marker (written before this existed) is kept once and claimed. */
 export function claimLocalData(actorId) {
   const me = String(actorId);
+  let legacyOk = false;                    // unsent entries with no ownerId may be claimed only then
   try {
     const owner = localStorage.getItem(OWNER_KEY);
+    legacyOk = owner === me;
     if (owner !== null && owner !== me) clearLocalAccountData();
     localStorage.setItem(OWNER_KEY, me);
   } catch { /* private browsing */ }
   if (state.draftsOwner != null && String(state.draftsOwner) !== me) { state.drafts = {}; state.pending = {}; }
   state.draftsOwner = actorId;
-  restoreUnsent(actorId);
+  restoreUnsent(actorId, legacyOk);
 }
 
 // ------------------------------------------------------------------ unsent messages
@@ -242,10 +244,14 @@ const UNSENT_PREFIX = "atalks_unsent_";
 
 /** Writes the conversation's in-flight and failed messages to storage (or removes the key).
  *  Storage is shared by every tab of the browser, so the stored list is MERGED: entries another
- *  tab wrote stay, unless this tab holds them or has just sent or discarded them (`done`). */
+ *  tab wrote stay, unless this tab holds them or has just sent or discarded them (`done`).
+ *  Every entry stores the `ownerId` that wrote it. Entries of another account are kept untouched
+ *  (a different account in another tab may still need them): never re-owned, never shown. */
 export function persistUnsent(convId, done = []) {
+  const owner = state.actor?.id ?? state.draftsOwner;
+  if (owner == null) return;               // no known account: writing an unattributed entry would leak it
   const mine = (state.pending[convId] || []).map((p) => ({
-    clientMsgId: p.clientMsgId, body: p.body, threadId: p.threadId ?? null, ts: p.ts,
+    ownerId: owner, clientMsgId: p.clientMsgId, body: p.body, threadId: p.threadId ?? null, ts: p.ts,
     // An in-flight entry has no error yet; if it comes back from storage, it was never confirmed.
     error: p.failed ? p.error || null : null,
   }));
@@ -258,7 +264,6 @@ export function persistUnsent(convId, done = []) {
   const list = [...others, ...mine];
   try {
     if (list.length) {
-      if (state.actor) localStorage.setItem(OWNER_KEY, String(state.actor.id));
       localStorage.setItem(UNSENT_PREFIX + convId, JSON.stringify(list));
     } else {
       localStorage.removeItem(UNSENT_PREFIX + convId);
@@ -284,7 +289,7 @@ export function preserveUnsent() {
 
 /** Sign-in: the stored unsent messages of THIS account (claimLocalData has already wiped any
  *  other account's) come back as failed bubbles, merged with what the tab still holds. */
-function restoreUnsent(actorId) {
+function restoreUnsent(actorId, legacyOk = false) {
   let keys = [];
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -298,8 +303,14 @@ function restoreUnsent(actorId) {
     try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* a broken entry */ }
     if (!Number.isFinite(convId) || !Array.isArray(list)) continue;
     const mine = state.pending[convId] || (state.pending[convId] = []);
+    let claimed = false;
     for (const u of list) {
       if (!u || typeof u.body !== "string" || !u.clientMsgId) continue;
+      if (u.ownerId == null) {
+        // Written by 4aa92d5 before entries carried an owner: the global marker is all we have.
+        if (!legacyOk) continue;
+        u.ownerId = actorId; claimed = true;
+      } else if (String(u.ownerId) !== String(actorId)) continue;
       if (mine.some((p) => p.clientMsgId === u.clientMsgId)) continue;
       mine.push({
         id: `tmp-${u.clientMsgId}`, clientMsgId: u.clientMsgId, conversationId: convId, actorId,
@@ -308,6 +319,7 @@ function restoreUnsent(actorId) {
         error: u.error || t("This message may not have been sent. Send it again - it will not be posted twice."),
       });
     }
+    if (claimed) { try { localStorage.setItem(key, JSON.stringify(list)); } catch { /* private browsing */ } }
   }
 }
 
