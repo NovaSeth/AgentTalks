@@ -2,10 +2,10 @@
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
 import { ACTOR_KEY, CSRF_KEY, api, newSessionGeneration, onUnauthorized, sessionGeneration, setCsrf } from "./api.js";
-import { cancelMarkRead, currentSeq, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, mergePageReactions, nextSeq, pageMayReplace, stampRow, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { applyPage, beginRead, cancelMarkRead, currentSeq, endRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, nextSeq, stampRow, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { announce, closeAccountOverlays, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
-import { actorHandle, findMsgById, mentionsMe, mergeActors, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
+import { actorHandle, findMsgById, mentionsMe, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
 import { showToast } from "./toasts.js";
 
 // ------------------------------------------------------------ session lost (S7)
@@ -140,22 +140,19 @@ const CATCH_UP_PAGE = 200;
 async function loadGapAfter(convId, floor, gen, mark) {
   let after = floor;
   for (;;) {
-    const before = new Map((state.msgs[convId] || []).map((m) => [m.id, m]));
-    const sent = nextSeq();
-    const data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${CATCH_UP_PAGE}`);
-    if (gen !== sessionGeneration()) return;
-    // F4 (codex r3), F6 (codex r4, B-MG-119), review-r1 F1: a held message gets the page's revision
-    // unless pageMayReplace (data.js) refuses: a write from a request sent after this page or from a
-    // later live event, a live write since this conversation's catch-up began, or an unstamped write
-    // while the page was in flight. The page still advances the paging cursor by every id it carried.
-    const now = new Map((state.msgs[convId] || []).map((m) => [m.id, m]));
-    for (const m of data.messages) {
-      if (!pageMayReplace(now.get(m.id), before.get(m.id), sent, mark)) continue;
-      upsertMessage(convId, m); stampRow(m, sent);
-    }
-    mergeActors(data.actors);
-    // F5 (codex r4, B-MG-118): reactions are merged for the whole page, whatever the body filter kept.
-    mergePageReactions(data.messages, data.reactions, sent);
+    // F4 (codex r3), F6 (codex r4, B-MG-119), review-r1 F1, r2 F2: the page is a flight (data.js
+    // beginRead/applyPage/endRead): a held message gets its revision unless a later-sent request, a
+    // live write since this conversation's catch-up began (mark), or an unstamped write in flight
+    // holds it; reactions are merged for the whole page by the same order (F5, B-MG-118); a page that
+    // overlapped another read of this conversation owes a re-read. The page still advances the paging
+    // cursor by every id it carried.
+    const f = beginRead(convId);
+    let data = null;
+    try {
+      data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${CATCH_UP_PAGE}`);
+      if (gen !== sessionGeneration()) return;
+      applyPage(convId, data, f, mark);
+    } finally { endRead(convId, f, data && data.messages); }
     const top = data.messages.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), after);
     if (data.messages.length < CATCH_UP_PAGE || top <= after) return;
     after = top;

@@ -431,6 +431,7 @@ test("r1 F1: when the superseded page lands first, the newer catch-up's page sti
 
 test("r1 F1: an unstamped write during the after= page (an own edit, applyMessageUpdate) is kept", async (t) => {
   const release = await heldResume(t, /after=1/);
+  server5[1] = edited(2, "own edit");   // r2: an own edit is the server's answer, so the server holds it
   store.upsertMessage(5, edited(2, "own edit"));
   release();
   await settle();
