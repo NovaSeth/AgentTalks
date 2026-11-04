@@ -38,7 +38,7 @@ export type AcquireResult =
 function normalizeResource(raw: string): string {
   const r = String(raw ?? "").trim();
   if (!r || r.length > 128 || /\s/.test(r)) {
-    throw badRequest("zly_zasob", "nazwa zasobu: niepusta, bez spacji, do 128 znakow");
+    throw badRequest("invalid_resource", "use a non-empty resource name without spaces, up to 128 characters");
   }
   return r;
 }

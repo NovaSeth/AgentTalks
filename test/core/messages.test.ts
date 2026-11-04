@@ -1,3 +1,4 @@
+// Polish fixture bodies exercise message storage and mention parsing.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkActor, testCtx } from "../helpers.ts";
@@ -19,22 +20,22 @@ import { openDb } from "../../src/store/db.ts";
 import { createCtx } from "../../src/core/ctx.ts";
 import { ask } from "../../src/core/questions.ts";
 
-test("parseMentions wyciaga handle bez duplikatow i bez wielkosci liter", () => {
+test("parseMentions extracts handles without duplicates and ignores case", () => {
   assert.deepEqual(
     parseMentions("czesc @Nestor i @michal, @nestor jeszcze raz"),
     ["nestor", "michal"],
   );
 });
 
-test("adres e-mail nie jest wzmianka", () => {
+test("an email address is not a mention", () => {
   assert.deepEqual(parseMentions("napisz na michal@example.com"), []);
 });
 
-test("wzmianka na poczatku i po nawiasie jest lapana, interpunkcja odcieta", () => {
+test("a mention at the start or after a parenthesis is recognized, with punctuation removed", () => {
   assert.deepEqual(parseMentions("@ala (@bob) [@cez] @del."), ["ala", "bob", "cez", "del"]);
 });
 
-test("postMessage nadaje rosnace id i zapisuje wzmianki", () => {
+test("postMessage assigns increasing ids and stores mentions", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "michal"), b = mkActor(ctx, "nestor");
   const c = createChannel(ctx, { slug: "general", kind: "public", createdBy: a.id });
@@ -46,31 +47,31 @@ test("postMessage nadaje rosnace id i zapisuje wzmianki", () => {
   assert.deepEqual(rows.map((r) => r.actor_id), [b.id]);
 });
 
-test("postMessage odrzuca puste cialo i cialo ponad limit", () => {
+test("postMessage rejects an empty body and a body over the limit", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
   assert.throws(
     () => postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "   " }),
-    /pusta/,
+    /empty/,
   );
   assert.throws(
     () => postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "x".repeat(70000) }),
-    /za dluga/,
+    /too long/,
   );
 });
 
-test("postMessage do cudzego kanalu prywatnego jest odrzucone", () => {
+test("postMessage rejects posting to another actor's private channel", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "s", kind: "private", createdBy: a.id });
   assert.throws(
     () => postMessage(ctx, { conversationId: c.id, actorId: b.id, body: "hej" }),
-    /brak dostepu/,
+    /do not have access/,
   );
 });
 
-test("listMessages stronicuje po id, nie po czasie", () => {
+test("listMessages paginates by id rather than time", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -92,7 +93,7 @@ test("listMessages stronicuje po id, nie po czasie", () => {
   );
 });
 
-test("watek grupuje odpowiedzi pod korzeniem", () => {
+test("a thread groups replies under its root", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -103,7 +104,7 @@ test("watek grupuje odpowiedzi pod korzeniem", () => {
   assert.deepEqual(listThread(ctx, root.id).map((m) => m.id), [root.id, r1.id]);
 });
 
-test("odpowiedz na odpowiedz splaszcza sie do korzenia watku", () => {
+test("a reply to a reply is flattened to the thread root", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -117,7 +118,7 @@ test("odpowiedz na odpowiedz splaszcza sie do korzenia watku", () => {
   assert.equal(r2.threadId, root.id);
 });
 
-test("watek z innej konwersacji jest odrzucony", () => {
+test("a thread from another conversation is rejected", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c1 = createChannel(ctx, { slug: "g1", kind: "public", createdBy: a.id });
@@ -127,21 +128,21 @@ test("watek z innej konwersacji jest odrzucony", () => {
     () => postMessage(ctx, {
       conversationId: c2.id, actorId: a.id, body: "x", threadId: root.id,
     }),
-    /innej konwersacji/,
+    /another conversation/,
   );
 });
 
-test("edytowac i kasowac moze tylko autor", () => {
+test("only the author can edit and delete", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
   const m = postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "x" });
-  assert.throws(() => editMessage(ctx, m.id, b.id, "y"), /nie jestes autorem/);
+  assert.throws(() => editMessage(ctx, m.id, b.id, "y"), /only the author/);
   assert.equal(editMessage(ctx, m.id, a.id, "y").body, "y");
   assert.ok(deleteMessage(ctx, m.id, a.id).deletedAt);
 });
 
-test("edycja przelicza wzmianki od nowa", () => {
+test("editing recalculates mentions", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob"), c3 = mkActor(ctx, "cez");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -153,7 +154,7 @@ test("edycja przelicza wzmianki od nowa", () => {
   assert.ok(!rows.some((r) => r.actor_id === b.id));
 });
 
-test("skasowana wiadomosc traci tresc, ale zostaje w kolejnosci", () => {
+test("a deleted message loses its body but keeps its position", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -166,22 +167,22 @@ test("skasowana wiadomosc traci tresc, ale zostaje w kolejnosci", () => {
   const raw = ctx.db.prepare("SELECT body FROM messages WHERE id=?").get(m.id) as {
     body: string;
   };
-  assert.equal(raw.body, "", "tresc ma zniknac z bazy, nie tylko z odpowiedzi");
+  assert.equal(raw.body, "", "the body must disappear from the database as well as the response");
 });
 
-test("inboxAfter zwraca cudze wiadomosci z moich konwersacji, bez wlasnych", () => {
+test("inboxAfter returns others' messages from my conversations, excluding my own", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob"), c3 = mkActor(ctx, "cez");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
   join(ctx, c.id, b.id);
-  const obcy = createChannel(ctx, { slug: "obcy", kind: "private", createdBy: c3.id });
+  const outsider = createChannel(ctx, { slug: "obcy", kind: "private", createdBy: c3.id });
   postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "moja" });
   postMessage(ctx, { conversationId: c.id, actorId: b.id, body: "twoja" });
-  postMessage(ctx, { conversationId: obcy.id, actorId: c3.id, body: "nie dla mnie" });
+  postMessage(ctx, { conversationId: outsider.id, actorId: c3.id, body: "nie dla mnie" });
   assert.deepEqual(inboxAfter(ctx, b.id, 0).map((m) => m.body), ["moja"]);
 });
 
-test("publish trafia tylko do subskrybentow z listy odbiorcow", () => {
+test("publish reaches only subscribers in the recipient list", () => {
   const bus = new EventBus();
   const got: number[] = [];
   bus.subscribe(1, () => got.push(1));
@@ -190,15 +191,15 @@ test("publish trafia tylko do subskrybentow z listy odbiorcow", () => {
   assert.deepEqual(got, [2]);
 });
 
-test("odsubskrybowanie przestaje dostarczac i zwalnia licznik", () => {
+test("unsubscribing stops delivery and releases the counter", () => {
   const bus = new EventBus();
-  const off = bus.subscribe(1, () => { throw new Error("nie powinno dojsc"); });
+  const off = bus.subscribe(1, () => { throw new Error("must not be delivered"); });
   off();
   assert.equal(bus.subscriberCount(1), 0);
   bus.publish([1], { type: "presence" });
 });
 
-test("wyjatek jednego subskrybenta nie blokuje pozostalych", () => {
+test("one subscriber's exception does not block the others", () => {
   const bus = new EventBus();
   let ok = false;
   bus.subscribe(1, () => { throw new Error("bum"); });
@@ -207,7 +208,7 @@ test("wyjatek jednego subskrybenta nie blokuje pozostalych", () => {
   assert.equal(ok, true);
 });
 
-test("postMessage publikuje zdarzenie do czlonkow konwersacji", () => {
+test("postMessage publishes an event to conversation members", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const d = ensureDirect(ctx, [a.id, b.id]);
@@ -219,7 +220,7 @@ test("postMessage publikuje zdarzenie do czlonkow konwersacji", () => {
   assert.deepEqual(seen.map((e) => e.type).sort(), ["message", "notification"]);
 });
 
-test("zdarzenie widzi wiadomosc juz zapisana w bazie (odczyt DRUGIM polaczeniem)", () => {
+test("the event sees the message already stored in the database, read through a SECOND connection", () => {
   // The same SQLite handle sees its own uncommitted transaction, so reading through it does not
   // distinguish publishing before a commit from publishing after one. A second connection to a
   // shared file sees only committed data - and that is the right judge.
@@ -228,16 +229,16 @@ test("zdarzenie widzi wiadomosc juz zapisana w bazie (odczyt DRUGIM polaczeniem)
   const reader = openDb(path);
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const d = ensureDirect(ctx, [a.id, b.id]);
-  let widzianeWBazie: unknown = null;
+  let seenInDatabase: unknown = null;
   ctx.bus.subscribe(b.id, (e) => {
     if (e.type !== "message") return;
-    widzianeWBazie = reader.prepare("SELECT id FROM messages WHERE id=?").get(e.message.id);
+    seenInDatabase = reader.prepare("SELECT id FROM messages WHERE id=?").get(e.message.id);
   });
   postMessage(ctx, { conversationId: d.id, actorId: a.id, body: "hej" });
-  assert.ok(widzianeWBazie, "subskrybent nie znalazl wiadomosci - publikacja przed commitem");
+  assert.ok(seenInDatabase, "the subscriber did not find the message; publication preceded commit");
 });
 
-test("ask publikuje zdarzenie dopiero, gdy pytanie JUZ istnieje (drugie polaczenie)", () => {
+test("ask publishes an event only when the question ALREADY exists, checked through a second connection", () => {
   const path = joinPath(mkdtempSync(joinPath(tmpdir(), "at-ask-")), "test.sqlite");
   const ctx = createCtx(openDb(path), new EventBus(), () => 1_000_000);
   const reader = openDb(path);
@@ -252,10 +253,10 @@ test("ask publikuje zdarzenie dopiero, gdy pytanie JUZ istnieje (drugie polaczen
   });
   ask(ctx, { conversationId: c.id, actorId: a.id, body: "atomowe?" });
   assert.equal(questionVisible, true,
-    "zdarzenie o wiadomosci ask wyszlo, zanim pytanie bylo w bazie");
+    "the ask message event was emitted before the question was in the database");
 });
 
-test("clientMsgId: retry nie dubluje wiadomosci ani zdarzenia", () => {
+test("clientMsgId: retry duplicates neither the message nor the event", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -264,14 +265,14 @@ test("clientMsgId: retry nie dubluje wiadomosci ani zdarzenia", () => {
   ctx.bus.subscribe(b.id, (e) => { if (e.type === "message") events.push(e.message.id); });
   const m1 = postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "deploy", clientMsgId: "x1" });
   const m2 = postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "deploy", clientMsgId: "x1" });
-  assert.equal(m1.id, m2.id, "retry ma zwrocic te sama wiadomosc");
+  assert.equal(m1.id, m2.id, "retry must return the same message");
   const n = ctx.db.prepare("SELECT count(*) AS n FROM messages WHERE conversation_id=?")
     .get(c.id) as { n: number };
-  assert.equal(n.n, 1, "powstala druga wiadomosc mimo dedup");
-  assert.equal(events.length, 1, "powtorzony push - idempotencja nie zadzialala na zdarzeniu");
+  assert.equal(n.n, 1, "a second message was created despite deduplication");
+  assert.equal(events.length, 1, "duplicate push; event idempotency failed");
 });
 
-test("clientMsgId jest per aktor - dwoch aktorow moze uzyc tego samego id", () => {
+test("clientMsgId is per actor; two actors may use the same id", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });

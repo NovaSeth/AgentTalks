@@ -4,7 +4,7 @@
 
 ```bash
 npm ci
-npm test          # cała suita, kilka sekund
+npm test          # the whole suite, a few seconds
 npm run typecheck # tsc --noEmit, must be clean
 npm run verify    # both
 node bin/agenttalks.js init && node bin/agenttalks.js serve
@@ -106,11 +106,22 @@ cannot happen), then the local check because it is cheap, then the outside one,
 because it is the only one that catches the wrong property, and the chain last,
 because it is the only one that survives every other check being right.
 
-One gate is on the whole existing stock rather than on new work: `test/jezyk.test.ts`
-requires the code comments to be English. It was added at the single moment such a
-gate is cheap and honest at once - when the stock was zero. It demands nothing
-backwards from anybody, and a month later the same line would have cost either
-rewriting a hundred files or switching the gate off.
+One gate is on the whole existing stock rather than on new work: `test/language.test.ts`
+requires English file names, test titles, source/bin string literals, identifiers,
+comments and repository Markdown. It scans tracked and new, non-ignored files, so
+renames and uncommitted additions are covered too. K1 checks Polish diacritics;
+K2 checks words, splitting camelCase and snake_case identifiers. Every category
+has negative probes for both criteria, plus extraction probes.
+
+Intentional exceptions belong in `test/language-allowlist.txt`: one tab-separated
+check, repository path, JSON-encoded exact sample and reason per line. Polish UI
+translation values, transliteration inputs, compatibility codes/aliases and quoted
+historical evidence remain explicit exceptions. Quotes and code fences are checked;
+they do not bypass the gate. A Polish human quote must include an English translation.
+The sole whole-category exception is the Polish UI locale's string values.
+
+The original comment gate was added when the untranslated stock reached zero.
+Extending it to the entire repository keeps that guarantee for future changes.
 
 ## Commits and pull requests
 

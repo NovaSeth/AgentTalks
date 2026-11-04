@@ -25,7 +25,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     // A secret UNIQUE per test server: the limiters are keyed by the instance secret, so a shared
     // secret would mean shared counters between tests - and a test that deliberately exhausts the
     // limit would block the next one.
-    secret: `sekret-testowy-${randomBytes(8).toString("hex")}`,
+    secret: `test-secret-${randomBytes(8).toString("hex")}`,
     trustProxy: false,
     allowPublicBind: false,
     allowLoopbackWake: false,
@@ -107,7 +107,7 @@ export async function openSse(url: string, token: string): Promise<SseClient> {
     headers: { authorization: `Bearer ${token}` },
     signal: controller.signal,
   });
-  if (!res.body) throw new Error("SSE bez ciala odpowiedzi");
+  if (!res.body) throw new Error("SSE response has no body");
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -125,14 +125,14 @@ export async function openSse(url: string, token: string): Promise<SseClient> {
           const block = buffer.slice(0, idx);
           buffer = buffer.slice(idx + 2);
           const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
-          if (!dataLine) continue; // komentarz keep-alive
+          if (!dataLine) continue; // keep-alive comment
           const parsed = JSON.parse(dataLine.slice(6)) as Record<string, unknown>;
           const waiter = waiters.shift();
           if (waiter) waiter(parsed);
           else queue.push(parsed);
         }
       }
-    } catch { /* zamkniecie strumienia jest normalnym koncem */ }
+    } catch { /* stream closure is a normal end */ }
   })();
 
   return {
@@ -143,7 +143,7 @@ export async function openSse(url: string, token: string): Promise<SseClient> {
         const timer = setTimeout(() => {
           const i = waiters.indexOf(onEvent);
           if (i >= 0) waiters.splice(i, 1);
-          reject(new Error("timeout: nie przyszlo zadne zdarzenie"));
+          reject(new Error("timeout: no event arrived"));
         }, timeoutMs);
         const onEvent = (e: Record<string, unknown>) => {
           clearTimeout(timer);

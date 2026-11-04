@@ -1,3 +1,4 @@
+// Polish fixture labels exercise session updates without changing the supplied text.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkActor, testCtx } from "../helpers.ts";
@@ -10,7 +11,7 @@ import {
   signal,
 } from "../../src/core/presence.ts";
 
-test("typing gasnie po 7 s, busy trzyma 30 s", () => {
+test("typing expires after 7 s; busy lasts 30 s", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const a = mkActor(ctx, "ala");
@@ -26,7 +27,7 @@ test("typing gasnie po 7 s, busy trzyma 30 s", () => {
   assert.equal(presence(ctx)[0].busy, false);
 });
 
-test("efemeryda znika z obecnosci szybciej niz sesja trwala", () => {
+test("an ephemeral session disappears from presence sooner than a durable session", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const a = mkActor(ctx, "ala");
@@ -38,7 +39,7 @@ test("efemeryda znika z obecnosci szybciej niz sesja trwala", () => {
   assert.equal(byId["trwala"].stale, false);
 });
 
-test("zakonczona sesja znika z obecnosci, tozsamosc zostaje w rosterze", () => {
+test("an ended session disappears from presence; its identity remains in the roster", () => {
   // Feedback from #nextIteration: the prototype's participant list grew monotonically, because
   // ended sessions never disappeared. Presence shows who you can talk to NOW; who EXISTS is what
   // the actor roster says.
@@ -51,7 +52,7 @@ test("zakonczona sesja znika z obecnosci, tozsamosc zostaje w rosterze", () => {
   assert.deepEqual(presence(ctx), []);
 });
 
-test("sesja trwala bez heartbeatu znika po oknie retencji, wczesniej jest stale", () => {
+test("a durable session without a heartbeat disappears after retention; before then it is stale", () => {
   let t = 1_000_000;
   const ctx = testCtx(() => t);
   const a = mkActor(ctx, "ala");
@@ -63,7 +64,7 @@ test("sesja trwala bez heartbeatu znika po oknie retencji, wczesniej jest stale"
   assert.deepEqual(presence(ctx), []);
 });
 
-test("rodzaj sesji jest deklarowany, nie zgadywany z ksztaltu nazwy", () => {
+test("session kind is declared rather than guessed from the name", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   // The prototype guessed from the "bs/" prefix and treated that as ephemeral.
@@ -71,7 +72,7 @@ test("rodzaj sesji jest deklarowany, nie zgadywany z ksztaltu nazwy", () => {
   assert.equal(presence(ctx)[0].kind, "durable");
 });
 
-test("dwie sesje tego samego aktora to jeden rozmowca, bez sufiksow", () => {
+test("two sessions of the same actor are one participant, without suffixes", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "nestor");
   registerSession(ctx, { sessionId: "s1", actorId: a.id, label: "vps" });
@@ -81,7 +82,7 @@ test("dwie sesje tego samego aktora to jeden rozmowca, bez sufiksow", () => {
   assert.deepEqual([...new Set(rows.map((r) => r.handle))], ["nestor"]);
 });
 
-test("ponowna rejestracja tej samej sesji aktualizuje, a nie dubluje", () => {
+test("registering the same session again updates it rather than duplicating it", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   registerSession(ctx, { sessionId: "s1", actorId: a.id, label: "stara" });
@@ -90,7 +91,7 @@ test("ponowna rejestracja tej samej sesji aktualizuje, a nie dubluje", () => {
   assert.equal(presence(ctx)[0].label, "nowa");
 });
 
-test("heartbeat odswieza, sesja przestaje byc stale", () => {
+test("a heartbeat refreshes the session so it is no longer stale", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const a = mkActor(ctx, "ala");
@@ -101,7 +102,7 @@ test("heartbeat odswieza, sesja przestaje byc stale", () => {
   assert.equal(presence(ctx)[0].stale, false);
 });
 
-test("doing widac w obecnosci", () => {
+test("doing is visible in presence", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   registerSession(ctx, { sessionId: "s1", actorId: a.id });
@@ -109,12 +110,12 @@ test("doing widac w obecnosci", () => {
   assert.equal(presence(ctx)[0].doing, "deploy motowolt");
 });
 
-test("rejestracja sesji nieistniejacego aktora jest odrzucona", () => {
+test("registering a session for a missing actor is rejected", () => {
   const ctx = testCtx();
-  assert.throws(() => registerSession(ctx, { sessionId: "s1", actorId: 999 }), /nie ma aktora/);
+  assert.throws(() => registerSession(ctx, { sessionId: "s1", actorId: 999 }), /actor .* was not found/);
 });
 
-test("heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me", () => {
+test("heartbeats and signals do NOT erase a label set through me", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "nestor");
   registerSession(ctx, { sessionId: "s1", actorId: a.id, label: "vps-deploy", kind: "durable" });
@@ -122,7 +123,7 @@ test("heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me", () => {
   registerSession(ctx, { sessionId: "s1", actorId: a.id });
   signal(ctx, "s1", "busy");
   const p = presence(ctx)[0];
-  assert.equal(p.label, "vps-deploy", "heartbeat zjadl etykiete");
+  assert.equal(p.label, "vps-deploy", "heartbeat erased the label");
   assert.equal(p.kind, "durable");
 });
 
@@ -135,34 +136,34 @@ test("heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me", () => {
  *is the same every time. The damping is invisible in operation (nothing breaks, it merely
  *gets expensive), so without a test it comes back at the first refactoring.
  */
-test("presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie", () => {
+test("presence broadcasts on changes rather than every heartbeat", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala");
-  let rozgloszenia = 0;
-  const oryginal = ctx.bus.publish.bind(ctx.bus);
-  ctx.bus.publish = (odbiorcy, ev) => {
-    if (ev.type === "presence") rozgloszenia++;
-    return oryginal(odbiorcy, ev);
+  let broadcasts = 0;
+  const original = ctx.bus.publish.bind(ctx.bus);
+  ctx.bus.publish = (recipients, ev) => {
+    if (ev.type === "presence") broadcasts++;
+    return original(recipients, ev);
   };
 
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "praca", kind: "durable" });
-  assert.equal(rozgloszenia, 1, "nowa sesja MA obudzic innych");
+  assert.equal(broadcasts, 1, "a new session MUST wake others");
 
   // Three heartbeats through the same call, nothing changes.
   for (let i = 0; i < 3; i++) {
     registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "praca", kind: "durable" });
   }
-  assert.equal(rozgloszenia, 1, "heartbeat bez zmiany nie ma budzic nikogo");
+  assert.equal(broadcasts, 1, "an unchanged heartbeat must not wake anyone");
 
   // A label change IS visible to others, so it has to be broadcast.
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "deploy", kind: "durable" });
-  assert.equal(rozgloszenia, 2, "zmiana etykiety ma sie rozniesc");
+  assert.equal(broadcasts, 2, "a label change must be broadcast");
 
   // Coming back after a session ended is a state change too.
   endSession(ctx, "s1");
-  const poZakonczeniu = rozgloszenia;
+  const afterEnd = broadcasts;
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "deploy", kind: "durable" });
-  assert.equal(rozgloszenia, poZakonczeniu + 1, "powrot sesji ma sie rozniesc");
+  assert.equal(broadcasts, afterEnd + 1, "a returning session must be broadcast");
 });
 
 /**
@@ -174,37 +175,37 @@ test("presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie", () =>
  *production before this change: the signal was set EVER by 8 of 26 sessions, mostly my own
  *attempts.
  */
-test("sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s", () => {
+test("a typing signal may carry its own lifetime, defaulting to 7 s", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const a = mkActor(ctx, "ala");
   registerSession(ctx, { sessionId: "s1", actorId: a.id, kind: "durable" });
-  const pisze = () => presence(ctx).find((p) => p.sessionId === "s1")?.typing ?? false;
+  const isTyping = () => presence(ctx).find((p) => p.sessionId === "s1")?.typing ?? false;
 
   // By default: 7 s, as before.
   signal(ctx, "s1", "typing", { typingIn: "c:1" });
-  assert.equal(pisze(), true);
+  assert.equal(isTyping(), true);
   t += 8;
-  assert.equal(pisze(), false, "domyslny czas zycia nie moze sie wydluzyc");
+  assert.equal(isTyping(), false, "the default lifetime must not increase");
 
   // Custom: the agent declares how long composing an answer will really take it.
   t += 1;
   signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 90 });
   t += 60;
-  assert.equal(pisze(), true, "sygnal zgasl w polowie zadeklarowanego okna");
+  assert.equal(isTyping(), true, "the signal expired halfway through its declared window");
   t += 31;
-  assert.equal(pisze(), false, "sygnal nie moze zyc dluzej, niz zadeklarowano");
+  assert.equal(isTyping(), false, "the signal must not outlive its declared lifetime");
 
   // The upper bound: a declaration must not turn the bubble into a permanent light.
   t += 1;
   signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 99_999 });
   t += 301;
-  assert.equal(pisze(), false, "brak gornego ograniczenia - bak wisialby godzinami");
+  assert.equal(isTyping(), false, "no upper bound; the indicator could remain for hours");
 
   // stop clears it at once, a long signal included.
   t += 1;
   signal(ctx, "s1", "typing", { typingIn: "c:1", sec: 300 });
-  assert.equal(pisze(), true);
+  assert.equal(isTyping(), true);
   signal(ctx, "s1", "typing", { stop: true });
-  assert.equal(pisze(), false, "stop musi gasic takze sygnal z dlugim oknem");
+  assert.equal(isTyping(), false, "stop must also clear a signal with a long window");
 });

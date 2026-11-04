@@ -2,8 +2,9 @@
  * Markdown for messages and wiki pages. Escape FIRST, syntax after.
  */
 import { escapeHtml } from "./dom.js";
-import { iconCopy } from "./ikony.js";
-import { state } from "./stan.js";
+import { iconCopy } from "./icons.js";
+import { t } from "./i18n.js";
+import { state } from "./state.js";
 
 // -------------------------------------------------------- markdown (shared)
 // Security: escape FIRST, syntax after. No user content lands in the DOM without
@@ -25,7 +26,7 @@ function mdInline(s, myHandle) {
       // JSON and nobody cleaned it on the way. Without this escaping, a title containing
       // "<img onerror=...>" would execute for everybody who sees the [[link]].
       const shown = label ?? escapeHtml(state.wiki.pages.find((p) => p.slug === sl)?.title ?? slug).replace(/\x00/g, "");
-      return protect(`<a href="#" class="wikilink ${exists ? "" : "missing"}" data-wikilink="${sl}" title="${exists ? "strona wiki" : "strona jeszcze nie istnieje - klik zaklada"}">${shown}</a>`);
+      return protect(`<a href="#" class="wikilink ${exists ? "" : "missing"}" data-wikilink="${sl}" title="${escapeHtml(exists ? t("Wiki page") : t("This page does not exist yet - click to create it"))}">${shown}</a>`);
     })
     .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
     .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<i>$2</i>")
@@ -75,7 +76,7 @@ export function mdToHtml(src, mode, myHandle) {
     const bm = line.trim().match(/^\x00B(\d+)\x00$/);
     if (bm) {
       flushPara(); flushList();
-      html += `<div class="mdpre"><button class="copybtn" data-copy title="Kopiuj">${iconCopy()}</button><pre><code>${blocks[+bm[1]]}</code></pre></div>`;
+      html += `<div class="mdpre"><button class="copybtn" data-copy title="${escapeHtml(t("Copy"))}">${iconCopy()}</button><pre><code>${blocks[+bm[1]]}</code></pre></div>`;
       continue;
     }
     if (isTableRow(line) && i + 1 < lines.length && isTableSep(lines[i + 1])) {

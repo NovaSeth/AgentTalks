@@ -64,7 +64,7 @@ export class EventBus {
       try {
         fn(recipients, event);
       } catch (err) {
-        console.error("[bus] tap rzucil wyjatek:", err);
+        console.error("[bus] tap threw an exception:", err);
       }
     }
     for (const actorId of new Set(recipients)) {
@@ -78,7 +78,7 @@ export class EventBus {
         } catch (err) {
           // A client that threw must not kill delivery to the others, nor the transaction that has
           // just finished.
-          console.error("[bus] subskrybent rzucil wyjatek:", err);
+          console.error("[bus] subscriber threw an exception:", err);
         }
       }
     }

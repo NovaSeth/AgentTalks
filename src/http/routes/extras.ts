@@ -21,9 +21,9 @@ import {
   unreadNotificationCount,
 } from "../../core/notifications.ts";
 import { badRequest, notFound } from "../../core/errors.ts";
-import { MAX_AVATAR_BYTES, bajtyAwatara, pobierzAwatar, ustawAwatar, usunAwatar } from "../../core/awatary.ts";
+import { MAX_AVATAR_BYTES, readAvatarBytes, getAvatar, setAvatar, deleteAvatar } from "../../core/avatars.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
-import { int, intDodatni, json, odrzucKoperteMultipart, readJson, readRaw, str } from "../respond.ts";
+import { int, nonNegativeInt, json, rejectMultipartEnvelope, readJson, readRaw, str } from "../respond.ts";
 import type { Router } from "../router.ts";
 
 // MIME types a browser can EXECUTE in the application's origin (a script, HTML, an SVG with
@@ -36,13 +36,13 @@ const ACTIVE_MIME =
 /** The file name from a header. `decodeURIComponent` throws a URIError on bad %-encoding
 /**  (say "report%zz.txt"), and an unhandled URIError is a 500 - that is, the server reports
 /**  its own failure where it was the client that sent junk. */
-function dekodujNazwe(raw: string): string {
+function decodeFileNameHeader(raw: string): string {
   try {
     return decodeURIComponent(raw);
   } catch {
     throw badRequest(
-      "zla_nazwa",
-      "naglowek X-File-Name ma nieprawidlowe kodowanie procentowe (uzyj encodeURIComponent)",
+      "invalid_name",
+      "the X-File-Name header has invalid percent encoding; use encodeURIComponent",
     );
   }
 }
@@ -82,8 +82,8 @@ export function registerExtraRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     json(res, 200, {
       messages: mentionsOf(rc.ctx, actor.id, {
-        afterId: intDodatni(rc.query.get("after") ?? undefined),
-        limit: intDodatni(rc.query.get("limit") ?? undefined),
+        afterId: nonNegativeInt(rc.query.get("after") ?? undefined),
+        limit: nonNegativeInt(rc.query.get("limit") ?? undefined),
       }),
     });
   });
@@ -94,10 +94,10 @@ export function registerExtraRoutes(router: Router): void {
     // ?summary=1 returns the counter alone. The side panel asks for the digest every 30 s just
     // to show ONE NUMBER - and the full response is tens of kilobytes of message content. The
     // full digest is fetched only when the summary is opened.
-    const samoPodsumowanie = ["1", "true", "yes"].includes(
+    const summaryOnly = ["1", "true", "yes"].includes(
       String(rc.query.get("summary") ?? "").toLowerCase(),
     );
-    if (samoPodsumowanie) {
+    if (summaryOnly) {
       json(res, 200, {
         digest: digest ? { count: digest.count, sinceId: digest.sinceId } : null,
       });
@@ -165,13 +165,13 @@ export function registerExtraRoutes(router: Router): void {
   // --- avatars -------------------------------------------------------------
 
   /** Your own avatar: YOU SEND THE BYTES, not a URL. The server fetches nothing from the network
-  /**  on anybody's request - see the reasoning in core/awatary.ts. */
+  /**  on anybody's request - see the reasoning in core/avatars.ts. */
   router.add("PUT", "/api/me/avatar", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const data = await readRaw(req, MAX_AVATAR_BYTES);
-    odrzucKoperteMultipart(data, str(req.headers["content-type"]));
-    const a = ustawAwatar(rc.ctx, rc.config.filesDir, actor.id, data,
+    rejectMultipartEnvelope(data, str(req.headers["content-type"]));
+    const a = setAvatar(rc.ctx, rc.config.filesDir, actor.id, data,
                           str(req.headers["content-type"]) ?? undefined);
     json(res, 200, { avatar: { hash: a.hash, mime: a.mime },
                      url: `/api/actors/${actor.id}/avatar?v=${a.hash}` });
@@ -180,7 +180,7 @@ export function registerExtraRoutes(router: Router): void {
   router.add("DELETE", "/api/me/avatar", (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
-    usunAwatar(rc.ctx, rc.config.filesDir, actor.id);
+    deleteAvatar(rc.ctx, rc.config.filesDir, actor.id);
     json(res, 200, { ok: true });
   });
 
@@ -189,11 +189,11 @@ export function registerExtraRoutes(router: Router): void {
   /**  despite long caching. */
   router.add("GET", "/api/actors/:id/avatar", (_req, res, rc) => {
     requireAuth(rc);
-    const a = pobierzAwatar(rc.ctx, Number(rc.params.id));
-    if (!a) throw notFound("awatar", `aktor ${rc.params.id} nie ma awatara`);
+    const a = getAvatar(rc.ctx, Number(rc.params.id));
+    if (!a) throw notFound("avatar_not_found", `actor ${rc.params.id} has no avatar; upload one first`);
     let data: Buffer;
-    try { data = bajtyAwatara(rc.config.filesDir, a); }
-    catch { throw notFound("awatar", "plik awatara zniknal z dysku"); }
+    try { data = readAvatarBytes(rc.config.filesDir, a); }
+    catch { throw notFound("avatar_not_found", "the avatar file is missing from disk; upload it again"); }
     res.writeHead(200, {
       // The format is verified by CONTENT at write time and limited to raster formats, so the type
       // can be returned as it is - otherwise the avatar would not be an image but a downloaded
@@ -214,14 +214,14 @@ export function registerExtraRoutes(router: Router): void {
     assertCsrf(rc, req);
     const nameHeader = req.headers["x-file-name"];
     if (typeof nameHeader !== "string" || !nameHeader.trim()) {
-      throw badRequest("brak_nazwy", "podaj naglowek X-File-Name (URL-encoded)");
+      throw badRequest("name_required", "provide the URL-encoded X-File-Name header");
     }
     const data = await readRaw(req, rc.config.maxFileBytes);
-    odrzucKoperteMultipart(data, str(req.headers["content-type"]));
+    rejectMultipartEnvelope(data, str(req.headers["content-type"]));
     const result = storeFile(rc.ctx, rc.config.filesDir, {
       actorId: actor.id,
       conversationId: Number(rc.params.id),
-      name: dekodujNazwe(nameHeader),
+      name: decodeFileNameHeader(nameHeader),
       data,
       mime: str(req.headers["content-type"]) ?? "application/octet-stream",
       maxBytes: rc.config.maxFileBytes,
@@ -257,7 +257,7 @@ export function registerExtraRoutes(router: Router): void {
   router.add("GET", "/api/files/:id/info", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
     const info = getFileInfo(rc.ctx, rc.params.id, actor.id);
-    if (!info) throw notFound("plik", `nie ma pliku ${rc.params.id} (albo wygasl)`);
+    if (!info) throw notFound("file_not_found", `file ${rc.params.id} was not found or has expired; check the file ID`);
     json(res, 200, { file: info });
   });
 
@@ -289,12 +289,12 @@ export function registerExtraRoutes(router: Router): void {
     assertCsrf(rc, req);
     const body = await readJson(req, 4096);
     const target = str(body.target);
-    if (!target) throw badRequest("brak_target", "podaj target (URL webhooka)");
+    if (!target) throw badRequest("target_required", "provide target (the webhook URL)");
     let result;
     try {
       result = setWake(rc.ctx, actor.id, target, { allowLoopback: rc.config.allowLoopbackWake });
     } catch (err) {
-      throw badRequest("zly_target", err instanceof Error ? err.message : String(err));
+      throw badRequest("invalid_target", err instanceof Error ? err.message : String(err));
     }
     json(res, 200, result);
   });

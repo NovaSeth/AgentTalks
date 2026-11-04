@@ -21,7 +21,7 @@ export type ConvKind = "public" | "private" | "dm" | "group";
 export type Notify = "all" | "mentions" | "none";
 export type Role = "admin" | "member";
 
-export type Rozmowca = { handle: string; displayName: string; kind: string };
+export type ConversationParticipant = { handle: string; displayName: string; kind: string };
 
 export type Conversation = {
   id: number;
@@ -33,7 +33,7 @@ export type Conversation = {
   archivedAt: number | null;
   /** The participants of a direct conversation OTHER than the asker - for dm/group only.
    *  Thanks to this the conversation list has names and faces right after login. */
-  others?: Rozmowca[];
+  others?: ConversationParticipant[];
 };
 
 export type Member = {
@@ -88,8 +88,8 @@ export function createChannel(
   ctx: Ctx,
   input: { slug: string; kind: "public" | "private"; topic?: string; createdBy: number },
 ): Conversation {
-  const slug = normalizeSlug(input.slug, "nazwa kanalu");
-  if (getBySlug(ctx, slug)) throw conflict("kanal_istnieje", `kanal "${slug}" juz istnieje`);
+  const slug = normalizeSlug(input.slug, "channel name");
+  if (getBySlug(ctx, slug)) throw conflict("channel_exists", `channel "${slug}" already exists; choose another name`);
   // One transaction for the channel and the creator's membership: a failure in the middle
   // would burn the unique slug forever, leaving a ghost channel with no admin at all.
   return tx(ctx.db, () => {
@@ -131,7 +131,7 @@ export function getBySlug(ctx: Ctx, slug: string): Conversation | null {
 export function ensureDirect(ctx: Ctx, actorIds: readonly number[]): Conversation {
   const ids = [...new Set(actorIds)].sort((a, b) => a - b);
   if (ids.length < 2) {
-    throw badRequest("za_malo_uczestnikow", "rozmowa wymaga co najmniej dwoch roznych osob");
+    throw badRequest("too_few_members", "a conversation requires at least two different participants");
   }
   const key = ids.join(",");
   // The whole thing in one transaction: a conversation without its full membership is the
@@ -166,7 +166,7 @@ export function join(
 ): Member {
   const existing = getMember(ctx, convId, actorId);
   if (existing) return existing;
-  if (!getConversation(ctx, convId)) throw notFound("konwersacja", `nie ma konwersacji ${convId}`);
+  if (!getConversation(ctx, convId)) throw notFound("conversation_not_found", `conversation ${convId} was not found; check the conversation ID`);
   // OR IGNORE: two processes joining the same pair at the same moment must not end with a
   // raw primary-key error for the loser.
   //
@@ -186,7 +186,7 @@ export function leave(ctx: Ctx, convId: number, actorId: number): void {
   if (conv && (conv.kind === "dm" || conv.kind === "group")) {
     // Leaving a DM would leave a conversation with one participant and messages nobody can
     // read. A direct conversation is hidden, not left.
-    throw badRequest("nie_mozna_wyjsc", "z rozmowy bezposredniej nie da sie wyjsc");
+    throw badRequest("cannot_leave", "you cannot leave a direct conversation");
   }
   ctx.db
     .prepare("DELETE FROM members WHERE conversation_id = ? AND actor_id = ?")
@@ -222,7 +222,7 @@ export function assertCanRead(ctx: Ctx, convId: number, actorId: number): Conver
   // Deliberately the same error for "does not exist" and "not allowed": otherwise the server's
   // answer would reveal private channels to somebody with no right to them.
   if (!conv || !canRead(ctx, convId, actorId)) {
-    throw forbidden("brak_dostepu", "brak dostepu do tej konwersacji");
+    throw forbidden("no_access", "you do not have access to this conversation; ask a channel admin to add you");
   }
   return conv;
 }
@@ -231,7 +231,7 @@ export function assertCanRead(ctx: Ctx, convId: number, actorId: number): Conver
  *  you a participant. For everything else you have to be a member already. */
 export function assertCanPost(ctx: Ctx, convId: number, actorId: number): Conversation {
   const conv = assertCanRead(ctx, convId, actorId);
-  if (conv.archivedAt) throw forbidden("zarchiwizowana", "ta konwersacja jest zarchiwizowana");
+  if (conv.archivedAt) throw forbidden("conversation_archived", "this conversation is archived; ask an admin to restore it");
   if (conv.kind === "public" && !isMember(ctx, convId, actorId)) join(ctx, convId, actorId);
   return conv;
 }
@@ -254,23 +254,23 @@ export function listForActor(ctx: Ctx, actorId: number): Conversation[] {
   // the conversation's name appeared only once you opened it and messages arrived. In a
   // messenger the conversation list IS the navigation, so it has to be readable from the
   // first frame (Messenger: faces and names, not content).
-  const rozmowcy = ctx.db.prepare(
+  const participants = ctx.db.prepare(
     `SELECT m.conversation_id AS cid, a.handle, a.display_name, a.kind
        FROM members m JOIN actors a ON a.id = m.actor_id
       WHERE m.actor_id <> ? AND m.conversation_id IN (
         SELECT conversation_id FROM members WHERE actor_id = ?
       )`,
   ).all(actorId, actorId) as Array<{ cid: number; handle: string; display_name: string; kind: string }>;
-  const wgRozmowy = new Map<number, Array<{ handle: string; displayName: string; kind: string }>>();
-  for (const r of rozmowcy) {
-    const lista = wgRozmowy.get(r.cid) ?? [];
-    lista.push({ handle: r.handle, displayName: r.display_name, kind: r.kind });
-    wgRozmowy.set(r.cid, lista);
+  const participantsByConversation = new Map<number, Array<{ handle: string; displayName: string; kind: string }>>();
+  for (const r of participants) {
+    const list = participantsByConversation.get(r.cid) ?? [];
+    list.push({ handle: r.handle, displayName: r.display_name, kind: r.kind });
+    participantsByConversation.set(r.cid, list);
   }
   return rows.map((r) => {
     const conv = toConv(r);
     if (r.kind === "dm" || r.kind === "group") {
-      return { ...conv, others: wgRozmowy.get(r.id) ?? [] };
+      return { ...conv, others: participantsByConversation.get(r.id) ?? [] };
     }
     return conv;
   });
@@ -318,11 +318,11 @@ export function recipientsOf(ctx: Ctx, convId: number): number[] {
 /** A channel is managed by its admin (a role in members) or the instance admin. */
 function assertCanManage(ctx: Ctx, convId: number, actorId: number, isInstanceAdmin: boolean): Conversation {
   const conv = getConversation(ctx, convId);
-  if (!conv) throw notFound("konwersacja", `nie ma konwersacji ${convId}`);
+  if (!conv) throw notFound("conversation_not_found", `conversation ${convId} was not found; check the conversation ID`);
   if (isInstanceAdmin) return conv;
   const m = getMember(ctx, convId, actorId);
   if (!m || m.role !== "admin") {
-    throw forbidden("brak_uprawnien", "tym kanalem zarzadza jego admin (albo admin instancji)");
+    throw forbidden("not_permitted", "only a channel admin or instance admin can manage this channel");
   }
   return conv;
 }
@@ -337,11 +337,11 @@ export function updateConversation(
   return tx(ctx.db, () => {
     if (input.slug !== undefined) {
       if (conv.kind !== "public" && conv.kind !== "private") {
-        throw badRequest("bez_slug", "nazwe (slug) ma tylko kanal, nie rozmowa bezposrednia");
+        throw badRequest("slug_required", "only channels have a name (slug); a direct conversation cannot be renamed");
       }
-      const slug = normalizeSlug(input.slug, "nazwa kanalu");
+      const slug = normalizeSlug(input.slug, "channel name");
       const taken = getBySlug(ctx, slug);
-      if (taken && taken.id !== conv.id) throw conflict("kanal_istnieje", `kanal "${slug}" juz istnieje`);
+      if (taken && taken.id !== conv.id) throw conflict("channel_exists", `channel "${slug}" already exists; choose another name`);
       ctx.db.prepare("UPDATE conversations SET slug = ? WHERE id = ?").run(slug, conv.id);
     }
     if (input.topic !== undefined) {
@@ -363,7 +363,7 @@ export function archiveConversation(
   input: { convId: number; actorId: number; isInstanceAdmin: boolean },
 ): void {
   const conv = assertCanManage(ctx, input.convId, input.actorId, input.isInstanceAdmin);
-  if (conv.kind === "dm") throw badRequest("dm_nie_znika", "rozmowy 1:1 sie nie archiwizuje");
+  if (conv.kind === "dm") throw badRequest("dm_cannot_be_deleted", "one-to-one conversations cannot be archived");
   if (conv.archivedAt) return; // idempotent
   const audience = recipientsOf(ctx, conv.id);
   ctx.db.prepare("UPDATE conversations SET archived_at = ? WHERE id = ?").run(ctx.now(), conv.id);
@@ -380,12 +380,12 @@ export function removeMember(
   input: { convId: number; actorId: number; targetActorId: number; isInstanceAdmin: boolean },
 ): void {
   const conv = input.targetActorId === input.actorId
-    ? (getConversation(ctx, input.convId) ?? (() => { throw notFound("konwersacja", `nie ma konwersacji ${input.convId}`); })())
+    ? (getConversation(ctx, input.convId) ?? (() => { throw notFound("conversation_not_found", `conversation ${input.convId} was not found; check the conversation ID`); })())
     : assertCanManage(ctx, input.convId, input.actorId, input.isInstanceAdmin);
   if (conv.kind === "dm" || conv.kind === "group") {
     // Consistent with leave(): the membership of a direct conversation is fixed; you hide it
     // rather than trim its participants.
-    throw badRequest("dm_staly", "z rozmowy bezposredniej nie usuwa sie uczestnikow");
+    throw badRequest("dm_members_fixed", "participants cannot be removed from a direct conversation");
   }
   // Event recipients are COUNTED BEFORE the removal - the one being removed should learn of it too.
   const audience = recipientsOf(ctx, conv.id);

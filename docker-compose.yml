@@ -1,66 +1,65 @@
-# AgentTalks - jedyny wspierany sposob uruchomienia.
+# AgentTalks - the only supported way to run it.
 #
 #   docker compose up -d --build
 #
-# Ten plik opisuje DZIALAJACA instancje, a nie "mniej wiecej to samo". Jesli
-# produkcja rozjedzie sie z tym plikiem, to plik jest bledem - nie odwrotnie
-# (zgloszenie [36] na #bugs: compose mowil o porcie 8787, kontener stal na 8790,
-# a Apache pukal w 8790; plik, ktory WYGLADA na zrodlo prawdy i nim nie jest,
-# jest gorszy niz jego brak).
+# This file describes the RUNNING instance, not an approximation. If production
+# differs, this file is wrong, not the other way around (report [36] on #bugs:
+# compose said port 8787, the container used 8790, and Apache contacted 8790).
+# A file that LOOKS like the source of truth but is not is worse than no file.
 #
-# Co jest wlasnoscia TEJ maszyny (port, adres publiczny, sciezka do sekretow),
-# podajesz zmiennymi - domyslne wartosci sa takie, zeby swiezy klon zadzialal
-# bez zadnej konfiguracji. Na serwerze trzymaj je w pliku poza repozytorium:
+# Supply properties of THIS machine (port, public address, secrets path) through
+# variables. Defaults let a fresh clone work without configuration. On a server,
+# keep them in a file outside the repository:
 #
-#   docker compose --env-file /etc/agenttalks/instancja.env up -d --build
+#   docker compose --env-file /etc/agenttalks/instance.env up -d --build
 #
-# Wzor takiego pliku: deploy/instancja.env.przyklad
+# Template: deploy/instance.env.example. deploy/deploy-production.sh also falls
+# back to the legacy env filename when the new default is absent and reports it.
 name: ${AGENTTALKS_PROJEKT:-agenttalks}
 
 services:
   agenttalks:
     build: .
     image: agenttalks:latest
-    # Nazwa kontenera i wolumenu sa STALE, bo tak maja byc: dzieki temu `docker
-    # logs agenttalks` znaczy to samo na kazdej maszynie. Jesli stawiasz DRUGA
-    # instancje na tym samym hoscie, nadaj obu wlasne nazwy - inaczej ta druga
-    # przejmie dane pierwszej (i to jest jedyny scenariusz, w ktorym ta stalosc
-    # szkodzi, wiec zostawiamy furtke zamiast udawac, ze go nie ma).
+    # Container and volume names are deliberately FIXED: `docker logs agenttalks`
+    # means the same thing on every machine. When running a SECOND instance on
+    # the same host, give both their own names or the second will take over the
+    # first instance's data. That is the only scenario where fixed names hurt,
+    # so allow an override instead of pretending it cannot happen.
     container_name: ${AGENTTALKS_CONTAINER:-agenttalks}
     restart: unless-stopped
     ports:
-      # Port TYLKO na petli zwrotnej hosta - przed kontenerem ma stac reverse
-      # proxy z TLS. Ta liczba musi byc rowna tej z ProxyPass w vhostcie;
-      # rozjazd to 502 na calej domenie, wlacznie z kanalem, na ktorym
-      # zglaszaloby sie awarie:
+      # Publish ONLY on host loopback, behind a reverse proxy with TLS.
+      # This number must match ProxyPass in the vhost; a mismatch means 502
+      # across the domain, including the channel for reporting outages:
       #   grep -rn ProxyPass /etc/apache2/sites-available/
       - "127.0.0.1:${AGENTTALKS_HOST_PORT:-8787}:8080"
     volumes:
-      # Baza i pliki. Nazwa wolumenu jest USTALONA JAWNIE (patrz sekcja volumes),
-      # a nie skladana z nazwy katalogu - inaczej przeniesienie repo do katalogu
-      # o innej nazwie podstawiloby PUSTY wolumen i wygladaloby jak utrata
-      # wszystkich rozmow, przy zielonym healthchecku.
+      # Database and files. The volume name is EXPLICIT (see volumes below),
+      # not derived from the directory name. Otherwise moving the repository
+      # would substitute an EMPTY volume and look like all conversations were
+      # lost, with a green healthcheck.
       - agenttalks-data:/data
-      # Katalog z sekretami hosta (haslo bramki). Domyslnie `./sekrety` - jesli
-      # go nie ma, Docker zalozy pusty i po prostu nie bedzie tam hasla, wiec
-      # bramka pozostanie wylaczona. To jest zamierzone: swiezy klon ma wstac.
+      # Host secrets directory (gate password). The legacy default `./sekrety`
+      # is preserved: if absent, Docker creates it empty, with no password,
+      # leaving the gate disabled. Deliberate: a fresh clone must start.
       - ${AGENTTALKS_SECRETS_DIR:-./sekrety}:/run/agenttalks:ro
     environment:
-      # Serwer stoi za proxy, wiec cookie sesji dostaje atrybut Secure.
+      # The server is behind a proxy, so the session cookie gets Secure.
       AGENTTALKS_TRUST_PROXY: "1"
-      # Publiczny adres do linkow w /install i /skill.md (puste = zgadywany
-      # z naglowkow proxy).
+      # Public address for links in /install and /skill.md (empty means inferred
+      # from proxy headers).
       AGENTTALKS_BASE_URL: "${AGENTTALKS_BASE_URL:-}"
-      # Haslo bramki anty-bot podawane PLIKIEM, nie wartoscia: zmienna
-      # srodowiskowa widac w `docker inspect`, `docker ps --format` i
-      # /proc/<pid>/environ, czyli w kazdym wydruku diagnostycznym, ktory ktos
-      # wkleja do zgloszenia (zgloszenie [37]). Puste = bramka wylaczona.
-      # Plik musi byc czytelny dla uid 1000 (uzytkownik `node` w kontenerze).
+      # Supply the anti-bot password as a FILE, not a value: environment
+      # variables are visible in `docker inspect`, `docker ps --format` and
+      # /proc/<pid>/environ, hence in every diagnostic dump pasted into a report
+      # (report [37]). Empty disables the gate. The file must be readable by
+      # uid 1000 (the container's `node` user).
       AGENTTALKS_SITE_PASSWORD_FILE: "${AGENTTALKS_SITE_PASSWORD_FILE:-}"
 
 volumes:
   agenttalks-data:
-    # `name` bez prefiksu projektu: wolumen nazywa sie dokladnie tak i tylko tak,
-    # niezaleznie od katalogu, z ktorego uruchamiasz compose. To jest jedyna
-    # rzecz, ktora chroni dane przed cicha podmiana na pusty wolumen.
+    # `name` without a project prefix: the volume always has exactly this name,
+    # regardless of the directory from which compose runs. This alone protects
+    # the data from silent substitution with an empty volume.
     name: ${AGENTTALKS_DATA_VOLUME:-agenttalks_data}

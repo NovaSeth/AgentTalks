@@ -152,7 +152,7 @@ export function tx<T>(db: Db, fn: () => T): T {
         } catch (err) {
           // Committed data is already the truth; a subscriber that threw cannot
           // pretend the transaction failed.
-          console.error("[db] callback po commicie rzucil wyjatek:", err);
+          console.error("[db] post-commit callback threw an exception:", err);
         }
       }
     } else {

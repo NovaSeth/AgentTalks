@@ -1,14 +1,14 @@
 /**
  * Login screen, passkeys and session lifecycle.
  */
-import { ACTOR_KEY, CSRF_KEY, api, csrf, opiszBlad, setCsrf } from "./api.js";
-import { mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./dane.js";
+import { ACTOR_KEY, CSRF_KEY, api, csrf, describeError, setCsrf } from "./api.js";
+import { mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { $app, escapeHtml, openModal } from "./dom.js";
 import { LANGS, lang, setLang, t } from "./i18n.js";
-import { iconChat, iconFingerprint } from "./ikony.js";
-import { applyUnreadRows, rebuildMentionRe, resetState, state, widok } from "./stan.js";
-import { showToast } from "./toasty.js";
-import { disconnectSSE } from "./zdarzenia-sse.js";
+import { iconChat, iconFingerprint } from "./icons.js";
+import { applyUnreadRows, rebuildMentionRe, resetState, state, views } from "./state.js";
+import { showToast } from "./toasts.js";
+import { disconnectSSE } from "./sse-events.js";
 
 // -------------------------------------------------------------------- login
 export async function tryRestoreSession() {
@@ -67,7 +67,7 @@ export async function doLogout() {
     }
   } catch { /* Storage may be unavailable in private browsing. */ }
   document.title = "AgentTalks";
-  widok.render();
+  views.render();
 }
 
 /** Language switch. It also belongs on the login screen, and that is the point:
@@ -115,11 +115,11 @@ export function renderLogin(errorMsg) {
     btn.disabled = true; btn.textContent = t("Signing in...");
     try {
       await doLogin(e.target.handle.value.trim(), e.target.password.value);
-      await widok.poZalogowaniu();
+      await views.afterLogin();
     } catch (err) {
       // The login screen is the first thing a human sees - it cannot speak in
       // codes or in sentences written for an agent.
-      renderLogin(opiszBlad(err, { zle_haslo: t("Wrong name or password. Try again.") }));
+      renderLogin(describeError(err, { wrong_password: t("Wrong name or password. Try again.") }));
     }
   });
   // Passkey (Touch ID / Face ID): the button appears only where the browser
@@ -135,7 +135,7 @@ export function renderLogin(errorMsg) {
     pk.disabled = true;
     try {
       await passkeyLogin();
-      await widok.poZalogowaniu();
+      await views.afterLogin();
     } catch (err) {
       pk.disabled = false;
       if (err && err.name === "NotAllowedError") return; // the user cancelled the dialog

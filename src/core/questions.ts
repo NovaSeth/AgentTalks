@@ -52,7 +52,7 @@ export function answer(
   const q = ctx.db.prepare("SELECT * FROM questions WHERE id = ?").get(input.questionId) as
     | { id: number; message_id: number; conversation_id: number; closed_at: number | null }
     | undefined;
-  if (!q) throw notFound("pytanie", `nie ma pytania ${input.questionId}`);
+  if (!q) throw notFound("question_not_found", `question ${input.questionId} was not found; check the question ID`);
   assertCanRead(ctx, q.conversation_id, input.actorId);
 
   // ONE transaction for the answer message and closing the question, with a RE-CHECK of the
@@ -62,7 +62,7 @@ export function answer(
     const fresh = ctx.db
       .prepare("SELECT closed_at, message_id, conversation_id FROM questions WHERE id = ?")
       .get(q.id) as { closed_at: number | null; message_id: number; conversation_id: number };
-    if (fresh.closed_at) throw badRequest("juz_zamkniete", "na to pytanie ktos juz odpowiedzial");
+    if (fresh.closed_at) throw badRequest("already_closed", "this question has already been answered");
 
     // The answer lands in the question's thread - so "what answered what" follows from the
     // structure rather than from reading in order.
@@ -98,9 +98,9 @@ export function openQuestions(
          JOIN conversations c ON c.id = qu.conversation_id
          JOIN messages m ON m.id = qu.message_id AND m.deleted_at IS NULL
         WHERE qu.closed_at IS NULL
-          -- Kanal zarchiwizowany nie przyjmuje juz wiadomosci, wiec na pytanie
-          -- w nim NIE DA SIE odpowiedziec. Zostawianie go na liscie "do podjecia"
-          -- to licznik, ktorego nie da sie wyzerowac inaczej niz ignorowaniem.
+          -- An archived channel no longer accepts messages, so its questions
+          -- CANNOT be answered. Leaving them on the pending list creates a
+          -- counter that can only be cleared by ignoring them.
           AND c.archived_at IS NULL
           AND (? IS NULL OR qu.conversation_id = ?)
           AND (c.kind = 'public'

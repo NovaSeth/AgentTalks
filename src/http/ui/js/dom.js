@@ -1,9 +1,9 @@
 /**
  * DOM helpers: HTML escaping, avatars, time formats, modal window, drawer.
  */
-import { iconMenu } from "./ikony.js";
+import { iconMenu } from "./icons.js";
 import { locale, t } from "./i18n.js";
-import { avatarUrl, state } from "./stan.js";
+import { avatarUrl, state } from "./state.js";
 
 export const $app = document.getElementById("app");
 
@@ -26,7 +26,7 @@ export const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
 // than CSS animations.
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-export const zachowanieScrolla = (smooth) => (smooth && !REDUCED_MOTION.matches ? "smooth" : "auto");
+export const scrollBehavior = (smooth) => (smooth && !REDUCED_MOTION.matches ? "smooth" : "auto");
 
 /** The only live region in the application (#live). We announce what is NEW,
  *  not the whole re-rendered branch - hence the text is assembled by hand
@@ -159,7 +159,7 @@ export const IMG_RE = /\.(png|jpe?g|gif|webp|avif)$/i;
 const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 /** @param html modal content; the heading should carry id="m-title" (aria-labelledby).
- *  @param opts.trwaly a window that CANNOT be dismissed with Escape or a backdrop
+ *  @param opts.persistent a window that CANNOT be dismissed with Escape or a backdrop
  *         click. Reserved for content shown once and unrecoverable (an invite
  *         code): a reflexive Escape cost the whole operation there. */
 export function openModal(html, opts = {}) {
@@ -171,7 +171,7 @@ export function openModal(html, opts = {}) {
   document.body.appendChild(ov);
 
   const onKey = (e) => {
-    if (e.key === "Escape" && !ov.dataset.trwaly) { e.preventDefault(); close(); return; }
+    if (e.key === "Escape" && !ov.dataset.persistent) { e.preventDefault(); close(); return; }
     if (e.key !== "Tab") return;
     const f = [...ov.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
     if (!f.length) return;
@@ -188,9 +188,9 @@ export function openModal(html, opts = {}) {
     if (returnTo && document.contains(returnTo)) returnTo.focus();
   }
   document.addEventListener("keydown", onKey, true);
-  ov.addEventListener("click", (e) => { if (e.target === ov && !ov.dataset.trwaly) close(); });
+  ov.addEventListener("click", (e) => { if (e.target === ov && !ov.dataset.persistent) close(); });
   const modal = ov.querySelector(".modal");
-  if (opts.trwaly) ov.dataset.trwaly = "1";
+  if (opts.persistent) ov.dataset.persistent = "1";
   // Focus on the first field, or - when the window is just a message - on the
   // window itself.
   const firstField = modal.querySelector('input:not([type="hidden"]),textarea,select,button');
@@ -203,7 +203,7 @@ export function openModal(html, opts = {}) {
     overlay: ov,
     modal,
     close,
-    zablokujZamykanie: () => { ov.dataset.trwaly = "1"; },
+    preventDismiss: () => { ov.dataset.persistent = "1"; },
   };
 }
 
@@ -275,16 +275,16 @@ export const hamburgerHtml = () => `<button class="iconbtn hamburger" id="btn-me
 /** An empty state says WHAT TO DO HERE, not merely "nothing". The third argument
  *  is an optional button {id, label} - wiring it up stays with the view, because
  *  the view is what knows what should happen. */
-export function emptyStateHtml(iconHtml, title, sub, akcja) {
+export function emptyStateHtml(iconHtml, title, sub, action) {
   return `<div class="empty"><div class="big">${iconHtml}</div><h2>${escapeHtml(title)}</h2>
     <p>${escapeHtml(sub)}</p>
-    ${akcja ? `<button class="btn slim" id="${akcja.id}">${escapeHtml(akcja.label)}</button>` : ""}</div>`;
+    ${action ? `<button class="btn slim" id="${action.id}">${escapeHtml(action.label)}</button>` : ""}</div>`;
 }
 
 /** An empty sidebar section: one sentence and, when there is something to do, a button. */
-export function sidebarEmptyHtml(text, akcja) {
+export function sidebarEmptyHtml(text, action) {
   return `<div class="sb-empty">${escapeHtml(text)}
-    ${akcja ? `<button class="sb-cta" id="${akcja.id}">${escapeHtml(akcja.label)}</button>` : ""}</div>`;
+    ${action ? `<button class="sb-cta" id="${action.id}">${escapeHtml(action.label)}</button>` : ""}</div>`;
 }
 
 export function skeletonHtml() {
@@ -304,7 +304,7 @@ export function scrollToBottom(smooth) {
   if (!el) return;
   // The "reduced motion" preference has to be honoured here too: scrollTo is not
   // a CSS animation, so no @media rule would stop it.
-  el.scrollTo({ top: el.scrollHeight, behavior: zachowanieScrolla(smooth) });
+  el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior(smooth) });
 }
 
 /** The "new below" pill: visible when you are not at the bottom; a click scrolls

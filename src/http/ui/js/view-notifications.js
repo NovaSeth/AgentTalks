@@ -2,14 +2,14 @@
  * The notification centre and the permission prompt for system notifications.
  */
 import { api } from "./api.js";
-import { refreshNotifications } from "./dane.js";
+import { refreshNotifications } from "./data.js";
 import { emptyStateHtml, escapeHtml, fmtDateTime, hamburgerHtml, openModal, toggleDrawerClass } from "./dom.js";
-import { iconBell, iconChat, iconDoc, iconWrench } from "./ikony.js";
+import { iconBell, iconChat, iconDoc, iconWrench } from "./icons.js";
 import { msg, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
-import { dmLabel, state, widok } from "./stan.js";
-import { showError, showToast } from "./toasty.js";
-import { openWikiPage } from "./widok-wiki.js";
+import { dmLabel, state, views } from "./state.js";
+import { showError, showToast } from "./toasts.js";
+import { openWikiPage } from "./view-wiki.js";
 
 /** The permission request for notifications. Called from the notification centre
  *  - that is, from the place where the user is already thinking about how they
@@ -32,34 +32,34 @@ async function askNotificationPermission() {
 /** The "What's new" modal: a list of fresh capabilities, shown once after a
  *  change. The content comes from the server (NEWS.md) and is already marked as
  *  delivered.
- *  @param poZamknieciu called when the window disappears - the greetings are a
+ *  @param onClose called when the window disappears - the greetings are a
  *         queue, so the next one can only start once this one frees the screen. */
-export function showNewsModal(news, poZamknieciu) {
+export function showNewsModal(news, onClose) {
   const { modal, close } = openModal(`
       <h2 id="m-title">${t("What's new")}</h2>
       <div class="md news-body">${mdToHtml(news.text, "page", state.actor.handle)}</div>
       <div class="row"><button class="btn" id="news-ok">${t("Got it, thanks")}</button></div>`,
   { modalClass: "wide news-modal" });
-  let zamkniete = false;
-  const koniec = () => {
-    if (zamkniete) return;
-    zamkniete = true;
+  let closed = false;
+  const finish = () => {
+    if (closed) return;
+    closed = true;
     document.removeEventListener("keydown", onEscape, true);
-    poZamknieciu?.();
+    onClose?.();
   };
-  const onEscape = (e) => { if (e.key === "Escape") koniec(); };
-  modal.querySelector("#news-ok").addEventListener("click", () => { close(); koniec(); });
+  const onEscape = (e) => { if (e.key === "Escape") finish(); };
+  modal.querySelector("#news-ok").addEventListener("click", () => { close(); finish(); });
   // Escape and a backdrop click close the window without going through our
   // button - without this the greeting queue would stall forever.
-  modal.closest(".overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) koniec(); });
+  modal.closest(".overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) finish(); });
   document.addEventListener("keydown", onEscape, true);
 }
 
 export async function openNotificationsView() {
   state.view = "notifications";
   state.drawerOpen = false;
-  widok.powloka();
-  widok.glowny();
+  views.shell();
+  views.main();
   toggleDrawerClass();
   await refreshNotifications();
   renderNotificationsMain();
@@ -143,7 +143,7 @@ export function renderNotificationsMain() {
     } catch (e) { showError(e); }
   });
   el.querySelector("#notif-go-chat")?.addEventListener("click", () => {
-    state.view = "chat"; widok.powloka();
+    state.view = "chat"; views.shell();
   });
   el.querySelectorAll("[data-notif]").forEach((b) =>
     b.addEventListener("click", () => openNotification(Number(b.dataset.notif))));
@@ -159,5 +159,5 @@ async function openNotification(id) {
       .catch(() => {});
   }
   if (n.wikiSlug) { openWikiPage(n.wikiSlug); return; }
-  if (n.conversationId) widok.otworzRozmowe(n.conversationId, n.messageId ?? undefined);
+  if (n.conversationId) views.openConversation(n.conversationId, n.messageId ?? undefined);
 }

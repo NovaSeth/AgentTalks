@@ -1,3 +1,4 @@
+// Polish fixture message bodies exercise exact content delivery through SSE and long-poll.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bearer, openSse, startTestServer, type TestServer } from "../http-helpers.ts";
@@ -9,25 +10,25 @@ import { createChannel, ensureDirect, join } from "../../src/core/conversations.
 function seed(s: TestServer) {
   const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
   const bob = createActor(s.ctx, { kind: "agent", handle: "bob" });
-  const kanal = createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
-  join(s.ctx, kanal.id, bob.id);
-  const prywatny = createChannel(s.ctx, { slug: "tajne", kind: "private", createdBy: ala.id });
+  const channel = createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
+  join(s.ctx, channel.id, bob.id);
+  const privateChannel = createChannel(s.ctx, { slug: "tajne", kind: "private", createdBy: ala.id });
   const dm = ensureDirect(s.ctx, [ala.id, bob.id]);
   return {
     ala, bob,
     tokenA: mintToken(s.ctx, ala.id, "t").token,
     tokenB: mintToken(s.ctx, bob.id, "t").token,
-    kanalId: kanal.id,
-    prywatnyId: prywatny.id,
+    channelId: channel.id,
+    privateChannelId: privateChannel.id,
     dmId: dm.id,
   };
 }
 
-test("SSE dostarcza wiadomosc do czlonka konwersacji", async () => {
+test("SSE delivers a message to a conversation member", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, kanalId } = seed(s);
+  const { tokenA, tokenB, channelId } = seed(s);
   const es = await openSse(s.url + "/api/events", tokenB);
-  await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "push" }),
   });
   const ev = await es.next(2000) as any;
@@ -37,11 +38,11 @@ test("SSE dostarcza wiadomosc do czlonka konwersacji", async () => {
   await s.close();
 });
 
-test("SSE nie dostarcza z konwersacji, ktorej nie jestem czlonkiem", async () => {
+test("SSE does not deliver from a conversation the actor has not joined", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, prywatnyId } = seed(s);
+  const { tokenA, tokenB, privateChannelId } = seed(s);
   const es = await openSse(s.url + "/api/events", tokenB);
-  await fetch(`${s.url}/api/conversations/${prywatnyId}/messages`, {
+  await fetch(`${s.url}/api/conversations/${privateChannelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "tajne" }),
   });
   await assert.rejects(() => es.next(500), /timeout/);
@@ -49,7 +50,7 @@ test("SSE nie dostarcza z konwersacji, ktorej nie jestem czlonkiem", async () =>
   await s.close();
 });
 
-test("SSE wznawia sie od kursora i dosyla zaleglosci", async () => {
+test("SSE resumes from a cursor and delivers the backlog", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
@@ -62,7 +63,7 @@ test("SSE wznawia sie od kursora i dosyla zaleglosci", async () => {
   await s.close();
 });
 
-test("zerwany klient SSE zwalnia subskrypcje", async () => {
+test("a disconnected SSE client releases its subscription", async () => {
   const s = await startTestServer();
   const { bob, tokenB } = seed(s);
   const es = await openSse(s.url + "/api/events", tokenB);
@@ -72,7 +73,7 @@ test("zerwany klient SSE zwalnia subskrypcje", async () => {
   await s.close();
 });
 
-test("long-poll wraca natychmiast, gdy sa zalegle wiadomosci", async () => {
+test("long-poll returns immediately when there are pending messages", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
@@ -82,12 +83,12 @@ test("long-poll wraca natychmiast, gdy sa zalegle wiadomosci", async () => {
   const r = await (await fetch(`${s.url}/api/messages?after=0&wait=30`, {
     headers: bearer(tokenB),
   })).json();
-  assert.ok(Date.now() - t0 < 1000, "long-poll czekal mimo zaleglosci");
+  assert.ok(Date.now() - t0 < 1000, "long-poll waited despite pending messages");
   assert.equal(r.messages.length, 1);
   await s.close();
 });
 
-test("long-poll budzi sie na wiadomosc NATYCHMIAST, nie przez timeout", async () => {
+test("long-poll wakes IMMEDIATELY on a message rather than timing out", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   const t0 = Date.now();
@@ -100,13 +101,13 @@ test("long-poll budzi sie na wiadomosc NATYCHMIAST, nie przez timeout", async ()
   const elapsed = Date.now() - t0;
   // Broken waking would also return the message - but only after a 10 s timeout.
   // The proof that waking works is the TIME, not the content of the response.
-  assert.ok(elapsed < 5000, `long-poll wrocil po ${elapsed} ms - to byl timeout, nie wybudzenie`);
+  assert.ok(elapsed < 5000, `long-poll returned after ${elapsed} ms; it timed out instead of waking`);
   assert.equal(r.messages.length, 1);
   assert.equal(r.messages[0].body, "w trakcie");
   await s.close();
 });
 
-test("SSE bez kursora NIE dosyla historii - tylko to, co nadejdzie", async () => {
+test("SSE without a cursor does NOT deliver history, only new arrivals", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
@@ -118,7 +119,7 @@ test("SSE bez kursora NIE dosyla historii - tylko to, co nadejdzie", async () =>
   await s.close();
 });
 
-test("SSE wznawia z Last-Event-ID i dosyla backlog wiekszy niz jedna strona", async () => {
+test("SSE resumes from Last-Event-ID and delivers a backlog larger than one page", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   // 205 messages > the resumption page (200) - a single page would cut off the tail
@@ -134,12 +135,12 @@ test("SSE wznawia z Last-Event-ID i dosyla backlog wiekszy niz jedna strona", as
     got.push(ev.message.body);
   }
   assert.equal(got.length, 205);
-  assert.equal(got[204], "zaleglosc 204", "ogon backlogu powyzej 200 zostal uciety");
+  assert.equal(got[204], "zaleglosc 204", "the backlog beyond 200 was truncated");
   es.close();
   await s.close();
 });
 
-test("wznowienie SSE dosyla message_updated dla edycji sprzed kursora", async () => {
+test("resuming SSE delivers message_updated for an edit before the cursor", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   const m = (await (await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
@@ -157,7 +158,7 @@ test("wznowienie SSE dosyla message_updated dla edycji sprzed kursora", async ()
   await s.close();
 });
 
-test("long-poll konczy sie pusta lista po uplywie wait", async () => {
+test("long-poll ends with an empty list when wait expires", async () => {
   const s = await startTestServer();
   const { tokenB } = seed(s);
   const r = await (await fetch(`${s.url}/api/messages?after=999999&wait=1`, {
@@ -167,7 +168,7 @@ test("long-poll konczy sie pusta lista po uplywie wait", async () => {
   await s.close();
 });
 
-test("long-poll nie zwraca wlasnych wiadomosci", async () => {
+test("long-poll does not return the actor's own messages", async () => {
   const s = await startTestServer();
   const { tokenA, dmId } = seed(s);
   await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
@@ -180,7 +181,7 @@ test("long-poll nie zwraca wlasnych wiadomosci", async () => {
   await s.close();
 });
 
-test("long-poll bez uwierzytelnienia daje 401", async () => {
+test("long-poll without authentication returns 401", async () => {
   const s = await startTestServer();
   const r = await fetch(`${s.url}/api/messages?after=0&wait=0`);
   assert.equal(r.status, 401);

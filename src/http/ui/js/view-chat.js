@@ -1,16 +1,16 @@
 /**
  * The conversation view: the message list, the composer, a thread, the details panel.
  */
-import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./akcje.js";
+import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./actions.js";
 import { api, csrf } from "./api.js";
-import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./dane.js";
-import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, zachowanieScrolla } from "./dom.js";
-import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./ikony.js";
+import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
+import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, scrollBehavior } from "./dom.js";
+import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./icons.js";
 import { renderBody } from "./markdown.js";
 import { t } from "./i18n.js";
-import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, czyZgloszenie, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, przytnijCache, pushRecent, saveDraft, state, upsertMessage, widoczneWiadomosci, widok, zgloszenia } from "./stan.js";
-import { showError, showToast } from "./toasty.js";
-import { openWikiPage, renderWikiMain } from "./widok-wiki.js";
+import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, isReport, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, trimConversationCache, pushRecent, saveDraft, state, upsertMessage, visibleMessages, views, reports } from "./state.js";
+import { showError, showToast } from "./toasts.js";
+import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
@@ -19,15 +19,15 @@ const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀",
 // ------------------------------------------------- entering a conversation
 export async function openConversation(id, focusMessageId) {
   saveDraft();                       // the PREVIOUS conversation's draft, before we redraw anything
-  const poprzednia = state.activeId;
+  const previousConversation = state.activeId;
   // The "new messages" line disappears only on LEAVING a conversation - otherwise the one place
   // that said "this is where you stopped" gets lost while you are still reading.
-  if (poprzednia && poprzednia !== id) delete state.readMark[poprzednia];
+  if (previousConversation && previousConversation !== id) delete state.readMark[previousConversation];
   state.view = "chat";
   state.activeId = id;
-  try { localStorage.setItem("atalks_last_conv", String(id)); } catch { /* prywatny tryb */ }
+  try { localStorage.setItem("atalks_last_conv", String(id)); } catch { /* private browsing */ }
   pushRecent(id);
-  przytnijCache();
+  trimConversationCache();
   state.drawerOpen = false;
   state.threadOpen = null;
   const draft = loadDraft(id);
@@ -39,7 +39,7 @@ export async function openConversation(id, focusMessageId) {
   if (state.readMark[id] === undefined) {
     state.readMark[id] = state.memberships[id]?.lastReadMessageId ?? 0;
   }
-  widok.render();
+  views.render();
   if (!state.loaded[id]) {
     state.loadingConv = true;
     renderMain();
@@ -58,7 +58,6 @@ export async function openConversation(id, focusMessageId) {
   const questionsReady = refreshQuestions(id);
   // Pins are needed straight away: without them the message menu does not know whether to offer
   // "Pin" or "Unpin". Previously only the details panel fetched them.
-  // "Przypnij" czy "Odepnij". Wczesniej pobieral je wylacznie panel szczegolow.
   state.convPins = [];
   const pinsReady = loadPins(id);
   if (focusMessageId) {
@@ -73,15 +72,15 @@ export async function openConversation(id, focusMessageId) {
     const list = target?.threadId ? "#th-msgs" : "#messages";
     const el = document.querySelector(`${list} [data-msg="${focusMessageId}"]`);
     if (el) {
-      el.scrollIntoView({ block: "center", behavior: zachowanieScrolla(false) });
+      el.scrollIntoView({ block: "center", behavior: scrollBehavior(false) });
       el.classList.add("flash");
       setTimeout(() => el.classList.remove("flash"), 1600);
     }
   } else {
     // Entering positions itself on the unread LINE when there is one - "catching up on the
     // backlog" is meant to be a finite action, not scrolling upwards by feel.
-    const linia = document.querySelector("#messages .newline");
-    if (linia) linia.scrollIntoView({ block: "start", behavior: zachowanieScrolla(false) });
+    const unreadLine = document.querySelector("#messages .newline");
+    if (unreadLine) unreadLine.scrollIntoView({ block: "start", behavior: scrollBehavior(false) });
     else scrollToBottom(false);
   }
   // Two reasons why this is NOT unconditional:
@@ -134,9 +133,9 @@ export function offlineBarHtml() {
 export function updateOfflineBar() {
   const main = document.getElementById("main");
   if (!main) return;
-  const istnieje = document.getElementById("offbar");
-  if (state.online) { istnieje?.remove(); return; }
-  if (istnieje) return;
+  const existing = document.getElementById("offbar");
+  if (state.online) { existing?.remove(); return; }
+  if (existing) return;
   const topbar = main.querySelector(".topbar");
   if (topbar) topbar.insertAdjacentHTML("afterend", offlineBarHtml());
 }
@@ -144,8 +143,8 @@ export function updateOfflineBar() {
 export function renderMain() {
   const el = document.getElementById("main");
   if (!el) return;
-  if (state.view === "users") { widok.uzytkownicy(); return; }
-  if (state.view === "notifications") { widok.powiadomienia(); return; }
+  if (state.view === "users") { views.users(); return; }
+  if (state.view === "notifications") { views.notifications(); return; }
   if (state.view === "wiki") { renderWikiMain(); return; }
   if (!state.activeId) {
     // An empty state says what to do and gives a button for it - "choose a conversation" with
@@ -323,13 +322,13 @@ export function renderDetails() {
     b.addEventListener("click", async () => {
       const h = b.dataset.kick;
       const self = h === state.actor.handle;
-      const zgoda = await confirmModal(self
+      const confirmed = await confirmModal(self
         ? { title: t("Leave this conversation?"), body: t("You stop receiving messages from it. The history stays."), ok: t("Leave the conversation"), danger: true }
         : { title: t("Remove @{handle} from the conversation?", { handle: h }), body: t("This person stops seeing new messages. What they have already read stays with them."), ok: t("Remove @{handle}", { handle: h }), danger: true });
-      if (!zgoda) return;
+      if (!confirmed) return;
       try {
         await api("DELETE", `/api/conversations/${c.id}/members/${encodeURIComponent(h)}`);
-        if (self) { state.detailsOpen = false; await loadConversationsList(); widok.sidebar(); renderMain(); return; }
+        if (self) { state.detailsOpen = false; await loadConversationsList(); views.sidebar(); renderMain(); return; }
         await refreshDetailsData(); renderDetails();
       } catch (e) { showError(e); }
     }));
@@ -367,7 +366,7 @@ export function renderDetails() {
     try {
       await api("POST", `/api/conversations/${c.id}/leave`, {});
       state.detailsOpen = false;
-      await loadConversationsList(); widok.sidebar(); renderMain();
+      await loadConversationsList(); views.sidebar(); renderMain();
     } catch (e) { showError(e); }
   });
   const arch = document.getElementById("dt-archive");
@@ -384,7 +383,7 @@ export function renderDetails() {
       await loadConversationsList();
       const next = state.conversations.find((x) => state.memberships[x.id]);
       state.activeId = null;
-      widok.sidebar();
+      views.sidebar();
       if (next) openConversation(next.id); else renderMain();
     } catch (e) { showError(e); }
   });
@@ -407,7 +406,7 @@ function editChannelModal(c) {
       await api("PATCH", `/api/conversations/${c.id}`, { slug: slug || undefined, topic });
       close();
       await loadConversationsList();
-      widok.sidebar(); renderMain();
+      views.sidebar(); renderMain();
       showToast(t("Channel updated"));
     } catch (e) { showError(e); }
   });
@@ -422,8 +421,8 @@ export function renderTopbar() {
   if (isDirect) {
     // The participants from the server (`others`) are available from the first frame, so the
     // header has a name and a presence dot before the first message arrives.
-    const inni = dmOthers(c);
-    const online = inni.length > 0 && inni.some((o) => handleOnline(o.handle));
+    const others = dmOthers(c);
+    const online = others.length > 0 && others.some((o) => handleOnline(o.handle));
     bar.innerHTML = `<span class="ppresence big ${online ? "on" : ""}"></span> ${escapeHtml(dmLabel(c))}`;
   } else {
     const pre = c.kind === "private" ? `${iconLock(true)} ` : "# ";
@@ -499,7 +498,7 @@ function bindScrollWatch(el) {
 
 /** An open inline edit lives ONLY in the DOM - it has to be remembered before a
  *  redraw, otherwise any SSE event erases a half-written sentence. */
-function zapiszOtwartaEdycje(el) {
+function saveOpenEdit(el) {
   const ta = el.querySelector(".inline-edit textarea");
   if (!ta) return null;
   const holder = ta.closest("[data-text],[data-answer-cta]");
@@ -513,7 +512,7 @@ function zapiszOtwartaEdycje(el) {
   };
 }
 
-function odtworzOtwartaEdycje(el, snap) {
+function restoreOpenEdit(el, snap) {
   if (!snap) return;
   const holder = el.querySelector(snap.sel);
   if (!holder) return;
@@ -531,10 +530,10 @@ export function renderMessages() {
   if (!el) return;
   if (closeEmojiPopover) closeEmojiPopover();
   if (closeMsgMenu) closeMsgMenu();
-  const edycja = zapiszOtwartaEdycje(el);
-  const trzymajDol = isScrolledToBottom();
+  const openEdit = saveOpenEdit(el);
+  const keepAtBottom = isScrolledToBottom();
   const scrollTop = el.scrollTop;
-  const list = widoczneWiadomosci(state.activeId);
+  const list = visibleMessages(state.activeId);
   if (!list.length) {
     el.innerHTML = emptyStateHtml(iconChat(2.2), t("Quiet so far"),
       t("Nobody has written anything here yet. Start with the first sentence - agents and humans will see it the same way."));
@@ -553,16 +552,16 @@ export function renderMessages() {
     ? `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>` : "";
   const idx = threadIndex(state.activeId);
   const mark = state.readMark[state.activeId] || 0;
-  let kreska = false;
+  let unreadLineShown = false;
   let lastDay = null, lastAuthor = null, lastTs = 0;
   for (const m of list) {
     const day = dayKey(m.ts);
     if (day !== lastDay) { html += `<div class="day">${dayLabel(m.ts)}</div>`; lastDay = day; lastAuthor = null; }
     // The "new messages" line: the one place that says "this is where you stopped reading". The
     // server has supplied lastReadMessageId all along, and the UI never used it once.
-    if (!kreska && mark && typeof m.id === "number" && m.id > mark && m.actorId !== state.actor.id) {
+    if (!unreadLineShown && mark && typeof m.id === "number" && m.id > mark && m.actorId !== state.actor.id) {
       html += `<div class="newline"><span>${t("New messages")}</span></div>`;
-      kreska = true;
+      unreadLineShown = true;
       lastAuthor = null;
     }
     const cont = m.actorId === lastAuthor && (m.ts - lastTs) < 300 && !m.deletedAt && m.kind !== "ask";
@@ -578,8 +577,8 @@ export function renderMessages() {
   if (lm) lm.addEventListener("click", () => { lm.disabled = true; loadOlderMessages(state.activeId); });
   // Reading position: replacing the children resets scrollTop, so we either hold the bottom
   // (because that is where we were) or return to where the user was actually looking.
-  el.scrollTop = trzymajDol ? el.scrollHeight : scrollTop;
-  odtworzOtwartaEdycje(el, edycja);
+  el.scrollTop = keepAtBottom ? el.scrollHeight : scrollTop;
+  restoreOpenEdit(el, openEdit);
 }
 
 /** A pointwise replacement of ONE bubble - the default path for live events.
@@ -590,27 +589,27 @@ export function upsertMessageNode(msg) {
   const el = document.getElementById("messages");
   if (!el) return;
   if (msg.threadId) { if (state.threadOpen) renderThread(); return; }
-  const stary = el.querySelector(`[data-msg="${msg.id}"]`);
+  const existingNode = el.querySelector(`[data-msg="${msg.id}"]`);
   const idx = threadIndex(state.activeId);
-  if (stary) {
+  if (existingNode) {
     // The bubble the user is writing in right now is untouchable.
-    if (stary.querySelector(".inline-edit")) return;
+    if (existingNode.querySelector(".inline-edit")) return;
     const tmp = document.createElement("div");
-    tmp.innerHTML = messageHtml(msg, stary.classList.contains("cont"), { threads: idx });
-    stary.replaceWith(tmp.firstElementChild);
+    tmp.innerHTML = messageHtml(msg, existingNode.classList.contains("cont"), { threads: idx });
+    existingNode.replaceWith(tmp.firstElementChild);
     return;
   }
   // We append ONLY at the end, and only when the list really is on screen. An insertion in the
   // middle (a replay after a break) goes through a normal render, so as not to break the order
   // or the day separators.
-  const lista = widoczneWiadomosci(state.activeId);
-  const i = lista.findIndex((x) => x.id === msg.id);
-  if (i !== lista.length - 1 || !el.querySelector("[data-msg]")) { renderMessages(); return; }
-  const poprz = lista[i - 1] || null;
-  const nowyDzien = !poprz || dayKey(poprz.ts) !== dayKey(msg.ts);
-  if (nowyDzien) el.insertAdjacentHTML("beforeend", `<div class="day">${dayLabel(msg.ts)}</div>`);
-  const cont = !nowyDzien && !!poprz && poprz.actorId === msg.actorId
-    && (msg.ts - poprz.ts) < 300 && !msg.deletedAt && msg.kind !== "ask" && poprz.kind !== "ask";
+  const list = visibleMessages(state.activeId);
+  const i = list.findIndex((x) => x.id === msg.id);
+  if (i !== list.length - 1 || !el.querySelector("[data-msg]")) { renderMessages(); return; }
+  const previousMessage = list[i - 1] || null;
+  const newDay = !previousMessage || dayKey(previousMessage.ts) !== dayKey(msg.ts);
+  if (newDay) el.insertAdjacentHTML("beforeend", `<div class="day">${dayLabel(msg.ts)}</div>`);
+  const cont = !newDay && !!previousMessage && previousMessage.actorId === msg.actorId
+    && (msg.ts - previousMessage.ts) < 300 && !msg.deletedAt && msg.kind !== "ask" && previousMessage.kind !== "ask";
   el.insertAdjacentHTML("beforeend", messageHtml(msg, cont, { threads: idx }));
 }
 
@@ -689,13 +688,13 @@ function deliveryHtml(m) {
   const d = state.lastDelivery;
   if (!d || d.conversationId !== m.conversationId || d.messageId !== m.id) return "";
   const parts = d.delivery.map((r) => {
-    const kto = `@${escapeHtml(r.handle)}`;
-    if (r.online) return `<span class="ok">${t("{who} is online now - will read it right away", { who: kto })}</span>`;
+    const who = `@${escapeHtml(r.handle)}`;
+    if (r.online) return `<span class="ok">${t("{who} is online now - will read it right away", { who: who })}</span>`;
     if (r.wakeable) {
-      const ile = timeAgo(r.lastSeenAt).replace(/ (ago|temu)$/, "");
-      return `<span class="warn">${t("{who} has been asleep for {how_long} - the server will wake them with this message", { who: kto, how_long: escapeHtml(ile) })}</span>`;
+      const elapsed = timeAgo(r.lastSeenAt).replace(/ (ago|temu)$/, "");
+      return `<span class="warn">${t("{who} has been asleep for {how_long} - the server will wake them with this message", { who: who, how_long: escapeHtml(elapsed) })}</span>`;
     }
-    return `<span class="off">${t("{who} is offline - will see it when they are back", { who: kto })}</span>`;
+    return `<span class="off">${t("{who} is offline - will see it when they are back", { who: who })}</span>`;
   });
   return `<div class="delivery">${parts.join(" · ")}</div>`;
 }
@@ -732,7 +731,7 @@ function messageHtml(m, cont, opts = {}) {
       </div>
     </div>`;
   }
-  const wolaMnie = mentionsMe(m.body);
+  const mentionsCurrentActor = mentionsMe(m.body);
   const isAsk = m.kind === "ask";
   const qid = state.openQuestions[m.id];
   const askOpen = isAsk && qid !== undefined;
@@ -749,18 +748,18 @@ function messageHtml(m, cont, opts = {}) {
   // Previously the wrench and the check hung next to EVERY message from somebody else, including
   // in a private conversation about lunch - and an accidental click sent somebody a request to
   // confirm something they had never reported.
-  const zgloszenie = czyZgloszenie(m);
-  const canResolve = zgloszenie && !m.deletedAt && m.kind !== "answer"
+  const report = isReport(m);
+  const canResolve = report && !m.deletedAt && m.kind !== "answer"
     && (mine || state.actor.isAdmin || (myMem && myMem.role === "admin"));
-  const canFix = zgloszenie && !mine && m.kind === "text" && !m.deletedAt;
-  const przypieta = state.convPins.some((p) => p.messageId === m.id);
+  const canFix = report && !mine && m.kind === "text" && !m.deletedAt;
+  const pinned = state.convPins.some((p) => p.messageId === m.id);
   const fresh = !animatedMsgs.has(m.id);
   // The set grew for the whole life of the tab. A reset past a threshold costs one unnecessary
   // entry animation and gives the memory back.
   if (animatedMsgs.size > 5000) animatedMsgs.clear();
   if (fresh) animatedMsgs.add(m.id);
   return `
-    <div class="msg ${fresh ? "enter" : ""} ${cont ? "cont" : ""} ${m.deletedAt ? "deleted" : ""} ${wolaMnie ? "mine-mention" : ""} ${isAsk ? "ask" : ""} ${m.kind === "answer" ? "answer" : ""} ${resolved ? "resolved" : ""}" data-msg="${m.id}">
+    <div class="msg ${fresh ? "enter" : ""} ${cont ? "cont" : ""} ${m.deletedAt ? "deleted" : ""} ${mentionsCurrentActor ? "mine-mention" : ""} ${isAsk ? "ask" : ""} ${m.kind === "answer" ? "answer" : ""} ${resolved ? "resolved" : ""}" data-msg="${m.id}">
       ${avatarHtml(handle)}
       <div class="body">
         <div class="head">
@@ -799,7 +798,7 @@ function messageHtml(m, cont, opts = {}) {
         ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark as fixed")}" title="${m.fixedAt ? t("Take back “fixed”") : t("Mark: I fixed it, waiting for confirmation")}">${iconWrench()}</button>` : ""}
         <button data-reply="${m.id}" aria-label="${t("Reply in a thread")}" title="${t("Reply in a thread")}">${iconThread()}</button>
         ${mine && m.kind === "text" ? `<button data-edit="${m.id}" aria-label="${t("Edit the message")}" title="${t("Edit")}">${iconEdit()}</button>` : ""}
-        <button data-more="${m.id}" data-pinned="${przypieta ? "1" : ""}" data-zgl="${zgloszenie ? "1" : ""}"
+        <button data-more="${m.id}" data-pinned="${pinned ? "1" : ""}" data-report="${report ? "1" : ""}"
           aria-label="${t("More actions")}" aria-haspopup="menu" title="${t("More")}">${iconMore()}</button>
       </div>` : ""}
     </div>`;
@@ -808,22 +807,22 @@ function messageHtml(m, cont, opts = {}) {
 // ONE delegated listener on the container instead of a dozen querySelectorAll passes after
 // every render. Thanks to that, replacing a single bubble requires re-attaching nothing - and
 // the message list does not have to be redrawn just to make the buttons work again.
-const PODPIETE = new WeakSet();
+const BOUND_SCOPES = new WeakSet();
 
 export function bindMessageEvents(scope) {
-  if (!scope || PODPIETE.has(scope)) return;
-  PODPIETE.add(scope);
+  if (!scope || BOUND_SCOPES.has(scope)) return;
+  BOUND_SCOPES.add(scope);
   scope.addEventListener("click", async (e) => {
-    const wez = (sel) => e.target.closest(sel);
+    const closest = (sel) => e.target.closest(sel);
     let b;
-    if ((b = wez("[data-react]"))) { toggleReaction(Number(b.dataset.react), b.dataset.emoji); return; }
-    if ((b = wez("[data-addreact]"))) { openEmojiPopover(Number(b.dataset.addreact), b); return; }
-    if ((b = wez("[data-reply]"))) { state.replyTo = Number(b.dataset.reply); renderComposer(); focusComposer(); return; }
-    if ((b = wez("[data-thread]"))) { openThread(Number(b.dataset.thread)); return; }
-    if ((b = wez("[data-resolve]"))) { resolveMsg(Number(b.dataset.resolve), !b.dataset.on); return; }
-    if ((b = wez("[data-fix]"))) { fixMsg(Number(b.dataset.fix), !b.dataset.on); return; }
-    if ((b = wez("[data-more]"))) { openMessageMenu(Number(b.dataset.more), b); return; }
-    if ((b = wez("[data-delete]"))) {
+    if ((b = closest("[data-react]"))) { toggleReaction(Number(b.dataset.react), b.dataset.emoji); return; }
+    if ((b = closest("[data-addreact]"))) { openEmojiPopover(Number(b.dataset.addreact), b); return; }
+    if ((b = closest("[data-reply]"))) { state.replyTo = Number(b.dataset.reply); renderComposer(); focusComposer(); return; }
+    if ((b = closest("[data-thread]"))) { openThread(Number(b.dataset.thread)); return; }
+    if ((b = closest("[data-resolve]"))) { resolveMsg(Number(b.dataset.resolve), !b.dataset.on); return; }
+    if ((b = closest("[data-fix]"))) { fixMsg(Number(b.dataset.fix), !b.dataset.on); return; }
+    if ((b = closest("[data-more]"))) { openMessageMenu(Number(b.dataset.more), b); return; }
+    if ((b = closest("[data-delete]"))) {
       const id = Number(b.dataset.delete);
       if (await confirmModal({
         title: t("Delete this message?"),
@@ -832,18 +831,18 @@ export function bindMessageEvents(scope) {
       })) deleteMsg(id);
       return;
     }
-    if ((b = wez("[data-edit]"))) { startInlineEdit(Number(b.dataset.edit), scope); return; }
-    if ((b = wez("[data-answer]"))) { startInlineAnswer(Number(b.dataset.answer), Number(b.dataset.msgRef), scope); return; }
-    if ((b = wez("[data-retry]"))) { retryPending(state.activeId, b.dataset.retry); return; }
-    if ((b = wez("[data-droppending]"))) { dropPending(state.activeId, b.dataset.droppending); return; }
-    if ((b = wez("[data-copytext]"))) {
+    if ((b = closest("[data-edit]"))) { startInlineEdit(Number(b.dataset.edit), scope); return; }
+    if ((b = closest("[data-answer]"))) { startInlineAnswer(Number(b.dataset.answer), Number(b.dataset.msgRef), scope); return; }
+    if ((b = closest("[data-retry]"))) { retryPending(state.activeId, b.dataset.retry); return; }
+    if ((b = closest("[data-droppending]"))) { dropPending(state.activeId, b.dataset.droppending); return; }
+    if ((b = closest("[data-copytext]"))) {
       const rec = (state.pending[state.activeId] || []).find((p) => p.clientMsgId === b.dataset.copytext);
       try { await navigator.clipboard.writeText(rec?.body ?? ""); showToast(t("Copied to the clipboard")); }
       catch { showToast(t("Could not copy"), { alert: true }); }
       return;
     }
-    if ((b = wez("[data-lightbox]"))) { openLightbox(b.dataset.lightbox); return; }
-    if ((b = wez("[data-copy]"))) {
+    if ((b = closest("[data-lightbox]"))) { openLightbox(b.dataset.lightbox); return; }
+    if ((b = closest("[data-copy]"))) {
       const code = b.parentElement.querySelector("code");
       try {
         await navigator.clipboard.writeText(code.textContent);
@@ -852,7 +851,7 @@ export function bindMessageEvents(scope) {
       } catch { showToast(t("Could not copy"), { alert: true }); }
       return;
     }
-    if ((b = wez("[data-wikilink]"))) {
+    if ((b = closest("[data-wikilink]"))) {
       e.preventDefault();
       const slug = b.dataset.wikilink;
       if (state.wiki.pages.some((p) => p.slug === slug)) { openWikiPage(slug); return; }
@@ -865,7 +864,7 @@ export function bindMessageEvents(scope) {
       state.wiki.revision = null;
       state.wiki.editing = true;
       state.wiki.draft = { title: slug, body: "" };
-      widok.sidebar();
+      views.sidebar();
       renderWikiMain();
     }
   });
@@ -881,10 +880,10 @@ export function bindMessageEvents(scope) {
       msg.classList.add("touch-actions");
     }, 500);
   }, { passive: true });
-  const anuluj = () => { clearTimeout(holdTimer); holdTimer = null; };
-  scope.addEventListener("pointerup", anuluj, { passive: true });
-  scope.addEventListener("pointercancel", anuluj, { passive: true });
-  scope.addEventListener("pointermove", anuluj, { passive: true });
+  const cancelHold = () => { clearTimeout(holdTimer); holdTimer = null; };
+  scope.addEventListener("pointerup", cancelHold, { passive: true });
+  scope.addEventListener("pointercancel", cancelHold, { passive: true });
+  scope.addEventListener("pointermove", cancelHold, { passive: true });
 }
 
 // --------------------------------------------------- the message "more" menu
@@ -899,25 +898,25 @@ function openMessageMenu(messageId, anchor) {
   const m = findMsgById(messageId);
   if (!m) return;
   const mine = m.actorId === state.actor.id;
-  const przypieta = state.convPins.some((p) => p.messageId === messageId);
-  const zgloszenie = czyZgloszenie(m);
-  const pozycje = [
-    { akcja: "pin", label: przypieta ? t("Unpin from the conversation") : t("Pin in the conversation"),
-      opis: przypieta ? t("It disappears from the pinned list.") : t("It goes to “Pinned” in the conversation details - for everybody.") },
-    ...(!zgloszenie && m.kind === "text" && !m.deletedAt
-      ? [{ akcja: "zgloszenie", label: t("Treat as a report"),
-        opis: t("Only then do the “I fixed it” and “I confirm it is gone” buttons appear.") }]
+  const pinned = state.convPins.some((p) => p.messageId === messageId);
+  const report = isReport(m);
+  const menuItems = [
+    { action: "pin", label: pinned ? t("Unpin from the conversation") : t("Pin in the conversation"),
+      description: pinned ? t("It disappears from the pinned list.") : t("It goes to “Pinned” in the conversation details - for everybody.") },
+    ...(!report && m.kind === "text" && !m.deletedAt
+      ? [{ action: "report", label: t("Treat as a report"),
+        description: t("Only then do the “I fixed it” and “I confirm it is gone” buttons appear.") }]
       : []),
-    { akcja: "kopiuj", label: t("Copy the text"), opis: "" },
-    ...(mine ? [{ akcja: "usun", label: t("Delete the message"), opis: t("Irreversible for everybody."), danger: true }] : []),
+    { action: "copy", label: t("Copy the text"), description: "" },
+    ...(mine ? [{ action: "delete", label: t("Delete the message"), description: t("Irreversible for everybody."), danger: true }] : []),
   ];
   const pop = document.createElement("div");
   pop.className = "msg-menu";
   pop.setAttribute("role", "menu");
-  pop.innerHTML = pozycje.map((p) => `
-    <button role="menuitem" data-mact="${p.akcja}" class="${p.danger ? "danger" : ""}">
+  pop.innerHTML = menuItems.map((p) => `
+    <button role="menuitem" data-mact="${p.action}" class="${p.danger ? "danger" : ""}">
       <span class="mm-l">${escapeHtml(p.label)}</span>
-      ${p.opis ? `<span class="mm-o">${escapeHtml(p.opis)}</span>` : ""}
+      ${p.description ? `<span class="mm-o">${escapeHtml(p.description)}</span>` : ""}
     </button>`).join("");
   document.body.appendChild(pop);
   const rect = anchor.getBoundingClientRect();
@@ -936,21 +935,21 @@ function openMessageMenu(messageId, anchor) {
   pop.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-mact]");
     if (!b) return;
-    const akcja = b.dataset.mact;
+    const action = b.dataset.mact;
     close();
-    if (akcja === "pin") { togglePin(messageId, !przypieta); return; }
-    if (akcja === "zgloszenie") {
-      zgloszenia.add(messageId);
-      widok.wiadomosc(findMsgById(messageId));
+    if (action === "pin") { togglePin(messageId, !pinned); return; }
+    if (action === "report") {
+      reports.add(messageId);
+      views.message(findMsgById(messageId));
       showToast(t("Treating this as a report. The message now carries “I fixed it” and “I confirm”."));
       return;
     }
-    if (akcja === "kopiuj") {
+    if (action === "copy") {
       try { await navigator.clipboard.writeText(m.body ?? ""); showToast(t("Copied to the clipboard.")); }
       catch { showToast(t("Could not copy."), { alert: true }); }
       return;
     }
-    if (akcja === "usun") {
+    if (action === "delete") {
       if (await confirmModal({
         title: t("Delete this message?"),
         body: t("The content disappears from the conversation for everybody. A “message deleted” trace stays in its place."),
@@ -964,7 +963,7 @@ function openMessageMenu(messageId, anchor) {
   pop.querySelector("button")?.focus();
 }
 
-// ------------------------------------------------------- edycja inline
+// ------------------------------------------------------- inline editing
 /** @param scope the container the click came from. The same message is sometimes in the
 /**  document TWICE (the main list + the thread root), so searching the whole document always
 /**  hit the first occurrence - that is, it opened the edit field in the copy the user cannot
@@ -1034,20 +1033,20 @@ function openLightbox(url) {
   overlay.setAttribute("aria-label", t("Image preview - Escape closes it"));
   overlay.innerHTML = `<img src="${url}" alt="${t("Enlarged attachment")}">`;
   document.body.appendChild(overlay);
-  const wrocDo = document.activeElement;
+  const returnFocus = document.activeElement;
   // The listener is removed in ONE place: previously only the Escape branch exited, so closing
   // by a click left a live close handler holding a reference to a removed element.
   const close = () => {
     overlay.remove();
     document.removeEventListener("keydown", onKey);
-    if (wrocDo && document.contains(wrocDo)) wrocDo.focus();
+    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
   };
   const onKey = (e) => { if (e.key === "Escape") close(); };
   overlay.addEventListener("click", close);
   document.addEventListener("keydown", onKey);
 }
 
-// ------------------------------------------------------------- reakcje: popover
+// ------------------------------------------------------------- reactions: popover
 let closeEmojiPopover = null;
 
 let emojiPopoverAnchor = null;
@@ -1090,29 +1089,29 @@ function openEmojiPopover(messageId, anchor) {
 // ------------------------------------------------------------- composer
 let draftTimer = null;
 
-function zapiszSzkicPozniej() { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 400); }
+function scheduleDraftSave() { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 400); }
 
 /** A shared entry point for files from the dialog, from the clipboard and from a drag. */
-function dodajPliki(files) {
+function addFiles(files) {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   for (const file of files) {
     // A screenshot from the clipboard arrives with no sensible name ("image.png"), and it has to
     // be recognisable later in the attachment list.
-    const nazwany = file.name && file.name !== "image.png"
+    const namedFile = file.name && file.name !== "image.png"
       ? file
-      : new File([file], `wklejone-${stamp}.${file.type.split("/")[1] || "png"}`, { type: file.type });
+      : new File([file], t("pasted-{stamp}.{extension}", { stamp, extension: file.type.split("/")[1] || "png" }), { type: file.type });
     state.pendingFiles.push({
-      file: nazwany, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      url: nazwany.type.startsWith("image/") ? URL.createObjectURL(nazwany) : null,
+      file: namedFile, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      url: namedFile.type.startsWith("image/") ? URL.createObjectURL(namedFile) : null,
       sensitive: false, burn: false, ttlSec: 0,
     });
   }
   renderPreviews();
-  odswiezPrzyciskWyslij();
+  updateSendButton();
   saveDraft();
 }
 
-function odswiezPrzyciskWyslij() {
+function updateSendButton() {
   const send = document.getElementById("composer-send");
   const ta = document.getElementById("composer-input");
   if (!send || !ta) return;
@@ -1124,6 +1123,7 @@ function odswiezPrzyciskWyslij() {
 /** Dropping a file onto the WHOLE conversation area, as in Slack - three steps (save to disk,
 /**  open the dialog, find the file) turn into one. */
 function bindDropZone(el) {
+  el.dataset.dropLabel = t("Drop to attach");
   if (el.dataset.dropbound) return;
   el.dataset.dropbound = "1";
   const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
@@ -1133,7 +1133,7 @@ function bindDropZone(el) {
     stop(e);
     el.classList.remove("dropping");
     const files = [...(e.dataTransfer?.files || [])];
-    if (files.length) dodajPliki(files);
+    if (files.length) addFiles(files);
   });
 }
 
@@ -1183,13 +1183,13 @@ export function renderComposer() {
   // The draft returns to the field with the conversation (and survives F5 - the text is in localStorage).
   const draft = state.drafts[state.activeId];
   if (draft?.text) ta.value = draft.text;
-  ta.addEventListener("input", () => { autosize(); signalTyping(); mentionAutocomplete(ta); zapiszSzkicPozniej(); });
+  ta.addEventListener("input", () => { autosize(); signalTyping(); mentionAutocomplete(ta); scheduleDraftSave(); });
   ta.addEventListener("keydown", (e) => {
     if (mentionKeydown(e, ta)) return;
     // Slack's ArrowUp on an EMPTY field: edit your own last message. Without it a typo can be
     // fixed only by hitting a 1.8rem icon that is visible only on hover.
     if (e.key === "ArrowUp" && !ta.value.trim() && !state.pendingFiles.length) {
-      const mine = [...widoczneWiadomosci(state.activeId)].reverse()
+      const mine = [...visibleMessages(state.activeId)].reverse()
         .find((m) => m.actorId === state.actor.id && m.kind === "text" && !m.deletedAt && !m.pending && !m.failed);
       if (mine) { e.preventDefault(); startInlineEdit(mine.id, document.getElementById("messages")); return; }
     }
@@ -1201,13 +1201,13 @@ export function renderComposer() {
     const files = [...(e.clipboardData?.files || [])];
     if (!files.length) return;
     e.preventDefault();
-    dodajPliki(files);
+    addFiles(files);
     autosize();
   });
   send.addEventListener("click", submit);
   attachBtn.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => {
-    dodajPliki([...fileInput.files]);
+    addFiles([...fileInput.files]);
     fileInput.value = "";
     autosize();
   });
@@ -1219,12 +1219,12 @@ export function renderComposer() {
     ta.value = ""; renderPreviews(); autosize();
     // A file that failed to send RETURNS to the previews - otherwise it would disappear together
     // with the only copy of the choice the user made.
-    const nieudane = [];
+    const failedFiles = [];
     for (const p of files) {
       const ok = await uploadAttachment(p);
-      if (ok) { if (p.url) URL.revokeObjectURL(p.url); } else nieudane.push(p);
+      if (ok) { if (p.url) URL.revokeObjectURL(p.url); } else failedFiles.push(p);
     }
-    if (nieudane.length) { state.pendingFiles = [...nieudane, ...state.pendingFiles]; renderPreviews(); odswiezPrzyciskWyslij(); }
+    if (failedFiles.length) { state.pendingFiles = [...failedFiles, ...state.pendingFiles]; renderPreviews(); updateSendButton(); }
     if (v) await sendMessage(v);
     saveDraft();
   }
@@ -1239,7 +1239,7 @@ export function renderComposer() {
  *  a collapsed menu with full labels and a sentence about the consequence; closed by default,
  *  so sending a file normally does not get harder, but nobody burns an attachment without
  *  having read what it does. */
-function wybraneOpcje(p) {
+function selectedFileOptions(p) {
   return [
     p.sensitive ? t("sensitive") : null,
     p.burn ? t("disappears after reading") : null,
@@ -1250,9 +1250,9 @@ function wybraneOpcje(p) {
 }
 
 function fileOptsHtml(p) {
-  const wybrane = wybraneOpcje(p);
+  const selected = selectedFileOptions(p);
   return `<details class="pv-opts" data-pvopts="${p.id}">
-    <summary>${wybrane.length ? escapeHtml(wybrane.join(" · ")) : t("Who can open it, and for how long")}</summary>
+    <summary>${selected.length ? escapeHtml(selected.join(" · ")) : t("Who can open it, and for how long")}</summary>
     <div class="pv-menu">
       <label class="pv-check">
         <input type="checkbox" data-pvsens="${p.id}" ${p.sensitive ? "checked" : ""}>
@@ -1280,40 +1280,40 @@ function fileOptsHtml(p) {
 function renderPreviews() {
   const box = document.getElementById("composer-previews");
   if (!box) return;
-  const usun = (p) => `<button data-rmpv="${p.id}" aria-label="${t("Remove the attachment {name}", { name: escapeHtml(p.file.name) })}"
+  const remove = (p) => `<button data-rmpv="${p.id}" aria-label="${t("Remove the attachment {name}", { name: escapeHtml(p.file.name) })}"
     title="${t("Remove")}"><span aria-hidden="true">&times;</span></button>`;
   box.innerHTML = state.pendingFiles.map((p) => p.url
-    ? `<div class="preview img" data-pv="${p.id}"><img src="${p.url}" alt="${escapeHtml(p.file.name)}">${usun(p)}${fileOptsHtml(p)}</div>`
-    : `<div class="preview file" data-pv="${p.id}"><div class="pv-main">${iconFile()}<span class="pn">${escapeHtml(p.file.name)}</span>${usun(p)}</div>${fileOptsHtml(p)}</div>`
+    ? `<div class="preview img" data-pv="${p.id}"><img src="${p.url}" alt="${escapeHtml(p.file.name)}">${remove(p)}${fileOptsHtml(p)}</div>`
+    : `<div class="preview file" data-pv="${p.id}"><div class="pv-main">${iconFile()}<span class="pn">${escapeHtml(p.file.name)}</span>${remove(p)}</div>${fileOptsHtml(p)}</div>`
   ).join("");
   box.querySelectorAll("[data-rmpv]").forEach((b) => b.addEventListener("click", () => {
     const p = state.pendingFiles.find((x) => x.id === b.dataset.rmpv);
     if (p?.url) URL.revokeObjectURL(p.url);
     state.pendingFiles = state.pendingFiles.filter((x) => x.id !== b.dataset.rmpv);
     renderPreviews();
-    odswiezPrzyciskWyslij();
+    updateSendButton();
     saveDraft();
   }));
   // We refresh the summary in the header POINTWISE rather than redrawing the previews: a full
   // render would close the menu that was just opened, on every click on an option.
-  const odswiezPodsumowanie = (id) => {
+  const updateFileSummary = (id) => {
     const p = state.pendingFiles.find((x) => x.id === id);
     const sum = box.querySelector(`[data-pvopts="${id}"] > summary`);
     if (!p || !sum) return;
-    const wybrane = wybraneOpcje(p);
-    sum.textContent = wybrane.length ? wybrane.join(" · ") : t("Who can open it, and for how long");
+    const selected = selectedFileOptions(p);
+    sum.textContent = selected.length ? selected.join(" · ") : t("Who can open it, and for how long");
   };
   box.querySelectorAll("[data-pvsens]").forEach((b) => b.addEventListener("change", () => {
     const p = state.pendingFiles.find((x) => x.id === b.dataset.pvsens);
-    if (p) { p.sensitive = b.checked; odswiezPodsumowanie(p.id); }
+    if (p) { p.sensitive = b.checked; updateFileSummary(p.id); }
   }));
   box.querySelectorAll("[data-pvburn]").forEach((b) => b.addEventListener("change", () => {
     const p = state.pendingFiles.find((x) => x.id === b.dataset.pvburn);
-    if (p) { p.burn = b.checked; odswiezPodsumowanie(p.id); }
+    if (p) { p.burn = b.checked; updateFileSummary(p.id); }
   }));
   box.querySelectorAll("[data-pvttl]").forEach((s) => s.addEventListener("change", () => {
     const p = state.pendingFiles.find((x) => x.id === s.dataset.pvttl);
-    if (p) { p.ttlSec = Number(s.value) || 0; odswiezPodsumowanie(p.id); }
+    if (p) { p.ttlSec = Number(s.value) || 0; updateFileSummary(p.id); }
   }));
 }
 
@@ -1348,7 +1348,7 @@ async function uploadAttachment(p) {
 
 function focusComposer() { const ta = document.getElementById("composer-input"); if (ta) ta.focus(); }
 
-// ---------------------------------------------- autouzupelnianie @wzmianek
+// ---------------------------------------------- @mention autocomplete
 let mentionPop = null, mentionItems = [], mentionIndex = 0, mentionStart = -1;
 
 function closeMentionPopover() {
@@ -1396,18 +1396,18 @@ async function mentionAutocomplete(ta) {
   // @ and THERE ARE NO SUGGESTIONS (@michal's report). visualViewport gives the genuinely
   // visible rectangle; when the browser does not have it, the window remains.
   const vv = window.visualViewport;
-  const obszar = { top: vv?.offsetTop ?? 0, left: vv?.offsetLeft ?? 0,
-                   szer: vv?.width ?? window.innerWidth, wys: vv?.height ?? window.innerHeight };
-  const margines = 8;
+  const viewport = { top: vv?.offsetTop ?? 0, left: vv?.offsetLeft ?? 0,
+                   width: vv?.width ?? window.innerWidth, height: vv?.height ?? window.innerHeight };
+  const margin = 8;
   const w = mentionPop.offsetWidth, h = mentionPop.offsetHeight;
-  let left = Math.min(rect.left + margines, obszar.left + obszar.szer - w - margines);
-  left = Math.max(obszar.left + margines, left);
+  let left = Math.min(rect.left + margin, viewport.left + viewport.width - w - margin);
+  left = Math.max(viewport.left + margin, left);
   // By default ABOVE the field (where the writer is looking). When there is no room above -
   // below it. When there is nowhere - at the top edge of the visible area, because a list off
   // screen is the same thing as no list.
   let top = rect.top - h - 6;
-  if (top < obszar.top + margines) {
-    top = rect.bottom + 6 + h <= obszar.top + obszar.wys ? rect.bottom + 6 : obszar.top + margines;
+  if (top < viewport.top + margin) {
+    top = rect.bottom + 6 + h <= viewport.top + viewport.height ? rect.bottom + 6 : viewport.top + margin;
   }
   mentionPop.style.left = `${Math.round(left)}px`;
   mentionPop.style.top = `${Math.round(top)}px`;
@@ -1444,7 +1444,7 @@ function mentionKeydown(e, ta) {
   return false;
 }
 
-// ------------------------------------------------------------- watek (drawer)
+// ------------------------------------------------------------- thread (drawer)
 export function renderThread() {
   let host = document.getElementById("thread-slot");
   if (!host) return;
@@ -1511,7 +1511,7 @@ export function closeThread() {
   document.querySelector(`#messages [data-thread="${rootId}"]`)?.focus();
 }
 
-// ============================================================= PYTANIA panel
+// ============================================================= QUESTIONS panel
 export async function openQuestionsPanel() {
   let data;
   try { data = await api("GET", "/api/questions/open"); } catch (e) { showError(e); return; }
@@ -1572,15 +1572,15 @@ export async function openNewConversationModal(initialTab) {
         <div class="row"><button class="btn ghost" id="nc-cancel">${t("Cancel")}</button><button class="btn" id="nc-create">${t("Create")}</button></div>`;
       let kind = "public";
       const pub = body.querySelector("#nc-public"), priv = body.querySelector("#nc-private");
-      const wybierz = (ktory) => {
-        kind = ktory === pub ? "public" : "private";
+      const choose = (chosen) => {
+        kind = chosen === pub ? "public" : "private";
         for (const b of [pub, priv]) {
-          b.classList.toggle("on", b === ktory);
-          b.setAttribute("aria-checked", String(b === ktory));
+          b.classList.toggle("on", b === chosen);
+          b.setAttribute("aria-checked", String(b === chosen));
         }
       };
-      pub.addEventListener("click", () => wybierz(pub));
-      priv.addEventListener("click", () => wybierz(priv));
+      pub.addEventListener("click", () => choose(pub));
+      priv.addEventListener("click", () => choose(priv));
       body.querySelector("#nc-cancel").addEventListener("click", close);
       body.querySelector("#nc-create").addEventListener("click", async () => {
         const slug = body.querySelector("#nc-slug").value.trim();
@@ -1590,7 +1590,7 @@ export async function openNewConversationModal(initialTab) {
           const data = await api("POST", "/api/conversations", { kind, slug, topic });
           close();
           await loadConversationsList();
-          widok.sidebar();
+          views.sidebar();
           openConversation(data.conversation.id);
         } catch (e) { showError(e); }
       });
@@ -1613,7 +1613,7 @@ export async function openNewConversationModal(initialTab) {
           const data = await api("POST", "/api/conversations", { kind: selHandles.length > 1 ? "group" : "dm", members: selHandles });
           close();
           await loadConversationsList();
-          widok.sidebar();
+          views.sidebar();
           openConversation(data.conversation.id);
         } catch (e) { showError(e); }
       });

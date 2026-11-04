@@ -1,3 +1,4 @@
+// Polish synthetic passwords verify login limits and device exemptions with the original credential inputs.
 /** T-MG-6 fix round 2: per-account login cap BEFORE verification with an at_dev device cookie
  *  exemption (D-MG-14), CLI invite logging. */
 import { test } from "node:test";

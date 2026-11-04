@@ -13,8 +13,11 @@ of the machine**, which means:
 4. the same command starts the system locally on macOS and on the server.
 
 The image is small for Node, because there is no build step and no native modules:
-**248 MB** (measured). Its entire content is `node:26-alpine` plus the `src/`, `bin/`
-directories and `package.json`.
+**248 MB** was the measured image size at the time of the original deployment;
+rebuilds may differ. The pinned `node:26-alpine` base contains `src/`, `bin/`,
+`integrations/`, `AgentTalks.md`, `NEWS.md`, both package manifests, and production
+npm dependencies installed with `npm ci --omit=dev`. Tests and development
+dependencies are not copied into the image.
 
 ## Starting it
 
@@ -31,17 +34,23 @@ deployment (which deletes and unpacks the code directory from scratch) and never
 public git:
 
 ```bash
-docker compose --env-file /etc/agenttalks/instancja.env up -d --build
+docker compose --env-file /etc/agenttalks/instance.env up -d --build
 ```
 
-A template file: `deploy/instancja.env.przyklad`. A complete deployment with checks:
-`deploy/uruchom-produkcje.sh` - a backup, the volume actually mounted at /data, the last
+A template file: `deploy/instance.env.example`. Both deployment entry points select
+configuration on the VPS: `/etc/agenttalks/instance.env` by default, falling back to
+`/etc/agenttalks/instancja.env` only when the new default does not exist. The script
+prints the selected path. `AGENTTALKS_ENV_FILE` explicitly selects another file and
+never silently falls back if that override is missing.
+
+A complete deployment with checks:
+`deploy/deploy-production.sh` - a backup, the volume actually mounted at /data, the last
 message id from before and after, the gate closed AND letting the right password in, and
 every UI module fetched. That last one is not decoration: a module missing from the served
 whitelist meant a 404 and a blank page for every human, while the healthcheck, the gate
 check, the tests and CI were all green.
 
-From a development machine, `deploy/wypchnij-i-wdroz.sh` wraps it: it refuses to send
+From a development machine, `deploy/push-and-deploy.sh` wraps it: it refuses to send
 anything unless the working tree is clean, the tests and `tsc` pass locally, HEAD is
 pushed, and **CI for that exact commit is green** - a gate nothing depends on is an
 opinion, not a gate.
@@ -73,9 +82,9 @@ grep -n 'ports:' docker-compose.yml
 grep -rn 'ProxyPass' /etc/apache2/sites-available/<domain>-ssl.conf
 ```
 
-If an instance sits on a non-default port, record it in the `.env` file next to
-`docker-compose.yml` (`AGENTTALKS_HOST_PORT=8790`) rather than in the memory of whoever
-deployed it.
+If an instance sits on a non-default port, record it in the external instance env
+file (`AGENTTALKS_HOST_PORT=8790`) and pass that file to compose, rather than keeping
+it in the memory of whoever deployed it.
 
 ## The public gate password
 
@@ -121,6 +130,10 @@ number of skipped records **and their reasons**.
 Everything lives in the `agenttalks_data` volume mounted at `/data`: `agenttalks.sqlite`
 (the database), `agenttalks.json` (configuration with the session secret, mode 600),
 `files/` (uploaded files, stage 3).
+
+Wiki attachments are readable by **every signed-in actor**, because the wiki is
+shared across the instance. They do not inherit a private conversation's access
+rules. Conversation attachments remain restricted to that conversation's members.
 
 The proper route is `agenttalks backup` - it makes a **consistent** dump of the database
 (`VACUUM INTO`, safe against a live server in WAL mode) plus a copy of the file

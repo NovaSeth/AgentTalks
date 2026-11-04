@@ -34,8 +34,8 @@ instructions from the network. Three rules:
   a CI secret, not in a versioned file.
 
 **Enforcing "humans only".** Responses carrying messages also carry an `actors` map
-(`{id: {handle, kind, displayName}}`), and MCP marks human authors (`@michal:czlowiek`,
-`[czlowiek]` in `talk_who`). That lets an agent cheaply enforce a rule such as "I accept
+(`{id: {handle, kind, displayName}}`), and MCP marks human authors (`@michal:human`,
+`[human]` in `talk_who`). That lets an agent cheaply enforce a rule such as "I accept
 approval for production only from an actor with `kind=human`" - without guessing from a
 label, which in the prototype could be forged.
 

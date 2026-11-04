@@ -2,13 +2,13 @@
  * Wiki: page, editor, history, revision tree.
  */
 import { api } from "./api.js";
-import { loadWikiList, signalTyping } from "./dane.js";
+import { loadWikiList, signalTyping } from "./data.js";
 import { avatarHtml, confirmModal, escapeHtml, fmtDateTime, formatBytes, hamburgerHtml, openModal, skeletonHtml, timeAgo, toggleDrawerClass } from "./dom.js";
-import { iconDoc, iconEdit, iconFile, iconHistory, iconTrash } from "./ikony.js";
+import { iconDoc, iconEdit, iconFile, iconHistory, iconTrash } from "./icons.js";
 import { locale, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
-import { state, widok } from "./stan.js";
-import { showError, showToast } from "./toasty.js";
+import { state, views } from "./state.js";
+import { showError, showToast } from "./toasts.js";
 
 // --------------------------------------------------- the wiki editor's draft
 // The chat has long kept a message draft that survives F5 and a deployment; the wiki editor
@@ -16,42 +16,42 @@ import { showError, showToast } from "./toasty.js";
 // click on another page, closing the tab) erased them without asking.
 const WIKI_DRAFT_KEY = (slug) => `atalks_wiki_draft_${slug}`;
 
-function zapiszWersjeRobocza(slug, draft) {
+function saveWikiDraft(slug, draft) {
   if (!slug || !draft) return;
-  try { localStorage.setItem(WIKI_DRAFT_KEY(slug), JSON.stringify(draft)); } catch { /* prywatny tryb */ }
+  try { localStorage.setItem(WIKI_DRAFT_KEY(slug), JSON.stringify(draft)); } catch { /* private browsing */ }
 }
 
-function wczytajWersjeRobocza(slug) {
+function loadWikiDraft(slug) {
   try {
     const raw = localStorage.getItem(WIKI_DRAFT_KEY(slug));
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
-function skasujWersjeRobocza(slug) {
-  try { localStorage.removeItem(WIKI_DRAFT_KEY(slug)); } catch { /* prywatny tryb */ }
+function clearWikiDraft(slug) {
+  try { localStorage.removeItem(WIKI_DRAFT_KEY(slug)); } catch { /* private browsing */ }
 }
 
 /** Whether the editor holds anything the server does not have. */
-function saNiezapisaneZmiany() {
+function hasUnsavedChanges() {
   const w = state.wiki;
   if (!w.editing || !w.draft) return false;
-  const tytul = document.getElementById("we-title")?.value ?? w.draft.title;
-  const tresc = document.getElementById("we-body")?.value ?? w.draft.body;
-  return tytul !== (w.page?.title ?? w.slug) || tresc !== (w.page?.body ?? "");
+  const title = document.getElementById("we-title")?.value ?? w.draft.title;
+  const body = document.getElementById("we-body")?.value ?? w.draft.body;
+  return title !== (w.page?.title ?? w.slug) || body !== (w.page?.body ?? "");
 }
 
 /** Leaving the editor asks instead of erasing. Returns false when the user stays. */
-export async function mozeszOpuscicEdytorWiki() {
-  if (!saNiezapisaneZmiany()) return true;
-  const zapamietaj = () => {
-    zapiszWersjeRobocza(state.wiki.slug, {
+export async function canLeaveWikiEditor() {
+  if (!hasUnsavedChanges()) return true;
+  const rememberDraft = () => {
+    saveWikiDraft(state.wiki.slug, {
       title: document.getElementById("we-title")?.value ?? "",
       body: document.getElementById("we-body")?.value ?? "",
       parentSlug: document.getElementById("we-parent")?.value || null,
     });
   };
-  zapamietaj();   // save the text first, ask afterwards - in that order
+  rememberDraft();   // save the text first, ask afterwards - in that order
   return await confirmModal({
     title: t("You have unsaved changes on this page"),
     body: t("I saved them as a draft in this browser - they come back when you open the editor again. Leave without saving to the server?"),
@@ -63,22 +63,22 @@ export async function mozeszOpuscicEdytorWiki() {
 // well, and the handler for that event reopens the page when you are looking at it. The event
 // can outrun the response to DELETE, so the interface tried to load a page it had just told
 // to disappear - and showed "There is no such wiki page" next to its own "Deleted".
-const kasowaneStrony = new Set();
+const deletingPages = new Set();
 
 // ============================================================= WIKI
 export async function openWikiPage(slug) {
-  if (kasowaneStrony.has(slug)) return;
+  if (deletingPages.has(slug)) return;
   // Moving to another page while writing is the most common route to losing text - so we ask
   // here, not only at Cancel.
-  if (state.wiki.editing && state.wiki.slug !== slug && !(await mozeszOpuscicEdytorWiki())) return;
+  if (state.wiki.editing && state.wiki.slug !== slug && !(await canLeaveWikiEditor())) return;
   state.view = "wiki";
   state.drawerOpen = false;
   state.wiki.slug = slug;
   state.wiki.revision = null;
   state.wiki.editing = false;
   state.wiki.draft = null;
-  toggleDrawerClass();   // na mobile: zamknij szuflade, inaczej zaslania strone
-  widok.sidebar();
+  toggleDrawerClass();   // close the mobile drawer so it does not cover the page
+  views.sidebar();
   renderWikiMain(true);
   try {
     const [pageData, histData] = await Promise.all([
@@ -91,10 +91,10 @@ export async function openWikiPage(slug) {
     // Entering a page clears the "N changes" indicator - locally first (the badge disappears at
     // once), then the marker on the server (best effort).
     const item = state.wiki.pages.find((p) => p.slug === slug);
-    if (item && item.unseen) { item.unseen = 0; widok.sidebar(); }
+    if (item && item.unseen) { item.unseen = 0; views.sidebar(); }
     api("POST", `/api/wiki/${encodeURIComponent(slug)}/seen`, {}).catch(() => {});
   } catch (e) {
-    if (state.wiki.draft === null) { showError(e); state.view = "chat"; widok.glowny(); return; }
+    if (state.wiki.draft === null) { showError(e); state.view = "chat"; views.main(); return; }
   }
   renderWikiMain();
 }
@@ -133,7 +133,7 @@ export function newWikiPageModal() {
     state.wiki.revision = null;
     state.wiki.editing = true;
     state.wiki.draft = { title, body: "", parentSlug };
-    widok.sidebar();
+    views.sidebar();
     renderWikiMain();
   });
 }
@@ -151,7 +151,7 @@ async function saveWikiEdit(title, body, note, parentSlug) {
     state.wiki.page = data.page;
     state.wiki.editing = false;
     state.wiki.draft = null;
-    skasujWersjeRobocza(slug);
+    clearWikiDraft(slug);
     const hist = await api("GET", `/api/wiki/${encodeURIComponent(slug)}/history`);
     state.wiki.history = hist.revisions;
     loadWikiList();
@@ -161,13 +161,13 @@ async function saveWikiEdit(title, body, note, parentSlug) {
     // A conflict is not a save failure but somebody else's change - and it calls for a DECISION,
     // not for a message that vanishes after four seconds.
     //
-    // The condition used to test for the word "konflikt" in the error's TEXT, while it lives only
+    // The condition used to search for a conflict in the error's TEXT, while it lives only
     // in its CODE - so the friendly path never fired once and a human got, in a toast, an
     // instruction with curl in it, written for an agent.
-    if (e.code === "konflikt_wiki") { pokazKonfliktWiki(title, body, note, parentSlug); return; }
+    if (e.code === "wiki_conflict") { showWikiConflict(title, body, note, parentSlug); return; }
     showError(e, {
       slug: t("Invalid page address. Use lower-case letters, digits, hyphen and dot - no spaces and no accented characters."),
-      slug_zarezerwowany: t("This address is reserved by the system. Pick another one."),
+      slug_reserved: t("This address is reserved by the system. Pick another one."),
     });
   }
 }
@@ -175,37 +175,37 @@ async function saveWikiEdit(title, body, note, parentSlug) {
 /** The conflict window: what happened and three ways out, each of which saves the text.
 /**  The draft lands in localStorage BEFORE we show anything - otherwise refreshing the page in
 /**  a panic would erase the work we are fighting over. */
-function pokazKonfliktWiki(title, body, note, parentSlug) {
+function showWikiConflict(title, body, note, parentSlug) {
   const slug = state.wiki.slug;
-  zapiszWersjeRobocza(slug, { title, body, parentSlug });
+  saveWikiDraft(slug, { title, body, parentSlug });
   const { modal, close } = openModal(`
       <h2 id="m-title">${t("Somebody saved this page before you")}</h2>
       <p class="mhint">${t("Since you started writing, somebody else changed this page. Your text is safe - it stayed in the editor and in this browser. Choose what happens next.")}</p>
-      <div class="kw-opcje">
-        <button class="kw-opt" id="kw-porownaj">
+      <div class="wiki-conflict-options">
+        <button class="wiki-conflict-option" id="wiki-conflict-compare">
           <b>${t("Show what changed")}</b>
           <span>${t("Opens the current version in a new tab. Yours stays here so you can weave it in.")}</span>
         </button>
-        <button class="kw-opt" id="kw-nadpisz">
+        <button class="wiki-conflict-option" id="wiki-conflict-overwrite">
           <b>${t("Save my version anyway")}</b>
           <span>${t("Your text becomes the current one. That other change does not disappear - it stays in the page history.")}</span>
         </button>
-        <button class="kw-opt" id="kw-wroc">
+        <button class="wiki-conflict-option" id="wiki-conflict-back">
           <b>${t("Back to the editor")}</b>
           <span>${t("I save nothing. You fix the text and try again.")}</span>
         </button>
       </div>`, { modalClass: "wide" });
-  modal.querySelector("#kw-porownaj").addEventListener("click", () => {
+  modal.querySelector("#wiki-conflict-compare").addEventListener("click", () => {
     window.open(`/api/wiki/${encodeURIComponent(slug)}`, "_blank", "noopener");
   });
-  modal.querySelector("#kw-wroc").addEventListener("click", close);
-  modal.querySelector("#kw-nadpisz").addEventListener("click", async () => {
+  modal.querySelector("#wiki-conflict-back").addEventListener("click", close);
+  modal.querySelector("#wiki-conflict-overwrite").addEventListener("click", async () => {
     close();
     try {
       // We fetch the CURRENT revision number and save against it: this is a deliberate "I know
       // somebody changed it and I want mine anyway", not a race.
-      const swieza = await api("GET", `/api/wiki/${encodeURIComponent(slug)}`);
-      state.wiki.page = swieza.page;
+      const freshPage = await api("GET", `/api/wiki/${encodeURIComponent(slug)}`);
+      state.wiki.page = freshPage.page;
       await saveWikiEdit(title, body, note, parentSlug);
     } catch (e) { showError(e); }
   });
@@ -242,7 +242,7 @@ async function revertWikiTo(revId) {
 /**  baseRevision=0 means "create it if it does not exist" - and after a deletion it does not,
 /**  so this is exactly that path. The history from before the deletion does not come back and
 /**  that has to be said outright rather than pretending it is a full undo. */
-async function odtworzStroneWiki(deleted) {
+async function restoreWikiPage(deleted) {
   if (!deleted) return;
   try {
     await api("PUT", `/api/wiki/${encodeURIComponent(deleted.slug)}`, {
@@ -287,7 +287,7 @@ export function renderWikiMain(loading) {
       ${hamburgerHtml()}
       <div class="title">
         <div class="t">${iconDoc()} ${wikiBreadcrumbHtml(page)}${escapeHtml(title ?? "")}
-          <span id="wiki-typing">${widok.pisze(`w:${w.slug}`)}</span></div>
+          <span id="wiki-typing">${views.typing(`w:${w.slug}`)}</span></div>
         <div class="topic">${page ? t("version {n} · last changed by @{who} {when}", { n: page.revisions, who: escapeHtml(page.updatedBy ?? "?"), when: timeAgo(page.updatedAt) }) : t("a new page, not saved yet")}</div>
       </div>
       ${!w.editing && !w.revision && (page || w.draft) ? `<button class="pillbtn" id="wiki-edit">${iconEdit()} ${t("Edit")}</button>` : ""}
@@ -312,35 +312,35 @@ export function renderWikiMain(loading) {
       body: t("It goes away together with its change history and attachments. Subpages do not disappear - they move one level up."),
       ok: t("Delete page"), danger: true,
     })) return;
-    const kasowany = w.slug;
-    kasowaneStrony.add(kasowany);
+    const deletedSlug = w.slug;
+    deletingPages.add(deletedSlug);
     try {
       // When deleting, the server returns the page's COMPLETE data (title, content, parent) - that
       // is, everything needed to restore it. Given that, "deleted" does not have to mean
       // "unrecoverable": it gives as much time to undo as it takes to realise you clicked the wrong
       // thing.
-      const { deleted } = await api("DELETE", `/api/wiki/${encodeURIComponent(kasowany)}`);
+      const { deleted } = await api("DELETE", `/api/wiki/${encodeURIComponent(deletedSlug)}`);
       state.wiki.page = null; state.wiki.slug = null; state.view = "chat";
-      loadWikiList(); widok.render();
+      loadWikiList(); views.render();
       showToast(t("Deleted “{title}”.", { title: deleted?.title ?? page.title }), {
-        action: { label: t("Undo"), onClick: () => { kasowaneStrony.delete(kasowany); odtworzStroneWiki(deleted); } },
+        action: { label: t("Undo"), onClick: () => { deletingPages.delete(deletedSlug); restoreWikiPage(deleted); } },
       });
     } catch (e) { showError(e); }
     // The lock is lifted with a delay: an SSE replay can arrive after the response to DELETE, not
     // only before it.
-    finally { setTimeout(() => kasowaneStrony.delete(kasowany), 3000); }
+    finally { setTimeout(() => deletingPages.delete(deletedSlug), 3000); }
   });
   const editBtn = document.getElementById("wiki-edit");
   if (editBtn) editBtn.addEventListener("click", () => {
     // A draft from a previous attempt beats the content on the server: if something stayed here,
     // it means the user did not finish it.
-    const robocza = wczytajWersjeRobocza(w.slug);
+    const savedDraft = loadWikiDraft(w.slug);
     w.editing = true;
-    w.draft = robocza
-      ? { title: robocza.title || page?.title || w.slug, body: robocza.body ?? "", parentSlug: robocza.parentSlug }
+    w.draft = savedDraft
+      ? { title: savedDraft.title || page?.title || w.slug, body: savedDraft.body ?? "", parentSlug: savedDraft.parentSlug }
       : { title: page?.title ?? w.slug, body: page?.body ?? "" };
     renderWikiMain();
-    if (robocza) showToast(t("I brought back your unsaved version from last time."));
+    if (savedDraft) showToast(t("I brought back your unsaved version from last time."));
   });
   renderWikiContent(loading);
   renderWikiSide();
@@ -379,7 +379,7 @@ function renderWikiContent(loading) {
         <label class="sr-only" for="we-body">${t("Page content (markdown)")}</label>
         <textarea id="we-body" class="we-body" placeholder="${t("Content in markdown... # heading, **bold**, - list, \`\`\`code\`\`\`")}"></textarea>
         <div class="we-foot">
-          <span class="we-zapis" id="we-zapis" aria-live="polite"></span>
+          <span class="we-draft-status" id="we-draft-status" aria-live="polite"></span>
           <label class="we-where" for="we-parent">${t("in:")} </label>
           <select id="we-parent" class="we-parent">
             <option value="">${t("(wiki root)")}</option>${options}
@@ -392,28 +392,28 @@ function renderWikiContent(loading) {
       </div>`;
     const ti = el.querySelector("#we-title"), b = el.querySelector("#we-body"), n = el.querySelector("#we-note");
     const par = el.querySelector("#we-parent");
-    const znacznik = el.querySelector("#we-zapis");
+    const draftMarker = el.querySelector("#we-draft-status");
     ti.value = d.title; b.value = d.body;
     // Autosaving the draft: after a second of stillness, into localStorage. It does not replace
     // saving to the server and says so outright - it exists only so that closing the tab, F5 or a
     // click on another page do not cost the whole text.
     let autoTimer = null;
-    const autozapis = () => {
+    const autosave = () => {
       clearTimeout(autoTimer);
       autoTimer = setTimeout(() => {
-        zapiszWersjeRobocza(w.slug, { title: ti.value, body: b.value, parentSlug: par.value || null });
-        if (znacznik) znacznik.textContent = t("draft kept in the browser");
+        saveWikiDraft(w.slug, { title: ti.value, body: b.value, parentSlug: par.value || null });
+        if (draftMarker) draftMarker.textContent = t("draft kept in the browser");
       }, 1000);
     };
     // A wiki edit signals typing too - the bubble next to the page for everybody else.
-    b.addEventListener("input", () => { signalTyping(`w:${w.slug}`); autozapis(); });
-    ti.addEventListener("input", autozapis);
-    par.addEventListener("change", autozapis);
+    b.addEventListener("input", () => { signalTyping(`w:${w.slug}`); autosave(); });
+    ti.addEventListener("input", autosave);
+    par.addEventListener("change", autosave);
     el.querySelector("#we-cancel").addEventListener("click", async () => {
-      if (!await mozeszOpuscicEdytorWiki()) return;
+      if (!await canLeaveWikiEditor()) return;
       clearTimeout(autoTimer);
       w.editing = false; w.draft = null;
-      if (!w.page) { state.view = "chat"; widok.sidebar(); widok.glowny(); return; }
+      if (!w.page) { state.view = "chat"; views.sidebar(); views.main(); return; }
       renderWikiMain();
     });
     el.querySelector("#we-save").addEventListener("click", () =>
@@ -438,7 +438,7 @@ function renderWikiContent(loading) {
   if (back) back.addEventListener("click", () => { w.revision = null; renderWikiMain(); });
   const rvt = el.querySelector("#rb-revert");
   if (rvt) rvt.addEventListener("click", () => revertWikiTo(rev.id));
-  widok.podepnijTresc(el);   // copy button, wiki links and the lightbox inside the page
+  views.bindContent(el);   // copy button, wiki links and the lightbox inside the page
 }
 
 function renderWikiSide() {

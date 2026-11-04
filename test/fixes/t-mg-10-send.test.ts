@@ -28,15 +28,15 @@ test("A2A-F6/F7: bare 'general' gets an address hint; '@@ghost' is reported once
 
 test("A2A-F7: unresolvedMentions in POST messages 201 and in talk_send", async () => {
   const s = await startTestServer();
-  const { kanal, token } = seed(s);
+  const { channel, token } = seed(s);
   assert.deepEqual(unresolvedMentions(s.ctx, "hi @ala @ghost @all and a@b.com"), ["ghost"]);
-  const res = await fetch(`${s.url}/api/conversations/${kanal.id}/messages`, {
+  const res = await fetch(`${s.url}/api/conversations/${channel.id}/messages`, {
     method: "POST", headers: { ...bearer(token), "content-type": "application/json" },
     body: JSON.stringify({ body: "hi @ala @ghost" }),
   });
   assert.equal(res.status, 201);
   assert.deepEqual(((await res.json()) as { unresolvedMentions: string[] }).unresolvedMentions, ["ghost"]);
-  const ok = await fetch(`${s.url}/api/conversations/${kanal.id}/messages`, {
+  const ok = await fetch(`${s.url}/api/conversations/${channel.id}/messages`, {
     method: "POST", headers: { ...bearer(token), "content-type": "application/json" },
     body: JSON.stringify({ body: "hi @ala" }),
   });

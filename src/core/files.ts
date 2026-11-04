@@ -71,7 +71,7 @@ function safeName(raw: string): string {
   // basename + filtering out path junk: the file name comes from the client and has no
   // business influencing WHERE the file lands.
   const name = basename(String(raw ?? "").trim()).replace(/[\x00-\x1f]/g, "");
-  return name && name !== "." && name !== ".." ? name.slice(0, 200) : "plik";
+  return name && name !== "." && name !== ".." ? name.slice(0, 200) : "file";
 }
 
 export function storeFile(
@@ -119,7 +119,7 @@ export function storeFile(
   const message = postMessage(ctx, {
     conversationId: input.conversationId,
     actorId: input.actorId,
-    body: `${name} (${human})${sensitive ? " [wrazliwy]" : ""}${input.burn ? " [znika po pobraniu]" : ""}`,
+    body: `${name} (${human})${sensitive ? " [sensitive]" : ""}${input.burn ? " [deleted after download]" : ""}`,
     kind: "file",
     sessionId: input.sessionId ?? null,
     meta: { fileId: id, name, size: input.data.length },
@@ -192,11 +192,11 @@ export function readFile(
   actorId: number,
 ): { info: FileInfo; data: Buffer } {
   const info = getFileInfo(ctx, id, actorId);
-  if (!info) throw notFound("plik", `nie ma pliku ${id} (albo wygasl)`);
+  if (!info) throw notFound("file_not_found", `file ${id} was not found or has expired; check the file ID`);
   const row = ctx.db.prepare("SELECT * FROM files WHERE id = ?").get(id) as FileRow;
   if (!existsSync(row.path)) {
     deleteFileRow(ctx, row);
-    throw notFound("plik", `plik ${id} znikl z dysku`);
+    throw notFound("file_not_found", `file ${id} is missing from disk; upload it again`);
   }
   const data = readFileSync(row.path);
   ctx.db.prepare("UPDATE files SET downloads = downloads + 1 WHERE id = ?").run(id);
@@ -209,7 +209,7 @@ export function readFile(
 export function deleteFile(ctx: Ctx, id: string, actorId: number): void {
   const row = ctx.db.prepare("SELECT * FROM files WHERE id = ?").get(id) as FileRow | undefined;
   if (!row || row.deleted_at) return;
-  if (row.actor_id !== actorId) throw forbidden("nie_autor", "tylko autor moze skasowac plik");
+  if (row.actor_id !== actorId) throw forbidden("not_author", "only the author can delete this file");
   deleteFileRow(ctx, row);
 }
 
@@ -264,10 +264,10 @@ export function sweepExpired(ctx: Ctx): number {
   for (const row of rows) deleteFileRow(ctx, row);
 
   // Orphans: a row marked as deleted with the file still on disk.
-  const sieroty = ctx.db
+  const orphans = ctx.db
     .prepare("SELECT * FROM files WHERE deleted_at IS NOT NULL LIMIT 200")
     .all() as FileRow[];
-  for (const row of sieroty) {
+  for (const row of orphans) {
     if (!existsSync(row.path)) continue;
     try {
       rmSync(row.path, { force: true });
@@ -290,9 +290,9 @@ function persistBytes(
     ttl: number | null; sensitive: boolean; burn: boolean;
   },
 ): { id: string; name: string } {
-  if (input.data.length === 0) throw badRequest("pusty_plik", "plik nie moze byc pusty");
+  if (input.data.length === 0) throw badRequest("empty_file", "the file is empty; upload a non-empty file");
   if (input.data.length > input.maxBytes) {
-    throw tooLarge("plik_za_duzy", `plik jest za duzy (limit ${input.maxBytes} B)`);
+    throw tooLarge("file_too_large", `the file exceeds ${input.maxBytes} B; upload a smaller file`);
   }
   const id = randomBytes(16).toString("base64url");
   const name = safeName(input.name);

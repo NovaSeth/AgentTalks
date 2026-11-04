@@ -3,10 +3,10 @@
  */
 import { api } from "./api.js";
 import { avatarHtml, confirmModal, escapeHtml, fmtDateTime, hamburgerHtml, openModal, timeAgo, toggleDrawerClass } from "./dom.js";
-import { iconChevron, iconUsers } from "./ikony.js";
+import { iconChevron, iconUsers } from "./icons.js";
 import { t } from "./i18n.js";
-import { state, widok } from "./stan.js";
-import { showError, showToast } from "./toasty.js";
+import { state, views } from "./state.js";
+import { showError, showToast } from "./toasts.js";
 
 // ==================================================== ADMIN PANEL: ACCOUNTS
 let usersData = null;      // { actors, invites } from /api/admin/actors
@@ -23,8 +23,8 @@ export function resetUsersError() { usersError = null; }
 export async function openUsersView() {
   state.view = "users";
   usersError = null;
-  widok.powloka();          // highlight the icon on the rail
-  widok.glowny();           // the main column = the accounts panel
+  views.shell();          // highlight the icon on the rail
+  views.main();           // the main column = the accounts panel
   toggleDrawerClass();      // on mobile, close the drawer
   try {
     usersData = await api("GET", "/api/admin/actors");
@@ -167,9 +167,9 @@ export function renderUsersMain() {
       renderUsersMain();
     } catch (err) { showError(err); }
   }));
-  const act = (sel, path, pytanie) => el.querySelectorAll(sel).forEach((b) => b.addEventListener("click", async () => {
+  const act = (sel, path, question) => el.querySelectorAll(sel).forEach((b) => b.addEventListener("click", async () => {
     const id = b.dataset.udisable || b.dataset.uenable;
-    if (pytanie && !await confirmModal(pytanie)) return;
+    if (question && !await confirmModal(question)) return;
     try {
       await api("POST", `/api/admin/actors/${id}/${path}`, {});
       usersData = await api("GET", "/api/admin/actors");
@@ -194,7 +194,7 @@ function newInviteModal() {
     ${opts.map((o) => `<button type="button" role="radio" aria-checked="${o.val === def}"
       class="pill ${o.val === def ? "on" : ""}" data-val="${o.val}">${o.label}</button>`).join("")}
   </div>`;
-  const { modal, close, zablokujZamykanie } = openModal(`
+  const { modal, close, preventDismiss } = openModal(`
       <h2 id="m-title">${t("New invite")}</h2>
       <div class="field"><label for="ni-note">${t("Invite label")}</label>
         <input id="ni-note" placeholder="${t("e.g. project-motowolt")}">
@@ -251,10 +251,10 @@ function newInviteModal() {
       // The code exists only inside this window. A reflexive Escape (or a click
       // beside it) cost the whole operation - and left a dead invite in the system
       // that nobody could use any more.
-      zablokujZamykanie();
+      preventDismiss();
       modal.querySelector("#ni-paste").value = paste;
       modal.querySelector("#ni-copy").focus();
-      const domknij = async () => {
+      const finishSetup = async () => {
         close();
         usersData = await api("GET", "/api/admin/actors");
         renderUsersMain();
@@ -270,7 +270,7 @@ function newInviteModal() {
             t("I have no access to the clipboard. The text is selected - copy it by hand, then close.");
           return;
         }
-        domknij();
+        finishSetup();
       });
       // Leaving without copying exists, but as an explicit decision with a warning
       // rather than by accident.
@@ -280,7 +280,7 @@ function newInviteModal() {
           body: t("This code cannot be recovered. The invite stays on the list but is useless - you will have to generate a new one."),
           ok: t("Close anyway"), danger: true,
         })) return;
-        domknij();
+        finishSetup();
       });
     } catch (err) { showError(err); }
   });

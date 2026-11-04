@@ -43,7 +43,7 @@ export function digestFor(ctx: Ctx, actorId: number): Digest | null {
   const rows = ctx.db
     .prepare(
       `SELECT a.handle AS who,
-              COALESCE('#' || c.slug, 'rozmowa prywatna') AS conv,
+              COALESCE('#' || c.slug, 'private conversation') AS conv,
               COUNT(*) AS n
          FROM members mem
          JOIN conversations c ON c.id = mem.conversation_id

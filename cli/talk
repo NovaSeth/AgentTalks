@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
-"""talk - ulotny kanal komunikacji miedzy rownoleglymi sesjami Claude Code.
+"""talk - an ephemeral communication channel between parallel Claude Code sessions.
 
-CZYM SIE ROZNI OD WIKI: wiki (~/second-brain) to pamiec TRWALA, wersjonowana gitem -
-tam trafiaja fakty, ktore maja przetrwac. Tu jest rozmowa: pytania, opinie, "pracuje
-wlasnie nad X, nie ruszaj", "sprawdzilem Y, wyszlo Z". Ulotne w sensie "nie jest wiedza trwala", ale historia NIE jest kasowana
-(kasowanie wylaczone 2026-07-30 na zyczenie Michala). NIE jest w gicie. Nie zasmieca wiedzy biezacym gadaniem.
+HOW IT DIFFERS FROM THE WIKI: the wiki (~/second-brain) is PERSISTENT memory, versioned with git -
+facts that must survive belong there. This is a conversation: questions, opinions, "I am
+working on X, leave it alone", "I checked Y, the result was Z". Ephemeral means "not persistent knowledge", but history is NOT deleted
+(deletion disabled on 2026-07-30 at Michal's request). It is NOT in git. It keeps ongoing chatter out of the knowledge base.
 
-DLACZEGO ~/.talk A NIE /tmp: nestor.service ma PrivateTmp=true, wiec /tmp NIE jest
-wspolny miedzy sesjami. Wszystkie sesje chodza jako user claude, wiec ~/.talk dziala.
+WHY ~/.talk INSTEAD OF /tmp: nestor.service has PrivateTmp=true, so /tmp is NOT
+shared between sessions. All sessions run as user claude, so ~/.talk works.
 
-MODEL: jeden wspolny kanal (jak pokoj na czacie) + rejestr obecnosci.
-Kazda sesja ma kursor; hook dostarcza nowe wiadomosci do kontekstu automatycznie,
-wiec nie trzeba pollowac recznie.
+MODEL: one shared channel (like a chat room) + a presence registry.
+Each session has a cursor; the hook delivers new messages to the context automatically,
+so manual polling is unnecessary.
 """
 import fcntl, json, os, re, sys, time, glob, base64
 
-# TALK_HOME pozwala uruchomic testy na katalogu tymczasowym, nie na zywym kanale.
-# Bez tego kazdy test dopisywalby smieci do rozmowy Michala i psul liczniki.
+# TALK_HOME lets tests use a temporary directory instead of the live channel.
+# Without it, each test would add junk to Michal's conversation and break the counters.
 ROOT = os.environ.get("TALK_HOME") or os.path.expanduser("~/.talk")
 CHAN = os.path.join(ROOT, "channel.jsonl")
 PRES = os.path.join(ROOT, "presence")
 CURS = os.path.join(ROOT, "cursor")
 LOCK = os.path.join(ROOT, "lock")
 
-MSG_TTL = 24 * 3600      # wiadomosci starsze niz 24h sa sprzatane
-ONLINE_WINDOW = 900      # brak heartbeatu > 15 min = sesja uznana za nieaktywna
-TYPING_TTL = 7           # "pisze..." gasnie po 7 s bez kolejnego sygnalu
-BUSY_TTL = 30            # "pracuje" = uzyla narzedzia w ostatnich 30 s
+MSG_TTL = 24 * 3600      # messages older than 24h are cleaned up
+ONLINE_WINDOW = 900      # no heartbeat for > 15 min = session considered inactive
+TYPING_TTL = 7           # "typing..." fades after 7 s without another signal
+BUSY_TTL = 30            # "working" = used a tool in the last 30 s
 
-# Dwa ROZNE sygnaly, celowo rozdzielone:
-#   typing/ - czlowiek faktycznie stuka w klawiature w UI
-#   busy/   - sesja wlasnie uzyla narzedzia (pisany przez hook PostToolUse, NIE przez
-#             pollowanie API - inaczej otwarta karta przegladarki udawalaby prace)
+# Two DIFFERENT signals, intentionally separate:
+#   typing/ - a human is actually typing in the UI
+#   busy/   - a session has just used a tool (written by the PostToolUse hook, NOT by
+#             API polling - otherwise an open browser tab would pretend to be working)
 TYPING = os.path.join(ROOT, "typing")
 BUSY = os.path.join(ROOT, "busy")
 
-# Magazyn plikow przesylanych przez kanal. Tworzony on-demand (nie w petli nizej),
-# bo wiekszosc sesji nigdy nie wysle pliku - nie ma po co robic pustego katalogu.
+# Storage for files sent through the channel. Created on demand (not in the loop below),
+# since most sessions never send a file - there is no reason to create an empty directory.
 FILES = os.path.join(ROOT, "files")
 
 for d in (ROOT, PRES, CURS):
@@ -53,7 +53,7 @@ class Lock:
 
 
 def _pstat(pid):
-    # pola /proc/<pid>/stat PO polu comm (moze zawierac spacje/nawiasy):
+    # /proc/<pid>/stat fields AFTER the comm field (which may contain spaces/parentheses):
     # [0]=state [1]=ppid [2]=pgrp [3]=session ... [19]=starttime
     return open("/proc/%d/stat" % pid).read().rsplit(")", 1)[1].split()
 
@@ -63,17 +63,17 @@ def sid():
     s = s.strip()
     if s:
         return s
-    # Sesje bez hooka startowego (deploy-runner, batch-analyst, cron-nocturne, pair-live,
-    # watchdog - 2026-08-03) dostawaly wspolny literal "unknown": pisaly do jednego pliku
-    # obecnosci, nadpisujac sie nawzajem, i nie mogly ani sie zalogowac (`talk me`), ani
-    # zablokowac zasobu. Fallback: stabilny, unikalny token z procesu-DZIADKA (trwaly proces
-    # sesji; jego PID jest identyczny miedzy osobnymi wywolaniami talk tej samej sesji,
-    # a rozny miedzy sesjami - zmierzone: getsid/pgid/ppid sie zmieniaja, dziadek nie) plus
-    # jego czas startu (na wypadek recyklingu PID po reboocie). Cron/test odpalony z czystego
-    # srodowiska ma dziadka = powloka/crond, ktora znika - i tak jest w porzadku: wpis obecnosci
-    # zwietrzeje po 10 min (STALE_AFTER) i zniknie, wiec zaden trwaly widmowy uczestnik.
+    # Sessions without a startup hook (deploy-runner, batch-analyst, cron-nocturne, pair-live,
+    # watchdog - 2026-08-03) shared the literal "unknown": they wrote to one presence file,
+    # overwriting each other, and could neither register (`talk me`) nor
+    # lock a resource. Fallback: a stable, unique token from the GRANDPARENT process (the persistent
+    # session process; its PID is identical across separate talk calls from the same session,
+    # but differs between sessions - measured: getsid/pgid/ppid change, the grandparent does not) plus
+    # its start time (in case the PID is recycled after a reboot). A cron job/test run in a clean
+    # environment has a shell/crond grandparent that disappears - this is fine: the presence entry
+    # becomes stale after 10 min (STALE_AFTER) and disappears, leaving no persistent phantom participant.
     try:
-        gp = int(_pstat(os.getppid())[1])          # dziadek talk = trwaly proces sesji
+        gp = int(_pstat(os.getppid())[1])          # talk's grandparent = persistent session process
         if gp <= 1:
             return "unknown"
         starttime = _pstat(gp)[19]
@@ -94,13 +94,13 @@ def label_of(s):
         return short(s)
 
 
-# Nazwy nic nie mowiace o pochodzeniu sesji. Michal musi wiedziec KTO jest kim,
-# a "claude" albo "home" nie odpowiada na to pytanie - kazda sesja tak by sie nazwala.
+# Names that say nothing about a session's origin. Michal needs to know WHO is who,
+# and "claude" or "home" does not answer that question - every session would use that name.
 GENERIC = {"claude", "home", "root", "workspace", "tmp", "usr", "var", "srv", "opt", ""}
 
 
 def taken_labels(exclude_sid):
-    """Etykiety zajete przez INNE sesje: {label: sid}."""
+    """Labels taken by OTHER sessions: {label: sid}."""
     out = {}
     for p in glob.glob(os.path.join(PRES, "*")):
         b = os.path.basename(p)
@@ -115,54 +115,54 @@ def taken_labels(exclude_sid):
     return out
 
 
-# Efemeryda = sesja, ktora konczy sie sama i nikt nie moze do niej wrocic:
-# one-shot przez most oraz wcielenia subagentow (prefiks "bs/" i podobne role).
-# Sufiksowanie takich nazw produkuje smieci, a pokazywanie ich jako zywych przez
-# 10 minut po smierci wprowadza w blad - zglosil to Michal, patrzac na liste,
-# gdy bs/uzytkownik swiecil sie aktywny 4 minuty po zakonczeniu wcielenia.
+# Ephemeral = a session that ends by itself and cannot be returned to:
+# one-shot calls through the bridge and subagent instances (the "bs/" prefix and similar roles).
+# Adding suffixes to these names creates clutter, and showing them as alive for
+# 10 minutes after they end is misleading - Michal reported this after seeing the list,
+# where bs/user was still marked active 4 minutes after the instance ended.
 #
-# UWAGA na wnioskowanie z KSZTALTU NAZWY: to jest heurystyka, nie prawda o sesji.
-# Wlasciwie rodzaj powinien byc deklarowany przy rejestracji (TALK_KIND), i tak to
-# teraz dziala - nazwa jest tylko awaryjnym rozpoznaniem dla starszych wpisow.
+# CAUTION about inferring from the NAME'S SHAPE: this is a heuristic, not a fact about the session.
+# The kind should be declared at registration (TALK_KIND), which is how it
+# works now - the name is only a fallback for recognizing older entries.
 EPHEMERAL = ("/oneshot",)
 EPHEMERAL_PREFIX = ("bs/",)
-PRESENCE_TTL = 2 * 3600     # wpis obecnosci bez heartbeatu dluzej -> usuwany
-STALE_AFTER = 600           # 10 min bez heartbeatu -> "ostatnio widziana", nie "zywa"
-EPHEMERAL_STALE = 60        # one-shot: martwy po ~minucie ciszy, nie po 10
+PRESENCE_TTL = 2 * 3600     # presence entry without a heartbeat longer than this -> removed
+STALE_AFTER = 600           # 10 min without a heartbeat -> "last seen", not "live"
+EPHEMERAL_STALE = 60        # one-shot: dead after ~a minute of silence, not 10
 
 
 def is_ephemeral(label, rec=None):
-    """Czy sesja konczy sie sama i nikt nie moze do niej wrocic.
+    """Whether the session ends by itself and cannot be returned to.
 
-    Kolejnosc jest wazna: NAJPIERW jawna deklaracja przy rejestracji (kind),
-    dopiero potem heurystyka po nazwie. Wnioskowanie z ksztaltu nazwy bylo
-    jedynym mechanizmem do 2026-07-31 i przez to wcielenia subagentow ("bs/...")
-    uchodzily za trwale sesje - pokazywaly sie jako aktywne 10 minut po smierci.
+    Order matters: FIRST the explicit declaration at registration (kind),
+    only then the name heuristic. Inferring from the name's shape was
+    the only mechanism until 2026-07-31, causing subagent instances ("bs/...")
+    to pass for persistent sessions - shown as active for 10 minutes after ending.
     """
     if rec and rec.get("kind"):
         return rec["kind"] == "ephemeral"
-    # Sufiks " (N)" zdejmujemy PRZED dopasowaniem - wpisy sprzed zmiany nazywaja
-    # sie "Nestor/oneshot (3)" i bez tego nie pasowaly do wzorca.
+    # Strip the " (N)" suffix BEFORE matching - entries from before the change are named
+    # "Nestor/oneshot (3)" and otherwise would not match the pattern.
     base = re.sub(r"\s*\(\d+\)$", "", str(label))
     return (any(base.endswith(e) for e in EPHEMERAL)
             or any(base.startswith(p) for p in EPHEMERAL_PREFIX))
 
 
 def unique_label(base, s):
-    """Ten sam projekt wolany wielokrotnie -> 'projekt (2)', 'projekt (3)'...
-    Efemerydy dziela jedna nazwe - nie ma sensu ich rozrozniac.
+    """The same project called repeatedly -> 'project (2)', 'project (3)'...
+    Ephemeral sessions share a name - distinguishing them serves no purpose.
 
-    Sufiks zdejmujemy z wejscia, zeby nazwa juz ponumerowana nie dostawala
-    kolejnego numeru: `talk me "projekt (2)"` ma dac "projekt (2)" albo wolny
-    numer, a nie "projekt (2) (3)". Sciezka realna, bo sesja moze odczytac
-    wlasna etykiete z `talk who` i zadeklarowac ja ponownie.
+    Strip the suffix from the input so an already numbered name does not receive
+    another number: `talk me "project (2)"` should yield "project (2)" or an available
+    number, not "project (2) (3)". This path is real: a session can read
+    its own label from `talk who` and declare it again.
 
-    UCZCIWIE O GENEZIE: wprowadzilem to 2026-07-31 mysalc, ze naprawiam
-    zaobserwowany blad - a "alfa/projekt (2) (3)" w wyjsciu `talk since` bylo
-    etykieta "alfa/projekt (2)" i LICZNIKIEM (3) obok niej. Zle przeczytalem
-    wlasny format. Moj wlasny test potwierdzajacy dawal czysty wynik przed i po
-    zmianie, co powinno bylo mnie zatrzymac od razu. Zmiana zostaje, bo sciezka
-    wyzej jest realna, ale nie powstala z pomiaru - powstala z pomylki.
+    HONESTLY ABOUT ITS ORIGIN: I introduced this on 2026-07-31, thinking I was fixing
+    an observed bug - but "alpha/project (2) (3)" in `talk since` output was
+    the label "alpha/project (2)" with a COUNTER (3) beside it. I misread
+    my own format. My own confirmation test passed both before and after
+    the change, which should have stopped me immediately. The change stays because the path
+    above is real, but it came from a mistake, not a measurement.
     """
     if is_ephemeral(base):
         return base
@@ -177,28 +177,28 @@ def unique_label(base, s):
 
 
 def prune_presence():
-    """Sesje, ktore sie zakonczyly, nie wychodza z kanalu - nie ma SessionEnd dla
-    procesu, ktory po prostu sie skonczyl. Bez tego lista rosnie monotonicznie
-    i obraz wyglada gorzej niz rzeczywistosc (blad zgloszony przez Nestor/motowolt)."""
+    """Ended sessions do not leave the channel - there is no SessionEnd for
+    a process that simply ended. Without this, the list grows monotonically
+    and looks worse than reality (bug reported by Nestor/motowolt)."""
     now = time.time()
     for p in glob.glob(os.path.join(PRES, "*")):
         if os.path.basename(p) == "michal":
-            continue                      # czlowiek zostaje, nawet gdy spi
+            continue                      # the human stays, even while asleep
         try:
             d = json.load(open(p))
         except Exception:
             continue
         age = now - (d.get("seen") or 0)
-        # USUWAMY TYLKO EFEMERYDY. Nazwane sesje zostaja, choc pokazuja sie jako
-        # "cisza" - bo mechanizm powstal, by sprzatac zakonczone one-shoty, a nie
-        # by zapominac uczestnikow.
+        # REMOVE ONLY EPHEMERAL SESSIONS. Named sessions stay, even when shown as
+        # "quiet" - the mechanism was created to clean up finished one-shot calls, not
+        # to forget participants.
         #
-        # Blad z 2026-07-30 08:56: PRESENCE_TTL = 2 h usunal wpis MOJEJ zywej sesji
-        # po nocy bezczynnosci. Przy nastepnym pingu etykieta wyprowadzila sie z
-        # katalogu roboczego i z "Nestor/chat-vps" zrobilo sie "sesja/24f1a066" -
-        # czyli Michal zobaczylby nowego rozmowce zamiast tej samej sesji.
-        # Sprzatanie tozsamosci na podstawie BEZCZYNNOSCI jest zawsze bledne:
-        # bezczynnosc nie znaczy koniec, a dla sesji bez petli jest stanem normalnym.
+        # Bug on 2026-07-30 08:56: PRESENCE_TTL = 2 h removed MY live session's entry
+        # after a night of inactivity. At the next ping, the label was derived from
+        # the working directory, turning "Nestor/chat-vps" into "session/24f1a066" -
+        # so Michal would have seen a new participant instead of the same session.
+        # Cleaning up identities based on INACTIVITY is always wrong:
+        # inactivity does not mean the end, and is normal for a session without a loop.
         if is_ephemeral(d.get("label", ""), d) and age > EPHEMERAL_STALE * 3:
             try:
                 os.remove(p)
@@ -207,22 +207,22 @@ def prune_presence():
 
 
 def derive_label(s):
-    """Etykieta automatyczna: z mostu, inaczej z katalogu projektu, nigdy generyczna."""
+    """Automatic label: from the bridge, otherwise the project directory, never generic."""
     env_label = os.environ.get("TALK_LABEL", "").strip()
     if env_label:
         return unique_label(env_label, s)
     base = os.path.basename(os.getcwd())
     if base.lower() in GENERIC:
-        # Nie wiemy z jakiego projektu - lepiej jawnie nieznana niz mylaca.
-        base = f"sesja/{short(s)}"
+        # The project is unknown - better explicitly unknown than misleading.
+        base = f"session/{short(s)}"
     return unique_label(base, s)
 
 
 def ping(label=None):
-    """Heartbeat + rejestracja. mtime pliku = ostatnia aktywnosc."""
+    """Heartbeat + registration. File mtime = last activity."""
     s = sid()
-    # Bez znanego ID nie rejestrujemy obecnosci - inaczej kazde reczne wywolanie
-    # z czystym srodowiskiem (np. z crona albo testu) tworzy widmo w `talk who`.
+    # Do not register presence without a known ID - otherwise every manual call
+    # in a clean environment (e.g. from cron or a test) creates a phantom in `talk who`.
     if s == "unknown":
         return {"label": "unknown", "seen": time.time()}
     p = os.path.join(PRES, s)
@@ -232,10 +232,10 @@ def ping(label=None):
     except Exception:
         pass
     if label:
-        cur["label"] = unique_label(label, s)     # `talk me` - jawna decyzja, ale unikalna
+        cur["label"] = unique_label(label, s)     # `talk me` - an explicit choice, but unique
     elif not cur.get("label") or cur.get("label", "").lower() in GENERIC:
-        cur["label"] = derive_label(s)            # brak lub generyczna -> wyprowadz
-    # Rodzaj deklarowany jawnie przy starcie - lepsze niz zgadywanie z nazwy.
+        cur["label"] = derive_label(s)            # missing or generic -> derive
+    # Kind declared explicitly at startup - better than guessing from the name.
     kind = os.environ.get("TALK_KIND", "").strip()
     if kind in ("ephemeral", "durable"):
         cur["kind"] = kind
@@ -261,7 +261,7 @@ def touch(dirpath, s=None):
 
 
 def fresh_in(dirpath, ttl):
-    """Kto ma sygnal mlodszy niz ttl sekund -> {sid: wiek_w_sekundach}."""
+    """Participants with a signal newer than ttl seconds -> {sid: age_in_seconds}."""
     out = {}
     if not os.path.isdir(dirpath):
         return out
@@ -280,11 +280,11 @@ def post(kind, text, to=None, chan=DEFAULT_CHAN, extra=None):
     if extra:
         rec.update(extra)
     with Lock():
-        # Wszystkie id nadawane POD LOCKIEM, inaczej dwie sesje dostana to samo.
+        # Assign all IDs UNDER THE LOCK, otherwise two sessions could receive the same one.
         existing = load_all()
-        # mid z MAKSIMUM, nie z dlugosci pliku: po prune/czyszczeniu historii
-        # licznik oparty na len() zaczalby wydawac numery, ktore juz istnieja,
-        # i reakcje przypinalyby sie do zlych wiadomosci.
+        # Derive mid from the MAXIMUM, not the file length: after pruning/clearing history,
+        # a len()-based counter would start issuing numbers that already exist,
+        # attaching reactions to the wrong messages.
         top = 0
         for r in existing:
             m = str(r.get("mid") or "")
@@ -292,8 +292,8 @@ def post(kind, text, to=None, chan=DEFAULT_CHAN, extra=None):
                 top = max(top, int(m[1:]))
         rec["mid"] = "m%d" % (top + 1)
         if kind == "ask" and "id" in rec:
-            # z maksimum, nie z licznika - po czyszczeniu historii licznik
-            # wydawalby id, ktore juz kiedys istnialy (ten sam blad co przy mid)
+            # From the maximum, not a counter - after clearing history, a counter
+            # would issue IDs that previously existed (the same bug as with mid).
             qtop = 0
             for r in existing:
                 q = str(r.get("id") or "")
@@ -306,7 +306,7 @@ def post(kind, text, to=None, chan=DEFAULT_CHAN, extra=None):
 
 
 def reactions(mid):
-    """Emoji przypiete do wiadomosci, zgrupowane: {emoji: [kto, ...]}."""
+    """Emoji attached to a message, grouped: {emoji: [who, ...]}."""
     out = {}
     for r in load_all():
         if r.get("kind") == "react" and r.get("ref") == mid:
@@ -315,8 +315,8 @@ def reactions(mid):
 
 
 def open_items(chan=None):
-    """Pytania bez odpowiedzi. Sedno pomyslu z kanalami tematycznymi: pytanie
-    zadane KANALOWI, nie konkretnej sesji, moze podjac ktokolwiek kto wroci."""
+    """Unanswered questions. The point of topic channels: a question
+    addressed to a CHANNEL, not a particular session, can be picked up by anyone returning."""
     msgs = load_all()
     answered = {r.get("ref") for r in msgs if r.get("kind") == "answer"}
     out = []
@@ -338,10 +338,10 @@ def watched(s=None):
 
 
 def channels():
-    """Kanaly z historii + wszystkie obserwowane + zawsze #general.
+    """Channels from history + all watched channels + always #general.
 
-    Obserwowane licza sie tez wtedy, gdy nie ma w nich jeszcze zadnej wiadomosci -
-    inaczej `talk watch #nowy` tworzylby kanal niewidoczny dla wszystkich."""
+    Watched channels count even when they do not have any messages yet -
+    otherwise `talk watch #new` would create a channel invisible to everyone."""
     out = {DEFAULT_CHAN}
     for r in load_all():
         if r.get("chan"):
@@ -372,10 +372,10 @@ def load_all():
     return out
 
 
-# --- transfer plikow przez wlasny magazyn Talka (bez publicznego HTTP) -----
-# Bajty ida do ~/.talk/files/<losowe-id>__<basename>, a w kanale laduje wiadomosc
-# kind='file' z metadanymi. Zdalny Mac dosiega tego przez SSH (uruchamia `talk`
-# na tym VPS), wiec plik nigdy nie przechodzi przez zaden serwer WWW.
+# --- file transfer through talk's own storage (no public HTTP) -----
+# Bytes go to ~/.talk/files/<random-id>__<basename>, and the channel receives a
+# kind='file' message with metadata. A remote Mac accesses this through SSH (running `talk`
+# on this VPS), so the file never passes through a web server.
 def _human(n):
     n = float(n or 0)
     for unit in ("B", "KB", "MB", "GB"):
@@ -385,7 +385,7 @@ def _human(n):
 
 
 def file_records():
-    """Mapa file_id -> rekord kanalu kind='file' (kto przeslal, kiedy)."""
+    """Map file_id -> kind='file' channel record (who uploaded it, when)."""
     out = {}
     for r in load_all():
         if r.get("kind") == "file" and r.get("file_id"):
@@ -394,10 +394,10 @@ def file_records():
 
 
 def store_file(data, name, to=None):
-    """Zapisz bajty do magazynu i oglos w kanale. Zwraca file_id."""
+    """Write bytes to storage and announce them in the channel. Returns file_id."""
     os.makedirs(FILES, exist_ok=True)
     fid = base64.urlsafe_b64encode(os.urandom(12)).decode().rstrip("=")
-    base = os.path.basename(name) or "plik"
+    base = os.path.basename(name) or "file"
     with open(os.path.join(FILES, fid + "__" + base), "wb") as f:
         f.write(data)
     size = len(data)
@@ -407,7 +407,7 @@ def store_file(data, name, to=None):
 
 
 def find_file(fid):
-    """Sciezka pliku w magazynie po file_id, albo None."""
+    """Storage path for a file_id, or None."""
     hits = glob.glob(os.path.join(FILES, fid + "__*"))
     return hits[0] if hits else None
 
@@ -416,16 +416,16 @@ def fmt(r, mark=""):
     t = time.strftime("%H:%M:%S", time.localtime(r["ts"]))
     who = r.get("label") or short(r.get("sid", "?"))
     if r["kind"] == "join":
-        return f"  {t}  * {who} weszla do kanalu"
+        return f"  {t}  * {who} joined the channel"
     if r["kind"] == "leave":
-        return f"  {t}  * {who} wyszla z kanalu"
+        return f"  {t}  * {who} left the channel"
     if r["kind"] == "react":
-        # Reakcja ma dochodzic czytelnie - to caly jej sens jako sygnalu dla sesji.
+        # Deliver reactions clearly - that is their whole purpose as a signal to sessions.
         tgt = next((x for x in load_all() if x.get("mid") == r.get("ref")), None)
         frag = (tgt.get("text", "")[:45] + "...") if tgt and tgt.get("text") else r.get("ref", "?")
-        return f"  {t}{mark}  * {who} zareagowal {r.get('emoji','?')} na: {frag}"
+        return f"  {t}{mark}  * {who} reacted {r.get('emoji','?')} to: {frag}"
     if r["kind"] == "file":
-        return (f"  {t}{mark}  * {who} przeslal plik: {r.get('name','?')} "
+        return (f"  {t}{mark}  * {who} sent a file: {r.get('name','?')} "
                 f"({_human(r.get('size'))}) [{r.get('file_id','?')}]")
     to = f" -> {r['to']}" if r.get("to") else ""
     ch = r.get("chan") or DEFAULT_CHAN
@@ -435,16 +435,16 @@ def fmt(r, mark=""):
     tail = ("   " + " ".join(f"{e}{len(v)}" for e, v in rx.items())) if rx else ""
     tag = f"[{mid}] " if mid else ""
     if r["kind"] == "ask":
-        return f"  {t}{mark} {where} {tag}[{r.get('id','?')}] PYTANIE od <{who}>: {r['text']}{tail}"
+        return f"  {t}{mark} {where} {tag}[{r.get('id','?')}] QUESTION from <{who}>: {r['text']}{tail}"
     if r["kind"] == "answer":
-        return f"  {t}{mark} {where} {tag}-> odp. na {r.get('ref','?')} od <{who}>: {r['text']}{tail}"
+        return f"  {t}{mark} {where} {tag}-> answer to {r.get('ref','?')} from <{who}>: {r['text']}{tail}"
     return f"  {t}{mark} {where} {tag}<{who}{to}> {r['text']}{tail}"
 
 
-# --- nieprzeczytane per widok --------------------------------------------
-# WSPOLNY mechanizm z UI: serwer /talk/api/read pisze do tych samych plikow.
-# Michal widzi liczniki w interfejsie, sesje musza miec do nich dostep z CLI -
-# inaczej UI wie o kanale wiecej niz jego uczestnicy.
+# --- unread counts per view --------------------------------------------
+# SHARED mechanism with the UI: the /talk/api/read server writes to the same files.
+# Michal sees counters in the interface; sessions must have access to them from the CLI -
+# otherwise the UI knows more about the channel than its participants.
 READ = os.path.join(ROOT, "read")
 
 
@@ -467,7 +467,7 @@ def set_read_mark(who, view, ts_ms=None):
 
 
 def unread_counts(who=None):
-    """{'#kanal': n, 'dm:<sid>': n} - liczone jak w UI, wiec liczby sie zgadzaja."""
+    """{'#channel': n, 'dm:<sid>': n} - counted as in the UI, so the numbers match."""
     who = who or sid()
     msgs = [r for r in load_all() if r.get("kind") not in ("react", "join", "leave")]
     out = {}
@@ -488,8 +488,8 @@ def unread_counts(who=None):
 
 
 def mentions_of(who=None, unread_only=False):
-    """Wiadomosci wspominajace @<label>. W Slacku wzmianka ma inna wage niz
-    zwykla nieprzeczytana - i tak samo tutaj: badge tylko za wzmianki i DM-y."""
+    """Messages mentioning @<label>. In Slack, a mention carries more weight than
+    an ordinary unread message - the same applies here: badges only for mentions and DMs."""
     who = who or sid()
     lbl = label_of(who)
     needles = {"@" + lbl.lower(), "@" + lbl.split("/")[0].lower(), "@" + short(who).lower()}
@@ -512,8 +512,8 @@ PINS = os.path.join(ROOT, "pins")
 
 
 def pinned():
-    """Przypiete wiadomosci: {mid: {'by':..., 'ts':...}}. Slack trzyma je per kanal;
-    tu wystarcza globalna lista, bo mid niesie kanal."""
+    """Pinned messages: {mid: {'by':..., 'ts':...}}. Slack keeps them per channel;
+    here a global list is enough because mid identifies the channel."""
     out = {}
     if not os.path.isdir(PINS):
         return out
@@ -538,17 +538,17 @@ def search(q, chan=None, limit=40):
     return res[-limit:]
 
 
-# --- zdrowie maszyny -------------------------------------------------------
-# Michal pytal o zasoby VPS-a wielokrotnie i za kazdym razem musial ZAPYTAC.
-# Dane sa w ~/lowmem-sample.log (probka co minute), wiec wystarczy je podac.
-# Sciezka nadpisywalna, zeby testy nie czytaly zywego logu maszyny - ta sama
-# zasada co TALK_HOME. Bez tego przypadek na `talk health` zalezalby od tego,
-# co akurat zebral sampler, czyli testowalby pogode, nie kod.
+# --- machine health -------------------------------------------------------
+# Michal repeatedly asked about VPS resources, and each time he had to ASK.
+# The data is in ~/lowmem-sample.log (sampled every minute), so it just needs to be shown.
+# The path is overridable so tests do not read the machine's live log - the same
+# principle as TALK_HOME. Without this, a `talk health` test would depend on
+# whatever the sampler collected, testing the weather rather than the code.
 SAMPLE_LOG = os.environ.get("TALK_SAMPLE_LOG") or os.path.expanduser("~/lowmem-sample.log")
 
 
 def health(points=60):
-    """Biezacy stan + szereg czasowy do wykresu. Zwraca dict albo None."""
+    """Current state + time series for a chart. Returns a dict or None."""
     try:
         with open(SAMPLE_LOG) as f:
             lines = f.readlines()[-points:]
@@ -576,12 +576,12 @@ def health(points=60):
 
 
 def digest(who=None, since_ts=None):
-    """Co sie dzialo pod nieobecnosc. Odpowiada na pytanie, ktore czlowiek zadaje
-    po powrocie: 'przegapilem cos waznego?' - a nie 'pokaz mi 241 wiadomosci'."""
+    """What happened while away. Answers the question a human asks
+    on returning: 'did I miss anything important?' rather than 'show me 241 messages'."""
     who = who or sid()
     msgs = [r for r in load_all() if r.get("kind") not in ("react", "join", "leave")]
     if since_ts is None:
-        # domyslnie: od ostatniej rzeczy, ktora TEN uczestnik napisal
+        # Default: since the last thing THIS participant wrote.
         mine = [r["ts"] for r in msgs if r.get("sid") == who]
         since_ts = mine[-1] if mine else (time.time() - 12 * 3600)
     new = [r for r in msgs if r["ts"] > since_ts and r.get("sid") != who]
@@ -624,13 +624,13 @@ def read_new(advance=True):
     if advance:
         with open(cursor_path(), "w") as f:
             f.write(str(len(msgs)))
-    # nie dostarczaj wlasnych wiadomosci ani cudzych adresowanych do kogos innego
+    # Do not deliver own messages or others' messages addressed to someone else.
     out = []
     for r in new:
         if r.get("sid") == me:
             continue
         if r.get("kind") in ("join", "leave"):
-            continue    # szum: kazde ask_nestor to wejscie+wyjscie
+            continue    # noise: every ask_nestor call produces a join+leave
         to = r.get("to")
         if to and to not in (me, short(me), label_of(me), "all"):
             continue
@@ -639,7 +639,7 @@ def read_new(advance=True):
 
 
 def who():
-    prune_presence()          # najpierw sprzataj zakonczone, potem pokazuj
+    prune_presence()          # clean up ended sessions before showing them
     now = time.time()
     rows = []
     for p in sorted(glob.glob(os.path.join(PRES, "*"))):
@@ -653,56 +653,56 @@ def who():
         age = now - d.get("seen", 0)
         rows.append((age, s, d))
     if not rows:
-        print("Nikogo nie ma w kanale.")
+        print("No one is in the channel.")
         return
     typ = fresh_in(TYPING, TYPING_TTL)
     bsy = fresh_in(BUSY, BUSY_TTL)
-    # Prog zalezy od rodzaju sesji: proces one-shot jest martwy po kilkudziesieciu
-    # sekundach ciszy, nazwana sesja moze po prostu czekac na kolejne wywolanie.
-    # Jeden prog dla obu pokazywal zakonczone efemerydy jako "aktywna" przez 10 min.
+    # The threshold depends on session kind: a one-shot process is dead after several dozen
+    # seconds of silence; a named session may simply be waiting for the next call.
+    # A single threshold for both showed ended ephemeral sessions as "active" for 10 min.
     def _dead(age, d):
         return age > (EPHEMERAL_STALE if is_ephemeral(d.get("label", ""), d) else STALE_AFTER)
     live = [r for r in sorted(rows) if not _dead(r[0], r[2])]
     gone = [r for r in sorted(rows) if _dead(r[0], r[2])]
-    print("Sesje w kanale:")
+    print("Sessions in the channel:")
     if not live:
-        print("  (nikt aktywny)")
+        print("  (no one active)")
     for age, s, d in live:
         if s in typ:
-            state = "PISZE..."
+            state = "TYPING..."
         elif s in bsy:
-            state = "pracuje"
+            state = "working"
         elif age < ONLINE_WINDOW:
-            state = "aktywna"
+            state = "active"
         else:
-            state = "cisza"
-        mine = "  <- to Ty" if s == sid() else ""
+            state = "quiet"
+        mine = "  <- you" if s == sid() else ""
         up = int((time.time() - d.get("since", time.time())) / 60)
         print(f"  [{state:8}] {d.get('label','?'):22} {short(s)}  "
-              f"ostatnio {int(age)}s temu, w kanale {up} min{mine}")
+              f"last seen {int(age)}s ago, in channel for {up} min{mine}")
         if d.get("doing"):
-            print(f"             robi: {d['doing']}")
+            print(f"             doing: {d['doing']}")
         if d.get("watch"):
-            print(f"             obserwuje: {', '.join(d['watch'])}")
+            print(f"             watching: {', '.join(d['watch'])}")
     if gone:
-        # Sesja, ktora sie skonczyla, nie wychodzi z kanalu - nie ma SessionEnd dla
-        # procesu, ktory po prostu zakonczyl prace. Wiec nie udajemy, ze zyje.
-        print("\nOstatnio widziane (juz nie pracuja):")
+        # An ended session does not leave the channel - there is no SessionEnd for
+        # a process that simply finished its work. So we do not pretend it is alive.
+        print("\nLast seen (no longer working):")
         for age, s, d in gone:
             mins = int(age / 60)
-            print(f"  {d.get('label','?'):22} {short(s)}  {mins} min temu")
+            print(f"  {d.get('label','?'):22} {short(s)}  {mins} min ago")
 
 
 def prune(force=False):
-    """Kasowanie WYLACZONE na zyczenie Michala (2026-07-30): historia kanalu ma
-    zostac w calosci. Bez --force ta komenda tylko raportuje, co BY usunela.
-    MSG_TTL zostaje w kodzie jako parametr, ale nic go nie stosuje automatycznie -
-    cron zostal usuniety."""
+    """Deletion DISABLED at Michal's request (2026-07-30): keep the entire
+    channel history. Without --force, this command only reports what it WOULD remove.
+    MSG_TTL remains a parameter in the code, but nothing applies it automatically -
+    the cron job was removed."""
     if not force:
         cut0 = time.time() - MSG_TTL
         old = [r for r in load_all() if r.get("ts", 0) < cut0]
-        print(f"Kasowanie wylaczone. {len(old)} wiadomosci byloby starszych niz "
-              f"{MSG_TTL//3600}h, ale NIC nie usuwam. Wymus: talk prune --force")
+        print(f"Deletion disabled. {len(old)} messages would be older than "
+              f"{MSG_TTL//3600}h, but NOTHING is being removed. To force: talk prune --force")
         return
     cut = time.time() - MSG_TTL
     msgs = [r for r in load_all() if r.get("ts", 0) >= cut]
@@ -712,7 +712,7 @@ def prune(force=False):
             for r in msgs:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
         os.replace(tmp, CHAN)
-    # kursory moglyby wskazywac za daleko - przytnij
+    # Cursors could point beyond the end - clamp them.
     for c in glob.glob(os.path.join(CURS, "*")):
         try:
             if int(open(c).read().strip() or 0) > len(msgs):
@@ -722,48 +722,48 @@ def prune(force=False):
     for p in glob.glob(os.path.join(PRES, "*")):
         if time.time() - os.path.getmtime(p) > 7 * 86400:
             os.remove(p)
-    print(f"ok, zostalo {len(msgs)} wiadomosci")
+    print(f"ok, {len(msgs)} messages remain")
 
 
-USAGE = """talk - ulotny kanal miedzy sesjami Claude Code (NIE pamiec trwala, to jest wiki)
+USAGE = """talk - an ephemeral channel between Claude Code sessions (NOT persistent memory; use the wiki)
 
-  talk status               PELNY obraz kanalu w jednym wywolaniu (zacznij tym)\n  talk health               stan maszyny: RAM, swap, workery, wykres w czasie\n  talk since                co sie dzialo pod Twoja nieobecnosc (zamiast 241 wiadomosci)
-  talk unread               ile nieprzeczytanych per kanal i per DM
-  talk seen <#kanal>        wyzeruj licznik bez czytania
-  talk who                  kto jest w kanale, kto aktywny, co robi
-  talk say <tekst>          powiedz wszystkim na #general
-  talk in <#kanal> <tekst>  powiedz na konkretnym kanale (np. #infra)
-  talk channels             lista kanalow
-  talk to <kto> <tekst>     DM do konkretnej sesji (label lub 8 znakow ID)
-  talk read                 nowe wiadomosci dla mnie (przesuwa kursor)
-  talk log [n]              ostatnie n wiadomosci (domyslnie 20, bez kursora)
+  talk status               FULL channel overview in one call (start here)\n  talk health               machine health: RAM, swap, workers, chart over time\n  talk since                what happened while you were away (instead of 241 messages)
+  talk unread               unread counts per channel and DM
+  talk seen <#channel>      reset the counter without reading
+  talk who                  who is in the channel, who is active, what they are doing
+  talk say <text>           tell everyone on #general
+  talk in <#channel> <text> speak in a specific channel (e.g. #infra)
+  talk channels             list channels
+  talk to <who> <text>      DM a specific session (label or 8-character ID)
+  talk read                 new messages for me (advances the cursor)
+  talk log [n]              last n messages (default 20, no cursor)
 
-  -- kanaly tematyczne: pytanie do KANALU, nie do konkretnej sesji --
-  talk watch <#kanal>       obserwuj kanal (widoczne w `talk who`)
-  talk unwatch <#kanal>     przestan obserwowac
-  talk ask <#kanal> <pyt.>  otwarte pytanie - podejmie je ktokolwiek, kto wroci
-  talk open [#kanal]        otwarte pytania bez odpowiedzi
-  talk answer <qid> <tekst> odpowiedz i zamknij pytanie
+  -- topic channels: ask a CHANNEL, not a specific session --
+  talk watch <#channel>     watch a channel (visible in `talk who`)
+  talk unwatch <#channel>   stop watching
+  talk ask <#channel> <question> ask an open question - anyone returning can pick it up
+  talk open [#channel]      open unanswered questions
+  talk answer <qid> <text>  answer and close a question
 
-  -- reakcje, wzmianki, szukanie, przypinanie --
-  talk react <mid> <emoji>  przypnij emoji do wiadomosci (mid widac w `talk log`)
-  talk mentions [--new]     wiadomosci ze wzmianka @Twoja-nazwa
-  talk search <fraza> [#k]  szukaj w historii kanalu
-  talk pin <mid> / unpin    przypnij / odepnij wiadomosc
-  talk pins                 lista przypietych
-  -- pliki: transfer przez wlasny magazyn Talka (bez publicznego HTTP) --
-  talk send-file <sciezka> [--to <label>]        wyslij plik z tego VPS do kanalu
-  talk send-file --name <nazwa> --stdin [--to <label>]   wyslij bajty ze STDIN (SSH)
-  talk files                                     lista plikow w magazynie
-  talk get-file <file_id> <sciezka_docelowa>     zapisz plik z magazynu na VPS
+  -- reactions, mentions, searching, pinning --
+  talk react <mid> <emoji>  attach an emoji to a message (mid is shown in `talk log`)
+  talk mentions [--new]     messages mentioning @Your-name
+  talk search <phrase> [#c] search channel history
+  talk pin <mid> / unpin    pin / unpin a message
+  talk pins                 list pinned messages
+  -- files: transfer through talk's own storage (no public HTTP) --
+  talk send-file <path> [--to <label>]         send a file from this VPS to the channel
+  talk send-file --name <name> --stdin [--to <label>]   send bytes from STDIN (SSH)
+  talk files                                     list files in storage
+  talk get-file <file_id> <destination_path>   save a stored file to the VPS
 
-  talk me <label>           nazwij sie (np. "motowolt-deploy")
-  talk doing <opis>         powiedz nad czym pracujesz (widoczne w `talk who`)
-  talk ping                 heartbeat (wolane przez hooki)
-  talk prune                sprzataj wiadomosci starsze niz 24h
+  talk me <label>           name yourself (e.g. "motowolt-deploy")
+  talk doing <description> say what you are working on (visible in `talk who`)
+  talk ping                 heartbeat (called by hooks)
+  talk prune                clean up messages older than 24h
 
-Historia NIE jest kasowana (kasowanie wylaczone 2026-07-30) i NIE jest w gicie. Fakty, ktore maja przetrwac,
-zapisuj do ~/second-brain (wiki) - patrz jego CLAUDE.md."""
+History is NOT deleted (deletion disabled on 2026-07-30) and is NOT in git. Save facts that need to survive
+to ~/second-brain (wiki) - see its CLAUDE.md."""
 
 
 def main():
@@ -775,258 +775,258 @@ def main():
     if cmd == "who":
         ping(); who()
     elif cmd == "say":
-        if not rest: print("talk say: brak tekstu"); return 1
+        if not rest: print("talk say: text required"); return 1
         ping(); r = post("say", " ".join(rest))
-        print(f"wyslane jako <{r['label']}>")
+        print(f"sent as <{r['label']}>")
     elif cmd == "in":
-        if len(rest) < 2: print("talk in <#kanal> <tekst>"); return 1
+        if len(rest) < 2: print("talk in <#channel> <text>"); return 1
         ch = rest[0] if rest[0].startswith("#") else "#" + rest[0]
         ping(); r = post("say", " ".join(rest[1:]), chan=ch)
-        print(f"wyslane na {ch} jako <{r['label']}>")
+        print(f"sent to {ch} as <{r['label']}>")
     elif cmd == "channels":
         mine = set(watched())
         for c in channels():
             op = len(open_items(c))
-            mark = " *obserwuje*" if c in mine else ""
-            print(f"  {c}{mark}" + (f"  ({op} otwartych)" if op else ""))
+            mark = " *watching*" if c in mine else ""
+            print(f"  {c}{mark}" + (f"  ({op} open)" if op else ""))
     elif cmd == "react":
-        if len(rest) < 2: print("talk react <mid> <emoji>   (mid widac w `talk log`)"); return 1
+        if len(rest) < 2: print("talk react <mid> <emoji>   (mid is shown in `talk log`)"); return 1
         mid = rest[0]
         tgt = [r for r in load_all() if r.get("mid") == mid]
-        if not tgt: print(f"nie ma wiadomosci {mid}"); return 1
+        if not tgt: print(f"message {mid} not found"); return 1
         ping(); post("react", "", chan=tgt[0].get("chan") or DEFAULT_CHAN,
                      extra={"ref": mid, "emoji": rest[1]})
         who_to = tgt[0].get("label") or tgt[0].get("sid", "")[:8]
-        print(f"{rest[1]} -> {mid} (od <{who_to}>)")
+        print(f"{rest[1]} -> {mid} (from <{who_to}>)")
     elif cmd == "watch":
-        if not rest: print("talk watch <#kanal> [...]"); return 1
+        if not rest: print("talk watch <#channel> [...]"); return 1
         chs = [c if c.startswith("#") else "#" + c for c in rest]
         s = sid(); p = os.path.join(PRES, s); d = ping()
         d["watch"] = sorted(set(watched()) | set(chs))
         with open(p, "w") as f: json.dump(d, f)
-        print("obserwujesz: " + ", ".join(d["watch"]))
+        print("watching: " + ", ".join(d["watch"]))
     elif cmd == "unwatch":
         chs = {c if c.startswith("#") else "#" + c for c in rest}
         s = sid(); p = os.path.join(PRES, s); d = ping()
         d["watch"] = [c for c in watched() if c not in chs]
         with open(p, "w") as f: json.dump(d, f)
-        print("obserwujesz: " + (", ".join(d["watch"]) or "(nic)"))
+        print("watching: " + (", ".join(d["watch"]) or "(none)"))
     elif cmd == "ask":
-        if len(rest) < 2: print("talk ask <#kanal> <pytanie>"); return 1
+        if len(rest) < 2: print("talk ask <#channel> <question>"); return 1
         ch = rest[0] if rest[0].startswith("#") else "#" + rest[0]
         ping(); r = post("ask", " ".join(rest[1:]), chan=ch, extra={"id": "?"})
-        print(f"otwarte pytanie {r['id']} na {ch} - odpowie ktokolwiek: talk answer {r['id']} <tekst>")
+        print(f"open question {r['id']} on {ch} - anyone can answer: talk answer {r['id']} <text>")
     elif cmd == "answer":
-        if len(rest) < 2: print("talk answer <id> <tekst>"); return 1
+        if len(rest) < 2: print("talk answer <id> <text>"); return 1
         qid = rest[0]
         src = [r for r in load_all() if r.get("id") == qid]
-        if not src: print(f"nie ma pytania {qid}"); return 1
+        if not src: print(f"question {qid} not found"); return 1
         ping(); post("answer", " ".join(rest[1:]),
                      chan=src[0].get("chan") or DEFAULT_CHAN, extra={"ref": qid})
-        print(f"odpowiedziane na {qid}")
+        print(f"answered {qid}")
     elif cmd == "open":
         ch = (rest[0] if rest[0].startswith("#") else "#" + rest[0]) if rest else None
         items = open_items(ch)
-        if not items: print("Brak otwartych pytan." + (f" ({ch})" if ch else "")); return 0
-        print(f"{len(items)} otwartych pytan:")
+        if not items: print("No open questions." + (f" ({ch})" if ch else "")); return 0
+        print(f"{len(items)} open questions:")
         for r in items:
             age = int((time.time() - r["ts"]) / 60)
-            print(f"  [{r['id']}] {r.get('chan')} od <{r.get('label')}> {age} min temu")
+            print(f"  [{r['id']}] {r.get('chan')} from <{r.get('label')}> {age} min ago")
             print(f"        {r['text']}")
-        print("\nOdpowiedz: talk answer <id> <tekst>")
+        print("\nAnswer: talk answer <id> <text>")
     elif cmd == "to":
-        if len(rest) < 2: print("talk to <kto> <tekst>"); return 1
+        if len(rest) < 2: print("talk to <who> <text>"); return 1
         ping(); r = post("say", " ".join(rest[1:]), to=rest[0])
-        print(f"wyslane do {rest[0]} jako <{r['label']}>")
+        print(f"sent to {rest[0]} as <{r['label']}>")
     elif cmd == "read":
         ping(); new = read_new(advance=True)
         if not new:
-            print("Brak nowych wiadomosci.")
+            print("No new messages.")
         else:
-            print(f"{len(new)} nowych:")
+            print(f"{len(new)} new messages:")
             for r in new: print(fmt(r, mark=" NEW"))
     elif cmd == "log":
         args = list(rest)
         ch = next((a if a.startswith("#") else None for a in args), None)
         n = next((int(a) for a in args if a.isdigit()), 20)
         ping()
-        # reakcje/wejscia nie sa osobnymi liniami
+        # Reactions/joins do not get separate lines.
         msgs = [r for r in load_all() if r.get("kind") not in ("react", "join", "leave")]
         if ch:
             msgs = [r for r in msgs if not r.get("to") and (r.get("chan") or DEFAULT_CHAN) == ch]
         msgs = msgs[-n:]
-        if not msgs: print("Pusto." + (f" ({ch})" if ch else ""))
+        if not msgs: print("Empty." + (f" ({ch})" if ch else ""))
         for r in msgs: print(fmt(r))
-        # Obejrzenie kanalu = przeczytanie, dokladnie jak w UI.
+        # Viewing a channel = reading it, exactly as in the UI.
         if ch: set_read_mark(sid(), ch)
     elif cmd == "unread":
         ping()
         u = {k: v for k, v in unread_counts().items() if v}
         if not u:
-            print("Wszystko przeczytane.")
+            print("Everything is read.")
         else:
-            print("Nieprzeczytane:")
+            print("Unread:")
             for k, v in sorted(u.items(), key=lambda x: -x[1]):
                 name = label_of(k[3:]) + " (DM)" if k.startswith("dm:") else k
                 print(f"  {v:>3}  {name}")
-            print("\nZobacz i wyzeruj: talk log <#kanal>   albo   talk seen <#kanal>")
+            print("\nView and reset: talk log <#channel>   or   talk seen <#channel>")
     elif cmd == "mentions":
         ping()
         only_new = "--new" in rest
         ms = mentions_of(unread_only=only_new)
         if not ms:
-            print("Brak wzmianek." + (" (nieprzeczytanych)" if only_new else ""))
+            print("No mentions." + (" (unread)" if only_new else ""))
         else:
-            print(f"{len(ms)} wzmianek{' nieprzeczytanych' if only_new else ''}:")
+            print(f"{len(ms)} mentions{' unread' if only_new else ''}:")
             for r in ms: print(fmt(r))
     elif cmd == "search":
-        if not rest: print("talk search <fraza> [#kanal]"); return 1
+        if not rest: print("talk search <phrase> [#channel]"); return 1
         ch = next((a for a in rest if a.startswith("#")), None)
         q = " ".join(a for a in rest if not a.startswith("#"))
         ping()
         res = search(q, ch)
-        print(f"{len(res)} trafien dla '{q}'" + (f" w {ch}" if ch else "") + ":")
+        print(f"{len(res)} matches for '{q}'" + (f" in {ch}" if ch else "") + ":")
         for r in res: print(fmt(r))
     elif cmd == "pin":
         if not rest: print("talk pin <mid>"); return 1
         mid = rest[0]
         tgt = next((r for r in load_all() if r.get("mid") == mid), None)
-        if not tgt: print(f"nie ma wiadomosci {mid}"); return 1
+        if not tgt: print(f"message {mid} not found"); return 1
         os.makedirs(PINS, exist_ok=True)
         with open(os.path.join(PINS, rkey(mid)), "w") as f:
             json.dump({"by": label_of(sid()), "ts": time.time(),
                        "chan": tgt.get("chan") or DEFAULT_CHAN}, f)
-        ping(); print(f"przypiete {mid} (na {tgt.get('chan') or DEFAULT_CHAN})")
+        ping(); print(f"pinned {mid} (in {tgt.get('chan') or DEFAULT_CHAN})")
     elif cmd == "unpin":
         if not rest: print("talk unpin <mid>"); return 1
         p = os.path.join(PINS, rkey(rest[0]))
-        os.path.exists(p) and os.remove(p); print(f"odpiete {rest[0]}")
+        os.path.exists(p) and os.remove(p); print(f"unpinned {rest[0]}")
     elif cmd == "pins":
         pn = pinned()
-        if not pn: print("Nic nie przypiete."); return 0
+        if not pn: print("Nothing pinned."); return 0
         by_mid = {r.get("mid"): r for r in load_all()}
-        print(f"{len(pn)} przypietych:")
+        print(f"{len(pn)} pinned messages:")
         for mid, meta in sorted(pn.items(), key=lambda x: x[1].get("ts", 0)):
             r = by_mid.get(mid)
-            if r: print(fmt(r) + f"   (przypiete przez {meta.get('by')})")
+            if r: print(fmt(r) + f"   (pinned by {meta.get('by')})")
     elif cmd == "seen":
-        if not rest: print("talk seen <#kanal|dm:sid>"); return 1
-        set_read_mark(sid(), rest[0]); print(f"oznaczone jako przeczytane: {rest[0]}")
+        if not rest: print("talk seen <#channel|dm:sid>"); return 1
+        set_read_mark(sid(), rest[0]); print(f"marked as read: {rest[0]}")
     elif cmd == "status":
-        # Jedno wywolanie = pelny obraz kanalu. To, co Michal widzi w UI,
-        # sesja musi dostac tekstem - inaczej pracuje z mniejsza wiedza niz on.
+        # One call = a full channel overview. A session must receive in text
+        # what Michal sees in the UI - otherwise it works with less knowledge than he has.
         ping()
-        print("=== KTO JEST W KANALE ==="); who()
+        print("=== WHO IS IN THE CHANNEL ==="); who()
         u = {k: v for k, v in unread_counts().items() if v}
-        print("\n=== NIEPRZECZYTANE ===")
-        if not u: print("  (nic)")
+        print("\n=== UNREAD ===")
+        if not u: print("  (none)")
         for k, v in sorted(u.items(), key=lambda x: -x[1]):
             name = label_of(k[3:]) + " (DM)" if k.startswith("dm:") else k
             print(f"  {v:>3}  {name}")
         mn = mentions_of(unread_only=True)
-        print("\n=== WZMIANKI (nieprzeczytane) ===")
-        if not mn: print("  (nic)")
+        print("\n=== MENTIONS (unread) ===")
+        if not mn: print("  (none)")
         for r in mn: print(fmt(r))
         pn = pinned()
         if pn:
             by_mid = {x.get("mid"): x for x in load_all()}
-            print("\n=== PRZYPIETE ===")
+            print("\n=== PINNED ===")
             for mid2, meta in sorted(pn.items(), key=lambda x: x[1].get("ts", 0)):
                 r = by_mid.get(mid2)
                 if r: print(fmt(r))
-        print("\n=== KANALY ===")
+        print("\n=== CHANNELS ===")
         mine = set(watched())
         for c in channels():
             op = len(open_items(c))
-            print(f"  {c}{' *obserwuje*' if c in mine else ''}" + (f"  ({op} otwartych)" if op else ""))
+            print(f"  {c}{' *watching*' if c in mine else ''}" + (f"  ({op} open)" if op else ""))
         items = open_items()
-        print("\n=== OTWARTE PYTANIA ===")
-        if not items: print("  (nic)")
+        print("\n=== OPEN QUESTIONS ===")
+        if not items: print("  (none)")
         for r in items:
-            print(f"  [{r['id']}] {r.get('chan')} od <{r.get('label')}>: {r['text'][:110]}")
-        print("\n=== OSTATNIE 8 WIADOMOSCI ===")
+            print(f"  [{r['id']}] {r.get('chan')} from <{r.get('label')}>: {r['text'][:110]}")
+        print("\n=== LAST 8 MESSAGES ===")
         for r in [x for x in load_all() if x.get("kind") not in ("join", "leave")][-8:]:
             print(fmt(r))
     elif cmd == "me":
         if not rest: print("talk me <label>"); return 1
         want = " ".join(rest).strip()
         if want.lower() in GENERIC:
-            print(f"'{want}' jest za ogolne - kazda sesja tak by sie nazwala i Michal "
-                  f"nie odrozni kto jest kim.\nUzyj nazwy wskazujacej pochodzenie, "
-                  f"np. 'Nestor/motowolt' albo 'projekt/gdzie-mnie-wolano'.")
+            print(f"'{want}' is too generic - every session would use that name and Michal "
+                  f"could not tell who is who.\nUse a name that indicates the origin, "
+                  f"e.g. 'Nestor/motowolt' or 'project/where-I-was-called'.")
             return 1
         d = ping(label=want)
         if d["label"] != want:
-            print(f"jestes: {d['label']}  (nazwa '{want}' byla juz zajeta, dodalem sufiks)")
+            print(f"you are: {d['label']}  (name '{want}' was already taken, added a suffix)")
         else:
-            print(f"jestes: {d['label']}")
+            print(f"you are: {d['label']}")
     elif cmd == "doing":
         s = sid(); p = os.path.join(PRES, s)
         d = ping()
         d["doing"] = " ".join(rest)
         with open(p, "w") as f: json.dump(d, f)
-        print(f"ustawione: {d['doing']}")
+        print(f"set: {d['doing']}")
     elif cmd == "ping":
         ping()
     elif cmd == "typing":
-        # czlowiek faktycznie stuka w klawiature (UI wola to z debounce)
+        # A human is actually typing (the UI calls this with debounce).
         ping(); touch(TYPING)
     elif cmd == "busy":
-        # sesja wlasnie uzyla narzedzia - odpowiednik "pisze..." dla modelu.
-        # Wolane WYLACZNIE z hooka PostToolUse, nigdy z pollowania API.
+        # A session just used a tool - the model's equivalent of "typing...".
+        # Called ONLY from the PostToolUse hook, never from API polling.
         ping(); touch(BUSY)
     elif cmd == "activity":
         typ = fresh_in(TYPING, TYPING_TTL)
         bsy = fresh_in(BUSY, BUSY_TTL)
         if not typ and not bsy:
-            print("Nikt nie pisze i nikt nie pracuje.")
+            print("No one is typing or working.")
         for s, age in sorted(typ.items(), key=lambda x: x[1]):
-            print(f"  {label_of(s)} PISZE ({int(age)}s temu)")
+            print(f"  {label_of(s)} TYPING ({int(age)}s ago)")
         for s, age in sorted(bsy.items(), key=lambda x: x[1]):
             if s in typ: continue
-            print(f"  {label_of(s)} pracuje ({int(age)}s temu)")
+            print(f"  {label_of(s)} working ({int(age)}s ago)")
     elif cmd == "join":
-        # Rejestrujemy obecnosc, ale NIE pisemy do kanalu. Kazde wywolanie
-        # ask_nestor to wejscie+wyjscie, wiec komunikaty byly czystym szumem -
-        # stan i tak widac na zywo w liscie sesji.
+        # Register presence, but do NOT write to the channel. Every ask_nestor
+        # call produces a join+leave, so those messages were pure noise -
+        # the state is already visible live in the session list.
         ping(label=" ".join(rest) if rest else None)
     elif cmd == "leave":
-        ping()   # tylko heartbeat; obecnosc wygasa sama po 15 min ciszy
+        ping()   # heartbeat only; presence expires by itself after 15 min of silence
     elif cmd == "since":
         ping()
         d = digest()
         if not d:
-            print("Nic nowego od Twojej ostatniej wiadomosci."); return 0
-        print(f"Pod Twoją nieobecność ({d['hours']} h): {d['count']} wiadomości")
-        # "etykieta (n)" jest nieczytelne, gdy etykieta sama ma nawiasy
-        # ("alfa/projekt (2)") - stad krzyzyk zamiast nawiasow.
-        print("  kto:    " + ", ".join(f"{k} \u00d7{v}" for k, v in d["by_who"][:5]))
-        print("  gdzie:  " + ", ".join(f"{k} \u00d7{v}" for k, v in d["by_chan"]))
+            print("Nothing new since your last message."); return 0
+        print(f"While you were away ({d['hours']} h): {d['count']} messages")
+        # "label (n)" is hard to read when the label itself has parentheses
+        # ("alpha/project (2)") - hence a multiplication sign instead of parentheses.
+        print("  who:    " + ", ".join(f"{k} \u00d7{v}" for k, v in d["by_who"][:5]))
+        print("  where:  " + ", ".join(f"{k} \u00d7{v}" for k, v in d["by_chan"]))
         if d["mentions"]:
-            print(f"\n  DOTYCZY CIEBIE ({len(d['mentions'])}):")
+            print(f"\n  RELEVANT TO YOU ({len(d['mentions'])}):")
             for r in d["mentions"][-3:]:
                 print("    " + fmt(r)[2:150])
         if d["open"]:
-            print(f"\n  OTWARTE PYTANIA ({len(d['open'])}):")
+            print(f"\n  OPEN QUESTIONS ({len(d['open'])}):")
             for r in d["open"]:
                 print(f"    [{r['id']}] {r.get('chan')}: {(r.get('text') or '')[:90]}")
-        print(f"\n  Ostatnia: {fmt(d['last'])[2:170]}")
-        print("\n  Cała treść: talk log 30")
+        print(f"\n  Latest: {fmt(d['last'])[2:170]}")
+        print("\n  Full text: talk log 30")
     elif cmd == "health":
         h = health()
         if not h:
-            print("Brak danych - sampler nie zapisal jeszcze nic."); return 1
-        print("Stan maszyny (ostatnie %d probek, co minute):" % h["points"])
-        print(f"  RAM wolne     {h['avail']} MB   (min {h['avail_min']}, max {h['avail_max']})")
-        print(f"  swap w uzyciu {h['swap']} MB")
-        print(f"  workery php   {h['fpm']}   najwiekszy {h['worker_max']} MB RSS")
+            print("No data - the sampler has not written anything yet."); return 1
+        print("Machine health (last %d samples, every minute):" % h["points"])
+        print(f"  RAM free      {h['avail']} MB   (min {h['avail_min']}, max {h['avail_max']})")
+        print(f"  swap used     {h['swap']} MB")
+        print(f"  php workers   {h['fpm']}   largest {h['worker_max']} MB RSS")
         ser = h["series"][-40:]
         if len(ser) > 2:
             lo, hi = min(ser), max(ser)
             blocks = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
             rng = max(hi - lo, 1)
             spark = "".join(blocks[min(7, (v - lo) * 8 // rng)] for v in ser)
-            print(f"  RAM w czasie  {spark}  ({lo}-{hi} MB)")
+            print(f"  RAM over time {spark}  ({lo}-{hi} MB)")
     elif cmd == "send-file":
         opts, pos, stdin_flag = {}, [], False
         i = 0
@@ -1035,7 +1035,7 @@ def main():
             if a == "--stdin":
                 stdin_flag = True; i += 1
             elif a in ("--to", "--name"):
-                if i + 1 >= len(rest): print(f"talk send-file: {a} wymaga wartosci"); return 1
+                if i + 1 >= len(rest): print(f"talk send-file: {a} requires a value"); return 1
                 opts[a] = rest[i + 1]; i += 2
             else:
                 pos.append(a); i += 1
@@ -1043,14 +1043,14 @@ def main():
         if stdin_flag:
             name = opts.get("--name")
             if not name:
-                print("talk send-file --name <nazwa> --stdin [--to <label>]   (nazwa wymagana przy --stdin)"); return 1
+                print("talk send-file --name <name> --stdin [--to <label>]   (name required with --stdin)"); return 1
             data = sys.stdin.buffer.read()
         else:
             if not pos:
-                print("talk send-file <sciezka> [--to <label>]   albo   --name <nazwa> --stdin"); return 1
+                print("talk send-file <path> [--to <label>]   or   --name <name> --stdin"); return 1
             path = pos[0]
             if not os.path.isfile(path):
-                print(f"nie ma pliku: {path}"); return 1
+                print(f"file not found: {path}"); return 1
             with open(path, "rb") as f:
                 data = f.read()
             name = opts.get("--name") or os.path.basename(path)
@@ -1065,25 +1065,25 @@ def main():
             fid, _, name = os.path.basename(p).partition("__")
             rows.append((fid, name or os.path.basename(p), os.path.getsize(p), recs.get(fid)))
         if not rows:
-            print("Magazyn plikow jest pusty."); return 0
+            print("File storage is empty."); return 0
         rows.sort(key=lambda r: (r[3] or {}).get("ts", 0))
-        print(f"{len(rows)} plikow w magazynie:")
+        print(f"{len(rows)} files in storage:")
         for fid, name, size, rec in rows:
             frm = (rec or {}).get("label") or "?"
             when = time.strftime("%Y-%m-%d %H:%M", time.localtime(rec["ts"])) if rec else "?"
-            print(f"  [{fid}]  {name}  ({_human(size)})  od <{frm}>  {when}")
-        print("\nPobierz: talk get-file <file_id> <sciezka_docelowa>")
+            print(f"  [{fid}]  {name}  ({_human(size)})  from <{frm}>  {when}")
+        print("\nDownload: talk get-file <file_id> <destination_path>")
     elif cmd == "get-file":
-        if len(rest) < 2: print("talk get-file <file_id> <sciezka_docelowa>"); return 1
+        if len(rest) < 2: print("talk get-file <file_id> <destination_path>"); return 1
         fid, dest = rest[0], rest[1]
         src = find_file(fid)
         if not src:
-            print(f"nie ma pliku o id {fid} (sprawdz `talk files`)"); return 1
+            print(f"file with ID {fid} not found (check `talk files`)"); return 1
         with open(src, "rb") as f:
             data = f.read()
         with open(dest, "wb") as f:
             f.write(data)
-        ping(); print(f"zapisane {len(data)} B -> {dest}")
+        ping(); print(f"saved {len(data)} B -> {dest}")
     elif cmd == "prune":
         prune(force="--force" in rest)
     else:
