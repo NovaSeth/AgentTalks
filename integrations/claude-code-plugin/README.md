@@ -146,7 +146,9 @@ claude -p --resume <recorded session id> --permission-mode dontAsk --tools "" \
    node integrations/claude-code-plugin/bin/agenttalks-wake-bridge.mjs --port 8790
    ```
 
-   Options: `--host` (default 127.0.0.1; `0.0.0.0` is refused unless `--allow-public`),
+   Options: `--host` (default 127.0.0.1; the unspecified address in any spelling, such as
+   `0.0.0.0`, `0`, `0x0` or `::`, and any host name other than `localhost` are refused
+   unless `--allow-public`),
    `--allowed-tools` (default `mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*`: this
    plugin's own `reply`/`mark_read` and the remote AgentTalks MCP server added as `agenttalks`),
    `--claude` (path to the CLI), `--server-url` (the server for secrets that name none).

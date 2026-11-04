@@ -36,6 +36,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
+import { isIPv4, isIPv6 } from "node:net";
 import { isAbsolute } from "node:path";
 import { PREAMBLE, quoteBody, safeLabel } from "./frame.mjs";
 import { latestSessionFor, readSessions } from "./sessions.mjs";
@@ -50,15 +51,62 @@ export const MAX_EXP_AHEAD_SEC = 3600;
 export const DEFAULT_ALLOWED_TOOLS = "mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*";
 const MAX_SEEN = 10_000;
 
-/** Never 0.0.0.0 or :: unless the operator says so explicitly.
- *  @param {string | undefined} host @param {boolean} allowPublic */
-export function listenHost(host, allowPublic) {
-  const h = host && host.trim() ? host.trim() : "127.0.0.1";
-  const wildcard = h === "0.0.0.0" || h === "::" || h === "[::]" || h === "*";
-  if (wildcard && !allowPublic) {
-    throw new Error(`refusing to listen on ${h} (public): put a TLS reverse proxy or a tunnel in front of 127.0.0.1, or pass --allow-public`);
+/** An IPv4 address in any form getaddrinfo/inet_aton accepts ("0", "0x0", "0.0.0.00",
+ *  "127.1", "0x7f000001"): 1 to 4 parts, each decimal, 0x-hex or 0-leading octal, the last
+ *  part filling the remaining bytes. Returns the dotted quad, or null for anything else.
+ *  @param {string} h */
+function parseIPv4Loose(h) {
+  const parts = h.split(".");
+  if (parts.length > 4) return null;
+  /** @type {number[]} */
+  const nums = [];
+  for (const p of parts) {
+    let n;
+    if (/^0x[0-9a-f]*$/i.test(p)) n = p.length === 2 ? 0 : parseInt(p.slice(2), 16);
+    else if (/^0[0-7]*$/.test(p)) n = parseInt(p, 8);
+    else if (/^[1-9][0-9]*$/.test(p)) n = parseInt(p, 10);
+    else return null;
+    nums.push(n);
   }
-  return h;
+  const last = /** @type {number} */ (nums.pop());
+  if (nums.some((n) => n > 255) || last >= 256 ** (4 - nums.length)) return null;
+  let value = last;
+  nums.forEach((n, i) => { value += n * 256 ** (3 - i); });
+  return [24, 16, 8, 0].map((s) => Math.floor(value / 2 ** s) % 256).join(".");
+}
+
+/**
+ * Where the bridge may listen. Never on the unspecified address (every interface) unless
+ * the operator says so with --allow-public, in WHATEVER spelling: "0", "0x0", "0.0.0.00",
+ * "::0", "0:0:0:0:0:0:0:0", "[::]", "::ffff:0.0.0.0" all bind every interface through
+ * node:net. The host is parsed and the CHECKED canonical form is returned, so what is
+ * listened on is exactly what was checked. Loopback and a specific interface address pass;
+ * a host NAME other than localhost needs --allow-public, since DNS or /etc/hosts can point
+ * it anywhere, the unspecified address included.
+ * @param {string | undefined} host @param {boolean} allowPublic
+ */
+export function listenHost(host, allowPublic) {
+  const raw = host && host.trim() ? host.trim() : "127.0.0.1";
+  const refuse = () => new Error(`refusing to listen on ${raw} (public): put a TLS reverse proxy or a tunnel in front of 127.0.0.1, or pass --allow-public`);
+  if (raw === "*") {
+    if (!allowPublic) throw refuse();
+    return "0.0.0.0";
+  }
+  const bare = raw.replace(/^\[(.*)\]$/, "$1");
+  if (isIPv6(bare)) {
+    let canonical = bare.toLowerCase();
+    try { canonical = new URL(`http://[${bare}]/`).hostname.replace(/^\[|\]$/g, ""); } catch { /* zone id: keep */ }
+    if ((canonical === "::" || canonical === "::ffff:0:0") && !allowPublic) throw refuse();
+    return canonical;
+  }
+  const v4 = isIPv4(bare) ? bare : parseIPv4Loose(bare);
+  if (v4) {
+    if (v4 === "0.0.0.0" && !allowPublic) throw refuse();
+    return v4;
+  }
+  if (bare.toLowerCase() === "localhost") return "localhost";
+  if (!allowPublic) throw refuse();
+  return bare;
 }
 
 /** @param {string} secret @param {Buffer} raw @param {unknown} presented */

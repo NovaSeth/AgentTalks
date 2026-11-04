@@ -190,6 +190,25 @@ test("wake bridge: listens on 127.0.0.1 by default and refuses a public bind wit
   assert.equal(listenHost("0.0.0.0", true), "0.0.0.0");
 });
 
+test("wake bridge: every spelling of the unspecified address is refused without --allow-public (Claude F3)", () => {
+  // Each of these binds 0.0.0.0 or :: through node:net (getaddrinfo accepts inet_aton forms).
+  for (const h of ["0", "0:0:0:0:0:0:0:0", "::0", "[::0]", "0.0.0.00", "0x0", "00", "0.0", "0x00000000",
+    "000.000.000.000", "::ffff:0.0.0.0", "[::]", "*", " 0.0.0.0 "]) {
+    assert.throws(() => listenHost(h, false), /public/, `"${h}" was accepted`);
+  }
+  // Loopback in any spelling is fine, and the CHECKED form is what the bridge listens on.
+  assert.equal(listenHost("127.0.0.1", false), "127.0.0.1");
+  assert.equal(listenHost("0x7f000001", false), "127.0.0.1");
+  assert.equal(listenHost("::1", false), "::1");
+  assert.equal(listenHost("[::1]", false), "::1");
+  assert.equal(listenHost("localhost", false), "localhost");
+  // A specific interface address is the operator's explicit choice; a name that DNS or
+  // /etc/hosts could point anywhere is not, without --allow-public.
+  assert.equal(listenHost("192.168.1.20", false), "192.168.1.20");
+  assert.throws(() => listenHost("bridge.example.com", false), /public/);
+  assert.equal(listenHost("0", true), "0.0.0.0");
+});
+
 test("wake bridge: a resumed run that hangs is killed at its time limit, so the session is not blocked forever", async () => {
   const started = Date.now();
   await spawnRunner(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { cwd: tmpdir(), timeoutMs: 300 });
