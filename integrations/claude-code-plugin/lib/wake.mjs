@@ -70,11 +70,20 @@ export function wakePrompt(body) {
   ].join("\n");
 }
 
-/** @type {(cmd: string, argv: string[], opts: { cwd: string }) => Promise<void>} */
+/** A resumed run gets at most this long: a hung run would otherwise keep its session marked
+ *  as running and block every later wake for it. */
+export const MAX_RUN_MS = 15 * 60 * 1000;
+
+/** @type {(cmd: string, argv: string[], opts: { cwd: string, timeoutMs?: number }) => Promise<void>} */
 export const spawnRunner = (cmd, argv, opts) => new Promise((resolve) => {
   const child = spawn(cmd, argv, { cwd: opts.cwd, shell: false, stdio: ["ignore", "ignore", "inherit"] });
-  child.on("error", () => resolve());
-  child.on("exit", () => resolve());
+  const limit = setTimeout(() => {
+    child.kill("SIGTERM");
+    setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+  }, opts.timeoutMs ?? MAX_RUN_MS);
+  const done = () => { clearTimeout(limit); resolve(); };
+  child.on("error", done);
+  child.on("exit", done);
 });
 
 /**

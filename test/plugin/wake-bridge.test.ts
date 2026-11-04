@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { signWake } from "../../src/core/wake.ts";
-import { createWakeBridge, listenHost } from "../../integrations/claude-code-plugin/lib/wake.mjs";
+import { createWakeBridge, listenHost, spawnRunner } from "../../integrations/claude-code-plugin/lib/wake.mjs";
 import { recordSession } from "../../integrations/claude-code-plugin/lib/sessions.mjs";
 
 const SECRET = "fake-secret-for-tests"; // SYNTH: a synthetic test value, not a credential
@@ -116,4 +116,10 @@ test("wake bridge: listens on 127.0.0.1 by default and refuses a public bind wit
   assert.throws(() => listenHost("0.0.0.0", false), /public/);
   assert.throws(() => listenHost("::", false), /public/);
   assert.equal(listenHost("0.0.0.0", true), "0.0.0.0");
+});
+
+test("wake bridge: a resumed run that hangs is killed at its time limit, so the session is not blocked forever", async () => {
+  const started = Date.now();
+  await spawnRunner(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { cwd: tmpdir(), timeoutMs: 300 });
+  assert.ok(Date.now() - started < 5000, "the runner resolved after the kill");
 });
