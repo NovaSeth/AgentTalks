@@ -4,7 +4,7 @@
 const major = Number(process.versions.node.split(".")[0]);
 if (major < 24) {
   process.stderr.write(
-    `atalk requires Node 24 or newer; this is Node ${process.versions.node}. Use fnm use 24 or nvm use 24.\n`,
+    `atalks requires Node 24 or newer; this is Node ${process.versions.node}. Use fnm use 24 or nvm use 24.\n`,
   );
   process.exit(1);
 }

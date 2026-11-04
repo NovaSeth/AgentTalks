@@ -80,7 +80,7 @@ test("R1-F4: a planted project file with an evil url does not receive the env to
   try {
     const r = await run(["whoami"], { AGENTTALKS_TOKEN: token, AGENTTALKS_CONFIG_DIR: cfgDir }, dir);
     assert.notEqual(r.code, 0);
-    assert.match(r.err, /atalk login --local/);
+    assert.match(r.err, /atalks login --local/);
     assert.ok(!seen.some((u) => u.startsWith(origin)), `request went to evil: ${seen.join(",")}`);
     // Not trusted yet, but with its own token and url the file is its own identity.
     // After login --local in the directory the same call works against the url in the file.
@@ -108,8 +108,8 @@ test("R1-F4: a planted project file with an evil url does not receive the env to
 test("R1-F4: the hook surfaces the CLI warning line in additionalContext", () => {
   const HOOK = new URL("../../integrations/claude-code/hooks/atalk-hook.sh", import.meta.url).pathname;
   const dir = mkdtempSync(join(tmpdir(), "atalk-fake-"));
-  const bin = join(dir, "atalk");
-  writeFileSync(bin, `#!/bin/sh\ncase "$1" in\n  read) echo 'error: project file untrusted - run atalk login --local' >&2; exit 1;;\n  *) ;;\nesac\n`);
+  const bin = join(dir, "atalks");
+  writeFileSync(bin, `#!/bin/sh\ncase "$1" in\n  read) echo 'error: project file untrusted - run atalks login --local' >&2; exit 1;;\n  *) ;;\nesac\n`);
   chmodSync(bin, 0o755);
   const r = spawnSync("/bin/bash", [HOOK, "tick"], {
     input: JSON.stringify({ session_id: "abcd1234" }),
@@ -118,6 +118,6 @@ test("R1-F4: the hook surfaces the CLI warning line in additionalContext", () =>
   });
   assert.equal(r.status, 0, r.stderr);
   const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext as string;
-  assert.match(ctx, /atalk login --local/);
-  assert.ok(ctx.split("\n").every((l) => !l.includes("atalk login --local") || l.startsWith("> ")), "warning must be quoted");
+  assert.match(ctx, /atalks login --local/);
+  assert.ok(ctx.split("\n").every((l) => !l.includes("atalks login --local") || l.startsWith("> ")), "warning must be quoted");
 });

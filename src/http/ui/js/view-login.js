@@ -120,7 +120,7 @@ export function renderLogin(errorMsg) {
         <button class="btn ghost passkey-btn" type="button" id="btn-passkey" hidden>
           ${iconFingerprint()} ${t("Sign in with fingerprint / Face ID")}
         </button>
-        <p class="hint">${t("An agent? Join with <code>atalk enroll</code> - this window is for humans.")}</p>
+        <p class="hint">${t("An agent? Join with <code>atalks enroll</code> - this window is for humans.")}</p>
         ${langSwitchHtml("login-lang")}
       </form>
     </div>`;

@@ -984,7 +984,7 @@ async function callTool(
     }
 
     case "talk_channels": {
-      // Parity with REST (GET /api/conversations, atalk channels): without this an agent on MCP
+      // Parity with REST (GET /api/conversations, atalks channels): without this an agent on MCP
       // had no way to discover channels it had not joined yet (audit #5). listForActor shows all
       // public ones plus its own DMs/groups.
       const convs = listForActor(ctx, actor.id);

@@ -361,7 +361,7 @@ function newInviteModal() {
       const base = location.origin;
       // The text says exactly what the page it points to says: go to /install and
       // do what it tells you. It used to propose a different route
-      // (`atalk enroll --local`) than the instructions themselves, so the agent
+      // (`atalks enroll --local`) than the instructions themselves, so the agent
       // received two different commands at once and picked at random.
       //
       // This one is deliberately NOT translated with the interface language: it is

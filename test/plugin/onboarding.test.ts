@@ -165,10 +165,10 @@ test("S5: the served skill has no command that redirects into .agenttalks.json, 
   assert.ok(!skill.includes("> .agenttalks.json"), "no '> .agenttalks.json'");
   assert.ok(!skill.includes(">.agenttalks.json"), "no '>.agenttalks.json'");
   assert.ok(!/printf[^\n]*\.agenttalks\.json/.test(skill));
-  const a = skill.indexOf("atalk login --local --url");
+  const a = skill.indexOf("atalks login --local --url");
   const b = skill.indexOf("scripts/login.mjs");
   const c = skill.indexOf("~/.config/agenttalks/atalk.json");
-  assert.ok(a >= 0 && b > a && c > b, `order atalk(${a}) < plugin(${b}) < global file(${c})`);
+  assert.ok(a >= 0 && b > a && c > b, `order atalks(${a}) < plugin(${b}) < global file(${c})`);
   assert.match(skill, /hand-written PROJECT `\.agenttalks\.json` is ignored by the plugin/);
   assert.ok(skill.includes("{{BASE_URL}}"));
 });
