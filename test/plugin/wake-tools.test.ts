@@ -42,6 +42,143 @@ function body(over: Record<string, unknown> = {}) {
   });
 }
 
+type Call = { cmd: string; argv: string[]; cwd: string; env?: Record<string, string | undefined>; config?: any; configText?: string;
+  configMode?: number; dirMode?: number; configPath?: string };
+
+async function bridge(t: any, extra: Record<string, unknown> = {}) {
+  const home = mkdtempSync(join(tmpdir(), "at-wtools-home-"));
+  const store = join(home, "claude-sessions");
+  const project = mkdtempSync(join(tmpdir(), "at-wtools-proj-"));
+  const tmp = mkdtempSync(join(tmpdir(), "at-wtools-tmp-"));
+  mkdirSync(join(home, ".config", "agenttalks"), { recursive: true });
+  writeFileSync(join(home, ".config", "agenttalks", "atalk.json"), JSON.stringify({ url: A, token: NESTOR_TOKEN }));
+  recordSession(store, { sessionId: SESSION, cwd: project, handle: "nestor", url: A, updatedAt: Date.now() });
+  const calls: Call[] = [];
+  /** Resolves the fake run: the bridge removes the config once the run is over. */
+  const finish: Array<() => void> = [];
+  const server = createWakeBridge({
+    secrets: [{ actor: "nestor", secret: SECRET, serverUrl: A }],
+    sessionsDir: store,
+    now: () => NOW * 1000,
+    env: { PATH: "/usr/bin:/bin", HOME: home },
+    whoami: async (id: { url: string; token: string }) => (id.token === NESTOR_TOKEN ? { handle: "nestor", id: 7 } : { handle: "bob", id: 8 }),
+    mcpConfigDir: tmp,
+    runner: (cmd: string, argv: string[], opts: { cwd: string; env?: Record<string, string | undefined> }) => {
+      const call: Call = { cmd, argv, cwd: opts.cwd, env: opts.env };
+      const i = argv.indexOf("--mcp-config");
+      if (i >= 0 && i < argv.indexOf("--")) {
+        call.configPath = argv[i + 1];
+        call.configText = readFileSync(call.configPath, "utf8");
+        call.config = JSON.parse(call.configText);
+        call.configMode = statSync(call.configPath).mode & 0o777;
+        call.dirMode = statSync(dirname(call.configPath)).mode & 0o777;
+      }
+      calls.push(call);
+      return new Promise<void>((r) => finish.push(r));
+    },
+    ...extra,
+  } as any);
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => new Promise<void>((r) => { server.closeAllConnections(); server.close(() => r()); }));
+  const { port } = server.address() as AddressInfo;
+  const send = (b: string) => fetch(`http://127.0.0.1:${port}/wake`, {
+    method: "POST", headers: { "content-type": "application/json", "x-agenttalks-signature": signWake(SECRET, b) }, body: b,
+  });
+  return { send, calls, finish, home, project, tmp };
+}
+
+const flag = (argv: string[], name: string) => {
+  const i = argv.indexOf(name);
+  return i >= 0 && i < argv.indexOf("--") ? argv[i + 1] : undefined;
+};
+
+test("wake tools (a): the woken run starts in strict MCP mode with a generated config naming ONLY the principal-checked tools server; no token on disk; 0600 in a private directory; removed when the run exits", async (t) => {
+  const b = await bridge(t);
+  const res = await b.send(body());
+  assert.equal(res.status, 202);
+  assert.deepEqual(await res.json(), { ok: true, woke: true });
+  const call = b.calls[0];
+  const sep = call.argv.indexOf("--");
+  assert.ok(sep > 0 && sep === call.argv.length - 2, "the prompt stays one argument after --");
+  assert.ok(call.argv.indexOf("--strict-mcp-config") >= 0 && call.argv.indexOf("--strict-mcp-config") < sep, "strict MCP mode is on");
+  assert.ok(call.configPath, "a generated --mcp-config is passed");
+  assert.ok(call.configPath!.startsWith(b.tmp), `under the configured private base: ${call.configPath}`);
+  assert.equal(call.configMode, 0o600);
+  assert.equal(call.dirMode, 0o700);
+  const servers = Object.keys(call.config.mcpServers);
+  assert.equal(servers.length, 1, `exactly one server: ${servers.join(",")}`);
+  const s = call.config.mcpServers[servers[0]];
+  assert.equal(s.command, process.execPath);
+  assert.equal(s.args[0], TOOLS);
+  assert.ok(existsSync(s.args[0]));
+  assert.equal(s.env.AGENTTALKS_EXPECT_SERVER_URL, A);
+  assert.equal(s.env.AGENTTALKS_EXPECT_ACTOR, "nestor");
+  assert.equal(s.env.AGENTTALKS_EXPECT_ACTOR_ID, "7");
+  assert.ok(!call.configText!.includes(NESTOR_TOKEN), "no token in the generated file");
+  assert.ok(!/token/i.test(call.configText!), `no token field at all: ${call.configText}`);
+  assert.ok(!JSON.stringify(call.argv).includes(NESTOR_TOKEN), "no token on argv");
+  // The allow list is exactly the tools server's tools.
+  const allowed = flag(call.argv, "--allowedTools")!;
+  for (const tool of ["read_conversation", "read_thread", "reply", "mark_read"]) {
+    assert.ok(ruleMatches(allowed, `mcp__${servers[0]}__${tool}`), `${tool} is pre-approved`);
+  }
+  assert.equal(allowed, DEFAULT_ALLOWED_TOOLS);
+  assert.equal(flag(call.argv, "--disallowedTools"), DISALLOWED_TOOLS);
+  // Still there while the run is going; gone once it exits.
+  assert.ok(existsSync(call.configPath!));
+  b.finish[0]();
+  await waitFor(() => !existsSync(dirname(call.configPath!)), 2000);
+});
+
+test("wake tools (a): the generated config is removed also when the run cannot start (ENOENT) or the runner throws", async (t) => {
+  const bin = join(mkdtempSync(join(tmpdir(), "at-wtools-bin-")), "claude");
+  const tmp = mkdtempSync(join(tmpdir(), "at-wtools-tmp-"));
+  const b = await bridge(t, { runner: spawnRunner, claudeBin: bin, mcpConfigDir: tmp });
+  const res = await b.send(body({ exp: NOW + 300, nonce: "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1" }));
+  assert.equal(res.status, 503);
+  await waitFor(() => readdirOf(tmp).length === 0, 2000);
+  const tmp2 = mkdtempSync(join(tmpdir(), "at-wtools-tmp-"));
+  const thrower = await bridge(t, { runner: () => { throw new Error("E2BIG"); }, mcpConfigDir: tmp2 });
+  const r2 = await Promise.race([thrower.send(body({ exp: NOW + 300, nonce: "d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2" })),
+    new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+  assert.ok(r2, "answered");
+  assert.equal(r2!.status, 503);
+  assert.deepEqual(await r2!.json(), { ok: false, woke: false, reason: "spawn failed" });
+  await waitFor(() => readdirOf(tmp2).length === 0, 2000);
+});
+
+const readdirOf = (dir: string) => readdirSync(dir);
+
+test("wake tools (b): codex alias scenario - another AgentTalks MCP server under another name (other_at, B/bob, pre-approved) is neither loadable nor callable in the woken run (B-MG-105)", async (t) => {
+  // The user's settings: an HTTP AgentTalks server `other_at` with bob's bearer on B and an
+  // allow rule mcp__other_at__*. Strict MCP mode drops every server not in --mcp-config, and
+  // the generated config holds the tools server only.
+  const b = await bridge(t);
+  assert.equal((await b.send(body())).status, 202);
+  const call = b.calls[0];
+  assert.ok(call.argv.includes("--strict-mcp-config"));
+  assert.deepEqual(Object.keys(call.config.mcpServers).filter((n) => n === "other_at" || n === "agenttalks"), []);
+  assert.equal(Object.keys(call.config.mcpServers).length, 1);
+  const allowed = flag(call.argv, "--allowedTools")!;
+  for (const tool of ["mcp__other_at__send_message", "mcp__other_at__read_messages", "mcp__agenttalks__send_message",
+    "mcp__plugin_agenttalks_agenttalks__reply", "mcp__github__create_issue", "Bash"]) {
+    assert.ok(!ruleMatches(allowed, tool), `${tool} must not be pre-approved`);
+  }
+  const denied = flag(call.argv, "--disallowedTools")!;
+  assert.ok(ruleMatches(denied, "mcp__agenttalks__send_message"));
+  assert.ok(ruleMatches(denied, "mcp__plugin_agenttalks_agenttalks__reply"), "the plugin channel too: the tools server is the only AgentTalks access");
+  for (const tool of DEFAULT_ALLOWED_TOOLS.split(",")) assert.ok(!ruleMatches(denied, tool), `${tool} must not be denied`);
+});
+
+test("wake tools: the prompt names the read tools and asks for the full message before acting", () => {
+  const p = wakePrompt(JSON.parse(body({ preview: "x".repeat(900) })));
+  assert.match(p, /read_thread/);
+  assert.match(p, /read_conversation/);
+  assert.match(p, /message_id=41/);
+  assert.match(p, /full/);
+  assert.ok(!/atalk/.test(p), "a woken run has no atalk; the truncation note points at the tools");
+});
+
 // --- the tools server itself, over stdio, against a fake AgentTalks HTTP API ---
 
 type Msg = { id: number; conversationId: number; actorId: number; actorHandle: string; body: string; threadId: number | null; deletedAt: number | null };
