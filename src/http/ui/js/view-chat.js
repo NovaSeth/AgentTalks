@@ -1408,6 +1408,8 @@ function startInlineEdit(messageId, scope) {
     </div>`;
   const ta = holder.querySelector("textarea");
   ta.value = msg.body;
+  const inThread = scope?.id === "th-msgs";
+  /** Closes the editor; returns the focus step, to run once every redraw of the save is done. */
   const finishEdit = () => {
     // B-MG-98: the field is about to disappear; while it still had the focus, the focus goes back
     // to the box the edit belongs to (the thread box for an edit in the thread panel), so ArrowUp
@@ -1417,10 +1419,13 @@ function startInlineEdit(messageId, scope) {
     // A list redraw may have restored this editor in a new holder while saving.
     const current = (scope || document).querySelector(`[data-text="${messageId}"]`);
     if (current) current.innerHTML = renderBody((findMsgById(messageId) || msg).body, state.actor.handle);
-    if (hadFocus) {
-      const box = (scope?.id === "th-msgs" && document.getElementById("th-input")) || document.getElementById("composer-input");
+    // Fix round 1 (codex F5): the save redraws the thread (and may redraw the list) AFTER this
+    // point, removing the box focused here; the box is looked up again once the update settled.
+    return () => {
+      if (!hadFocus) return;
+      const box = (inThread && document.getElementById("th-input")) || document.getElementById("composer-input");
       box?.focus();
-    }
+    };
   };
   const autos = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 300) + "px"; };
   ta.addEventListener("input", autos);
@@ -1428,10 +1433,14 @@ function startInlineEdit(messageId, scope) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const v = ta.value.trim();
-      if (!v || v === msg.body) { finishEdit(); return; }
-      try { await saveEditedMsg(messageId, v, finishEdit); } catch (err) { showError(err); }
+      if (!v || v === msg.body) { finishEdit()(); return; }
+      let refocus = null;
+      try {
+        await saveEditedMsg(messageId, v, () => { refocus = finishEdit(); });
+        refocus?.();
+      } catch (err) { showError(err); }
     }
-    if (e.key === "Escape") { e.preventDefault(); finishEdit(); }
+    if (e.key === "Escape") { e.preventDefault(); finishEdit()(); }
   });
   autos(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
 }

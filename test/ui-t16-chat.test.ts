@@ -240,3 +240,83 @@ test("B-MG-98: focus moved elsewhere while the save was in flight stays where th
   await settle();
   assert.equal(active, search, "the composer does not steal the focus back");
 });
+
+// ------------------------------------------------------------------ fix round 1 (codex review-r1 F5)
+/** The thread slot with the production renderThread: every redraw replaces the elements its HTML
+ *  names (th-msgs, th-input, ...), and an element leaving the document loses the focus, as in a
+ *  browser (the edit field inside the old th-msgs too). */
+function hostify(host: El): El {
+  let html = "";
+  const owned = new Set<string>();
+  const drop = (id: string) => {
+    const old = els.get(id);
+    if (!old) return;
+    old.isConnected = false;
+    if (active === old) active = null;
+    if (old.texts) for (const h of old.texts.values()) if (active === h.ta) active = null;
+    old.dropAll?.();
+    els.delete(id);
+  };
+  host.dropAll = () => { for (const id of owned) drop(id); owned.clear(); };
+  Object.defineProperty(host, "innerHTML", {
+    get: () => html,
+    set(v: string) {
+      html = String(v);
+      host.dropAll();
+      for (const m of html.matchAll(/\bid="([^"]+)"/g)) {
+        const id = m[1];
+        if (els.has(id) && owned.has(id)) continue;
+        const fresh = id === "th-msgs" ? messageList() : hostify(el({ id }));
+        fresh.id = id;
+        if (id === "th-msgs") fresh.rows.clear();
+        els.set(id, fresh); owned.add(id);
+      }
+    },
+  });
+  return host;
+}
+function threadSlot() {
+  const slot = hostify(el({ id: "thread-slot" }));
+  els.set("thread-slot", slot);
+  return slot;
+}
+
+test("R1 F5 (codex repro): Enter saves a thread edit, the real thread renderer redraws, the focus is in the new th-input", async () => {
+  openChat();
+  store.registerViews({ thread: chat.renderThread });
+  try {
+    Object.assign(state, { threadOpen: 10, threadMsgs: [state.msgs[5][0]] });
+    threadSlot();
+    chat.renderThread();
+    const firstBox = els.get("th-input");
+    assert.ok(firstBox, "the thread box was drawn");
+    const ta = startEdit(els.get("th-msgs")!);
+    ta.value = "thread edit saved";
+    key(ta, "Enter");
+    await settle();
+    assert.equal(held[0]?.method, "PATCH");
+    answer(200, { message: { id: 10, conversationId: 5, actorId: 1, body: "thread edit saved", ts: 1, kind: "text", editedAt: 2 } });
+    await settle();
+    const box = els.get("th-input");
+    assert.notEqual(box, firstBox, "the save redrew the thread (the old box left the document)");
+    assert.equal(active, box, "the focus is in the thread box that is on screen now");
+  } finally {
+    store.registerViews({ thread: () => {} });
+  }
+});
+
+test("R1 F5: Enter saves a main-list edit; the focus lands in the composer that is in the document after the update", async () => {
+  const list = openChat();
+  const ta = startEdit(list);
+  ta.value = "first, fixed";
+  key(ta, "Enter");
+  await settle();
+  // The update redraws the main composer (a new element under the same id).
+  const fresh = el({ id: "composer-input" });
+  store.registerViews({ message: (m: Any) => { els.set("composer-input", fresh); return chat.upsertMessageNode(m); } });
+  try {
+    answer(200, { message: { id: 10, conversationId: 5, actorId: 1, body: "first, fixed", ts: 1, kind: "text", editedAt: 2 } });
+    await settle();
+  } finally { store.registerViews({ message: chat.upsertMessageNode }); }
+  assert.equal(active, fresh);
+});
