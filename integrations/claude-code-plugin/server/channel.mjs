@@ -167,10 +167,13 @@ function heartbeat(state) {
   }
   // "pause" (reconnecting): not refreshed, so it goes stale unless the stream comes back.
 }
+// At a stop, messages still held by the rate limit are NOT flushed: they stay uncommitted (the
+// heartbeat carries the delivered cursor only), and the monitor that takes over replays them.
 process.on("exit", () => beat("closed"));
 for (const sig of /** @type {const} */ (["SIGTERM", "SIGINT", "SIGHUP"])) process.on(sig, () => process.exit(0));
 
-/** @param {import("../lib/feed.mjs").FeedItem[]} items @param {{ dropped: number }} info */
+/** Writes one notification; resolves once it is written (the feed's cursor waits for that).
+ *  @param {import("../lib/feed.mjs").FeedItem[]} items @param {{ dropped: number }} info */
 function send(items, info) {
   let content = frameMany(items);
   if (info.dropped > 0) {
@@ -178,7 +181,7 @@ function send(items, info) {
   }
   const list = (/** @type {(i: import("../lib/feed.mjs").FeedItem) => unknown} */ f) =>
     items.map((i) => String(f(i) ?? "")).join(",");
-  server.notify("notifications/claude/channel", {
+  return server.notify("notifications/claude/channel", {
     content,
     // Meta keys: letters, digits and underscores only (Claude Code drops other keys).
     meta: {

@@ -26,7 +26,16 @@ export type FakeAt = {
   threads: Map<number, Route>;
   /** Every message ever emitted, in order: the replay source. */
   log: FakeMessage[];
-  emit(m: FakeMessage): void;
+  /** GET /api/mentions source (filtered by ?after, the newest `limit`, ascending, like the server). */
+  mentions: FakeMessage[];
+  /** GET /api/status answer (default 404: a server without it). */
+  status: Route;
+  /** Sends the message on the open streams and records it for replay. `live: false` records
+   *  it only (posted while nobody was connected); `record: false` sends it again without
+   *  recording (a duplicate delivery). */
+  emit(m: FakeMessage, opts?: { live?: boolean; record?: boolean }): void;
+  /** A `notification` event (no id), as the server sends when a mention lands. */
+  notify(): void;
   /** Drops every open SSE stream (the client reconnects with Last-Event-ID). */
   cut(): void;
   streams(): number;
@@ -53,10 +62,15 @@ export async function fakeAt(opts: { me?: { id: number; handle: string } } = {})
     conversations: { status: 200, body: { conversations: [], memberships: [] } },
     threads: new Map(),
     log: [],
+    mentions: [],
+    status: { status: 404, body: { error: "not found" } },
     requests: [],
-    emit(m) {
-      fake.log.push(m);
-      for (const res of open) res.write(frame(m));
+    emit(m, o = {}) {
+      if (o.record !== false) fake.log.push(m);
+      if (o.live !== false) for (const res of open) res.write(frame(m));
+    },
+    notify() {
+      for (const res of open) res.write(`event: notification\ndata: ${JSON.stringify({ type: "notification" })}\n\n`);
     },
     cut() { for (const res of [...open]) { res.destroy(); open.delete(res); } },
     streams: () => open.size,
@@ -83,7 +97,13 @@ export async function fakeAt(opts: { me?: { id: number; handle: string } } = {})
       return sendJson(res, fake.conversations);
     }
     if (url.pathname === "/api/actors") return sendJson(res, { status: 200, body: { actors: [] } });
-    if (url.pathname === "/api/mentions") return sendJson(res, { status: 200, body: { messages: [] } });
+    if (url.pathname === "/api/mentions") {
+      const after = Number(url.searchParams.get("after") ?? 0) || 0;
+      const limit = Math.min(Number(url.searchParams.get("limit") ?? 50) || 50, 200);
+      const list = fake.mentions.filter((m) => m.id > after).sort((a, b) => a.id - b.id).slice(-limit);
+      return sendJson(res, { status: 200, body: { messages: list } });
+    }
+    if (url.pathname === "/api/status") return sendJson(res, fake.status);
     const thread = /^\/api\/messages\/(\d+)\/thread$/.exec(url.pathname);
     if (thread) {
       const route = fake.threads.get(Number(thread[1])) ?? { status: 404, body: { error: "not found" } };

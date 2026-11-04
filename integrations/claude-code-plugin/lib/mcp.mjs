@@ -38,9 +38,13 @@ export function createStdioServer(opts) {
   let initialized = false;
   const toolMap = new Map(Object.entries(opts.tools));
 
-  /** @param {object} msg */
+  /** Resolves once the line is handed to the output (its write callback).
+   *  @param {object} msg @returns {Promise<void>} */
   function write(msg) {
-    opts.output.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
+    return new Promise((resolve, reject) => {
+      opts.output.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n",
+        (/** @type {any} */ err) => (err ? reject(err) : resolve()));
+    });
   }
 
   /** @param {unknown} id @param {number} code @param {string} message */
@@ -139,7 +143,9 @@ export function createStdioServer(opts) {
 
   return {
     /** @param {string} method @param {object} params */
-    notify(method, params) { write({ method, params }); },
+    /** @param {string} method @param {object} params
+     *  @returns {Promise<void>} settles when the notification is written */
+    notify(method, params) { return write({ method, params }); },
     get initialized() { return initialized; },
   };
 }

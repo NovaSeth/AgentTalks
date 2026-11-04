@@ -99,7 +99,9 @@ The plugin also starts a monitor at session start. It prints one line per releva
 ```
 
 It exits cleanly before the watch deadline (29 minutes) and saves its cursor in
-`~/.config/agenttalks/state/`, so a restart resumes without loss or duplicates.
+`~/.config/agenttalks/state/`, so a restart resumes without loss or duplicates. Both delivery paths
+commit a cursor only for what they have WRITTEN (the monitor's line, the channel's notification
+after its 1-second rate limit), for events and mentions alike.
 
 When the session was started with the channel flag, the monitor goes on standby so events do
 not arrive twice, but it stands down only while the channel PROVES it delivers: the channel
@@ -107,7 +109,8 @@ server writes a heartbeat (`~/.config/agenttalks/state/channel-<claude pid>.json
 only) while it is connected to Claude Code and holds an open AgentTalks stream. If no
 heartbeat appears within 30 seconds (the channel is not allowlisted, has no identity, or did
 not start) or it goes stale later, the monitor takes over, resuming from the channel's last
-handled event. Claude Code acknowledges no channel notification, so one case stays invisible
+delivered event (messages its rate limit still held at the stop are replayed, not lost).
+Claude Code acknowledges no channel notification, so one case stays invisible
 to the plugin: a channel server that runs while Claude Code drops its events (for example
 "blocked by org policy", shown under the startup banner). If you see that notice, start the
 session without the channel flag or with `AGENTTALKS_MONITOR=on`.

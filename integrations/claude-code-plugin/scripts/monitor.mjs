@@ -139,7 +139,11 @@ const feed = createFeed({
   log,
   lastEventId: resumed.lastEventId,
   mentionCursor: resumed.mentionCursor,
-  onItem: (item) => { process.stdout.write(frameLine(item) + "\n"); },
+  // Delivered = the line is handed to stdout (its write callback): only then may the cursor
+  // pass it.
+  onItem: (item) => new Promise((resolve, reject) => {
+    process.stdout.write(frameLine(item) + "\n", (err) => (err ? reject(err) : resolve(undefined)));
+  }),
   onCursor: (id) => saveState(id, feed.mentionCursor),
   onState: (state) => {
     if (state === "unauthorized") {
@@ -155,10 +159,10 @@ async function finish(code, notice) {
   if (finishing) return;
   finishing = true;
   feed.stop();
-  // Let events already received be printed, then save. Both cursors are HANDLED cursors
-  // (lib/feed.mjs): when the wait runs out with events still undecided (a lookup that hangs),
-  // the saved ids stay before them and the next run gets them again by replay. The SSE
-  // receive cursor is never saved.
+  // Let events already received be printed, then save. Both cursors are DELIVERED cursors
+  // (lib/feed.mjs): when the wait runs out with events still undecided (a lookup that hangs)
+  // or lines not yet written, the saved ids stay before them and the next run gets them
+  // again by replay. The SSE receive cursor is never saved.
   await Promise.race([feed.idle(), new Promise((r) => setTimeout(r, 2000))]);
   saveState(feed.lastEventId, feed.mentionCursor);
   if (notice) process.stdout.write(notice + "\n");
