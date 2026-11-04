@@ -1,0 +1,42 @@
+{
+  "schema": 2,
+  "id": "T-MG-17",
+  "kind": "task",
+  "title": "Docs: README and every doc match the shipped product; prototype leftovers removed; new UI screenshots",
+  "lane": null,
+  "owner": "MG",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: matches risk glob **/AGENTS.md; 600 LOC > 400",
+      "at": "2026-11-04T10:34:51.624Z"
+    }
+  ],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T10:34:45.526Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T10:34:51.624Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:a384388adcb2ed2b",
+          "loc-over",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}
