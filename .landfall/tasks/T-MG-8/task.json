@@ -135,8 +135,21 @@
       "data": {
         "head": "72a3140c194408c9f46813362eed5108885c52d8"
       }
+    },
+    {
+      "at": "2026-11-04T00:22:13.768Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "c3a024e3d0a40e764a4fb0394f22f9b66372e1e2",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "9e6026751146f2879fbc2af5c5f58886db987ea5"
+      }
     }
   ],
   "base": "0561f866f0737576cc087c30a3cdaff79a1ed8b3",
-  "branch": "task/T-MG-8-fix-c-ui"
+  "branch": "task/T-MG-8-fix-c-ui",
+  "mergedAt": "2026-11-04T00:22:13.768Z"
 }
