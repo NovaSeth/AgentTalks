@@ -185,6 +185,14 @@ test("U7: a send that fails while the offline bar is up adds no toast (the bar a
   assert.ok((state.pending[1] || []).some((p: any) => p.failed), "the bubble is marked as not sent");
   state.pending = {};
   state.online = true;
+  // T-MG-16 (F9 r7): the toast is skipped only for a row actually on screen, so the list holds the
+  // failed row inside its visible box (the stub DOM draws nothing by itself).
+  const list = (globalThis as Record<string, any>).document.getElementById("messages") as El;
+  const visibleRow = { isConnected: true, getBoundingClientRect: () => ({ top: 700, bottom: 760, height: 60 }) };
+  Object.assign(list, {
+    querySelector: (sel: string) => (sel.startsWith("[data-msg=\"tmp-") ? visibleRow : null),
+    getBoundingClientRect: () => ({ top: 56, bottom: 800, height: 744 }),
+  });
   const r2 = await sendMessage("hello while online", { conversationId: 1 });
   assert.equal(r2, null);
   // r5 U40: online too, the "not sent" row on screen (its .failwhy sentence and Send again) is the

@@ -1409,9 +1409,18 @@ function startInlineEdit(messageId, scope) {
   const ta = holder.querySelector("textarea");
   ta.value = msg.body;
   const finishEdit = () => {
+    // B-MG-98: the field is about to disappear; while it still had the focus, the focus goes back
+    // to the box the edit belongs to (the thread box for an edit in the thread panel), so ArrowUp
+    // there edits the last message again. A focus the user moved elsewhere during the save stays.
+    const editor = (scope || document).querySelector(`[data-text="${messageId}"] textarea`) || ta;
+    const hadFocus = document.activeElement === ta || document.activeElement === editor;
     // A list redraw may have restored this editor in a new holder while saving.
     const current = (scope || document).querySelector(`[data-text="${messageId}"]`);
     if (current) current.innerHTML = renderBody((findMsgById(messageId) || msg).body, state.actor.handle);
+    if (hadFocus) {
+      const box = (scope?.id === "th-msgs" && document.getElementById("th-input")) || document.getElementById("composer-input");
+      box?.focus();
+    }
   };
   const autos = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 300) + "px"; };
   ta.addEventListener("input", autos);

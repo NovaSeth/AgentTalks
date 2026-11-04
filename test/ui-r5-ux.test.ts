@@ -78,7 +78,10 @@ test("U40: a failed send with its 'not sent' row on screen raises no toast; the 
   const branch = src.slice(start, src.indexOf("return null;", start));
   // The row is drawn when the conversation is active and the message is in the main list: then the
   // row carries the error (its .failwhy) and the retry buttons, and a toast would only cover them.
-  assert.match(branch, /const rowShown = state\.activeId === convId && inMainList;/);
+  // T-MG-16 (F9 r7): "drawn" is not "on screen" (another view, a row scrolled away), so the row is
+  // asked as well; the behaviour is covered in test/ui-t16-chat.test.ts.
+  assert.match(branch, /const drawn = state\.activeId === convId && inMainList;/);
+  assert.match(branch, /const rowShown = drawn && failedRowOnScreen\(rec\);/);
   assert.match(branch, /if \(!rowShown && !connectionLost\) showError\(e\);/);
   assert.doesNotMatch(branch, /if \(!connectionLost\) showError\(e\);/);
 
