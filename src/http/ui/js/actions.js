@@ -2,11 +2,12 @@
  * Message actions: sending (optimistic, with retry), reactions, editing,
  * deleting. Drawing goes through the `views` registry.
  */
-import { api } from "./api.js";
-import { loadConversationsList, mySessionId, refreshQuestions } from "./data.js";
+import { api, describeError } from "./api.js";
+import { parseCommand, runCommand } from "./commands.js";
+import { loadConversationsList, markReadDebounced, mySessionId, refreshQuestions } from "./data.js";
 import { iconCheck } from "./icons.js";
 import { t } from "./i18n.js";
-import { clearDraft, findMsgById, saveDraft, state, upsertMessage, views } from "./state.js";
+import { clearDraft, findMsgById, persistUnsent, saveDraft, state, upsertMessage, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 
 // Optimistic send. The bubble appears IMMEDIATELY (greyed out), because the
@@ -19,6 +20,21 @@ function pendingList(convId) { return state.pending[convId] || (state.pending[co
 
 export async function sendMessage(text, opts = {}) {
   const convId = opts.conversationId ?? state.activeId;
+  // S5: a slash command RUNS instead of being posted, from any box. `asText` is the confirmed
+  // "send '/foo' as text" from the toast; a retry (clientMsgId) is never parsed again; the
+  // "also send to the channel" copy of a command (threadId: null) is silently skipped, the
+  // thread box already ran it.
+  if (!opts.asText && !opts.clientMsgId && parseCommand(text)) {
+    const r = await runCommand(text, {
+      conversationId: convId, threadId: opts.threadId ?? undefined,
+      silent: "threadId" in opts && opts.threadId === null,
+      sendAsText: (raw) => sendMessage(raw, { ...opts, asText: true }),
+    });
+    if (r.handled) {
+      if (r.keepText) { restoreComposer(convId, opts, text); return null; }
+      return r.message ?? (opts.threadId ? findMsgById(opts.threadId) : null) ?? { ephemeral: true };
+    }
+  }
   const composer = !opts.threadId && !opts.clientMsgId && state.activeId === convId
     ? document.getElementById("composer-input") : null;
   const composerText = composer?.value;
@@ -30,18 +46,29 @@ export async function sendMessage(text, opts = {}) {
     rec = {
       id: `tmp-${++tmpSeq}`, clientMsgId, conversationId: convId, actorId: state.actor.id,
       body: text, ts: Math.floor(Date.now() / 1000), kind: "text",
-      threadId: opts.threadId ?? state.replyTo ?? null, pending: true, failed: false,
+      // An explicit threadId (even null: "also send to the channel") wins over the reply mode.
+      threadId: "threadId" in opts ? opts.threadId ?? null : state.replyTo ?? null, pending: true, failed: false,
     };
     list.push(rec);
   }
   rec.pending = true; rec.failed = false;
-  if (state.activeId === convId && !rec.threadId) { views.message(rec); views.scrollToBottom(true); }
+  // In the main list: a main-list message, or a thread reply brought back as "not sent".
+  const inMainList = !rec.threadId || rec.restored;
+  // Stored BEFORE the request: an F5 or a lost session mid-send must not take the words (W3-S4-B).
+  persistUnsent(convId);
+  if (state.activeId === convId && inMainList) { views.message(rec); views.scrollToBottom(true); }
   try {
     const data = await api("POST", `/api/conversations/${convId}/messages`, {
       body: rec.body, clientMsgId, threadId: rec.threadId || undefined, sessionId: mySessionId || undefined,
     });
-    state.pending[convId] = list.filter((p) => p.clientMsgId !== clientMsgId);
-    document.querySelector(`#messages [data-msg="${rec.id}"]`)?.remove();
+    // This send supersedes an earlier failed copy of the same words in the same place (the user
+    // typed them again instead of pressing "Send again").
+    const superseded = (state.pending[convId] || []).filter((p) => p.clientMsgId !== clientMsgId
+      && p.failed && p.body === rec.body && (p.threadId ?? null) === (rec.threadId ?? null));
+    state.pending[convId] = (state.pending[convId] || [])
+      .filter((p) => p.clientMsgId !== clientMsgId && !superseded.includes(p));
+    persistUnsent(convId, [clientMsgId, ...superseded.map((p) => p.clientMsgId)]);
+    for (const p of [rec, ...superseded]) document.querySelector(`#messages [data-msg="${p.id}"]`)?.remove();
     upsertMessage(convId, data.message);
     if (data.delivery) {
       state.lastDelivery = { conversationId: convId, messageId: data.message.id, delivery: data.delivery };
@@ -85,11 +112,47 @@ export async function sendMessage(text, opts = {}) {
     }
     return data.message;
   } catch (e) {
-    rec.pending = false; rec.failed = true; rec.error = e.message;
-    if (state.activeId === convId && !rec.threadId) views.message(rec);
-    showError(e);
+    // A lost session already preserved this entry for its account (onSessionLost), and an
+    // answer from a previous session belongs to nobody here: neither may touch the state now.
+    if (e.stale || e.sessionLost) return null;
+    // The human sentence, never fetch's raw "Failed to fetch" (W3-S4-B).
+    rec.pending = false; rec.failed = true; rec.error = describeError(e);
+    persistUnsent(convId);
+    // U1 (r4): the bubble grows by its "Send again" row; a list that was at the bottom follows.
+    const rowShown = state.activeId === convId && inMainList;
+    if (rowShown) { views.message(rec); views.repin?.(); }
+    // U40 (r5): the "not sent" row on screen already carries the error sentence and the retry
+    // buttons; a toast with the same words would only cover them. A toast is for a failure the
+    // user cannot see: a thread reply (its text goes back to the thread box) or another
+    // conversation.
+    // U7: with the offline bar already up, a connection error is told twice (the bar, the
+    // "not sent" bubble with Send again) - a toast saying the same again only covers the bar.
+    const connectionLost = !state.online && !e.status && !e.code;
+    if (!rowShown && !connectionLost) showError(e);
     return null;
   }
+}
+
+/** A command that did not run (unknown, incomplete, refused) gives the text back to the main
+ *  box: the composer clears the field BEFORE it calls sendMessage, and the words must not
+ *  vanish while the toast asks what to do. The thread box restores its own text on null. */
+function restoreComposer(convId, opts, text) {
+  if (opts.threadId || state.activeId !== convId) return;
+  const ta = document.getElementById("composer-input");
+  if (ta && !ta.value.trim()) { ta.value = text; ta.dispatchEvent(new Event("input")); ta.focus(); }
+}
+
+/** A tracked question (S5, restores M7): POST /ask creates the message and the question row in
+ *  one transaction. The badge and the Catch up count come from refreshQuestions. */
+export async function askQuestion(convId, body) {
+  try {
+    const data = await api("POST", `/api/conversations/${convId}/ask`, { body, sessionId: mySessionId || undefined });
+    upsertMessage(convId, data.message);
+    state.openQuestions[data.message.id] = data.question;
+    if (state.activeId === convId) { views.message(data.message); views.scrollToBottom(true); }
+    refreshQuestions(convId);
+    return data.message;
+  } catch (e) { showError(e); return null; }
 }
 
 export function retryPending(convId, clientMsgId) {
@@ -102,6 +165,7 @@ export function retryPending(convId, clientMsgId) {
 export function dropPending(convId, clientMsgId) {
   const rec = (state.pending[convId] || []).find((p) => p.clientMsgId === clientMsgId);
   state.pending[convId] = (state.pending[convId] || []).filter((p) => p.clientMsgId !== clientMsgId);
+  persistUnsent(convId, [clientMsgId]);
   document.querySelector(`#messages [data-msg="${rec?.id}"]`)?.remove();
   const ta = document.getElementById("composer-input");
   if (rec && ta) { ta.value = rec.body; ta.dispatchEvent(new Event("input")); ta.focus(); }
@@ -216,10 +280,14 @@ export async function saveEditedMsg(messageId, text, beforeUpdate) {
 }
 
 export async function answerQuestion(questionId, text) {
+  // F1 (r3): the conversation is the one the answer was given in, captured before the await;
+  // the one open when the answer returns may be another.
+  const convId = state.activeId;
   const data = await api("POST", `/api/questions/${questionId}/answer`, { body: text, sessionId: mySessionId || undefined });
-  upsertMessage(state.activeId, data.message);
-  await refreshQuestions(state.activeId);
-  views.messages();
+  const target = data.message?.conversationId ?? convId;
+  upsertMessage(target, data.message);
+  await refreshQuestions(target);
+  if (state.activeId === target) views.messages();
 }
 
 export async function joinChannel(id, btn) {
@@ -227,15 +295,22 @@ export async function joinChannel(id, btn) {
     if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`; }
     await api("POST", `/api/conversations/${id}/join`, {});
     if (btn) btn.innerHTML = iconCheck();
+    // Joining IS reading: the history was there before you came, so the row must not light up
+    // as unread the moment you join (S7).
+    markReadDebounced(id);
     await loadConversationsList();
     setTimeout(() => { views.sidebar(); views.main(); }, 350);
   } catch (e) { showError(e); if (btn) { btn.disabled = false; btn.textContent = t("Join"); } }
 }
 
-/** A direct conversation from the palette: one Enter instead of the "New conversation" modal. */
+/** A direct conversation from the palette or a #/dm/<handles> link: one Enter instead of the
+ *  "New conversation" modal. Several handles open (or create) the group with them (U19): a link
+ *  to a group nobody has started yet is an invitation, not a locked door. */
 export async function startDirect(handle) {
+  const members = (Array.isArray(handle) ? handle : [handle]).map((h) => String(h).replace(/^@/, "")).filter(Boolean);
+  if (!members.length) return;
   try {
-    const data = await api("POST", "/api/conversations", { kind: "dm", members: [handle] });
+    const data = await api("POST", "/api/conversations", { kind: members.length > 1 ? "group" : "dm", members });
     await loadConversationsList();
     views.sidebar();
     views.openConversation(data.conversation.id);

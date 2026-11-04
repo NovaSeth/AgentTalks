@@ -4,9 +4,9 @@
 import { api } from "./api.js";
 import { refreshNotifications } from "./data.js";
 import { emptyStateHtml, escapeHtml, fmtDateTime, hamburgerHtml, openModal, toggleDrawerClass } from "./dom.js";
-import { iconBell, iconChat, iconDoc, iconWrench } from "./icons.js";
+import { iconBell, iconChat, iconCheck, iconDoc, iconWrench } from "./icons.js";
 import { msg, t } from "./i18n.js";
-import { mdToHtml } from "./markdown.js";
+import { mdToHtml, stripMd } from "./markdown.js";
 import { dmLabel, state, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 import { openWikiPage } from "./view-wiki.js";
@@ -29,17 +29,40 @@ async function askNotificationPermission() {
   renderNotificationsMain();
 }
 
+/** The part of NEWS.md meant for people: the intro plus every `## ` section whose heading does not
+ *  end with "(for agents)" (its `###` subsections and tables go with it). "" when nothing is left. */
+export function humanNews(text) {
+  const parts = String(text ?? "").split(/^(?=## )/m);
+  const intro = parts[0].startsWith("## ") ? "" : parts.shift();
+  // Text with no sections at all has nothing marked for agents: it is all for people.
+  if (!parts.length) return intro.trim() ? intro : "";
+  const kept = parts.filter((p) => !/^## .*\(for agents\)\s*$/.test(p.split("\n")[0]));
+  return kept.length ? (intro + kept.join("")).trimEnd() + "\n" : "";
+}
+
 /** The "What's new" modal: a list of fresh capabilities, shown once after a
  *  change. The content comes from the server (NEWS.md) and is already marked as
  *  delivered.
  *  @param onClose called when the window disappears - the greetings are a
  *         queue, so the next one can only start once this one frees the screen. */
 export function showNewsModal(news, onClose) {
+  const text = humanNews(news.text);
+  // Agent-only news: nothing to show a person, but the news still counts as delivered.
+  if (!text) { onClose?.(); return; }
   const { modal, close } = openModal(`
       <h2 id="m-title">${t("What's new")}</h2>
-      <div class="md news-body">${mdToHtml(news.text, "page", state.actor.handle)}</div>
+      <div class="md news-body">${mdToHtml(text, "page", state.actor.handle)}</div>
       <div class="row"><button class="btn" id="news-ok">${t("Got it, thanks")}</button></div>`,
-  { modalClass: "wide news-modal" });
+  {
+    modalClass: "wide news-modal",
+    // A teardown (sign-out, lost session) drops the window and its Escape listener, and does NOT
+    // advance the greeting queue onto the sign-in screen (F2).
+    onClose: ({ forced }) => {
+      if (!forced) return;
+      closed = true;
+      document.removeEventListener("keydown", onEscape, true);
+    },
+  });
   let closed = false;
   const finish = () => {
     if (closed) return;
@@ -71,11 +94,39 @@ export async function openNotificationsView() {
 // server now sends those as `fix`.
 const NOTIF_TEXT = {
   mention: msg("mentioned you"),
-  dm: msg("sent you a direct message"),
+  dm: msg("wrote to you privately"),
   reaction: msg("reacted to your post"),
-  wiki: msg("changed a page you co-author"),
+  // W6-S14-A: the page is the target ("changed the page Runbook"); a click opens it, there is
+  // no diff route to promise.
+  wiki: msg("changed the page"),
   fix: msg("fixed what you reported - confirm the symptom is gone"),
 };
+
+/** The row as one sentence (S8, M15): "@nestor mentioned you in #general", "... in a thread in
+ *  #bugs", "@nestor wrote to you privately". A DM names no place twice: "privately" is the place.
+ *  A wiki change names the page. Exported for the test and for the row's aria-label. */
+export function notifSentence(n) {
+  const who = `@${n.from ?? "?"}`;
+  const what = t(NOTIF_TEXT[n.kind] || msg("did something that concerns you - open it to see"));
+  const where = n.wikiSlug ? notifTarget(n) : notifPlace(n);
+  return where ? `${who} ${what} ${where}` : `${who} ${what}`;
+}
+
+/** Sentence plus excerpt: the name a screen reader reads for the row button. */
+export function notifLabel(n) {
+  return n.excerpt ? `${notifSentence(n)}: ${stripMd(n.excerpt)}` : notifSentence(n);
+}
+
+/** "in #general", "in a thread in #bugs"; "" for a DM (the verb already says privately) and for
+ *  a wiki change (the page name is shown as the target instead). */
+function notifPlace(n) {
+  if (n.wikiSlug) return "";
+  const c = state.conversations.find((x) => x.id === n.conversationId);
+  if (!c || c.kind === "dm" || c.kind === "group") return "";
+  const where = `#${c.slug || c.id}`;
+  const m = n.messageId ? (state.msgs[c.id] || []).find((x) => x.id === n.messageId) : null;
+  return m?.threadId ? t("in a thread in {where}", { where }) : t("in {where}", { where });
+}
 
 function notifIcon(kind) {
   if (kind === "wiki") return iconDoc();
@@ -101,24 +152,26 @@ export function renderNotificationsMain() {
   const el = document.getElementById("main");
   if (!el) return;
   const list = state.notifications;
+  // U5: the two actions carry an icon and a name; on a phone the S8 CSS hides the label, so the
+  // title keeps its room and nothing leaves the viewport.
   el.innerHTML = `
-    <div class="topbar">
+    <div class="topbar notif-topbar">
       ${hamburgerHtml()}
-      <div class="title"><div class="t">${iconBell()} ${t("Notifications")}</div>
+      <div class="title"><div class="t">${iconBell()} ${t("Activity")}</div>
         <div class="topic">${state.notifUnread ? t("{n} new", { n: state.notifUnread }) : t("nothing unread")}</div></div>
       ${("Notification" in window) && Notification.permission !== "granted"
-        ? `<button class="pillbtn" id="btn-notif-perm">${t("Turn on system notifications")}</button>` : ""}
-      <button class="btn ghost" id="btn-notif-read" ${state.notifUnread ? "" : "disabled"}>${t("Mark all as read")}</button>
+        ? `<button class="pillbtn notif-act" id="btn-notif-perm" aria-label="${t("Turn on system notifications")}" title="${t("Turn on system notifications")}">${iconBell()}<span class="notif-act-l">${t("Turn on system notifications")}</span></button>` : ""}
+      <button class="btn ghost notif-act" id="btn-notif-read" aria-label="${t("Mark all as read")}" title="${t("Mark all as read")}" ${state.notifUnread ? "" : "disabled"}>${iconCheck()}<span class="notif-act-l">${t("Mark all as read")}</span></button>
     </div>
     <div class="notif-list viewfade" id="notif-list">
       ${list.length
         ? list.map((n) => `
-        <button class="notif ${n.readAt ? "" : "fresh"}" data-notif="${n.id}">
+        <button class="notif ${n.readAt ? "" : "fresh"}" data-notif="${n.id}" aria-label="${escapeHtml(notifLabel(n))}">
           <span class="ni">${notifIcon(n.kind)}</span>
           <span class="nb">
             <span class="nh"><b>@${escapeHtml(n.from ?? "?")}</b> ${t(NOTIF_TEXT[n.kind] || msg("did something that concerns you - open it to see"))}
-              ${notifTarget(n) ? `<span class="nw">${escapeHtml(notifTarget(n))}</span>` : ""}</span>
-            ${n.excerpt ? `<span class="nx">${escapeHtml(n.excerpt)}</span>` : ""}
+              ${notifPlace(n) ? `<span class="nw">${escapeHtml(notifPlace(n))}</span>` : n.wikiSlug ? `<span class="nw">${escapeHtml(notifTarget(n))}</span>` : ""}</span>
+            ${n.excerpt ? `<span class="nx">${escapeHtml(stripMd(n.excerpt))}</span>` : ""}
           </span>
           <span class="nt">${fmtDateTime(n.createdAt)}</span>
         </button>`).join("")

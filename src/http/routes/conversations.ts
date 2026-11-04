@@ -22,7 +22,7 @@ import { badRequest, notFound } from "../../core/errors.ts";
 import { listMessages, postMessage } from "../../core/messages.ts";
 import { answer, ask, openQuestions } from "../../core/questions.ts";
 import { reactionsFor } from "../../core/reactions.ts";
-import { markRead, unreadFor } from "../../core/unread.ts";
+import { markRead, markUnread, unreadFor } from "../../core/unread.ts";
 import { actorLiveness } from "../../core/presence.ts";
 import { isWakeable } from "../../core/wake.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
@@ -199,6 +199,23 @@ export function registerConversationRoutes(router: Router): void {
     assertCanRead(rc.ctx, id, actor.id);
     markRead(rc.ctx, actor.id, id, int(body.messageId));
     json(res, 200, { ok: true });
+  });
+
+  router.add("POST", "/api/conversations/:id/unread", async (req, res, rc) => {
+    const { actor } = requireAuth(rc);
+    assertCsrf(rc, req);
+    const body = await readJson(req, 1024);
+    const id = convId(rc);
+    const messageId = body.messageId;
+    if (typeof messageId !== "number" || !Number.isInteger(messageId) || messageId < 1) {
+      throw badRequest("invalid_id", "messageId must be a positive integer");
+    }
+    assertCanRead(rc.ctx, id, actor.id);
+    const unread = markUnread(rc.ctx, actor.id, id, messageId);
+    const row = rc.ctx.db
+      .prepare("SELECT last_read_message_id AS m FROM members WHERE conversation_id = ? AND actor_id = ?")
+      .get(id, actor.id) as { m: number };
+    json(res, 200, { conversationId: id, lastReadMessageId: row.m, unread });
   });
 
   router.add("POST", "/api/conversations/:id/members", async (req, res, rc) => {

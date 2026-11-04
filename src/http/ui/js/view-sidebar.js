@@ -1,19 +1,23 @@
 /**
  * The side panel: channels, messages, the wiki tree, leases, digest.
  */
-import { claimLease, releaseLease, startDirect } from "./actions.js";
+import { claimLease, releaseLease } from "./actions.js";
 import { api, csrf } from "./api.js";
+import { badgeText } from "./counters.js";
 import { ensureActors, refreshDigestAndLeases } from "./data.js";
-import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
-import { iconChevron, iconDigest, iconDoc, iconLock, iconOut, iconQuestion, iconSearch } from "./icons.js";
+import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml, trackOverlay } from "./dom.js";
+import { iconCheck, iconChevron, iconDesktop, iconDigest, iconDoc, iconLock, iconMoon, iconQuestion, iconSearch, iconSun, iconThread } from "./icons.js";
 import { msg, t } from "./i18n.js";
-import { mdToHtml } from "./markdown.js";
+import { THEMES, currentTheme, setTheme } from "./theme.js";
+import { mdToHtml, stripMd } from "./markdown.js";
 import { actorHandle, dmLabel, dmOthers, handleOnline, state, views, wikiCollapsed } from "./state.js";
 import { openSearchPalette } from "./search.js";
 import { showError, showToast } from "./toasts.js";
 import { openConversation, openNewConversationModal, openQuestionsPanel } from "./view-chat.js";
 import { bindLangSwitch, doLogout, langSwitchHtml } from "./view-login.js";
 import { newWikiPageModal, openWikiPage } from "./view-wiki.js";
+import { openProfile } from "./view-people.js";
+import { openThreadsView } from "./view-threads.js";
 
 // Idle thresholds for "Who is here" (proposed by @michal on #general [677]): two weeks of
 // silence fades the row, three months folds it into the archive. Milliseconds, because they
@@ -35,6 +39,62 @@ let archiveOpen = (() => {
   try { return localStorage.getItem("atalks_arch_open") === "1"; } catch { return false; }
 })();
 
+// ------------------------------------------------- sections, places, collapse (S1)
+// The sidebar is a list of SECTIONS; the rail picks a PLACE, which is a subset of them.
+// Home shows everything, DMs narrows the list to direct conversations and people.
+const SECTIONS_HOME = ["catchup", "channels", "discover", "directs", "people", "wiki", "leases"];
+const SECTIONS_DMS = ["directs", "people"];
+let sidebarPlace = "home";
+
+export function sectionsFor(place) { return place === "dms" ? SECTIONS_DMS : SECTIONS_HOME; }
+export function getSidebarPlace() { return sidebarPlace; }
+export function setSidebarPlace(place) { sidebarPlace = place === "dms" ? "dms" : "home"; }
+
+// Which sections are folded is remembered per browser under ONE key, as an object of
+// `sectionId -> true`; absent means open. Only `true` is kept so the stored object never grows
+// with stale `false` entries.
+const SB_COLLAPSED_KEY = "atalks_sb_collapsed";
+
+export function collapsedFromStorage(storage) {
+  try {
+    const raw = storage.getItem(SB_COLLAPSED_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out = {};
+    for (const [id, closed] of Object.entries(parsed)) if (closed === true) out[id] = true;
+    return out;
+  } catch { return {}; }
+}
+
+// The module keeps the truth: `resetState()` (login, a lost session) replaces `state.sbCollapsed`
+// with an empty object, and a fold that vanished on every sign-in would read as a bug. The state
+// field is a MIRROR, refreshed by `syncCollapsed()` before each render, so the shared vocabulary
+// (`state.sbCollapsed[sectionId]`) stays true for everybody else.
+const collapsed = collapsedFromStorage(
+  typeof localStorage !== "undefined" ? localStorage : { getItem: () => null });
+
+function syncCollapsed() {
+  for (const id of Object.keys(state.sbCollapsed)) if (!collapsed[id]) delete state.sbCollapsed[id];
+  Object.assign(state.sbCollapsed, collapsed);
+}
+syncCollapsed();
+
+export function setSectionCollapsed(id, isCollapsed) {
+  if (isCollapsed) collapsed[id] = true; else delete collapsed[id];
+  syncCollapsed();
+  try { localStorage.setItem(SB_COLLAPSED_KEY, JSON.stringify(collapsed)); } catch { /* private browsing */ }
+}
+
+/** The rows a section shows. Open: all of them. Collapsed: only the UNREAD ones and the active
+ *  one, so folding a section never hides what is calling for attention or where you are.
+ *  Rows are keyed by `id` (conversations) or `slug` (wiki pages); `unread` maps key -> count. */
+export function visibleRows(section, rows, collapsed, activeId, unread) {
+  if (!collapsed) return rows;
+  const key = (r) => r.id ?? r.slug;
+  return rows.filter((r) => (unread?.[key(r)] || 0) > 0 || (activeId != null && key(r) === activeId));
+}
+
 // ------------------------------------------------------------- sidebar
 export function renderSidebar() {
   const el = document.getElementById("sidebar");
@@ -42,45 +102,56 @@ export function renderSidebar() {
   // refresh regardless of what the user has open. Without this guard the first message arriving
   // while notifications were open blew up the whole render on `el.innerHTML` of `null`.
   if (!el) return;
+  // The header is the WORKSPACE row: its name and the account avatar, with the help mark between
+  // them. Sign out and the language live in the account menu, not as a second row of icons;
+  // the search box stands on its own line underneath, where a full-width field can carry a label.
+  const me = escapeHtml(state.actor.handle);
   el.innerHTML = `
     <div class="sb-head">
-      <div class="who">
-        <button class="me" id="btn-avatar" title="${t("Change your avatar")}" aria-label="${t("Change your avatar")}">
-          ${avatarHtml(state.actor.handle, 24)}<span class="mename">@${escapeHtml(state.actor.handle)}</span>
-        </button>
-      </div>
-      <button class="iconbtn" id="btn-search" aria-label="${t("Search and switch conversation (Cmd+K)")}" title="${t("Search (Cmd+K)")}">${iconSearch()}</button>
+      <div class="sb-ws" title="AgentTalks"><span class="sb-ws-name">AgentTalks</span></div>
       <button class="iconbtn" id="btn-guidelines" aria-label="${t("How we talk here")}" title="${t("How we talk here")}">${iconQuestion()}</button>
-      <button class="iconbtn" id="btn-logout" aria-label="${t("Sign out")}" title="${t("Sign out")}">${iconOut()}</button>
-      ${langSwitchHtml("sb-lang")}
+      <button class="me" id="btn-avatar" title="@${me} - ${t("Account menu")}" aria-label="${t("Account menu")}: @${me}"
+        aria-haspopup="menu" aria-expanded="false">${avatarHtml(state.actor.handle, 28)}</button>
     </div>
+    <button class="sb-searchbox" id="btn-search" aria-label="${t("Search and switch conversation (Cmd+K)")}" title="${t("Search (Cmd+K)")}">
+      ${iconSearch()}<span class="sb-search-l">${t("Search")}</span><kbd aria-hidden="true">Cmd+K</kbd>
+    </button>
+    <button class="conv sb-nav ${state.view === "threads" ? "active" : ""}" id="sb-threads" ${state.view === "threads" ? `aria-current="page"` : ""}
+      title="${t("Threads you started or replied to")}">
+      <span class="pre">${iconThread()}</span><span class="nm">${t("Threads")}</span>
+    </button>
     <div class="sb-scroll" id="sb-scroll"></div>
-    <div class="sb-foot" id="sb-foot">
-      <span id="sb-ui" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}"></span>
+    <div class="sb-foot" id="sb-foot" hidden>
+      <span id="sb-ui" class="stale"></span>
     </div>`;
-  document.getElementById("btn-avatar").addEventListener("click", changeAvatar);
-  document.getElementById("btn-logout").addEventListener("click", doLogout);
+  document.getElementById("btn-avatar").addEventListener("click", (e) => openAccountMenu(e.currentTarget));
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
-  bindLangSwitch("sb-lang");
-  // The UI version: what the user sees against what the server sends. A mismatch means a cache
-  // somewhere along the way - and this is the only way to see it.
+  // W5-S10-A: the Threads view had no visible entry; this row opens it. U16: the rail button is
+  // gone, the Threads entry lives here only (the top section of the list).
+  document.getElementById("sb-threads").addEventListener("click", () => openThreadsView());
+  // The UI version against the server's (U9): the foot stays hidden unless they differ. The
+  // stamp itself moved into the help popover as "Interface version", out of a newcomer's way.
   const foot = document.getElementById("sb-ui");
   if (foot) {
-    foot.textContent = `UI ${UI_STAMP || "?"}`;
     api("GET", "/api/ui-version").then((v) => {
-      if (!v.stamp) return;
-      foot.textContent = `UI ${UI_STAMP || "?"}`;
-      if (UI_STAMP && v.stamp !== UI_STAMP) {
-        foot.textContent = t("UI {mine} - the server has {theirs}", { mine: UI_STAMP, theirs: v.stamp });
-        foot.classList.add("stale");
-        foot.title = t("Your interface is older than the server's. Reload the page bypassing the cache.");
-      }
+      const notice = uiVersionNotice(UI_STAMP, v.stamp);
+      if (!notice) return;
+      foot.textContent = notice;
+      foot.title = t("Your interface is older than the server's. Reload the page bypassing the cache.");
+      document.getElementById("sb-foot")?.removeAttribute("hidden");
     }).catch(() => {});
   }
   // The event stream's state moved out of here into the bar above the conversation: "you are
   // not seeing new messages" must not share fine print with a version number.
   renderSidebarList();
+}
+
+/** The sidebar foot's text (U9): empty unless the loaded interface and the server's stamp are
+ *  both known and differ; then the one line that explains a stale cache. Pure, for the test. */
+export function uiVersionNotice(mine, theirs) {
+  if (!mine || !theirs || mine === theirs) return "";
+  return t("UI {mine} - the server has {theirs}", { mine, theirs });
 }
 
 /** A pointwise update of ONE row: the bold text and the badge. A navigation list has to be a
@@ -93,16 +164,17 @@ export function updateConvRow(convId) {
   row.classList.toggle("unread", unread > 0);
   const name = row.querySelector(".nm")?.textContent ?? "";
   row.setAttribute("aria-label", `${name}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}`);
+  // The number is the one the tab title counts (unreadBadge: DMs and mentions, W2-S7-B); plain
+  // unread stays a bold row with no number, so the two never disagree.
   let badge = row.querySelector(".badge");
-  if (!unread) { badge?.remove(); return; }
+  if (!unread || !(state.unreadBadge[convId] || 0)) { badge?.remove(); return; }
   if (!badge) {
     badge = document.createElement("span");
     badge.className = "badge";
     badge.setAttribute("aria-hidden", "true");
     row.appendChild(badge);
   }
-  badge.classList.toggle("soft", (state.unreadBadge[convId] || 0) === 0);
-  badge.textContent = unread > 99 ? "99+" : String(unread);
+  badge.textContent = badgeText(state.unreadBadge[convId]);
 }
 
 /** Presence dots - the only thing a session heartbeat changes in the sidebar every 30 s.
@@ -152,7 +224,7 @@ export function renderSidebarList() {
         aria-label="${escapeHtml(label)}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}">
         ${pre}
         <span class="nm">${escapeHtml(label)}</span>
-        ${unread ? `<span class="badge ${(state.unreadBadge[c.id] || 0) > 0 ? "" : "soft"}" aria-hidden="true">${unread > 99 ? "99+" : unread}</span>` : ""}
+        ${unread && (state.unreadBadge[c.id] || 0) > 0 ? `<span class="badge" aria-hidden="true">${badgeText(state.unreadBadge[c.id])}</span>` : ""}
       </button>`;
   };
 
@@ -174,8 +246,8 @@ export function renderSidebarList() {
       const online = handleOnline(a.handle);
       return `
       <button class="conv person${faded ? " faded" : ""}" data-person="${escapeHtml(a.handle)}"
-        title="${t("Write to @{handle} privately", { handle: escapeHtml(a.handle) })}"
-        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`}${faded ? `, ${t("no activity for over two weeks")}` : ""} - ${t("write privately")}">
+        title="${t("Open the profile of @{handle}", { handle: escapeHtml(a.handle) })}"
+        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`}${faded ? `, ${t("no activity for over two weeks")}` : ""} - ${t("open the profile")}">
         <span class="conv-face">${avatarHtml(a.handle, 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>
         <span class="nm">@${escapeHtml(a.handle)}</span>
         <span class="kindtag ${a.kind}">${a.kind === "human" ? t("human") : t("agent")}</span>
@@ -203,9 +275,10 @@ export function renderSidebarList() {
 
   // The wiki is a tree: a parent page plays the role of a directory. Collapsed branches are
   // remembered per browser; the badge on a collapsed parent sums its subtree.
-  const wikiTreeHtml = () => {
+  const wikiTreeHtml = (sectionClosed) => {
     const pages = state.wiki.pages;
     if (!pages.length) {
+      if (sectionClosed) return "";
       return sidebarEmptyHtml(t("Nothing here yet. The wiki is shared memory - agents read it before they ask."),
         { id: "sb-new-wiki", label: t("Create the first page") });
     }
@@ -225,29 +298,41 @@ export function renderSidebarList() {
     // not allowed in HTML, cannot be reached with Tab (Enter on the row always opened the page),
     // and a 16 px touch target lying inside another target is not saved even by the spacing
     // exception in WCAG 2.5.8.
-    const row = (p, depth) => {
+    // `flat` draws the page alone, without its twist or its subtree: the folded-section list.
+    // W6-S14-C: the tree speaks ARIA. The page button is the treeitem (it is what the S14 keys
+    // move between), a parent carries aria-expanded and aria-level, its subtree sits in a group;
+    // the twist keeps its own expanded state for the pointer. The folded-section flat list is a
+    // plain list of rows, not a tree.
+    const row = (p, depth, flat = false) => {
       const active = state.view === "wiki" && state.wiki.slug === p.slug;
-      const hasKids = kids.has(p.slug);
+      const hasKids = !flat && kids.has(p.slug);
       const closed = hasKids && wikiCollapsed.has(p.slug);
       const unseen = (p.unseen || 0) + (closed ? subtreeUnseen(p.slug) : 0);
       const title = escapeHtml(p.title || p.slug);
+      const treeAttrs = flat ? "" : ` role="treeitem"${hasKids ? ` aria-expanded="${closed ? "false" : "true"}"` : ""} aria-level="${depth + 1}"`;
       return `
       <div class="conv-row" style="padding-left:${(0.15 + depth * 0.85).toFixed(2)}rem">
         ${hasKids
           ? `<button class="twist ${closed ? "closed" : ""}" data-wikitwist="${escapeHtml(p.slug)}"
                aria-expanded="${closed ? "false" : "true"}" aria-label="${closed ? t("Expand") : t("Collapse")} ${title}">${iconChevron()}</button>`
           : `<span class="pre" aria-hidden="true">${iconDoc()}</span>`}
-        <button class="conv ${active ? "active" : ""}" data-wikipage="${escapeHtml(p.slug)}"
+        <button class="conv ${active ? "active" : ""}" data-wikipage="${escapeHtml(p.slug)}"${treeAttrs}
           ${active ? `aria-current="page"` : ""}
           aria-label="${title}${unseen ? `, ${t("{n} changes", { n: unseen })}` : ""}">
           <span class="nm">${title}</span>
           ${unseen ? `<span class="badge soft" aria-hidden="true">${unseen > 99 ? "99+" : unseen}</span>` : ""}
         </button>
       </div>
-      ${hasKids && !closed ? level(p.slug, depth + 1) : ""}`;
+      ${hasKids && !closed ? `<div role="group">${level(p.slug, depth + 1)}</div>` : ""}`;
     };
     const level = (key, depth) => (kids.get(key) || []).map((p) => row(p, depth)).join("");
-    return level("", 0);
+    if (sectionClosed) {
+      // A folded Wiki keeps the pages with unseen changes and the open one, as a flat list.
+      const unseen = Object.fromEntries(pages.map((p) => [p.slug, p.unseen || 0]));
+      const active = state.view === "wiki" ? state.wiki.slug : null;
+      return visibleRows("wiki", pages, true, active, unseen).map((p) => row(p, 0, true)).join("");
+    }
+    return `<div class="wiki-tree" role="tree" aria-label="${t("Wiki")}">${level("", 0)}</div>`;
   };
 
   // The "+" buttons carried the accessible name "+" (content beats title), hence aria-label on
@@ -263,44 +348,55 @@ export function renderSidebarList() {
   // Open questions and the digest went into ONE section: they spoke about the same thing in
   // three languages, in three places, with three counters.
   const hasCatchUp = openCount > 0 || (state.digest && state.digest.count > 0);
-  el.innerHTML = `
-    ${hasCatchUp ? `
-    <div class="sb-group">
-      <h3>${t("To catch up on")}</h3>
+
+  // Every section header is a BUTTON with a caret (S1): a click folds the section, the state
+  // survives a reload, and a folded section still lists its unread rows and the active one.
+  // The header is an <h3> for the outline; the toggle inside it carries aria-expanded and points
+  // at the body it controls. The "+" stays a sibling of the toggle, never inside it.
+  syncCollapsed();
+  const isClosed = (id) => !!state.sbCollapsed[id];
+  const head = (id, label, extra = "", attrs = "") => `
+      <h3${attrs}>
+        <button class="sb-toggle" data-section="${id}" aria-expanded="${isClosed(id) ? "false" : "true"}" aria-controls="sb-sec-${id}">
+          <span class="sb-caret${isClosed(id) ? " closed" : ""}" aria-hidden="true">${iconChevron()}</span>
+          <span class="sb-label">${label}</span>
+        </button>${extra}
+      </h3>`;
+  const group = (id, label, body, { extra = "", attrs = "", cls = "" } = {}) => `
+    <div class="sb-group${cls ? ` ${cls}` : ""}${isClosed(id) ? " closed" : ""}" data-group="${id}">
+      ${head(id, label, extra, attrs)}
+      ${body ? `<div class="sb-body" id="sb-sec-${id}">${body}</div>` : ""}
+    </div>`;
+  const convRows = (id, list, emptyHtml) => {
+    const shown = visibleRows(id, list, isClosed(id), state.view === "chat" ? state.activeId : null, state.unread);
+    if (shown.length) return shown.map(row).join("");
+    return isClosed(id) ? "" : emptyHtml;
+  };
+
+  const sections = {
+    catchup: () => hasCatchUp ? group("catchup", t("To catch up on"), isClosed("catchup") ? "" : `
       ${state.digest && state.digest.count > 0 ? `
       <button class="conv" id="btn-digest">
-        <span class="pre">${iconDigest()}</span><span class="nm">${t("What happened while you were away")}</span>
+        <span class="pre">${iconDigest()}</span><span class="nm">${t("While you were away")}</span>
         <span class="badge soft">${state.digest.count > 99 ? "99+" : state.digest.count}</span>
       </button>` : ""}
       ${openCount ? `
       <button class="conv qcount" id="btn-questions">
-        <span class="pre">?</span><span class="nm">${t("Questions waiting for an answer")}</span>
+        <span class="pre">?</span><span class="nm">${t("Open questions")}</span>
         <span class="badge coral">${openCount}</span>
-      </button>` : ""}
-    </div>` : ""}
-    <div class="sb-group">
-      <h3>${t("Channels")} ${plus("channel", t("New channel"))}</h3>
-      ${channels.map(row).join("") || sidebarEmptyHtml(t("You are not on any channel yet."),
-        { id: "sb-new-chan", label: t("Create a channel") })}
-    </div>
-    ${discoverable.length ? `<div class="sb-group discover">
-      <h3>${t("Channels you can join")}</h3>${discoverable.map(row).join("")}</div>` : ""}
-    <div class="sb-group">
-      <h3>${t("Direct conversations")} ${plus("dm", t("New direct conversation"))}</h3>
-      ${directs.map(row).join("") || sidebarEmptyHtml(t("You are not talking to anybody in private yet."),
-        { id: "sb-new-dm", label: t("Write to somebody") })}
-    </div>
-    <div class="sb-group">
-      <h3>${t("Who is here")}</h3>
-      ${peopleHtml()}
-    </div>
-    <div class="sb-group">
-      <h3>${t("Wiki")} ${plus("wiki", t("New wiki page"))}</h3>
-      ${wikiTreeHtml()}
-    </div>
-    <div class="sb-group">
-      <h3 title="${t("Before anyone touches something shared (a deployment, a migration, a configuration file), they claim it here. Everybody else sees it is taken and waits - instead of walking into the same thing at the same time.")}">${t("Claimed resources")} ${plus("lease", t("Claim a resource"))}</h3>
-      ${state.leases.length ? state.leases.map((l) => {
+      </button>` : ""}`) : "",
+    channels: () => group("channels", t("Channels"),
+      convRows("channels", channels, sidebarEmptyHtml(t("You are not on any channel yet."), { id: "sb-new-chan", label: t("Create a channel") })),
+      { extra: plus("channel", t("New channel")) }),
+    discover: () => discoverable.length
+      ? group("discover", t("Channels you can join"), convRows("discover", discoverable, ""), { cls: "discover" })
+      : "",
+    directs: () => group("directs", t("Direct conversations"),
+      convRows("directs", directs, sidebarEmptyHtml(t("You are not talking to anybody in private yet."), { id: "sb-new-dm", label: t("Write to somebody") })),
+      { extra: plus("dm", t("New direct conversation")) }),
+    people: () => group("people", t("Who is here"), isClosed("people") ? "" : peopleHtml()),
+    wiki: () => group("wiki", t("Wiki"), wikiTreeHtml(isClosed("wiki")), { extra: plus("wiki", t("New wiki page")) }),
+    leases: () => group("leases", t("Claimed resources"), isClosed("leases") ? "" : (state.leases.length ? state.leases.map((l) => {
         const mine = l.handle === state.actor.handle;
         return `
       <div class="lease-row" title="${t("“{resource}” is held by @{handle}{note}. It releases itself in {left}.", { resource: escapeHtml(l.resource), handle: escapeHtml(l.handle), note: l.note ? ` - ${escapeHtml(l.note)}` : "", left: leaseCountdown(l.expiresAt) })}">
@@ -311,12 +407,16 @@ export function renderSidebarList() {
           aria-label="${t("Release {resource}", { resource: escapeHtml(l.resource) })}" title="${t("Release - others will be able to touch it")}">${t("Release")}</button>` : ""}
       </div>`;
       }).join("") : sidebarEmptyHtml(t("Nobody is blocking anything right now."),
-        { id: "sb-new-lease", label: t("Claim a resource") })}
-    </div>
-  `;
+        { id: "sb-new-lease", label: t("Claim a resource") })),
+      { extra: plus("lease", t("Claim a resource")),
+        attrs: ` title="${t("Before anyone touches something shared (a deployment, a migration, a configuration file), they claim it here. Everybody else sees it is taken and waits - instead of walking into the same thing at the same time.")}"` }),
+  };
+  // The rail's place decides which sections are drawn: Home shows all, DMs only the direct ones.
+  el.innerHTML = sectionsFor(sidebarPlace).map((id) => sections[id]()).join("");
   el.scrollTop = scrollTop;
+  // S6 (G11): a people row opens the PROFILE (with its "Message" button), not a conversation at once.
   el.querySelectorAll("[data-person]").forEach((b) =>
-    b.addEventListener("click", () => startDirect(b.dataset.person)));
+    b.addEventListener("click", () => openProfile(b.dataset.person, b)));
   el.querySelector("#sb-arch")?.addEventListener("toggle", (e) => {
     archiveOpen = e.target.open;
     try { localStorage.setItem("atalks_arch_open", archiveOpen ? "1" : "0"); } catch { /* private browsing */ }
@@ -344,6 +444,15 @@ export function renderSidebarList() {
       if (wikiCollapsed.has(slug)) wikiCollapsed.delete(slug); else wikiCollapsed.add(slug);
       try { localStorage.setItem("atalks_wiki_collapsed", JSON.stringify([...wikiCollapsed])); } catch { /* ok */ }
       renderSidebarList();
+    }));
+  el.querySelectorAll("[data-section]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const id = b.dataset.section;
+      setSectionCollapsed(id, !state.sbCollapsed[id]);
+      renderSidebarList();
+      // The list is rebuilt, so the focus goes back to the SAME header: keyboard users keep
+      // their place and can toggle again with Enter or Space.
+      el.querySelector(`[data-section="${id}"]`)?.focus();
     }));
   el.querySelectorAll("[data-new]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -379,7 +488,7 @@ async function openDigestModal() {
   };
   const mentionRow = (m) => `
     <button class="pin-row" data-gomsg="${m.id}" data-goconvid="${m.conversationId}">
-      <span class="pin-txt"><b>@${escapeHtml(actorHandle(m.actorId))}</b> ${escapeHtml(String(m.body || "").slice(0, 90))}</span>
+      <span class="pin-txt"><b>@${escapeHtml(actorHandle(m.actorId))}</b> ${escapeHtml(stripMd(m.body).slice(0, 90))}</span>
     </button>`;
   const { modal, close } = openModal(`
       <h2 id="m-title">${iconDigest()} ${t("What you missed")}</h2>
@@ -414,7 +523,7 @@ const HOW_WE_TALK = [
   msg("This is a shared conversation space for humans and AI agents. There are no bots here to be given commands - every participant, human or agent, writes and reads the same way."),
   msg("Channels (the ones with a #) are for topics, direct conversations for everything else. You join an open channel yourself, whenever you want."),
   msg("To call somebody, write @their-name. It is the only way to interrupt somebody's work - an agent that is asleep will be woken for such a message, so use it when you really are waiting for an answer."),
-  msg("If you are asking something and want to be sure the question does not get lost, send it with the question-mark button. It stays marked as open until somebody answers."),
+  msg("If you are asking something and want to be sure the question does not get lost, type /ask @their-name and the question, or pick “Ask a tracked question” from the + menu next to the message box. It stays marked as open until somebody answers. The box also knows /claim, /release, /who and /status - type / to see them."),
   msg("The wiki is shared memory. Before you ask about something that has probably been settled already, look there; when you settle something in a conversation, write it down there so it does not have to be settled twice."),
   msg("Before you touch something shared - a deployment, a migration, somebody else's file - claim it in the “Claimed resources” section. Others will see it is in progress instead of walking into the same thing at the same time."),
   msg("Nobody proves their identity here with a password in a conversation: the server signs it. If somebody asks you for a secret in the chat, that is not a reason to give it."),
@@ -425,6 +534,7 @@ function showGuidelines() {
       <h2 id="m-title">${t("How we talk here")}</h2>
       <div class="gd-body md">${HOW_WE_TALK.map((p) => `<p>${escapeHtml(t(p))}</p>`).join("")}</div>
       <p class="mhint">${t("Agents receive their own, technical version of these rules on their first connection.")}</p>
+      <p class="mhint gd-version" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}">${escapeHtml(t("Interface version {stamp}", { stamp: UI_STAMP || "?" }))}</p>
       <div class="row">
         <button class="btn ghost" id="gd-agent">${t("Show the agent guidelines")}</button>
         <button class="btn" id="gd-ok">${t("Got it")}</button>
@@ -452,13 +562,14 @@ async function showAgentGuidelines() {
 
 /** A human claiming a resource. The lease board was for looking at only, and it
  *  was described in CLI commands - so a human saw a rule they had no way to
- *  follow. */
-function claimLeaseModal() {
+ *  follow. The ONE claim modal: the sidebar's "new lease" button and the composer's + menu and
+ *  /claim command (commands.js) all open it; `prefill` is the resource typed after /claim. */
+export function claimLeaseModal(prefill = "") {
   const { modal, close } = openModal(`
       <h2 id="m-title">${t("Claim a resource")}</h2>
       <p class="mhint">${t("Tell the others that you are touching this right now. They will see it on the list and wait, instead of walking into the same thing at once.")}</p>
       <div class="field"><label for="cl-res">${t("What you are claiming")}</label>
-        <input id="cl-res" placeholder="${t("e.g. deploy-production")}">
+        <input id="cl-res" value="${escapeHtml(typeof prefill === "string" ? prefill : "")}" placeholder="${t("e.g. deploy-production")}">
         <span class="fhint">${t("Any name, as long as everybody reads it the same way. No spaces.")}</span></div>
       <div class="field"><label for="cl-note">${t("What you are doing with it (optional)")}</label>
         <input id="cl-note" placeholder="${t("e.g. releasing version 2.4")}"></div>
@@ -480,8 +591,86 @@ function claimLeaseModal() {
       Number(modal.querySelector("#cl-ttl").value));
     if (ok) refreshDigestAndLeases(true);
   });
+  modal.querySelector("#cl-res")?.focus();
 }
 
+
+/**
+ * The account menu under the avatar: the avatar action, the color mode (Auto / Light / Dark,
+ * Primer's color modes through js/theme.js) and signing out. One small menu rather than a row
+ * of header icons: the header is the one place a person looks for "me" settings.
+ */
+const THEME_ITEMS = [
+  { mode: "auto", label: () => t("Auto (follows the system)"), icon: iconDesktop },
+  { mode: "light", label: () => t("Light"), icon: iconSun },
+  { mode: "dark", label: () => t("Dark"), icon: iconMoon },
+];
+
+function openAccountMenu(anchor) {
+  const pop = document.createElement("div");
+  pop.className = "msg-menu account-menu";
+  pop.setAttribute("role", "menu");
+  pop.setAttribute("aria-label", t("Account menu"));
+  const theme = currentTheme();
+  pop.innerHTML = `
+    <button role="menuitem" data-mact="avatar"><span class="mm-l">${escapeHtml(t("Change your avatar"))}</span></button>
+    <div class="mm-sep" role="separator"></div>
+    <div class="mm-head" id="am-theme">${escapeHtml(t("Theme"))}</div>
+    <div role="group" aria-labelledby="am-theme">
+      ${THEME_ITEMS.map((it) => `
+      <button role="menuitemradio" data-theme="${it.mode}" aria-checked="${theme === it.mode}">
+        ${it.icon()}<span class="mm-l">${escapeHtml(it.label())}</span>
+        <span class="mm-check">${theme === it.mode ? iconCheck(true) : ""}</span>
+      </button>`).join("")}
+    </div>
+    <div class="mm-sep" role="separator"></div>
+    <div class="mm-head" id="am-lang-head">${escapeHtml(t("Interface language"))}</div>
+    <div class="mm-lang">${langSwitchHtml("am-lang")}</div>
+    <div class="mm-sep" role="separator"></div>
+    <button role="menuitem" data-mact="logout" class="danger"><span class="mm-l">${escapeHtml(t("Sign out"))}</span></button>`;
+  document.body.appendChild(pop);
+  // The language switch moved here from the sidebar header (S1). Changing the language redraws
+  // the whole shell, so the menu closes with it instead of floating over a new header.
+  bindLangSwitch("am-lang");
+  anchor.setAttribute("aria-expanded", "true");
+  const rect = anchor.getBoundingClientRect();
+  pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
+  pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+  let armed = null;
+  function close(how) {
+    clearTimeout(armed);
+    untrack();
+    pop.remove();
+    document.removeEventListener("mousedown", onOutside, true);
+    document.removeEventListener("keydown", onKey, true);
+    anchor.setAttribute("aria-expanded", "false");
+    if (!how?.forced && document.contains(anchor)) anchor.focus();
+  }
+  const untrack = trackOverlay(pop, close);
+  const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  pop.addEventListener("click", (e) => {
+    if (e.target.closest("[data-lang]")) { close(); return; }
+    const th = e.target.closest("[data-theme]");
+    if (th && THEMES.includes(th.dataset.theme)) {
+      setTheme(th.dataset.theme);
+      for (const b of pop.querySelectorAll("[data-theme]")) {
+        const on = b.dataset.theme === th.dataset.theme;
+        b.setAttribute("aria-checked", String(on));
+        b.querySelector(".mm-check").innerHTML = on ? iconCheck(true) : "";
+      }
+      return;
+    }
+    const b = e.target.closest("[data-mact]");
+    if (!b) return;
+    close();
+    if (b.dataset.mact === "avatar") changeAvatar();
+    if (b.dataset.mact === "logout") doLogout();
+  });
+  armed = setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  document.addEventListener("keydown", onKey, true);
+  pop.querySelector("[role=menuitem]")?.focus();
+}
 
 /**
  * Changing the avatar: pick a file from disk, with no screens in between.

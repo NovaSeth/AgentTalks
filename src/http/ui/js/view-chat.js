@@ -2,15 +2,20 @@
  * The conversation view: the message list, the composer, a thread, the details panel.
  */
 import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./actions.js";
-import { api, csrf } from "./api.js";
+import { api, csrf, sessionGeneration } from "./api.js";
+import { dividerAfter } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
-import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, scrollBehavior } from "./dom.js";
-import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./icons.js";
-import { renderBody } from "./markdown.js";
+import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, notePinned, openModal, repinIfPinned, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior, watchListPin } from "./dom.js";
+import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconChevron, iconCopy, iconDigest, iconEdit, iconFile, iconFlame, iconGear, iconInfo, iconLink, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconUnpin, iconWrench } from "./icons.js";
+import { renderBody, stripMd } from "./markdown.js";
+import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
+import { openPlusMenu } from "./commands.js";
 import { t } from "./i18n.js";
-import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, isReport, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, trimConversationCache, pushRecent, saveDraft, state, upsertMessage, visibleMessages, views, reports } from "./state.js";
+import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, isReport, isReportChannel, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, trimConversationCache, pushRecent, rememberLastConv, saveDraft, state, upsertMessage, visibleMessages, views, reports } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
+import { conversationRoute, permalink, syncRoute, unreadFrom } from "./router.js";
+import { bindProfileClicks, closeProfile, ensureHeaderMembers, headerFacesHtml, mountPeoplePicker, profileFacts, renderProfile, visibleMembers } from "./view-people.js";
 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
@@ -18,15 +23,28 @@ const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀",
 
 // ------------------------------------------------- entering a conversation
 export async function openConversation(id, focusMessageId) {
+  // F1: an open that resumes after the account changed must not draw, fetch or mark read.
+  const gen = sessionGeneration();
   saveDraft();                       // the PREVIOUS conversation's draft, before we redraw anything
   const previousConversation = state.activeId;
   // The "new messages" line disappears only on LEAVING a conversation - otherwise the one place
   // that said "this is where you stopped" gets lost while you are still reading.
   if (previousConversation && previousConversation !== id) delete state.readMark[previousConversation];
+  // W4-S6-C: the details and the pinned list describe ONE conversation; carried into the next one
+  // they showed the wrong members and pins. A profile is a person's, so it may stay.
+  if (previousConversation !== id) { state.detailsOpen = false; state.pinnedOpen = false; }
+  // U6: the header faces belong to ONE conversation too. Kept across a route change they drew
+  // the other channel's members (or its count) until the new fetch landed; dropped, the header
+  // re-fetches them for this conversation and shows nothing in the meantime.
+  if (previousConversation !== id) { state.convMembersFor = null; state.convMembers = []; }
   state.view = "chat";
   state.activeId = id;
-  try { localStorage.setItem("atalks_last_conv", String(id)); } catch { /* private browsing */ }
+  rememberLastConv(id);              // per account (F2 r3)
   pushRecent(id);
+  // S3: the address bar follows the view, so F5 restores it and Back walks the conversations
+  // you opened in reverse. A jump to one message carries `/m/<id>`.
+  const routeConv = state.conversations.find((c) => c.id === id);
+  if (routeConv) syncRoute(conversationRoute(routeConv, dmOthers(routeConv), { messageId: focusMessageId }));
   trimConversationCache();
   state.drawerOpen = false;
   state.threadOpen = null;
@@ -40,11 +58,37 @@ export async function openConversation(id, focusMessageId) {
     state.readMark[id] = state.memberships[id]?.lastReadMessageId ?? 0;
   }
   views.render();
+  let drawn = false;                 // the message list is on screen with what the state holds
+  let fresh = false;                 // the newest batch was fetched in THIS open
   if (!state.loaded[id]) {
-    state.loadingConv = true;
+    // W2-S2-B: the flag names the conversation being loaded. A boolean was shared by every open in
+    // flight: a slow load of one conversation kept the skeleton over another, already loaded one
+    // (a channel previewed from "Channels you can join" showed the loader, not its messages), and
+    // whichever load finished last switched it off for all.
+    state.loadingConv = id;
     renderMain();
     try { await loadMessages(id); } catch (e) { showError(e); }
-    state.loadingConv = false;
+    // U14/U6: the skeleton flag goes BEFORE the abandoned-open return below: left on, a later
+    // redraw of this conversation (an SSE event, a theme switch) painted the skeleton again.
+    if (state.loadingConv === id) state.loadingConv = false;
+    if (gen !== sessionGeneration()) return;
+    // U14 (boot): the newest batch is on screen the moment it lands. Drawing it only after the
+    // focus fetch below left the skeleton up for as long as that fetch waited in the browser's
+    // per-host connection queue (a torn-down page's requests hold the sockets up to the server's
+    // headers timeout) although the messages were already in the state.
+    renderMain();
+    drawn = true;
+    fresh = state.loaded[id];
+  }
+  // U14 (boot): an id above the newest message of a batch fetched just now cannot exist in this
+  // conversation - that batch holds the newest messages - so no fetch is needed to know the
+  // link is dead, and the toast and the address rewrite happen at once instead of after a
+  // queued request. A cache from an earlier open proves nothing (a link to a message newer
+  // than it is the normal case), so only a fresh batch decides.
+  if (focusMessageId && fresh && focusMessageId > (lastMessageId(id) ?? 0)) {
+    focusMessageId = undefined;
+    if (routeConv) syncRoute(conversationRoute(routeConv, dmOthers(routeConv)));
+    showToast(t("That message is gone or you cannot see it."), { alert: true });
   }
   if (focusMessageId && !(state.msgs[id] || []).some((m) => m.id === focusMessageId)) {
     try {
@@ -52,9 +96,20 @@ export async function openConversation(id, focusMessageId) {
       for (const m of data.messages) { upsertMessage(id, m); animatedMsgs.add(m.id); }
       mergeActors(data.actors);
       mergeReactions(data.messages, data.reactions);
+      drawn = false;
     } catch { /* best effort */ }
+    if (gen !== sessionGeneration()) return;
+    // U14: a link to a message that is deleted, out of reach or never existed. The conversation
+    // opens as usual (the newest at the bottom, the address without `/m/<id>`) and one toast
+    // says why the link did not land anywhere - a skeleton or a silent channel left the human
+    // guessing.
+    if (!(state.msgs[id] || []).some((m) => m.id === focusMessageId)) {
+      focusMessageId = undefined;
+      if (routeConv) syncRoute(conversationRoute(routeConv, dmOthers(routeConv)));
+      showToast(t("That message is gone or you cannot see it."), { alert: true });
+    }
   }
-  renderMain();
+  if (!drawn) renderMain();
   const questionsReady = refreshQuestions(id);
   // Pins are needed straight away: without them the message menu does not know whether to offer
   // "Pin" or "Unpin". Previously only the details panel fetched them.
@@ -63,7 +118,7 @@ export async function openConversation(id, focusMessageId) {
   if (focusMessageId) {
     // These refreshes can redraw the list, so highlight only after they finish.
     await Promise.all([questionsReady, pinsReady]);
-    if (state.view !== "chat" || state.activeId !== id) return;
+    if (gen !== sessionGeneration() || state.view !== "chat" || state.activeId !== id) return;
     const target = (state.msgs[id] || []).find((m) => m.id === focusMessageId);
     if (target?.threadId) {
       await openThread(target.threadId);
@@ -75,6 +130,10 @@ export async function openConversation(id, focusMessageId) {
       el.scrollIntoView({ block: "center", behavior: scrollBehavior(false) });
       el.classList.add("flash");
       setTimeout(() => el.classList.remove("flash"), 1600);
+      // A deep link lands the KEYBOARD on the message too (inside the thread panel when it opened
+      // one): a screen reader announces it, Tab continues from it, Escape closes the panel.
+      if (el.getAttribute?.("tabindex") == null) el.setAttribute?.("tabindex", "-1");
+      el.focus?.({ preventScroll: true });
     }
   } else {
     // Entering positions itself on the unread LINE when there is one - "catching up on the
@@ -91,11 +150,20 @@ export async function openConversation(id, focusMessageId) {
   if (state.memberships[id] && !focusMessageId) markReadDebounced(id, lastMessageId(id));
 }
 
+// U8: the root whose replies are being fetched. The panel says "Loading replies..." while this
+// names the open thread and nothing has arrived yet; once the fetch returns (or fails) an empty
+// thread says "No replies yet" instead of showing the root alone.
+let threadLoadingFor = null;
+
 export async function openThread(rootId) {
   const conversationId = state.activeId;
   state.threadOpen = rootId;
-  state.threadMsgs = [];
-  const isCurrent = () => state.view === "chat" && state.activeId === conversationId && state.threadOpen === rootId;
+  // U8: what the cache already holds (the root, replies seen on an earlier open or from the
+  // stream) is on screen at once; the fetch only completes and refreshes it.
+  state.threadMsgs = (state.msgs[conversationId] || []).filter((m) => m.id === rootId || m.threadId === rootId);
+  threadLoadingFor = rootId;
+  const gen = sessionGeneration();
+  const isCurrent = () => gen === sessionGeneration() && state.view === "chat" && state.activeId === conversationId && state.threadOpen === rootId;
   // Opening the panel must not replace the main composer while a send is completing.
   if (!document.getElementById("thread-slot")) {
     const host = document.createElement("div");
@@ -103,6 +171,10 @@ export async function openThread(rootId) {
     document.getElementById("main")?.appendChild(host);
   }
   renderThread();
+  // U1 (r4): the panel takes a column, the list reflows taller; a list that was at the bottom
+  // stays there (the ResizeObserver on the list catches the width change too; this is the
+  // explicit call for browsers without one).
+  repinIfPinned();
   try {
     const data = await api("GET", `/api/messages/${rootId}/thread`);
     if (!isCurrent()) return;
@@ -114,6 +186,7 @@ export async function openThread(rootId) {
     mergeActors(data.actors);
     mergeReactions(data.messages, data.reactions);
   } catch (e) { if (isCurrent()) showError(e); }
+  if (threadLoadingFor === rootId) threadLoadingFor = null;
   if (isCurrent()) renderThread();
 }
 
@@ -140,11 +213,52 @@ export function updateOfflineBar() {
   if (topbar) topbar.insertAdjacentHTML("afterend", offlineBarHtml());
 }
 
+// ------------------------------------------------- the side panel (S2)
+/** What the side panel shows, derived from the open flags: `null`, `{ kind: "thread", id }`,
+ *  `{ kind: "details", id }`, `{ kind: "pinned", id }` (S10) or `{ kind: "profile", id: handle }`
+ *  (S6). A profile is the top-most layer, pinned (opened from details or the header pill) wins
+ *  over details, details win over the thread - the panel hosts one thing. */
+export function sidePanelOf(s) {
+  if (s.profileHandle) return { kind: "profile", id: s.profileHandle };
+  if (s.pinnedOpen) return { kind: "pinned", id: s.activeId };
+  if (s.detailsOpen) return { kind: "details", id: s.activeId };
+  if (s.threadOpen) return { kind: "thread", id: s.threadOpen };
+  return null;
+}
+
+// The panel last shown, so Mod+. can bring it back after closing it.
+let lastSidePanel = null;
+
+/** Mod+. : close the open panel, or reopen the one closed last. The key itself is matched by the
+ *  shortcut table and run from app.js (W5-S8-C: one owner); this is only the action. */
+export async function toggleSidePanel() {
+  const open = sidePanelOf(state);
+  if (open) {
+    lastSidePanel = open;
+    if (open.kind === "profile") closeProfile();
+    else if (open.kind === "pinned") closePinnedPanel();
+    else if (open.kind === "details") { state.detailsOpen = false; renderMain(); document.getElementById("btn-details")?.focus(); }
+    else closeThread();
+    return;
+  }
+  if (!lastSidePanel || state.view !== "chat" || !state.activeId) return;
+  if (lastSidePanel.kind === "profile") { state.profileHandle = lastSidePanel.id; renderMain(); return; }
+  if (lastSidePanel.kind === "pinned") { await openPinnedPanel(); return; }
+  if (lastSidePanel.kind === "details") { state.detailsOpen = true; await refreshDetailsData(); renderMain(); return; }
+  if (findMsgById(lastSidePanel.id)) await openThread(lastSidePanel.id);
+}
+
+/** The main column of the current view. Every view that is not the conversation goes through the
+ *  `views` registry (W5-S11-A): a direct renderMain() after a language switch or an SSE event
+ *  must not redraw the chat column over the search, threads or unreads view. */
 export function renderMain() {
   const el = document.getElementById("main");
   if (!el) return;
   if (state.view === "users") { views.users(); return; }
   if (state.view === "notifications") { views.notifications(); return; }
+  if (state.view === "threads") { views.threads(); return; }
+  if (state.view === "unreads") { views.unreads(); return; }
+  if (state.view === "search") { views.search(); return; }
   if (state.view === "wiki") { renderWikiMain(); return; }
   if (!state.activeId) {
     // An empty state says what to do and gives a button for it - "choose a conversation" with
@@ -157,13 +271,22 @@ export function renderMain() {
   }
   const c = state.conversations.find((x) => x.id === state.activeId);
   const isMember = !!state.memberships[state.activeId];
+  // S2: the side panel is ONE slot that is always in the markup. The message column is wrapped
+  // in .main-col so the panel can stand next to it as a grid column from 1280 px (D3) and
+  // overlay it below. The thread/details hosts exist only while open (openThread appends its
+  // own host to #main when it is missing; the S2 CSS lays that host out like the panel).
+  state.sidePanel = sidePanelOf(state);
+  if (state.sidePanel) lastSidePanel = state.sidePanel;
   el.innerHTML = `
+    <div class="main-col" id="main-col">
     <div class="topbar">
       ${hamburgerHtml()}
+      <button class="iconbtn topbar-back" id="btn-back" aria-label="${t("Back to the list")}" title="${t("Back to the list")}">${iconArrowDown()}</button>
       <div class="title">
         <div class="t" id="topbar-title"></div>
         ${c && c.topic ? `<div class="topic">${escapeHtml(c.topic)}</div>` : ""}
       </div>
+      <div class="topbar-meta" id="topbar-meta"></div>
       <button class="iconbtn ${state.detailsOpen ? "on" : ""}" id="btn-details" aria-label="${t("Conversation details")}"
         aria-expanded="${state.detailsOpen}" aria-controls="details-slot" title="${t("Conversation details")}">${iconInfo()}</button>
     </div>
@@ -181,11 +304,22 @@ export function renderMain() {
              <button class="joinbtn" id="btn-join">${t("Join")}</button>
            </div>`}
     </div>
-    ${state.threadOpen ? `<div id="thread-slot"></div>` : ""}
-    ${state.detailsOpen ? `<div id="details-slot"></div>` : ""}
+    </div>
+    <aside class="side-panel" id="side-panel" aria-label="${t("Side panel")}"
+      data-kind="${state.sidePanel ? state.sidePanel.kind : ""}">
+      ${state.threadOpen ? `<div id="thread-slot"></div>` : ""}
+      ${state.detailsOpen ? `<div id="details-slot"></div>` : ""}
+      ${state.pinnedOpen ? `<div id="pinned-slot"></div>` : ""}
+      ${state.profileHandle ? `<div id="profile-slot"></div>` : ""}
+    </aside>
   `;
+  bindProfileClicks();
   document.getElementById("btn-menu").addEventListener("click", () => {
     state.drawerOpen = !state.drawerOpen; toggleDrawerClass();
+  });
+  // S9: on a phone the conversation is a pushed screen; the arrow pops it back to the list.
+  document.getElementById("btn-back").addEventListener("click", () => {
+    state.drawerOpen = true; toggleDrawerClass();
   });
   document.getElementById("btn-details").addEventListener("click", toggleDetails);
   const joinBtn = document.getElementById("btn-join");
@@ -201,12 +335,14 @@ export function renderMain() {
   });
   renderTopbar();
   bindScrollWatch(document.getElementById("messages"));
-  if (state.loadingConv) document.getElementById("messages").innerHTML = skeletonHtml();
+  if (state.loadingConv === state.activeId) document.getElementById("messages").innerHTML = skeletonHtml();
   else renderMessages();
   renderPresenceBar();
   if (isMember) { renderComposer(); bindDropZone(el); }
   if (state.threadOpen) renderThread();
   if (state.detailsOpen) renderDetails();
+  if (state.pinnedOpen) renderPinned();
+  if (state.profileHandle) renderProfile();
 }
 
 // ----------------------------------------------- the conversation details panel
@@ -225,6 +361,7 @@ export async function refreshDetailsData() {
       api("GET", `/api/conversations/${id}/pins`).catch(() => ({ pins: [] })),
     ]);
     state.convMembers = convData.members || [];
+    state.convMembersFor = id; // the header (S6) shares this fetch, see ensureHeaderMembers
     state.convPins = pinsData.pins || [];
     // The actor cache knows only the authors of messages - a member who has written nothing
     // would show as "@?"; we fetch the directory once.
@@ -249,8 +386,10 @@ export function renderDetails() {
     const removable = isChannel && (manage || m.actorId === state.actor.id);
     return `
       <div class="dm-row">
-        ${avatarHtml(handle, 26)}
-        <span class="dm-name">@${escapeHtml(handle)}</span>
+        <button type="button" class="dm-who" data-profile="${escapeHtml(handle)}" aria-label="${t("Open the profile of @{handle}", { handle: escapeHtml(handle) })}">
+          ${avatarHtml(handle, 26)}
+          <span class="dm-name">@${escapeHtml(handle)}</span>
+        </button>
         <span class="kindtag ${a.kind || "agent"}">${a.kind === "human" ? t("human") : t("agent")}</span>
         ${m.role === "admin" ? `<span class="roletag">admin</span>` : ""}
         <span class="ppresence ${online ? "on" : ""}"></span>
@@ -282,9 +421,9 @@ export function renderDetails() {
           </div>
           ${c.topic ? `<p class="dt-topic">${escapeHtml(c.topic)}</p>` : ""}
         </div>` : ""}
-        <div class="dt-sec">
-          <h4>${t("Members")} (${state.convMembers.length})</h4>
-          ${state.convMembers.map(memberRow).join("") || `<p class="sb-empty">${t("none")}</p>`}
+        <div class="dt-sec" id="dt-members">
+          <h4 tabindex="-1" id="dt-members-h">${t("Members")} (${visibleMembers(state.convMembers, state.actorsCache).length})</h4>
+          ${visibleMembers(state.convMembers, state.actorsCache).map(memberRow).join("") || `<p class="sb-empty">${t("none")}</p>`}
           ${c.kind === "private" ? `
           <div class="dt-add">
             <label class="sr-only" for="dt-add-input">${t("Who to add to the conversation")}</label>
@@ -303,9 +442,10 @@ export function renderDetails() {
           <p class="dt-hint">${t("When this conversation may call you (push / waking an agent): every message, mentions and DMs only, or never.")}</p>
         </div>` : ""}
         ${state.convPins.length ? `
-        <div class="dt-sec">
-          <h4>${t("Pinned")} (${state.convPins.length})</h4>
-          ${state.convPins.map(pinRow).join("")}
+        <div class="dt-sec" id="dt-pins">
+          <h4 tabindex="-1" id="dt-pins-h">${t("Pinned")} (${state.convPins.length})</h4>
+          ${state.convPins.slice(0, 3).map(pinRow).join("")}
+          <button type="button" class="pillbtn slim" id="dt-pins-all">${iconPin()} ${t("Show all pinned in the panel")}</button>
         </div>` : ""}
         ${isChannel && my ? `
         <div class="dt-sec dt-danger">
@@ -316,6 +456,7 @@ export function renderDetails() {
       </div>
     </div>`;
   document.getElementById("dt-close").addEventListener("click", () => { state.detailsOpen = false; renderMain(); });
+  document.getElementById("dt-pins-all")?.addEventListener("click", () => openPinnedPanel());
   const edit = document.getElementById("dt-edit");
   if (edit) edit.addEventListener("click", () => editChannelModal(c));
   host.querySelectorAll("[data-kick]").forEach((b) =>
@@ -389,6 +530,62 @@ export function renderDetails() {
   });
 }
 
+// ------------------------------------------------------- the pinned panel (S10)
+/** Opens the pinned list in the side panel (from the header pill, Details or Mod+.). The pins are
+ *  re-fetched so a pin made on another device is here too; Details stays where it was so closing
+ *  the panel returns to it. */
+export async function openPinnedPanel() {
+  if (state.view !== "chat" || !state.activeId) return;
+  state.profileHandle = null;
+  state.pinnedOpen = true;
+  await refreshDetailsData();
+  renderMain();
+  document.getElementById("pn-h")?.focus();
+}
+
+export function closePinnedPanel() {
+  state.pinnedOpen = false;
+  renderMain();
+  (document.querySelector('[data-details="pins"]') || document.getElementById("dt-pins-h") || document.getElementById("btn-details"))?.focus();
+}
+
+/** The pinned panel: every pin of the open conversation, newest first, each a button that jumps
+ *  to the message (and flashes it). Hosted by #pinned-slot inside the side panel. */
+export function renderPinned() {
+  const host = document.getElementById("pinned-slot");
+  if (!host) return;
+  const c = state.conversations.find((x) => x.id === state.activeId);
+  if (!c) return;
+  const pins = [...state.convPins].sort((a, b) => b.messageId - a.messageId);
+  const row = (p) => {
+    const msg = findMsgById(p.messageId);
+    const who = msg ? actorHandle(msg.actorId) : (p.by || "?");
+    const excerpt = msg ? String(msg.body || "").replace(/\s+/g, " ").slice(0, 200) : t("message #{id}", { id: p.messageId });
+    const when = msg ? timeAgo(msg.ts) : "";
+    return `
+      <button type="button" class="pin-row pn-row" data-jump="${p.messageId}"
+        aria-label="${escapeHtml(t("Jump to the pinned message by @{handle}", { handle: who }))}">
+        ${avatarHtml(who, 24)}
+        <span class="pin-txt"><span class="pn-meta"><b>@${escapeHtml(who)}</b> <span class="pn-when">${escapeHtml(when)}</span></span>
+          <span class="pn-body">${escapeHtml(excerpt)}</span></span>
+      </button>`;
+  };
+  host.innerHTML = `
+    <div class="thread details pinned" role="region" aria-label="${t("Pinned")}">
+      <div class="th-head">${iconPin()} <span tabindex="-1" id="pn-h">${t("Pinned")} (${pins.length})</span>
+        <button class="iconbtn close" id="pn-close" aria-label="${t("Close the pinned list")}" title="${t("Close")}"><span aria-hidden="true">&times;</span></button></div>
+      <div class="dt-body pn-body-list" id="pn-list">
+        ${pins.length ? pins.map(row).join("") : `<p class="sb-empty">${t("Nothing is pinned here yet. Pin a message from its More menu and it stays within reach for everybody.")}</p>`}
+      </div>
+    </div>`;
+  document.getElementById("pn-close").addEventListener("click", closePinnedPanel);
+  host.querySelectorAll("[data-jump]").forEach((b) =>
+    b.addEventListener("click", () => {
+      state.pinnedOpen = false;
+      openConversation(c.id, Number(b.dataset.jump));
+    }));
+}
+
 /** The channel edit modal: topic + slug (name). */
 function editChannelModal(c) {
   const { modal, close } = openModal(`
@@ -418,16 +615,68 @@ export function renderTopbar() {
   const c = state.conversations.find((x) => x.id === state.activeId);
   if (!c || state.view !== "chat") return;
   const isDirect = c.kind === "dm" || c.kind === "group";
+  const meta = document.getElementById("topbar-meta");
   if (isDirect) {
     // The participants from the server (`others`) are available from the first frame, so the
     // header has a name and a presence dot before the first message arrives.
     const others = dmOthers(c);
     const online = others.length > 0 && others.some((o) => handleOnline(o.handle));
     bar.innerHTML = `<span class="ppresence big ${online ? "on" : ""}"></span> ${escapeHtml(dmLabel(c))}`;
+    // S6: the other side's face, kind, presence and "doing" line; the face opens the profile.
+    if (meta) meta.innerHTML = dmHeaderMetaHtml(others);
   } else {
     const pre = c.kind === "private" ? `${iconLock(true)} ` : "# ";
     bar.innerHTML = `${pre}${escapeHtml(c.slug || t("unnamed"))}`;
+    // S6: stacked faces + member count (opens Details at Members) and a pins pill. The members
+    // arrive once per conversation; the first paint shows the pill alone, the fetch redraws.
+    if (meta) {
+      meta.innerHTML = channelHeaderMetaHtml(c);
+      ensureHeaderMembers(c.id, renderTopbar);
+    }
   }
+  meta?.querySelectorAll("[data-details]").forEach((b) =>
+    b.addEventListener("click", () => openDetailsAt(b.dataset.details)));
+}
+
+function channelHeaderMetaHtml(c) {
+  const haveMembers = state.convMembersFor === c.id;
+  const faces = haveMembers
+    ? `<button type="button" class="hdr-members" data-details="members"
+        aria-label="${t("{n} members - open the member list", { n: visibleMembers(state.convMembers, state.actorsCache).length })}"
+        title="${t("Members")}">${headerFacesHtml(state.convMembers, state.actorsCache)}</button>`
+    : "";
+  const pins = state.convPins.length
+    ? `<button type="button" class="hdr-pill" data-details="pins" aria-label="${t("{n} pinned - show them", { n: state.convPins.length })}"
+        title="${t("Pinned")}">${iconPin()} ${state.convPins.length}</button>`
+    : "";
+  return `${faces}${pins}`;
+}
+
+function dmHeaderMetaHtml(others) {
+  if (!others.length) return "";
+  const o = others[0];
+  const online = handleOnline(o.handle);
+  const row = state.presence.find((p) => String(p.handle).toLowerCase() === String(o.handle).toLowerCase() && p.doing)
+    || null;
+  const facts = profileFacts({ id: -1, handle: o.handle, kind: o.kind }, row ? [row] : []);
+  return `
+    <button type="button" class="hdr-dm" data-profile="${escapeHtml(o.handle)}" aria-label="${t("Open the profile of @{handle}", { handle: escapeHtml(o.handle) })}">
+      ${avatarHtml(o.handle, 24)}
+      <span class="kindtag ${o.kind || "agent"}">${o.kind === "human" ? t("human") : t("agent")}</span>
+      <span class="hdr-dm-state">${online ? t("online now") : t("offline")}</span>
+      ${facts.doing ? `<span class="hdr-dm-doing">${iconGear()} <i>${escapeHtml(facts.doing)}</i></span>` : ""}
+    </button>${others.length > 1 ? `<span class="hdr-count">+${others.length - 1}</span>` : ""}`;
+}
+
+/** Opens Details and moves focus to one of its headings ("members"); "pins" opens the pinned
+ *  panel instead (S10: the pins live in their own panel, Details only points at them). */
+async function openDetailsAt(section) {
+  if (section === "pins") { await openPinnedPanel(); return; }
+  state.profileHandle = null;
+  state.detailsOpen = true;
+  await refreshDetailsData();
+  renderMain();
+  document.getElementById(section === "pins" ? "dt-pins-h" : "dt-members-h")?.focus();
 }
 
 // -------------------------------------------------------- the presence bar
@@ -480,7 +729,10 @@ export function renderPresenceBar() {
 
 /** Attached once per list render: tracks the scroll position and drives the pill. */
 function bindScrollWatch(el) {
+  // U1 (r4): the list's own size changes re-pin it when it was at the bottom.
+  watchListPin(el);
   el.addEventListener("scroll", () => {
+    notePinned();
     updateJumpPill();
     // Marking as read belongs to THIS condition: you reached the bottom, so you really do see the
     // newest. Previewing a channel you do not belong to must not enrol you in it by scrolling
@@ -533,14 +785,17 @@ export function renderMessages() {
   const openEdit = saveOpenEdit(el);
   const keepAtBottom = isScrolledToBottom();
   const scrollTop = el.scrollTop;
-  const list = visibleMessages(state.activeId);
-  if (!list.length) {
+  const all = visibleMessages(state.activeId);
+  const c = state.conversations.find((x) => x.id === state.activeId);
+  // S5: the "N open" pill in the header and, when it is pressed, the list narrowed to the open
+  // reports of this channel (client-side; "Show all" is the way back).
+  renderReportPill(c, all);
+  const list = state.reportFilter && isReportChannel(c) ? all.filter((m) => openReport(m, c)) : all;
+  if (!all.length) {
     el.innerHTML = emptyStateHtml(iconChat(2.2), t("Quiet so far"),
       t("Nobody has written anything here yet. Start with the first sentence - agents and humans will see it the same way."));
     return;
   }
-
-  const c = state.conversations.find((x) => x.id === state.activeId);
   if (c && (c.kind === "dm" || c.kind === "group") && !dmMembersCache[c.id]) {
     const others = [...new Set((state.msgs[c.id] || []).map((m) => m.actorId))].filter((id) => id !== state.actor.id);
     if (others.length) dmMembersCache[c.id] = others;
@@ -548,10 +803,18 @@ export function renderMessages() {
 
   // Older messages load themselves as you scroll up; the button stays as an escape route (say,
   // when a batch did not fill the screen and there is nothing to scroll).
-  let html = state.hasMore[state.activeId]
-    ? `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>` : "";
+  let html = state.reportFilter && list !== all
+    ? `<div class="report-filter" role="status">${t("Showing only the open reports of this channel.")}
+        <button type="button" class="linkbtn" data-report-showall>${t("Show all")}</button></div>`
+      + (list.length ? "" : `<p class="report-none">${t("No open reports here - everything has been confirmed.")}</p>`)
+    : "";
+  if (state.hasMore[state.activeId] && !state.reportFilter) html += `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>`;
   const idx = threadIndex(state.activeId);
-  const mark = state.readMark[state.activeId] || 0;
+  // The divider position comes from counters.js: with a read mark it is the mark; on a first
+  // visit (mark 0) the server's unread count says where the new part begins (S7); the newest unread
+  // id (W2-S7-A) keeps the line in place when the unread include thread replies the list does not show.
+  const mark = dividerAfter(list, state.readMark[state.activeId] || 0, state.unread[state.activeId], state.actor.id,
+    state.lastUnread[state.activeId]);
   let unreadLineShown = false;
   let lastDay = null, lastAuthor = null, lastTs = 0;
   for (const m of list) {
@@ -559,7 +822,7 @@ export function renderMessages() {
     if (day !== lastDay) { html += `<div class="day">${dayLabel(m.ts)}</div>`; lastDay = day; lastAuthor = null; }
     // The "new messages" line: the one place that says "this is where you stopped reading". The
     // server has supplied lastReadMessageId all along, and the UI never used it once.
-    if (!unreadLineShown && mark && typeof m.id === "number" && m.id > mark && m.actorId !== state.actor.id) {
+    if (!unreadLineShown && mark !== null && typeof m.id === "number" && m.id > mark && m.actorId !== state.actor.id) {
       html += `<div class="newline"><span>${t("New messages")}</span></div>`;
       unreadLineShown = true;
       lastAuthor = null;
@@ -613,6 +876,41 @@ export function upsertMessageNode(msg) {
   el.insertAdjacentHTML("beforeend", messageHtml(msg, cont, { threads: idx }));
 }
 
+/** The tooltip of a reaction chip (S12): a sentence with the names, me first as "You". */
+export function reactionTooltip(emoji, handles, me) {
+  const others = handles.filter((h) => h !== me).map((h) => `@${h}`);
+  const mine = handles.includes(me);
+  let who;
+  if (mine && !others.length) who = t("You");
+  else if (mine) who = t("You and {who}", { who: others.join(", ") });
+  else if (others.length === 1) who = others[0];
+  else who = t("{list} and {last}", { list: others.slice(0, -1).join(", "), last: others[others.length - 1] });
+  return t("{who} reacted with {emoji}", { who, emoji });
+}
+
+/** The quick-react row (S12): the `n` most used emoji of the conversation, by count and then
+ *  first-seen order; the head of the palette fills what is missing. */
+export function topReactions(convId, n = 4) {
+  const counts = new Map();
+  for (const m of state.msgs[convId] || []) {
+    const r = state.reactions[m.id];
+    if (!r) continue;
+    for (const [emoji, handles] of Object.entries(r)) counts.set(emoji, (counts.get(emoji) || 0) + handles.length);
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([e]) => e);
+  for (const e of EMOJI_PALETTE) { if (top.length >= n) break; if (!top.includes(e)) top.push(e); }
+  return top.slice(0, n);
+}
+
+/** Only MY handle (W1-C): `mentionsMe` in state.js also answers true for @all / @channel, which
+ *  must not tint a whole row - everybody got it, nobody was singled out. */
+export function mentionsMeDirectly(text) {
+  const handle = state.actor?.handle;
+  if (!handle) return false;
+  const re = new RegExp(`(^|[\\s(>])@${handle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+  return re.test(String(text ?? ""));
+}
+
 function reactionChipsHtml(m) {
   const r = state.reactions[m.id];
   if (!r) return "";
@@ -621,12 +919,23 @@ function reactionChipsHtml(m) {
   return Object.entries(r).map(([emoji, handles]) => {
     const mine = handles.includes(state.actor.handle);
     const safeEmoji = escapeHtml(emoji);
-    return `<button class="react ${mine ? "mine" : ""}" data-react="${m.id}" data-emoji="${safeEmoji}"
-      title="${escapeHtml(handles.join(", "))}">${safeEmoji}<span class="n">${handles.length}</span></button>`;
+    const tip = escapeHtml(reactionTooltip(emoji, handles, state.actor.handle));
+    return `<button class="react ${mine ? "mine" : ""}" data-react="${m.id}" data-emoji="${safeEmoji}" aria-pressed="${mine}"
+      title="${tip}" aria-label="${tip}">${safeEmoji}<span class="n">${handles.length}</span></button>`;
   }).join("");
 }
 
-/** A thread bar as in Slack: the participants' avatars + the number of replies + the time of
+/** The quick-react buttons of the hover bar (S12): the same `data-react` contract as a chip, so
+ *  one delegated handler serves both. */
+function quickReactHtml(m) {
+  return topReactions(m.conversationId).map((emoji) => {
+    const safe = escapeHtml(emoji);
+    const label = t("React with {emoji}", { emoji: safe });
+    return `<button class="qr tooltipped tooltipped-n" data-react="${m.id}" data-emoji="${safe}" aria-label="${label}">${safe}</button>`;
+  }).join("");
+}
+
+/** A thread bar as in other chat tools: the participants' avatars + the number of replies + the time of
 /**  the last one. Always visible when a thread exists - it is what makes threads discoverable
 /**  (the icon in the hover menu only CREATES one). */
 /** A "thread root -> replies" map, computed ONCE per render. Previously every message filtered
@@ -684,26 +993,90 @@ function attachmentHtml(m) {
 /**  else do you know whether the person you are writing to has any chance of reading it - and
 /**  it spoke like an engineer ("silent 47 min - wakeable", "unreachable"). Now every line is a
 /**  sentence: what is true now and what follows from it. */
-function deliveryHtml(m) {
+const DELIVERY_COLLAPSE_MS = 10_000;
+let deliveryTimer = null;
+
+export function deliveryHtml(m) {
   const d = state.lastDelivery;
   if (!d || d.conversationId !== m.conversationId || d.messageId !== m.id) return "";
   const parts = d.delivery.map((r) => {
     const who = `@${escapeHtml(r.handle)}`;
-    if (r.online) return `<span class="ok">${t("{who} is online now - will read it right away", { who: who })}</span>`;
+    if (r.online) return { cls: "ok", text: t("{who} is online now - will read it right away", { who: who }) };
     if (r.wakeable) {
       const elapsed = timeAgo(r.lastSeenAt).replace(/ (ago|temu)$/, "");
-      return `<span class="warn">${t("{who} has been asleep for {how_long} - the server will wake them with this message", { who: who, how_long: escapeHtml(elapsed) })}</span>`;
+      return { cls: "warn", text: t("{who} has been asleep for {how_long} - the server will wake them with this message", { who: who, how_long: escapeHtml(elapsed) }) };
     }
-    return `<span class="off">${t("{who} is offline - will see it when they are back", { who: who })}</span>`;
+    return { cls: "off", text: t("{who} is offline - will see it when they are back", { who: who }) };
   });
-  return `<div class="delivery">${parts.join(" · ")}</div>`;
+  // S12: the sentence has its moment right after the send; ten seconds later it folds into a
+  // small icon that still tells the whole story on hover. `shownAt` is remembered on the delivery
+  // record itself the first time it is drawn, and one timer redraws this bubble when it is due.
+  if (!d.shownAt) d.shownAt = Date.now();
+  const age = Date.now() - d.shownAt;
+  if (age < DELIVERY_COLLAPSE_MS) {
+    clearTimeout(deliveryTimer);
+    deliveryTimer = setTimeout(() => {
+      if (state.lastDelivery === d) upsertMessageNode(findMsgById(d.messageId));
+    }, DELIVERY_COLLAPSE_MS - age + 50);
+    return `<div class="delivery">${parts.map((p) => `<span class="${p.cls}">${p.text}</span>`).join(" · ")}</div>`;
+  }
+  const plain = parts.map((p) => p.text.replace(/<[^>]+>/g, "")).join(" · ");
+  const worst = parts.some((p) => p.cls === "off") ? "off" : parts.some((p) => p.cls === "warn") ? "warn" : "ok";
+  return `<div class="delivery compact"><span class="${worst}" tabindex="0" role="img" title="${plain}" aria-label="${t("Delivery: {status}", { status: plain })}">${iconSend()}</span></div>`;
 }
 
 /* The entry animation only on a message's FIRST render. Every re-render (a reaction,
    an edit, a read) redraws the whole list, and without this memory every bubble
    replayed its "slide in" from scratch. */
 
-function messageHtml(m, cont, opts = {}) {
+/** Which report controls a message carries (S5, A5). `report`: the message is in the report
+ *  cycle - the trace (fixedAt/resolvedAt), the explicit "Treat as a report", or the channel rule
+ *  (a bug/issue/incident channel treats every top-level text as a report, G19). "Mark fixed" is
+ *  for everybody but the author; "Confirm fixed" for the author, the instance admin or a channel
+ *  admin, and only once somebody has marked it fixed (or to take a confirmation back). Before
+ *  the channel rule the wrench and the check hung next to EVERY message from somebody else,
+ *  including in a private conversation about lunch; the rule puts them where reports live. */
+/** An open report: in the report cycle and not confirmed yet (in-flight entries do not count). */
+function openReport(m, c) {
+  return isReport(m, c) && !m.resolvedAt && !m.pending && !m.failed;
+}
+
+/** The "N open" pill next to the title (S5, A5): only in a bug/issue/incident channel, counting
+ *  the LOADED top-level reports without resolvedAt. Pressing it narrows the list; the element is
+ *  created once per header and found by id afterwards. */
+function renderReportPill(c, all) {
+  const inChannel = isReportChannel(c);
+  if (!inChannel && state.reportFilter) state.reportFilter = false;   // the filter is per report channel
+  let pill = document.getElementById("report-pill");
+  if (!pill) {
+    const host = document.getElementById("topbar-title")?.closest(".title");
+    if (!host?.insertAdjacentElement) return;
+    pill = document.createElement("button");
+    pill.id = "report-pill"; pill.type = "button"; pill.className = "pillbtn report-pill";
+    pill.addEventListener("click", () => { state.reportFilter = !state.reportFilter; renderMessages(); });
+    host.insertAdjacentElement("afterend", pill);
+  }
+  const open = inChannel ? all.filter((m) => openReport(m, c)).length : 0;
+  const show = inChannel && (open > 0 || state.reportFilter);
+  pill.hidden = !show;
+  if (!show) return;
+  pill.innerHTML = `${iconWrench()} ${t("{n} open", { n: open })}`;
+  pill.setAttribute("aria-pressed", String(state.reportFilter));
+  pill.classList.toggle("on", state.reportFilter);
+  const tip = state.reportFilter ? t("Showing only the open reports. Click to show everything.") : t("Reports nobody has confirmed as fixed yet. Click to show only those.");
+  pill.title = tip; pill.setAttribute("aria-label", `${t("{n} open", { n: open })} - ${tip}`);
+}
+
+function reportControls(m, mine) {
+  const myMem = state.memberships[m.conversationId];
+  const report = isReport(m);
+  const canResolve = report && !m.deletedAt && m.kind !== "answer" && !!(m.fixedAt || m.resolvedAt)
+    && (mine || state.actor.isAdmin || (myMem && myMem.role === "admin"));
+  const canFix = report && !mine && m.kind === "text" && !m.deletedAt;
+  return { report, canFix, canResolve };
+}
+
+export function messageHtml(m, cont, opts = {}) {
   const handle = actorHandle(m.actorId);
   const kind = actorKind(m.actorId);
   const mine = m.actorId === state.actor.id;
@@ -731,7 +1104,7 @@ function messageHtml(m, cont, opts = {}) {
       </div>
     </div>`;
   }
-  const mentionsCurrentActor = mentionsMe(m.body);
+  const mentionsCurrentActor = mentionsMeDirectly(m.body);
   const isAsk = m.kind === "ask";
   const qid = state.openQuestions[m.id];
   const askOpen = isAsk && qid !== undefined;
@@ -741,17 +1114,7 @@ function messageHtml(m, cont, opts = {}) {
   // "confirmed" by whoever reported it (or an admin). One badge for both would read as a
   // verification while meaning "somebody claims they did it".
   const fixed = !!m.fixedAt && !resolved;
-  // Resolving is for the author, the instance admin, or a channel admin (as on the server).
-  const myMem = state.memberships[m.conversationId];
-  // ...but we SHOW it only next to a message that is a report: either it is already circulating
-  // in that cycle (it has fixedAt/resolvedAt), or somebody explicitly said "treat as a report".
-  // Previously the wrench and the check hung next to EVERY message from somebody else, including
-  // in a private conversation about lunch - and an accidental click sent somebody a request to
-  // confirm something they had never reported.
-  const report = isReport(m);
-  const canResolve = report && !m.deletedAt && m.kind !== "answer"
-    && (mine || state.actor.isAdmin || (myMem && myMem.role === "admin"));
-  const canFix = report && !mine && m.kind === "text" && !m.deletedAt;
+  const { report, canFix, canResolve } = reportControls(m, mine);
   const pinned = state.convPins.some((p) => p.messageId === m.id);
   const fresh = !animatedMsgs.has(m.id);
   // The set grew for the whole life of the tab. A reset past a threshold costs one unnecessary
@@ -760,10 +1123,10 @@ function messageHtml(m, cont, opts = {}) {
   if (fresh) animatedMsgs.add(m.id);
   return `
     <div class="msg ${fresh ? "enter" : ""} ${cont ? "cont" : ""} ${m.deletedAt ? "deleted" : ""} ${mentionsCurrentActor ? "mine-mention" : ""} ${isAsk ? "ask" : ""} ${m.kind === "answer" ? "answer" : ""} ${resolved ? "resolved" : ""}" data-msg="${m.id}">
-      ${avatarHtml(handle)}
+      <button type="button" class="av-btn" data-profile="${escapeHtml(handle)}" aria-label="${t("Open the profile of @{handle}", { handle: escapeHtml(handle) })}" ${cont ? "tabindex=\"-1\"" : ""}>${avatarHtml(handle)}</button>
       <div class="body">
         <div class="head">
-          <span class="author">@${escapeHtml(handle)}</span>
+          <button type="button" class="author" data-profile="${escapeHtml(handle)}" title="${t("Open the profile of @{handle}", { handle: escapeHtml(handle) })}">@${escapeHtml(handle)}</button>
           <span class="kindtag ${kind}">${kind === "human" ? t("human") : t("agent")}</span>
           <span class="time">${fmtTime(m.ts)}</span>
           ${m.editedAt ? `<span class="edited">${t("(edited)")}</span>` : ""}
@@ -782,24 +1145,28 @@ function messageHtml(m, cont, opts = {}) {
           <button class="answerbtn" data-answer="${qid}" data-msg-ref="${m.id}">${iconReply()} ${t("Answer")}</button>
         </div>` : ""}
         ${(() => {
-          // One fixed row under an entry, as in Slack: the reaction chips, then a visible "add a
-          // reaction" button, and the thread replies on the right.
+          // One fixed row under an entry, as in other chat tools: the reaction chips, an "add a reaction"
+          // chip next to them ONLY when there already are some (S12: otherwise the hover bar carries it),
+          // and the thread replies on the right.
           if (m.deletedAt) return "";
           const tlink = !m.threadId && !opts.noThreadLink ? threadLinkHtml(m, opts.threads) : "";
+          if (!chips && !tlink) return "";
           return `<div class="reacts">${chips}
-            <button class="react addreact" data-addreact="${m.id}" aria-label="${t("Add a reaction")}" title="${t("Add a reaction")}">${iconAddReaction()}</button>
+            ${chips ? `<button class="react addreact" data-addreact="${m.id}" aria-label="${t("Add a reaction")}" title="${t("Add a reaction")}">${iconAddReaction()}</button>` : ""}
             ${tlink}</div>`;
         })()}
         ${mine ? deliveryHtml(m) : ""}
       </div>
       ${!m.deletedAt ? `
       <div class="actions" role="group" aria-label="${t("Actions for the message from @{handle}", { handle: escapeHtml(handle) })}">
-        ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}" title="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}">${iconCheck(true)}</button>` : ""}
-        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark as fixed")}" title="${m.fixedAt ? t("Take back “fixed”") : t("Mark: I fixed it, waiting for confirmation")}">${iconWrench()}</button>` : ""}
-        <button data-reply="${m.id}" aria-label="${t("Reply in a thread")}" title="${t("Reply in a thread")}">${iconThread()}</button>
-        ${mine && m.kind === "text" ? `<button data-edit="${m.id}" aria-label="${t("Edit the message")}" title="${t("Edit")}">${iconEdit()}</button>` : ""}
+        ${quickReactHtml(m)}
+        <button data-addreact="${m.id}" class="tooltipped tooltipped-n" aria-label="${t("Add a reaction")}">${iconAddReaction()}</button>
+        <button data-reply="${m.id}" class="tooltipped tooltipped-n" aria-label="${t("Reply in a thread")}">${iconThread()}</button>
+        ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="tooltipped tooltipped-n ${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? t("Take back the confirmation") : t("Confirm fixed")}">${iconCheck(true)}</button>` : ""}
+        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="tooltipped tooltipped-n ${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark fixed")}">${iconWrench()}</button>` : ""}
+        ${mine && m.kind === "text" ? `<button data-edit="${m.id}" class="tooltipped tooltipped-n" aria-label="${t("Edit the message")}">${iconEdit()}</button>` : ""}
         <button data-more="${m.id}" data-pinned="${pinned ? "1" : ""}" data-report="${report ? "1" : ""}"
-          aria-label="${t("More actions")}" aria-haspopup="menu" title="${t("More")}">${iconMore()}</button>
+          class="tooltipped tooltipped-n" aria-label="${t("More actions")}" aria-haspopup="menu">${iconMore()}</button>
       </div>` : ""}
     </div>`;
 }
@@ -822,6 +1189,8 @@ export function bindMessageEvents(scope) {
     if ((b = closest("[data-resolve]"))) { resolveMsg(Number(b.dataset.resolve), !b.dataset.on); return; }
     if ((b = closest("[data-fix]"))) { fixMsg(Number(b.dataset.fix), !b.dataset.on); return; }
     if ((b = closest("[data-more]"))) { openMessageMenu(Number(b.dataset.more), b); return; }
+    if ((b = closest("[data-report-showall]"))) { state.reportFilter = false; renderMessages(); return; }
+    if ((b = closest("[data-eph-close]"))) { b.closest(".msg")?.remove(); return; }
     if ((b = closest("[data-delete]"))) {
       const id = Number(b.dataset.delete);
       if (await confirmModal({
@@ -869,7 +1238,7 @@ export function bindMessageEvents(scope) {
     }
   });
   // Touch has no hover, and the action bar lived only on hover. A long press on a message
-  // (500 ms) reveals it exactly as in Slack.
+  // (500 ms) reveals it, the convention of touch chat clients.
   let holdTimer = null;
   scope.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse") return;
@@ -899,37 +1268,59 @@ function openMessageMenu(messageId, anchor) {
   if (!m) return;
   const mine = m.actorId === state.actor.id;
   const pinned = state.convPins.some((p) => p.messageId === messageId);
-  const report = isReport(m);
+  const { report, canFix, canResolve } = reportControls(m, mine);
+  // U15: every item carries an Octicon (the same one as its hover-bar twin where it has one), the
+  // own-message group (Edit, Delete) sits below a separator with Delete in the danger colour, and
+  // the report entry says what it does in plain words.
+  const canEdit = mine && m.kind === "text" && !m.deletedAt;
   const menuItems = [
-    { action: "pin", label: pinned ? t("Unpin from the conversation") : t("Pin in the conversation"),
+    // The report cycle in words (S5): the same two actions as the hover bar, with the consequence.
+    ...(canFix ? [{ action: "fix", icon: iconWrench(), label: m.fixedAt ? t("Take back “fixed”") : t("Mark fixed"),
+      description: m.fixedAt ? "" : t("Say you changed the code. Whoever reported it is asked to confirm the symptom is gone.") }] : []),
+    ...(canResolve ? [{ action: "resolve", icon: iconCheck(true), label: m.resolvedAt ? t("Take back the confirmation") : t("Confirm fixed"),
+      description: m.resolvedAt ? "" : t("Close the report: the symptom is gone.") }] : []),
+    { action: "pin", icon: pinned ? iconUnpin() : iconPin(), label: pinned ? t("Unpin from the conversation") : t("Pin in the conversation"),
       description: pinned ? t("It disappears from the pinned list.") : t("It goes to “Pinned” in the conversation details - for everybody.") },
     ...(!report && m.kind === "text" && !m.deletedAt
-      ? [{ action: "report", label: t("Treat as a report"),
-        description: t("Only then do the “I fixed it” and “I confirm it is gone” buttons appear.") }]
+      ? [{ action: "report", icon: iconFlame(), label: t("Mark as a problem"),
+        description: t("Adds the Fixed and Confirmed buttons, so whoever fixes it and whoever reported it can close it.") }]
       : []),
-    { action: "copy", label: t("Copy the text"), description: "" },
-    ...(mine ? [{ action: "delete", label: t("Delete the message"), description: t("Irreversible for everybody."), danger: true }] : []),
+    { action: "copy", icon: iconCopy(), label: t("Copy the text"), description: "" },
+    { action: "copylink", icon: iconLink(), label: t("Copy link"), description: t("A link that opens this message, inside its thread when it has one.") },
+    ...(state.memberships[m.conversationId] && !m.deletedAt
+      ? [{ action: "unread", icon: iconDigest(), label: t("Mark unread"), description: t("The conversation goes bold again from this message on.") }]
+      : []),
+    ...(canEdit || mine ? [{ separator: true }] : []),
+    ...(canEdit ? [{ action: "edit", icon: iconEdit(), label: t("Edit the message"), description: "" }] : []),
+    ...(mine ? [{ action: "delete", icon: iconTrash(), label: t("Delete the message"), description: t("Irreversible for everybody."), danger: true }] : []),
   ];
   const pop = document.createElement("div");
   pop.className = "msg-menu";
   pop.setAttribute("role", "menu");
-  pop.innerHTML = menuItems.map((p) => `
+  pop.innerHTML = menuItems.map((p) => p.separator ? `<hr class="mm-sep" role="separator">` : `
     <button role="menuitem" data-mact="${p.action}" class="${p.danger ? "danger" : ""}">
-      <span class="mm-l">${escapeHtml(p.label)}</span>
-      ${p.description ? `<span class="mm-o">${escapeHtml(p.description)}</span>` : ""}
+      <span class="mm-i" aria-hidden="true">${p.icon}</span>
+      <span class="mm-body">
+        <span class="mm-l">${escapeHtml(p.label)}</span>
+        ${p.description ? `<span class="mm-o">${escapeHtml(p.description)}</span>` : ""}
+      </span>
     </button>`).join("");
   document.body.appendChild(pop);
   const rect = anchor.getBoundingClientRect();
   pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8))}px`;
 
-  function close() {
+  let armed = null;
+  function close(how) {
+    clearTimeout(armed);
+    untrack();
     pop.remove();
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
     closeMsgMenu = null;
-    if (document.contains(anchor)) anchor.focus();
+    if (!how?.forced && document.contains(anchor)) anchor.focus();
   }
+  const untrack = trackOverlay(pop, close);
   const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
   const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
   pop.addEventListener("click", async (e) => {
@@ -937,11 +1328,19 @@ function openMessageMenu(messageId, anchor) {
     if (!b) return;
     const action = b.dataset.mact;
     close();
+    if (action === "fix") { fixMsg(messageId, !m.fixedAt); return; }
+    if (action === "resolve") { resolveMsg(messageId, !m.resolvedAt); return; }
     if (action === "pin") { togglePin(messageId, !pinned); return; }
     if (action === "report") {
       reports.add(messageId);
       views.message(findMsgById(messageId));
-      showToast(t("Treating this as a report. The message now carries “I fixed it” and “I confirm”."));
+      showToast(t("Marked as a problem. The message now carries the Fixed and Confirmed buttons."));
+      return;
+    }
+    if (action === "edit") {
+      // The same message can stand in both lists (thread root): edit the copy the menu came from.
+      const scope = anchor.closest?.("#th-msgs") || anchor.closest?.("#messages") || document.getElementById("messages");
+      if (scope) startInlineEdit(messageId, scope);
       return;
     }
     if (action === "copy") {
@@ -949,6 +1348,14 @@ function openMessageMenu(messageId, anchor) {
       catch { showToast(t("Could not copy."), { alert: true }); }
       return;
     }
+    if (action === "copylink") {
+      const c = state.conversations.find((x) => x.id === m.conversationId);
+      const hash = c ? conversationRoute(c, dmOthers(c), { messageId }) : `#/c/${m.conversationId}/m/${messageId}`;
+      try { await navigator.clipboard.writeText(permalink(hash, location.origin)); showToast(t("Link copied to the clipboard.")); }
+      catch { showToast(t("Could not copy."), { alert: true }); }
+      return;
+    }
+    if (action === "unread") { markUnreadFrom(messageId); return; }
     if (action === "delete") {
       if (await confirmModal({
         title: t("Delete this message?"),
@@ -957,10 +1364,31 @@ function openMessageMenu(messageId, anchor) {
       })) deleteMsg(messageId);
     }
   });
-  setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  armed = setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
   document.addEventListener("keydown", onKey, true);
   closeMsgMenu = close;
   pop.querySelector("button")?.focus();
+}
+
+/** "Mark unread" from a message on: the row goes bold with a count, the "New messages" divider
+ *  moves above the message, and the read marker on the server is asked to follow. The local
+ *  state is painted first - a counter that waits for the network reads as a broken click. */
+function markUnreadFrom(messageId) {
+  const m = findMsgById(messageId);
+  if (!m) return;
+  const convId = m.conversationId;
+  const marker = messageId - 1;
+  state.readMark[convId] = marker;
+  if (state.memberships[convId]) state.memberships[convId].lastReadMessageId = marker;
+  state.unread[convId] = unreadFrom(state.msgs[convId], messageId, state.actor.id);
+  const c = state.conversations.find((x) => x.id === convId);
+  state.unreadBadge[convId] = (c && (c.kind === "dm" || c.kind === "group"))
+    ? state.unread[convId]
+    : (state.msgs[convId] || []).filter((x) => x.id >= messageId && x.actorId !== state.actor.id && !x.deletedAt && mentionsMe(x.body)).length;
+  views.conversationRow(convId);
+  if (state.activeId === convId) renderMessages();
+  api("POST", `/api/conversations/${convId}/unread`, { messageId }).catch(() => { /* best effort */ });
+  showToast(t("Marked unread from here."));
 }
 
 // ------------------------------------------------------- inline editing
@@ -1016,8 +1444,11 @@ function startInlineAnswer(questionId, messageId, scope) {
       e.preventDefault();
       const v = ta.value.trim();
       if (!v) return;
-      try { await answerQuestion(questionId, v); showToast(t("Question closed - thank you!")); }
-      catch (err) { showError(err); renderMessages(); }
+      // F1 (r3): an answer that returns under another account draws nothing (the api drops it as
+      // stale; the old catch still redrew the list).
+      const gen = sessionGeneration();
+      try { await answerQuestion(questionId, v); if (gen === sessionGeneration()) showToast(t("Question closed - thank you!")); }
+      catch (err) { if (gen !== sessionGeneration()) return; showError(err); renderMessages(); }
     }
     if (e.key === "Escape") renderMessages();
   });
@@ -1036,13 +1467,15 @@ function openLightbox(url) {
   const returnFocus = document.activeElement;
   // The listener is removed in ONE place: previously only the Escape branch exited, so closing
   // by a click left a live close handler holding a reference to a removed element.
-  const close = () => {
+  const close = (how) => {
+    untrack();
     overlay.remove();
     document.removeEventListener("keydown", onKey);
-    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+    if (!how?.forced && returnFocus && document.contains(returnFocus)) returnFocus.focus();
   };
+  const untrack = trackOverlay(overlay, close);
   const onKey = (e) => { if (e.key === "Escape") close(); };
-  overlay.addEventListener("click", close);
+  overlay.addEventListener("click", () => close());
   document.addEventListener("keydown", onKey);
 }
 
@@ -1072,7 +1505,10 @@ function openEmojiPopover(messageId, anchor) {
   };
   const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
   const onKey = (e) => { if (e.key === "Escape") close(); };
+  let armed = null;
   function close() {
+    clearTimeout(armed);
+    untrack();
     pop.removeEventListener("click", onPick);
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey);
@@ -1080,8 +1516,9 @@ function openEmojiPopover(messageId, anchor) {
     closeEmojiPopover = null;
     emojiPopoverAnchor = null;
   }
+  const untrack = trackOverlay(pop, close);
   pop.addEventListener("click", onPick);
-  setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  armed = setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
   document.addEventListener("keydown", onKey);
   closeEmojiPopover = close;
 }
@@ -1120,7 +1557,7 @@ function updateSendButton() {
   send.classList.toggle("ready", can);
 }
 
-/** Dropping a file onto the WHOLE conversation area, as in Slack - three steps (save to disk,
+/** Dropping a file onto the WHOLE conversation area, as in other chat tools - three steps (save to disk,
 /**  open the dialog, find the file) turn into one. */
 function bindDropZone(el) {
   el.dataset.dropLabel = t("Drop to attach");
@@ -1155,22 +1592,18 @@ export function renderComposer() {
   el.innerHTML = `
     ${replyMsg ? `<div class="replying">${t("Replying in the thread of <b>@{handle}</b>", { handle: escapeHtml(actorHandle(replyMsg.actorId)) })}
       <button id="cancel-reply" aria-label="${t("Cancel replying in the thread")}" title="${t("Cancel")}"><span aria-hidden="true">&times;</span></button></div>` : ""}
-    <div class="card" id="composer-card">
-      <div class="previews" id="composer-previews"></div>
-      <div class="row">
-        <button class="attach" id="composer-attach" type="button" aria-label="${t("Attach files")}" title="${t("Attach files")}">${iconPlus()}</button>
-        <input type="file" id="composer-file" multiple style="display:none" aria-label="${t("Choose files to send")}">
-        <label class="sr-only" for="composer-input">${t("Your message")}</label>
-        <textarea id="composer-input" rows="1" placeholder="${t("Your message...")}"></textarea>
-        <button class="send" id="composer-send" disabled aria-label="${t("Send the message")}" title="${t("Send (Enter)")}">${iconSend()}</button>
-      </div>
-    </div>`;
+    ${composerCardHtml({ prefix: "composer", label: t("Your message"), placeholder: t("Your message..."), files: true })}`;
   const ta = document.getElementById("composer-input");
   const send = document.getElementById("composer-send");
   const cancel = document.getElementById("cancel-reply");
   const attachBtn = document.getElementById("composer-attach");
   const fileInput = document.getElementById("composer-file");
+  const card = document.getElementById("composer-card");
   if (cancel) cancel.addEventListener("click", () => { state.replyTo = null; renderComposer(); focusComposer(); });
+  // The shared parts (composer.js): formatting bar, emoji picker, one autocomplete for @ and #.
+  const formatKey = bindFormatting(ta, card);
+  const ac = mountAutocomplete(ta);
+  document.getElementById("composer-emoji")?.addEventListener("click", (e) => openEmojiPicker(e.currentTarget, (ch) => insertAtCaret(ta, ch)));
   const autosize = () => {
     ta.style.height = "auto";
     const maxH = window.innerHeight * 0.4;
@@ -1183,10 +1616,11 @@ export function renderComposer() {
   // The draft returns to the field with the conversation (and survives F5 - the text is in localStorage).
   const draft = state.drafts[state.activeId];
   if (draft?.text) ta.value = draft.text;
-  ta.addEventListener("input", () => { autosize(); signalTyping(); mentionAutocomplete(ta); scheduleDraftSave(); });
+  ta.addEventListener("input", () => { autosize(); signalTyping(); ac.refresh(); scheduleDraftSave(); });
   ta.addEventListener("keydown", (e) => {
-    if (mentionKeydown(e, ta)) return;
-    // Slack's ArrowUp on an EMPTY field: edit your own last message. Without it a typo can be
+    if (ac.keydown(e)) return;
+    if (formatKey(e)) return;
+    // The chat convention of ArrowUp on an EMPTY field: edit your own last message. Without it a typo can be
     // fixed only by hitting a 1.8rem icon that is visible only on hover.
     if (e.key === "ArrowUp" && !ta.value.trim() && !state.pendingFiles.length) {
       const mine = [...visibleMessages(state.activeId)].reverse()
@@ -1205,7 +1639,8 @@ export function renderComposer() {
     autosize();
   });
   send.addEventListener("click", submit);
-  attachBtn.addEventListener("click", () => fileInput.click());
+  // S5: the "+" is a menu (attach, ask a tracked question, claim a resource); commands.js owns it.
+  attachBtn.addEventListener("click", (e) => openPlusMenu(e.currentTarget, { attach: () => fileInput.click() }));
   fileInput.addEventListener("change", () => {
     addFiles([...fileInput.files]);
     fileInput.value = "";
@@ -1214,18 +1649,33 @@ export function renderComposer() {
   async function submit() {
     const v = ta.value.trim();
     if (!v && !state.pendingFiles.length) return;
-    closeMentionPopover();
+    ac.close();
+    // F1 (r3): the account, the conversation and the view are captured NOW and re-checked after
+    // every await below; a continuation that resumes elsewhere uploads, posts and draws nothing.
+    const convId = state.activeId;
+    const current = submitTarget({ withThread: false });
+    // The draft is written NOW, with the text about to be sent, and cleared only once the server
+    // confirms (actions.js does that on success). A failed send therefore survives F5: the fail
+    // bar holds the bubble, localStorage holds the words (M14). A submit cut short by a switch
+    // leaves the words (and the files, in memory) in this conversation's draft.
+    clearTimeout(draftTimer);
+    saveDraft();
     const files = state.pendingFiles; state.pendingFiles = [];
     ta.value = ""; renderPreviews(); autosize();
     // A file that failed to send RETURNS to the previews - otherwise it would disappear together
     // with the only copy of the choice the user made.
     const failedFiles = [];
     for (const p of files) {
-      const ok = await uploadAttachment(p);
+      const ok = await uploadAttachment(p, convId);
+      if (!current()) return;
       if (ok) { if (p.url) URL.revokeObjectURL(p.url); } else failedFiles.push(p);
     }
     if (failedFiles.length) { state.pendingFiles = [...failedFiles, ...state.pendingFiles]; renderPreviews(); updateSendButton(); }
-    if (v) await sendMessage(v);
+    if (v) {
+      const sent = await sendMessage(v, { conversationId: convId });
+      // keep the draft: the text is still the user's only copy besides the fail bar
+      if (!sent || !current()) return;
+    }
     saveDraft();
   }
   renderPreviews();
@@ -1317,8 +1767,8 @@ function renderPreviews() {
   }));
 }
 
-async function uploadAttachment(p) {
-  const convId = state.activeId;
+/** @param convId the conversation the submit started in (F1 r3: never the one active now). */
+async function uploadAttachment(p, convId) {
   const file = p.file;
   try {
     const res = await fetch(`/api/conversations/${convId}/files`, {
@@ -1348,100 +1798,25 @@ async function uploadAttachment(p) {
 
 function focusComposer() { const ta = document.getElementById("composer-input"); if (ta) ta.focus(); }
 
-// ---------------------------------------------- @mention autocomplete
-let mentionPop = null, mentionItems = [], mentionIndex = 0, mentionStart = -1;
-
-function closeMentionPopover() {
-  if (mentionPop) { mentionPop.remove(); mentionPop = null; mentionItems = []; }
+// ---------------------------------------------- @ and # autocomplete (engine in composer.js)
+/** The directory is refreshed on one TTL rule (ensureActors) - an agent that joined a minute ago
+ *  must exist for the suggestions. The Polish alias of @all stays accepted (D-MG-16). */
+function mountAutocomplete(ta) {
+  return createAutocomplete(ta, {
+    actors: async () => { await ensureActors(); return state.actorsList; },
+    allAliases: ["wszyscy"],
+  });
 }
 
-async function mentionAutocomplete(ta) {
-  const upto = ta.value.slice(0, ta.selectionStart ?? ta.value.length);
-  const m = upto.match(/(^|[\s(])@([a-z0-9._-]{0,24})$/i);
-  if (!m) { closeMentionPopover(); return; }
-  mentionStart = upto.length - m[2].length - 1;
-  // One rule for refreshing the directory (a TTL) instead of three different ones - otherwise an
-  // agent that joined a minute ago did not exist for the suggestions.
-  await ensureActors();
-  const q = m[2].toLowerCase();
-  // @all at the top of the list when it matches - one announcement wakes the whole channel.
-  const allItem = { handle: "all", displayName: t("everybody on the channel"), kind: "all" };
-  const showAll = (!q || "all".startsWith(q) || "wszyscy".startsWith(q));
-  mentionItems = [
-    ...(showAll ? [allItem] : []),
-    ...state.actorsList
-      .filter((a) => a.handle !== state.actor.handle)
-      .filter((a) => !q || a.handle.toLowerCase().includes(q) || (a.displayName || "").toLowerCase().includes(q)),
-  ].slice(0, 6);
-  if (!mentionItems.length) { closeMentionPopover(); return; }
-  mentionIndex = 0;
-  if (!mentionPop) {
-    mentionPop = document.createElement("div");
-    mentionPop.className = "mention-pop";
-    document.body.appendChild(mentionPop);
-  }
-  const rect = ta.getBoundingClientRect();
-  mentionPop.innerHTML = mentionItems.map((a, i) => `
-    <button data-mi="${i}" class="${i === mentionIndex ? "sel" : ""}">
-      ${a.kind === "all" ? `<span class="mention-all-ic">@</span>` : avatarHtml(a.handle, 22)}
-      <span class="mh">@${escapeHtml(a.handle)}</span>
-      <span class="kindtag ${a.kind === "all" ? "" : a.kind}">${a.kind === "all" ? t("the whole channel") : a.kind === "human" ? t("human") : t("agent")}</span>
-    </button>`).join("");
-
-  // Setting the POSITION, clamped to the visible area.
-  //
-  // On a phone the keyboard takes the bottom of the screen, and `position:fixed` is measured
-  // against the whole window rather than what is visible - so a list computed as "above the
-  // field" could land under the keyboard or past the edge. The symptom for the user: they type
-  // @ and THERE ARE NO SUGGESTIONS (@michal's report). visualViewport gives the genuinely
-  // visible rectangle; when the browser does not have it, the window remains.
-  const vv = window.visualViewport;
-  const viewport = { top: vv?.offsetTop ?? 0, left: vv?.offsetLeft ?? 0,
-                   width: vv?.width ?? window.innerWidth, height: vv?.height ?? window.innerHeight };
-  const margin = 8;
-  const w = mentionPop.offsetWidth, h = mentionPop.offsetHeight;
-  let left = Math.min(rect.left + margin, viewport.left + viewport.width - w - margin);
-  left = Math.max(viewport.left + margin, left);
-  // By default ABOVE the field (where the writer is looking). When there is no room above -
-  // below it. When there is nowhere - at the top edge of the visible area, because a list off
-  // screen is the same thing as no list.
-  let top = rect.top - h - 6;
-  if (top < viewport.top + margin) {
-    top = rect.bottom + 6 + h <= viewport.top + viewport.height ? rect.bottom + 6 : viewport.top + margin;
-  }
-  mentionPop.style.left = `${Math.round(left)}px`;
-  mentionPop.style.top = `${Math.round(top)}px`;
-
-  // pointerdown, not mousedown: on touch the mouse is EMULATED and the event arrives later - and
-  // by then the field has lost focus and the list is gone, so a tap selected... nothing.
-  // pointerdown handles mouse, touch and stylus.
-  mentionPop.querySelectorAll("[data-mi]").forEach((b) =>
-    b.addEventListener("pointerdown", (e) => { e.preventDefault(); pickMention(ta, Number(b.dataset.mi)); }));
-}
-
-function pickMention(ta, idx) {
-  const a = mentionItems[idx];
-  if (!a) return;
-  const after = ta.value.slice(ta.selectionStart ?? ta.value.length);
-  ta.value = ta.value.slice(0, mentionStart) + "@" + a.handle + " " + after;
-  const pos = mentionStart + a.handle.length + 2;
-  ta.setSelectionRange(pos, pos);
-  closeMentionPopover();
-  ta.dispatchEvent(new Event("input"));
-  ta.focus();
-}
-
-function mentionKeydown(e, ta) {
-  if (!mentionPop) return false;
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-    e.preventDefault();
-    mentionIndex = (mentionIndex + (e.key === "ArrowDown" ? 1 : mentionItems.length - 1)) % mentionItems.length;
-    mentionPop.querySelectorAll("[data-mi]").forEach((b, i) => b.classList.toggle("sel", i === mentionIndex));
-    return true;
-  }
-  if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickMention(ta, mentionIndex); return true; }
-  if (e.key === "Escape") { closeMentionPopover(); return true; }
-  return false;
+// ------------------------------------------------------------- submit guard
+/** F1 (r3): the target of a submit, captured when it starts. The returned check is true only
+ *  while the same account session, the chat view, the same conversation and (for the thread box)
+ *  the same thread are on screen. A submit asks it after every await and stops when it is false,
+ *  so a continuation of account A never sends, stores or draws into account B's view. */
+export function submitTarget({ withThread }) {
+  const gen = sessionGeneration(), convId = state.activeId, rootId = state.threadOpen;
+  return () => gen === sessionGeneration() && state.view === "chat" && state.activeId === convId
+    && (!withThread || state.threadOpen === rootId);
 }
 
 // ------------------------------------------------------------- thread (drawer)
@@ -1450,6 +1825,14 @@ export function renderThread() {
   if (!host) return;
   const root = findMsgById(state.threadOpen);
   const replies = state.threadMsgs.filter((m) => m.id !== state.threadOpen);
+  // The panel is redrawn when the replies arrive and on every echo; what the user already typed
+  // into the box, and the "also send" tick, must survive that redraw.
+  const keep = { text: document.getElementById("th-input")?.value ?? "", also: !!document.getElementById("th-also")?.checked };
+  // U8: an empty reply list is one of two states and the panel says which one.
+  const loading = threadLoadingFor === state.threadOpen && !replies.length;
+  const repliesState = replies.length ? "" : loading
+    ? `<div class="th-state th-loading" role="status">${skeletonHtml()}<span class="th-state-text">${t("Loading replies...")}</span></div>`
+    : `<div class="th-state th-empty" role="status">${iconThread()}<span class="th-state-text">${t("No replies yet - be the first.")}</span></div>`;
   host.innerHTML = `
     <div class="thread" role="region" aria-label="${t("Thread")}">
       <div class="th-head">${iconThread()} ${t("Thread")}
@@ -1457,40 +1840,70 @@ export function renderThread() {
       <div class="th-msgs" id="th-msgs">
         ${root ? messageHtml(root, false, { noThreadLink: true }) : ""}
         ${replies.map((m, i) => messageHtml(m, i > 0 && replies[i - 1].actorId === m.actorId)).join("")}
+        ${repliesState}
       </div>
       <div class="composer" id="th-composer"></div>
     </div>`;
   document.getElementById("th-close").addEventListener("click", closeThread);
   bindMessageEvents(document.getElementById("th-msgs"));
+  // The SAME composer as the main dock (composer.js): formatting, emoji, @ and # lists. Files stay
+  // a main-dock feature: the upload route has no thread target yet.
+  const conv = state.conversations.find((c) => c.id === state.activeId);
+  const alsoLabel = conv?.slug ? t("Also send to #{channel}", { channel: escapeHtml(conv.slug) }) : t("Also send to the conversation");
   const tc = document.getElementById("th-composer");
-  tc.innerHTML = `<div class="card"><div class="row">
-    <label class="sr-only" for="th-input">${t("Reply in the thread")}</label>
-    <textarea id="th-input" rows="1" placeholder="${t("Reply in the thread...")}"></textarea>
-    <button class="send" id="th-send" disabled aria-label="${t("Send the reply")}">${iconSend()}</button></div></div>`;
+  tc.innerHTML = composerCardHtml({
+    prefix: "th", label: t("Reply in the thread"), placeholder: t("Reply in the thread..."), sendLabel: t("Send the reply"),
+    compact: true,   // U31 (r4): 380 px wide - the secondary tools fold behind "More formatting"
+    footer: `<label class="th-also"><input id="th-also" type="checkbox"${keep.also ? " checked" : ""}> <span>${alsoLabel}</span></label>`,
+  });
   const ta = document.getElementById("th-input"), send = document.getElementById("th-send");
+  if (keep.text) ta.value = keep.text;
   const autosize = () => {
     ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
     ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
     send.disabled = !ta.value.trim();
     send.classList.toggle("ready", !!ta.value.trim());
   };
-  ta.addEventListener("input", () => { autosize(); signalTyping(); });
-  ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
+  const formatKey = bindFormatting(ta, tc);
+  const ac = mountAutocomplete(ta);
+  document.getElementById("th-emoji")?.addEventListener("click", (e) => openEmojiPicker(e.currentTarget, (ch) => insertAtCaret(ta, ch)));
+  ta.addEventListener("input", () => { autosize(); signalTyping(); ac.refresh(); });
+  ta.addEventListener("keydown", (e) => {
+    if (ac.keydown(e)) return;
+    if (formatKey(e)) return;
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
   send.addEventListener("click", submit);
   async function submit() {
     const v = ta.value.trim(); if (!v) return;
+    ac.close();
+    const also = !!document.getElementById("th-also")?.checked;
     ta.value = ""; autosize();
-    // Capture the target before awaiting: the user may switch threads or close the panel.
+    // Capture the target before awaiting: the user may switch accounts, threads or close the
+    // panel. F1 (r3): `current()` is asked again after EVERY await - a value computed before an
+    // await says nothing about the world after it (A's reply once landed in B's thread).
     const convId = state.activeId, rootId = state.threadOpen;
+    const gen = sessionGeneration();
+    const sameAccount = () => gen === sessionGeneration();
+    const current = submitTarget({ withThread: true });
     const msg = await sendMessage(v, { threadId: rootId, conversationId: convId });
-    const stillHere = state.view === "chat" && state.activeId === convId && state.threadOpen === rootId;
+    // sendMessage already stored the reply for its root; a continuation under ANOTHER account
+    // touches nothing and sends nothing more.
+    if (!sameAccount()) return;
     // A failed send returns the text to the field - exactly as in the main composer.
     if (!msg) {
-      if (stillHere && document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
+      if (current() && document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
       return;
     }
-    // sendMessage already stored the reply for its root; never insert it into another thread.
-    if (!stillHere) return;
+    // "Also send to the channel": a second POST without threadId, a copy in the main list. Both
+    // sends name their conversation and thread explicitly, so the SAME account switching
+    // conversation or thread meanwhile still gets the copy it asked for (r4, item 10); only the
+    // state and DOM updates below are skipped for a place no longer on screen.
+    if (also) {
+      await sendMessage(v, { conversationId: convId, threadId: null });
+      if (!sameAccount()) return;
+    }
+    if (!current()) return;
     const index = state.threadMsgs.findIndex((entry) => entry.id === msg.id);
     if (index >= 0) state.threadMsgs[index] = msg;
     else { state.threadMsgs.push(msg); state.threadMsgs.sort((a, b) => a.id - b.id); }
@@ -1500,14 +1913,19 @@ export function renderThread() {
     const list = document.getElementById("th-msgs");
     if (list) list.scrollTop = 999999;
   }
+  if (keep.text) autosize();
   document.getElementById("th-msgs").scrollTop = 999999;
 }
 
 /** Closing a thread, returning focus to the bar that opened it. */
 export function closeThread() {
   const rootId = state.threadOpen;
+  // W2-S2-A: the "x" and Escape close a thread too, not only Mod+.; remember it so Mod+. brings
+  // it back (toggleSidePanel only records what IT closed).
+  if (rootId) lastSidePanel = { kind: "thread", id: rootId };
   state.threadOpen = null;
   renderMain();
+  repinIfPinned();   // U1 (r4): the column widens back; a list that was at the bottom stays there
   document.querySelector(`#messages [data-thread="${rootId}"]`)?.focus();
 }
 
@@ -1526,8 +1944,9 @@ export async function openQuestionsPanel() {
             ${avatarHtml(actorHandle(q.message.actorId), 26)}
             <span class="qmain">
               <span class="qtop">@${escapeHtml(actorHandle(q.message.actorId))} <span class="pal-where">${escapeHtml(where)} · ${timeAgo(q.message.ts)}</span></span>
-              <span class="qbody">${escapeHtml(q.message.body.slice(0, 160))}</span>
+              <span class="qbody">${escapeHtml(stripMd(q.message.body).slice(0, 160))}</span>
             </span>
+            <span class="qgo"><span class="qgo-l">${t("Go to the question")}</span>${iconChevron()}</span>
           </button>`;
         }).join("") : `<p class="sb-empty">${t("There are no open questions - everything is closed.")}</p>`}
       </div>
@@ -1596,18 +2015,16 @@ export async function openNewConversationModal(initialTab) {
       });
       body.querySelector("#nc-slug").focus();
     } else {
-      const others = state.actorsList.filter((a) => a.handle !== state.actor.handle);
+      // S6: a people picker (search, chips, faces, kind tag) instead of a <select multiple>;
+      // @system is never offered (filterPeople's default).
       body.innerHTML = `
-        <div class="field"><label for="nc-who">${t("To whom")}</label>
-          <select id="nc-who" multiple size="6" class="who-select">
-            ${others.map((a) => `<option value="${escapeHtml(a.handle)}">@${escapeHtml(a.handle)} ${a.kind === "human" ? `- ${t("human")}` : `- ${t("agent")}`}</option>`).join("")}
-          </select>
+        <div class="field"><span class="flabel" id="nc-who-label">${t("To whom")}</span>
+          <div id="nc-who" aria-labelledby="nc-who-label"></div>
         </div>
         <p class="mhint">${t("One person is a direct conversation, several is a group. You approach an agent exactly as you approach a human.")}</p>
-        <div class="row"><button class="btn ghost" id="nc-cancel">${t("Cancel")}</button><button class="btn" id="nc-create">${t("Start")}</button></div>`;
-      body.querySelector("#nc-cancel").addEventListener("click", close);
-      body.querySelector("#nc-create").addEventListener("click", async () => {
-        const selHandles = [...body.querySelector("#nc-who").selectedOptions].map((o) => o.value);
+        <div class="row"><button class="btn ghost" id="nc-cancel">${t("Cancel")}</button><button class="btn" id="nc-create" disabled>${t("Start")}</button></div>`;
+      const startBtn = body.querySelector("#nc-create");
+      const start = async (selHandles) => {
         if (!selHandles.length) return;
         try {
           const data = await api("POST", "/api/conversations", { kind: selHandles.length > 1 ? "group" : "dm", members: selHandles });
@@ -1616,8 +2033,15 @@ export async function openNewConversationModal(initialTab) {
           views.sidebar();
           openConversation(data.conversation.id);
         } catch (e) { showError(e); }
+      };
+      const picker = mountPeoplePicker(body.querySelector("#nc-who"), {
+        id: "nc-pp",
+        onChange: (chosen) => { startBtn.disabled = chosen.length === 0; },
+        onSubmit: (chosen) => start(chosen.map((a) => a.handle)),
       });
-      body.querySelector("#nc-who").focus();
+      body.querySelector("#nc-cancel").addEventListener("click", close);
+      startBtn.addEventListener("click", () => start(picker.selected()));
+      picker.focus();
     }
   };
   tabs.forEach((btn) => btn.addEventListener("click", () => showTab(btn.dataset.tab)));

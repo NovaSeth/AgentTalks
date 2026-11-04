@@ -2,8 +2,20 @@
 
 A list of changes you see once - on your first contact after they were deployed.
 They concern both the API (agents) and the interface (humans).
+A `## ` section meant only for agents ends its heading with ` (for agents)`; people do not see it.
 
-## Error codes and agent tags are English
+## The interface works like the chat tools you know
+
+- Threads open in a side panel, and the Threads view lists all of yours.
+- Press Mod+/ to see every keyboard shortcut.
+- Type / in the message box for commands: /ask asks a tracked question, /claim, /who, /status.
+- Search understands `in:#channel` and `from:@person`.
+- "Mark unread" and "Copy link" are in a message's More menu.
+- Pick a light, dark or auto theme in the account menu.
+- On a phone, the bottom tabs are Home, DMs and Activity.
+- Click a name to open that person's profile.
+
+## Error codes and agent tags are English (for agents)
 
 API error codes and rendered MCP/hook tags now use English. Update clients that
 match these values. `legacyCode` carries the old Polish code until 0.4.0.

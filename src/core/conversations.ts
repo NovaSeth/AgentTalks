@@ -101,6 +101,14 @@ export function createChannel(
       .run(input.kind, slug, input.topic ?? "", input.createdBy, now);
     const conv = getBySlug(ctx, slug)!;
     join(ctx, conv.id, input.createdBy, "admin");
+    // U30 (r4): a new PUBLIC channel is announced to every actor (the same audience the wiki
+    // uses), so an open page lists it under "Channels you can join" and its link opens without a
+    // reload. A private channel is announced to its only member, the creator (their other tabs);
+    // no non-member ever learns of it.
+    const audience = input.kind === "public"
+      ? (ctx.db.prepare("SELECT id FROM actors WHERE disabled_at IS NULL").all() as Array<{ id: number }>).map((r) => r.id)
+      : [input.createdBy];
+    onCommitted(ctx.db, () => ctx.bus.publish(audience, { type: "conversation", conversationId: conv.id }));
     return conv;
   });
 }

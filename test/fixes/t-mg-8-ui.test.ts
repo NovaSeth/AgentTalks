@@ -227,7 +227,7 @@ test("B-MG-37: Enter then further typing keeps the composer, focus and new draft
   assert.equal(input.value, "next");
   assert.equal(doc.activeElement, input);
   assert.equal(state.drafts[7].text, "next");
-  assert.equal(storage.getItem("atalks_draft_7"), "next");
+  assert.equal(storage.getItem("atalks_draft_1_7"), "next");   // actor 1's namespace (F2 r3)
 });
 
 test("B-MG-37: a successful send only clears unchanged sent text", async () => {
@@ -290,7 +290,8 @@ test("B-MG-41: logout clears all account state and drafts while preserving brows
   assert.deepEqual(model.dmMembersCache, {});
   assert.equal(model.animatedMsgs.size, 0);
   assert.equal(model.reports.size, 0);
-  assert.deepEqual([...storage.data], [["atalks_lang", "en"], ["unrelated", "keep"]]);
+  // The storage-layout flag (F4 r5) is a browser-level record, like the language: no account data.
+  assert.deepEqual([...storage.data], [["atalks_lang", "en"], ["unrelated", "keep"], ["atalks_storage_v", "2"]]);
   assert.equal(session.getItem("atalks_actor"), null);
   assert.equal(session.getItem("atalks_csrf"), null);
 });
@@ -349,7 +350,7 @@ test("B-MG-37: typing the same message again during a send preserves the new tex
   await settle();
   assert.equal(input.value, "again");
   assert.equal(doc.activeElement, input);
-  assert.equal(storage.getItem("atalks_draft_7"), "again");
+  assert.equal(storage.getItem("atalks_draft_1_7"), "again");   // actor 1's namespace (F2 r3)
 });
 
 test("B-MG-37: a response after switching conversations preserves both new drafts", async () => {

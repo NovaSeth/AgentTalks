@@ -7,30 +7,16 @@ import { avatarHtml, confirmModal, escapeHtml, fmtDateTime, formatBytes, hamburg
 import { iconDoc, iconEdit, iconFile, iconHistory, iconTrash } from "./icons.js";
 import { locale, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
-import { state, views } from "./state.js";
+import { clearWikiDraft, loadWikiDraft, saveWikiDraft, state, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
+import { buildRoute, syncRoute } from "./router.js";
 
 // --------------------------------------------------- the wiki editor's draft
 // The chat has long kept a message draft that survives F5 and a deployment; the wiki editor
 // kept nothing, and it is where the longest texts are written. Leaving the editor (Cancel, a
 // click on another page, closing the tab) erased them without asking.
-const WIKI_DRAFT_KEY = (slug) => `atalks_wiki_draft_${slug}`;
-
-function saveWikiDraft(slug, draft) {
-  if (!slug || !draft) return;
-  try { localStorage.setItem(WIKI_DRAFT_KEY(slug), JSON.stringify(draft)); } catch { /* private browsing */ }
-}
-
-function loadWikiDraft(slug) {
-  try {
-    const raw = localStorage.getItem(WIKI_DRAFT_KEY(slug));
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function clearWikiDraft(slug) {
-  try { localStorage.removeItem(WIKI_DRAFT_KEY(slug)); } catch { /* private browsing */ }
-}
+// The draft is stored per account and page by state.js (saveWikiDraft / loadWikiDraft /
+// clearWikiDraft, F2 r3): two tabs signed in as two accounts never read each other's.
 
 /** Whether the editor holds anything the server does not have. */
 function hasUnsavedChanges() {
@@ -59,6 +45,71 @@ export async function canLeaveWikiEditor() {
   });
 }
 
+// --------------------------------------------------- wiki tree keyboard navigation (S14)
+// The tree rows live in the sidebar (view-sidebar.js) and are re-rendered on every change, so
+// the keys are handled by ONE delegated listener on the document instead of a listener per row.
+// The pattern is Primer's TreeView: Up/Down walk the visible rows, Home/End jump to the ends,
+// Left closes a branch or climbs to the parent, Right opens a branch or steps into its first
+// child. Enter and Space stay native: the row is a button and already opens the page.
+
+/** The decision behind one key on a tree row. `row` says whether the page has subpages,
+ *  whether its branch is open, and whether its parent is on screen. Pure, for the test. */
+export function wikiTreeKeyAction(key, row) {
+  switch (key) {
+    case "ArrowDown": return "next";
+    case "ArrowUp": return "prev";
+    case "Home": return "first";
+    case "End": return "last";
+    case "ArrowLeft":
+      if (row.hasKids && row.expanded) return "collapse";
+      return row.hasParent ? "parent" : null;
+    case "ArrowRight":
+      if (!row.hasKids) return null;
+      return row.expanded ? "firstChild" : "expand";
+    default: return null;
+  }
+}
+
+function onWikiTreeKeydown(e) {
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  const rowEl = e.target?.closest?.(".conv-row");
+  const pageBtn = rowEl?.querySelector("[data-wikipage]");
+  if (!pageBtn) return;
+  const slug = pageBtn.dataset.wikipage;
+  const twist = rowEl.querySelector("[data-wikitwist]");
+  const page = state.wiki.pages.find((p) => p.slug === slug);
+  // Only the rendered rows: a closed branch has no rows, so the walk skips it by itself.
+  const rows = [...document.querySelectorAll(".conv-row [data-wikipage]")];
+  const idx = rows.indexOf(pageBtn);
+  const parentSlug = page?.parentSlug ?? null;
+  const action = wikiTreeKeyAction(e.key, {
+    hasKids: !!twist,
+    expanded: !!twist && twist.getAttribute("aria-expanded") === "true",
+    hasParent: !!parentSlug && rows.some((b) => b.dataset.wikipage === parentSlug),
+  });
+  if (!action) return;
+  e.preventDefault();
+  const focusSlug = (s) => rows.find((b) => b.dataset.wikipage === s)?.focus();
+  switch (action) {
+    case "next": rows[Math.min(idx + 1, rows.length - 1)]?.focus(); break;
+    case "prev": rows[Math.max(idx - 1, 0)]?.focus(); break;
+    case "first": rows[0]?.focus(); break;
+    case "last": rows[rows.length - 1]?.focus(); break;
+    case "firstChild": rows[idx + 1]?.focus(); break;   // an open branch's first child is the next visible row
+    case "parent": focusSlug(parentSlug); break;
+    case "collapse":
+    case "expand":
+      // The twist's click handler re-renders the sidebar, which drops the focused button; the
+      // row comes back under the same slug, so we put the focus back on it one frame later.
+      twist.click();
+      requestAnimationFrame(() => {
+        document.querySelector(`.conv-row [data-wikipage="${slug.replace(/"/g, '\\"')}"]`)?.focus();
+      });
+      break;
+  }
+}
+if (typeof document !== "undefined") document.addEventListener("keydown", onWikiTreeKeydown);
+
 // Pages we are deleting right now. The server broadcasts a `wiki` event for a deleted page as
 // well, and the handler for that event reopens the page when you are looking at it. The event
 // can outrun the response to DELETE, so the interface tried to load a page it had just told
@@ -74,6 +125,7 @@ export async function openWikiPage(slug) {
   state.view = "wiki";
   state.drawerOpen = false;
   state.wiki.slug = slug;
+  syncRoute(buildRoute({ view: "wiki", slug }));   // S3: F5 and Back restore the page
   state.wiki.revision = null;
   state.wiki.editing = false;
   state.wiki.draft = null;
@@ -286,13 +338,13 @@ export function renderWikiMain(loading) {
     <div class="topbar">
       ${hamburgerHtml()}
       <div class="title">
-        <div class="t">${iconDoc()} ${wikiBreadcrumbHtml(page)}${escapeHtml(title ?? "")}
+        <div class="t">${iconDoc()} ${wikiBreadcrumbHtml(page)}<span class="wt">${escapeHtml(title ?? "")}</span>
           <span id="wiki-typing">${views.typing(`w:${w.slug}`)}</span></div>
         <div class="topic">${page ? t("version {n} · last changed by @{who} {when}", { n: page.revisions, who: escapeHtml(page.updatedBy ?? "?"), when: timeAgo(page.updatedAt) }) : t("a new page, not saved yet")}</div>
       </div>
       ${!w.editing && !w.revision && (page || w.draft) ? `<button class="pillbtn" id="wiki-edit">${iconEdit()} ${t("Edit")}</button>` : ""}
       ${!w.editing && !w.revision && page && (page.createdBy === state.actor.handle || state.actor.isAdmin)
-        ? `<button class="iconbtn" id="wiki-delete" aria-label="${t("Delete page")}" title="${t("Delete page")}">${iconTrash()}</button>` : ""}
+        ? `<button class="iconbtn danger" id="wiki-delete" aria-label="${t("Delete page")}" title="${t("Delete page")}">${iconTrash()}</button>` : ""}
     </div>
     <div class="wiki-body viewfade">
       <div class="wiki-content" id="wiki-content"></div>
@@ -386,8 +438,10 @@ function renderWikiContent(loading) {
           </select>
           <label class="sr-only" for="we-note">${t("Change description")}</label>
           <input id="we-note" class="we-note" placeholder="${t("What you are changing (optional)")}">
-          <button class="btn ghost" id="we-cancel">${t("Cancel")}</button>
-          <button class="btn slim" id="we-save">${t("Save")}</button>
+          <div class="we-actions">
+            <button class="btn ghost" id="we-cancel">${t("Cancel")}</button>
+            <button class="btn slim" id="we-save">${t("Save")}</button>
+          </div>
         </div>
       </div>`;
     const ti = el.querySelector("#we-title"), b = el.querySelector("#we-body"), n = el.querySelector("#we-note");

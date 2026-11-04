@@ -13,20 +13,68 @@ export let csrf = sessionStorage.getItem(CSRF_KEY) || null;
  *  assign to another module's binding - hence the explicit setter. */
 export function setCsrf(v) { csrf = v; }
 
+// The session-lost hook (S7): a 401 from any call except signing in or out means the session
+// ended under the user - the handler saves the draft and returns to the sign-in screen. Set by
+// sse-events.js at load; kept here so that api() does not import the state or the views.
+let unauthorized = null;
+
+export function onUnauthorized(handler) { unauthorized = handler; }
+
+const SESSION_FREE = /^\/api\/(login|logout|webauthn)/;
+
+// The session generation (T-MG-3 F1). Every sign-in, sign-out and session loss starts a new one;
+// a response that comes back under another generation than its request was sent in belongs to
+// an account that is no longer here. It is dropped HERE, before any caller merges it into the
+// state or the DOM - one guard instead of a check after every await in forty call sites - and it
+// never reaches the session-lost handler (an old 401 must not sign the next person out).
+let sessionGen = 0;
+
+export function sessionGeneration() { return sessionGen; }
+
+export function newSessionGeneration() { return ++sessionGen; }
+
+/** The error a stale answer turns into: callers see a rejection, showError stays silent. */
+function staleError(path) {
+  const err = new Error(`stale response for ${path}`);
+  err.stale = true;
+  err.sessionLost = true;
+  return err;
+}
+
 export async function api(method, path, body) {
+  const gen = sessionGen;
   const headers = {};
   if (body !== undefined) headers["content-type"] = "application/json";
   if (method !== "GET" && csrf) headers["x-at-csrf"] = csrf;
-  const res = await fetch(path, {
-    method, headers, credentials: "same-origin",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method, headers, credentials: "same-origin",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    if (gen !== sessionGen) throw staleError(path);
+    throw e;
+  }
   let data = null;
   try { data = await res.json(); } catch { /* e.g. 204 */ }
+  if (gen !== sessionGen) throw staleError(path);
   if (!res.ok) {
+    // `message` is the human sentence (the fail bar, usersError and toasts read it); the raw
+    // server text stays in `serverMessage` for the fallback and for debugging.
     const err = new Error((data && data.error) || `HTTP ${res.status}`);
+    err.serverMessage = err.message;
     err.code = data && englishCode(data.code, res.status);
     err.status = res.status;
+    err.message = describeError(err);
+    if (res.status === 401 && !SESSION_FREE.test(path)) {
+      // The session-lost handler shows ONE toast; the failing caller must not add its own
+      // (W2-S7-C): showError skips an error flagged this way.
+      err.sessionLost = true;
+      if (unauthorized) {
+        try { unauthorized(err, path); } catch { /* the caller still gets its error */ }
+      }
+    }
     throw err;
   }
   return data;
@@ -268,5 +316,5 @@ export function describeError(e, context) {
   if (e.status && STATUSES[e.status]) return t(STATUSES[e.status]);
   // No network: fetch throws a TypeError with no status - that is not a server error.
   if (!e.status && !e.code) return t("No connection to the server. Check your network and try again.");
-  return e.message || t("Something went wrong.");
+  return e.serverMessage || e.message || t("Something went wrong.");
 }

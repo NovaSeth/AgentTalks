@@ -1,9 +1,10 @@
 /**
  * DOM helpers: HTML escaping, avatars, time formats, modal window, drawer.
  */
+import { badgeText, titleCount } from "./counters.js";
 import { iconMenu } from "./icons.js";
 import { locale, t } from "./i18n.js";
-import { avatarUrl, state } from "./state.js";
+import { avatarUrl, handleKind, state } from "./state.js";
 
 export const $app = document.getElementById("app");
 
@@ -47,10 +48,9 @@ export function announce(text) {
  *  Only notifications with no counterpart in the conversation counters are
  *  added - that is, wiki page changes. */
 export function updateTitleBadge() {
-  const conversations = Object.values(state.unread).reduce((n, v) => n + (v || 0), 0);
-  const wiki = (state.notifications || []).filter((n) => !n.readAt && n.wikiSlug).length;
-  const total = conversations + wiki;
-  document.title = total > 0 ? `(${total > 99 ? "99+" : total}) AgentTalks` : "AgentTalks";
+  // One derivation (counters.js) for the title, the badges and the divider - S7.
+  const total = titleCount(state);
+  document.title = total > 0 ? `(${badgeText(total)}) AgentTalks` : "AgentTalks";
 }
 
 const PALETTE = ["#3b5ce0", "#ff6b3d", "#1fae7a", "#a45ee5", "#e0466b", "#0ea5c4", "#c98a1f", "#5c6bc0"];
@@ -72,7 +72,9 @@ export function avatarHtml(handle, size) {
   const c = colorFor(handle || "?");
   // Small avatars: proportionally smaller initials and a lighter cut (class sm).
   const style = size ? `width:${size}px;height:${size}px;font-size:${Math.max(7, Math.round(size * 0.36))}px` : "";
-  const cls = size && size <= 28 ? "av sm" : "av";
+  // Agent faces are square-cornered, human ones round (spec A8), in every list at once: the
+  // class rides on the avatar itself instead of on each container (W4-S6-B).
+  const cls = (size && size <= 28 ? "av sm" : "av") + (handleKind(handle) === "agent" ? " agent" : "");
   // An image when the actor has one; initials when they do not. A vanished file
   // must produce the dot, not an empty frame with a broken-image icon - same
   // place, same size, no layout jump.
@@ -151,6 +153,35 @@ export function formatBytes(n) {
 
 export const IMG_RE = /\.(png|jpe?g|gif|webp|avif)$/i;
 
+// ------------------------------------------------------- account-bound overlays
+// Windows, menus, pickers and the toast stack are mounted on <body>, outside #app, so redrawing
+// #app at sign-out or a lost session does not touch them (T-MG-3 F2: a freshly issued token
+// stayed on the sign-in screen). Each one registers here with its own close function, which
+// also removes its document listeners; closeAccountOverlays() runs them all at teardown.
+const overlays = new Set();
+
+/** @param el the mounted element; @param close its own close (removes listeners), called with
+ *  `{ forced: true }` at teardown. @returns a function that unregisters it. */
+export function trackOverlay(el, close) {
+  for (const o of overlays) if (!o.el.isConnected) overlays.delete(o);
+  const entry = { el, close };
+  overlays.add(entry);
+  return () => overlays.delete(entry);
+}
+
+/** Closes every registered overlay, including the persistent secret dialogs that refuse normal
+ *  dismissal, and removes their DOM even when a close function fails. */
+export function closeAccountOverlays() {
+  const all = [...overlays];
+  overlays.clear();
+  for (const o of all) {
+    if (o.el.isConnected) {
+      try { o.close({ forced: true }); } catch { /* the element still goes below */ }
+    }
+    try { o.el.remove(); } catch { /* already gone */ }
+  }
+}
+
 // -------------------------------------------------------------------- modals
 // ONE modal implementation for the whole UI. Reason: a window without a focus
 // trap looks like a modal but is not one - Tab walks out onto the page
@@ -162,6 +193,16 @@ const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:no
  *  @param opts.persistent a window that CANNOT be dismissed with Escape or a backdrop
  *         click. Reserved for content shown once and unrecoverable (an invite
  *         code): a reflexive Escape cost the whole operation there. */
+// U13: while a modal is open the app behind it is inert - the backdrop dims it, and inert also
+// takes it out of the Tab order and the accessibility tree (the composer stayed focusable behind
+// the passkey offer). Counted, because a modal can open over another (confirm over a form).
+let openModals = 0;
+function setAppInert(open) {
+  openModals = Math.max(0, openModals + (open ? 1 : -1));
+  const app = document.getElementById("app");
+  if (app) app.inert = openModals > 0;
+}
+
 export function openModal(html, opts = {}) {
   const returnTo = document.activeElement;
   const ov = document.createElement("div");
@@ -169,6 +210,7 @@ export function openModal(html, opts = {}) {
   ov.innerHTML = `<div class="modal ${opts.modalClass ?? ""}" role="dialog" aria-modal="true"
     aria-labelledby="m-title" ${opts.style ? `style="${opts.style}"` : ""}>${html}</div>`;
   document.body.appendChild(ov);
+  setAppInert(true);
 
   const onKey = (e) => {
     if (e.key === "Escape" && !ov.dataset.persistent) { e.preventDefault(); close(); return; }
@@ -179,14 +221,25 @@ export function openModal(html, opts = {}) {
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
-  function close() {
+  let closed = false;
+  function close(how) {
+    if (closed) return;
+    closed = true;
+    untrack();
     document.removeEventListener("keydown", onKey, true);
     ov.remove();
+    // The app is usable again before focus returns into it: an inert element refuses focus.
+    setAppInert(false);
+    // A caller with listeners of its own (confirmModal's Escape, the news queue) learns that the
+    // window is gone; `forced` = the account teardown closed it, not the user.
+    opts.onClose?.({ forced: !!how?.forced });
+    if (how?.forced) return;
     // Focus returns where it came from - otherwise, after the window closes, a
     // screen reader starts from the top of the page instead of from the button
     // that opened it.
     if (returnTo && document.contains(returnTo)) returnTo.focus();
   }
+  const untrack = trackOverlay(ov, close);
   document.addEventListener("keydown", onKey, true);
   ov.addEventListener("click", (e) => { if (e.target === ov && !ov.dataset.persistent) close(); });
   const modal = ov.querySelector(".modal");
@@ -223,7 +276,7 @@ export function confirmModal({ title, body, ok, cancel, danger = false }) {
       <div class="row">
         <button class="btn ghost" id="cf-no">${escapeHtml(cancelLabel)}</button>
         <button class="btn ${danger ? "danger" : ""}" id="cf-yes">${escapeHtml(okLabel)}</button>
-      </div>`);
+      </div>`, { onClose: ({ forced }) => { if (forced) finish(false); } });
     let answered = false;
     const finish = (v) => {
       if (answered) return;
@@ -292,6 +345,30 @@ export function skeletonHtml() {
     <div class="skeleton"><div class="sk-line w40"></div><div class="sk-line w80"></div></div>`).join("");
 }
 
+// ------------------------------------------------------- the floating dock
+/** U1: the dock (composer, presence bar, jump pill) floats over the message list, so the list
+ *  needs a bottom padding equal to the dock's height, whatever the composer grows to (a draft of
+ *  five lines, a file preview, the reply bar). A ResizeObserver writes `--dock-h` on the dock's
+ *  parent (.main); app.css reads it in .messages. One observer per dock element. */
+export function watchDockHeight(dock) {
+  if (!dock || dock.dataset.dockWatched || typeof ResizeObserver !== "function") return;
+  dock.dataset.dockWatched = "1";
+  const host = dock.parentElement;
+  if (!host) return;
+  const apply = () => {
+    const h = Math.ceil(dock.getBoundingClientRect().height);
+    host.style.setProperty("--dock-h", `${h}px`);
+    // U36: the toast stack stands outside #app and sits above the dock, so it reads the same
+    // height from the root element.
+    document.documentElement?.style?.setProperty?.("--dock-h", `${h}px`);
+    // U1 (r4): a taller dock means more bottom padding, so a list pinned to the bottom has to
+    // follow - otherwise the last message slides under the composer.
+    repinIfPinned();
+  };
+  new ResizeObserver(apply).observe(dock);
+  apply();
+}
+
 // ------------------------------------------------------- reading position
 export function isScrolledToBottom() {
   const el = document.getElementById("messages");
@@ -299,12 +376,47 @@ export function isScrolledToBottom() {
   return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 }
 
+/** U1 (r4) "keep pinned": `pinned` remembers whether the list was at the bottom BEFORE a layout
+ *  change (the thread panel opening or closing, the dock growing, a failed message gaining its
+ *  "Send again" row). The list's scroll events update it (notePinned), every scrollToBottom sets
+ *  it; repinIfPinned, called after such a change, scrolls to the bottom only when it is set - a
+ *  user who scrolled up is never yanked. During a smooth scroll to the bottom the intermediate
+ *  scroll events do not count: the intent was the bottom. */
+let pinned = true;
+let settleUntil = 0;
+
+export function notePinned() {
+  if (Date.now() < settleUntil) return;
+  pinned = isScrolledToBottom();
+}
+
+export function repinIfPinned() {
+  if (!pinned) return;
+  const el = document.getElementById("messages");
+  if (!el || el.scrollHeight - el.scrollTop - el.clientHeight <= 0) return;
+  el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+}
+
+/** The list's own box changes when the side panel opens or closes (the column narrows and the
+ *  content reflows taller) and when the viewport changes: one observer per list element re-pins.
+ *  A fresh list starts pinned: a conversation opens at the bottom or at the unread line, and the
+ *  scroll event of that first positioning sets the flag right. */
+export function watchListPin(list) {
+  pinned = true;
+  if (!list || list.dataset.pinWatched || typeof ResizeObserver !== "function") return;
+  list.dataset.pinWatched = "1";
+  new ResizeObserver(() => repinIfPinned()).observe(list);
+}
+
 export function scrollToBottom(smooth) {
   const el = document.getElementById("messages");
   if (!el) return;
+  pinned = true;
   // The "reduced motion" preference has to be honoured here too: scrollTo is not
   // a CSS animation, so no @media rule would stop it.
-  el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior(smooth) });
+  const behavior = scrollBehavior(smooth);
+  if (behavior === "smooth") settleUntil = Date.now() + 600;
+  el.scrollTo({ top: el.scrollHeight, behavior });
 }
 
 /** The "new below" pill: visible when you are not at the bottom; a click scrolls

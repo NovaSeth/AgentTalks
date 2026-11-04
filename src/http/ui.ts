@@ -71,9 +71,37 @@ const UI_MODULES = [
   "app.js", "dom.js", "icons.js", "markdown.js", "api.js", "state.js", "toasts.js",
   "data.js", "actions.js", "sse-events.js", "view-login.js", "view-sidebar.js",
   "view-chat.js", "view-wiki.js", "view-notifications.js", "view-admin.js", "search.js",
-  "i18n.js", "i18n-pl.js", "gate.js",
+  "i18n.js", "i18n-pl.js", "gate.js", "theme.js",
+  // T-MG-3 slices (S0 scaffolding): owned by later slices, registered here once.
+  "router.js", "shortcuts.js", "composer.js", "view-people.js", "counters.js",
+  "emoji.js",
+  "emoji-names-pl.js",
+  "view-threads.js",
+  "commands.js",
+  "view-search.js",
+  "view-unreads.js",
 ];
 const UI_MODULE_SET = new Set(UI_MODULES);
+
+// The vendored design system (Primer, D-MG-18): static CSS and SVG under ui/vendor/primer/.
+// Served by a DIRECTORY allowlist plus a file-name shape, for the same reason UI_MODULES is a
+// list: no path is ever built from user input beyond one safe segment. LICENSE and
+// VERSIONS.md live next to the files but are not served - they are provenance, not assets.
+const VENDOR_DIRS = new Set(["primitives", "css", "octicons"]);
+const VENDOR_FILE = /^[a-z0-9-]+\.(css|svg)$/;
+function vendorPath(dir: string, file: string): string | null {
+  if (!VENDOR_DIRS.has(dir) || !VENDOR_FILE.test(file)) return null;
+  return uiFile(`vendor/primer/${dir}/${file}`);
+}
+/** The vendored CSS the shell links, in load order: tokens first, components, then app.css. */
+const VENDOR_CSS = [
+  "primitives/base-size.css", "primitives/base-typography.css",
+  "primitives/light.css", "primitives/dark.css", "primitives/typography.css",
+  "primitives/size.css", "primitives/space.css", "primitives/border.css", "primitives/radius.css",
+  "primitives/motion.css",
+  "css/base.css", "css/buttons.css", "css/forms.css", "css/labels.css", "css/avatars.css",
+  "css/tooltips.css", "css/toasts.css", "css/box.css",
+];
 
 /** A content stamp for the UI: a short hash of the CSS and ALL the modules. Computed once per
 /**  process, because the files do not change on the fly - a change means a new image. */
@@ -87,6 +115,12 @@ export function assetStamp(): string {
   for (const name of UI_MODULES) {
     try {
       h.update(readFileSync(uiFile(`js/${name}`)));
+    } catch { /* missing file; stamp the available content */ }
+  }
+  // The vendored CSS is part of the look: a Primer upgrade must change the stamp too.
+  for (const name of VENDOR_CSS) {
+    try {
+      h.update(readFileSync(uiFile(`vendor/primer/${name}`)));
     } catch { /* missing file; stamp the available content */ }
   }
   stampCache = h.digest("hex").slice(0, 8);
@@ -119,11 +153,29 @@ function serveStatic(res: ServerResponse, path: string, opts?: { noindex?: boole
   // The shell/CSS/JS without versioning: no-cache (revalidate) rather than permanent browser
   // caching - otherwise a user sees the old UI after a deployment. The icons have their own
   // max-age (serveBinary), because they change rarely.
-  if (ext === "html" || ext === "css" || ext === "js") {
+  if (ext === "html" || ext === "css" || ext === "js" || ext === "svg") {
     headers["cache-control"] = "no-cache";
   }
   res.writeHead(200, headers);
   res.end(readOnce(path));
+}
+
+/** A vendored Primer file, or a 404 shaped like the module 404 (same message, same code). */
+function serveVendor(res: ServerResponse, dir: string, file: string): void {
+  const path = vendorPath(dir, file);
+  if (!path) {
+    json(res, 404, { error: "file not found; check the file name", code: "file_required" });
+    return;
+  }
+  // Read BEFORE the headers go out: serveStatic writes 200 first, so a missing file caught
+  // after it would leave the client a 200 with an empty body instead of a 404.
+  try {
+    readOnce(path);
+  } catch {
+    json(res, 404, { error: "file not found; check the file name", code: "file_required" });
+    return;
+  }
+  serveStatic(res, path, { noindex: true });
 }
 
 // Binaries (icon PNGs): a separate Buffer cache - readOnce reads utf8 and would corrupt bytes.
@@ -295,7 +347,8 @@ export function registerUiRoutes(router: Router): void {
   const shell = (_req: IncomingMessage, res: ServerResponse) => {
     const html = readOnce(uiFile("index.html"))
       .replace('href="/app.css"', `href="/app.css?v=${assetStamp()}"`)
-      .replace('src="/js/app.js"', `src="/js/app.js?v=${assetStamp()}"`);
+      .replace('src="/js/app.js"', `src="/js/app.js?v=${assetStamp()}"`)
+      .replace(/href="(\/vendor\/primer\/[a-z0-9/-]+\.css)"/g, (_m, p) => `href="${p}?v=${assetStamp()}"`);
     res.writeHead(200, {
       "content-type": TYPES.html,
       "x-robots-tag": "noindex, nofollow",
@@ -320,6 +373,9 @@ export function registerUiRoutes(router: Router): void {
     }
     serveModule(res, name);
   });
+  // The vendored design system: tokens, component styles and icons (see VENDOR_DIRS).
+  router.add("GET", "/vendor/primer/:dir/:file", (_req, res, rc) =>
+    serveVendor(res, rc.params.dir ?? "", rc.params.file ?? ""));
 
   // The AgentTalks mark: one vector + PNGs for the places that will not take SVG
   // (apple-touch-icon, old browsers, the manifest).

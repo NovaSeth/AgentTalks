@@ -18,6 +18,7 @@ import type { Ctx } from "./ctx.ts";
 import { canRead, join, isMember } from "./conversations.ts";
 import { onCommitted } from "../store/db.ts";
 import { lastMessageId } from "./messages.ts";
+import { badRequest, forbidden, notFound } from "./errors.ts";
 
 export type UnreadRow = {
   conversationId: number;
@@ -147,4 +148,44 @@ export function markRead(ctx: Ctx, actorId: number, convId: number, messageId?: 
     actorId,
     messageId: target,
   }));
+}
+
+/**
+ * "Mark unread" from a message on: an explicit rewind of the read marker to just before the
+ * message. markRead never moves backwards (two devices must not take each other's read
+ * messages away), so a deliberate rewind needs its own door. It only moves back or stays:
+ * pointing at a message that is already unread changes nothing.
+ *
+ * A non-member is refused (403, the same answer as "no access"), never joined: marking
+ * something unread presupposes it was read, and a join here would be a side door into a
+ * public channel. Returns the new unread count of this conversation.
+ */
+export function markUnread(ctx: Ctx, actorId: number, convId: number, messageId: number): number {
+  if (!Number.isInteger(messageId) || messageId < 1) {
+    throw badRequest("invalid_id", "messageId must be a positive integer");
+  }
+  if (!canRead(ctx, convId, actorId) || !isMember(ctx, convId, actorId)) {
+    throw forbidden("no_access", "you do not have access to this conversation; ask a channel admin to add you");
+  }
+  const found = ctx.db
+    .prepare("SELECT 1 FROM messages WHERE id = ? AND conversation_id = ?")
+    .get(messageId, convId);
+  if (!found) throw notFound("message_not_found", "that message is not in this conversation");
+  ctx.db
+    .prepare(
+      `UPDATE members
+          SET last_read_message_id = MAX(0, MIN(last_read_message_id, ?))
+        WHERE conversation_id = ? AND actor_id = ?`,
+    )
+    .run(messageId - 1, convId, actorId);
+  const marker = (ctx.db
+    .prepare("SELECT last_read_message_id AS m FROM members WHERE conversation_id = ? AND actor_id = ?")
+    .get(convId, actorId) as { m: number }).m;
+  onCommitted(ctx.db, () => ctx.bus.publish([actorId], {
+    type: "read",
+    conversationId: convId,
+    actorId,
+    messageId: marker,
+  }));
+  return unreadFor(ctx, actorId).find((r) => r.conversationId === convId)?.unread ?? 0;
 }

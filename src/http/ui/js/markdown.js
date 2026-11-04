@@ -43,6 +43,14 @@ function mdInline(s, myHandle) {
     const mine = myHandle && h.toLowerCase() === myHandle.toLowerCase();
     return `${pre}<span class="${mine ? "me-mention" : "mention"}" data-actor="${escapeHtml(h)}">@${h}</span>`;
   });
+  // #slug of a conversation I can see is a link to it (S4, U3). A heading "# title" has a space
+  // after the hash, "#1" is not a slug of mine and "a#b" sits inside a word: all stay text.
+  out = out.replace(/(^|[\s(>])#([a-z0-9][a-z0-9_-]{0,79})\b/gi, (m, pre, slug) => {
+    const known = state.conversations.some((c) => c.slug && c.slug.toLowerCase() === slug.toLowerCase());
+    if (!known) return m;
+    const sl = escapeHtml(slug.toLowerCase());
+    return `${pre}<a href="#/c/${sl}" class="chanlink" data-channel="${sl}">#${slug}</a>`;
+  });
   const restore = (text) => text.replace(/\x00I(\d+)\x00/g, (m, index) => restore(fragments[+index]));
   return restore(out);
 }
@@ -112,4 +120,24 @@ export function mdToHtml(src, mode, myHandle) {
 
 export function renderBody(text, myHandle) {
   return mdToHtml(text, "message", myHandle);
+}
+
+/** Markdown reduced to the plain text a one-line PREVIEW shows (U10): Activity excerpts, unread
+ *  rows, search hits, the digest's mention rows. Code keeps its content, a link keeps its label,
+ *  `[[slug|label]]` its label (or the slug), emphasis marks, headings, list bullets and quote
+ *  marks go, whitespace collapses to single spaces. Plain text: the caller escapes it. */
+export function stripMd(src) {
+  let s = String(src ?? "");
+  s = s.replace(/```[a-z0-9_-]*\n?([\s\S]*?)```/gi, " $1 ");
+  s = s.replace(/`([^`\n]+)`/g, "$1");
+  s = s.replace(/\[\[([a-z0-9_-]{1,80})(?:\|([^\]\n]{1,120}))?\]\]/gi, (m, slug, label) => label ?? slug);
+  s = s.replace(/\[([^\]\n]+)\]\((?:https?:\/\/)[^)\s]+\)/g, "$1");
+  s = s.replace(/^[ \t]*#{1,6}[ \t]+/gm, "");
+  s = s.replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, "");
+  s = s.replace(/^[ \t]*>[ \t]?/gm, "");
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, "$1");
+  s = s.replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1$2");
+  s = s.replace(/(^|[\s(])_([^_\n]+)_/g, "$1$2");
+  s = s.replace(/~~([^~\n]+)~~/g, "$1");
+  return s.replace(/\s+/g, " ").trim();
 }

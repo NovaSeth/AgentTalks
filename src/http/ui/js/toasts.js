@@ -2,7 +2,7 @@
  * A stack of messages in the corner of the screen. A live region for a screen reader.
  */
 import { describeError } from "./api.js";
-import { escapeHtml } from "./dom.js";
+import { escapeHtml, trackOverlay } from "./dom.js";
 import { t } from "./i18n.js";
 
 // ------------------------------------------------------------------ toasts
@@ -17,7 +17,7 @@ const TOAST_ACTION_MS = 9000;
 let toastStack = null;
 
 function ensureToastStack() {
-  if (!toastStack) {
+  if (!toastStack || !toastStack.isConnected) {
     toastStack = document.createElement("div");
     toastStack.className = "toast-stack";
     // The stack stands OUTSIDE #app, so without a role of its own it would not exist for a screen
@@ -26,6 +26,10 @@ function ensureToastStack() {
     toastStack.setAttribute("aria-live", "polite");
     toastStack.setAttribute("aria-atomic", "false");
     document.body.appendChild(toastStack);
+    // Toasts can carry account data (a handle, a resource name): the whole stack goes at
+    // sign-out and on a lost session (T-MG-3 F2); the next toast builds a fresh one.
+    const stack = toastStack;
+    trackOverlay(stack, () => { stack.remove(); if (toastStack === stack) toastStack = null; });
   }
   return toastStack;
 }
@@ -63,5 +67,8 @@ export function showToast(msg, opts = {}) {
 /**  in forty places - otherwise every new call again dumps text written for an agent onto the
 /**  user. */
 export function showError(e, context) {
+  // A lost session already said so ("session ended, draft kept"); the failing caller's own
+  // sentence next to it would only confuse (W2-S7-C).
+  if (e && e.sessionLost) return;
   showToast(describeError(e, context), { alert: true });
 }

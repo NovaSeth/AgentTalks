@@ -101,9 +101,10 @@ test("notification refresh uses the current language and plural form for its acc
     ? { setAttribute: (_: string, value: string) => { label = value; } } : null);
   context.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ notifications: [], unread })));
   for (const [language, count, expected] of [
-    ["en", 0, "Notifications"], ["en", 2, "Notifications, 2 new"],
-    ["pl", 1, "Powiadomienia, 1 nowa"], ["pl", 2, "Powiadomienia, 2 nowe"],
-    ["pl", 5, "Powiadomienia, 5 nowych"],
+    // The rail place is called Activity (T-MG-3 S1; follow-up W2-S1-A keeps the refresh in step).
+    ["en", 0, "Activity"], ["en", 2, "Activity, 2 new"],
+    ["pl", 1, "Aktywność, 1 nowa"], ["pl", 2, "Aktywność, 2 nowe"],
+    ["pl", 5, "Aktywność, 5 nowych"],
   ] as const) {
     setLang(language);
     unread = count;

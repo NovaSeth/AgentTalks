@@ -1,12 +1,12 @@
 /**
  * Login screen, passkeys and session lifecycle.
  */
-import { ACTOR_KEY, CSRF_KEY, api, csrf, describeError, setCsrf } from "./api.js";
-import { mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
-import { $app, escapeHtml, openModal } from "./dom.js";
+import { ACTOR_KEY, CSRF_KEY, api, csrf, describeError, newSessionGeneration, setCsrf } from "./api.js";
+import { cancelMarkRead, mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { $app, closeAccountOverlays, escapeHtml, openModal } from "./dom.js";
 import { LANGS, lang, setLang, t } from "./i18n.js";
 import { iconChat, iconFingerprint } from "./icons.js";
-import { applyUnreadRows, rebuildMentionRe, resetState, state, views } from "./state.js";
+import { applyUnreadRows, claimLocalData, clearLocalAccountData, rebuildMentionRe, resetState, state, views } from "./state.js";
 import { showToast } from "./toasts.js";
 import { disconnectSSE } from "./sse-events.js";
 
@@ -16,7 +16,9 @@ export async function tryRestoreSession() {
   if (!csrf || !savedActor) return false;
   try {
     const me = await api("GET", "/api/me");
+    newSessionGeneration();   // F1: a new account session starts here
     state.actor = me.actor;
+    claimLocalData(me.actor.id);
     state.conversations = me.conversations;
     applyUnreadRows(me.unread);
     state.guidelines = me.guidelines || null;
@@ -38,13 +40,17 @@ export async function tryRestoreSession() {
 
 async function doLogin(handle, password) {
   const data = await api("POST", "/api/login", { handle, password });
+  newSessionGeneration();
   state.actor = data.actor;
+  claimLocalData(data.actor.id);
   setCsrf(data.csrf);
   sessionStorage.setItem(CSRF_KEY, csrf);
   sessionStorage.setItem(ACTOR_KEY, data.actor.handle);
 }
 
 export async function doLogout() {
+  // F2 (r3): sign-out clears the persisted data of the account that signs out, and only that.
+  const leaving = state.actor?.id ?? state.draftsOwner;
   try { if (mySessionId) await api("DELETE", `/api/sessions/${mySessionId}`); } catch { /* */ }
   try { await api("POST", "/api/logout"); } catch { /* */ }
   setCsrf(null);
@@ -55,17 +61,14 @@ export async function doLogout() {
   // timers.
   stopPresenceHeartbeat();
   stopDigestTimer();
+  cancelMarkRead();
   disconnectSSE();
+  // F1: answers still in flight belong to the account that just left; F2: so do the windows,
+  // menus and toasts mounted outside #app.
+  newSessionGeneration();
+  closeAccountOverlays();
   resetState();
-  try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key === "atalks_last_conv" || key === "atalks_recent"
-          || key?.startsWith("atalks_draft_") || key?.startsWith("atalks_wiki_draft_")) {
-        localStorage.removeItem(key);
-      }
-    }
-  } catch { /* Storage may be unavailable in private browsing. */ }
+  clearLocalAccountData(leaving);
   document.title = "AgentTalks";
   views.render();
 }
@@ -89,6 +92,19 @@ export function bindLangSwitch(id) {
 }
 
 // ------------------------------------------------------------- login screen
+/** The browser remembers that a passkey for this origin was enrolled or used here (M17). Before
+ *  that, offering the fingerprint button only yields the browser's "no passkeys" dialog, because
+ *  having an authenticator is not the same as having a passkey on it. */
+export const PASSKEY_KNOWN_KEY = "atalks_passkey_known";
+
+export function passkeyKnownHere(storage = globalThis.localStorage) {
+  try { return storage?.getItem(PASSKEY_KNOWN_KEY) === "1"; } catch { return false; }
+}
+
+export function markPasskeyKnownHere(storage = globalThis.localStorage) {
+  try { storage?.setItem(PASSKEY_KNOWN_KEY, "1"); } catch { /* private mode: the offer simply waits */ }
+}
+
 export function renderLogin(errorMsg) {
   $app.innerHTML = `
     <div class="login">
@@ -123,9 +139,11 @@ export function renderLogin(errorMsg) {
     }
   });
   // Passkey (Touch ID / Face ID): the button appears only where the browser
-  // actually has a platform authenticator.
+  // actually has a platform authenticator AND a passkey was enrolled or used in
+  // this browser before (M17) - otherwise the first click opens a dialog that
+  // says there is nothing to sign in with.
   const pk = document.getElementById("btn-passkey");
-  if (window.PublicKeyCredential
+  if (passkeyKnownHere() && window.PublicKeyCredential
       && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
     PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then((ok) => {
       if (ok) pk.hidden = false;
@@ -179,7 +197,10 @@ async function passkeyLogin() {
     authenticatorData: bufToB64u(cred.response.authenticatorData),
     signature: bufToB64u(cred.response.signature),
   });
+  markPasskeyKnownHere(); // a passkey just worked here: the button has earned its place
+  newSessionGeneration();
   state.actor = data.actor;
+  claimLocalData(data.actor.id);
   setCsrf(data.csrf);
   sessionStorage.setItem(CSRF_KEY, csrf);
   sessionStorage.setItem(ACTOR_KEY, data.actor.handle);
@@ -219,6 +240,7 @@ async function passkeyEnroll() {
     attestationObject: bufToB64u(cred.response.attestationObject),
     label: navigator.platform || t("device"),
   });
+  markPasskeyKnownHere();
 }
 
 /** After a password login: if this is a human, the device supports it and there
