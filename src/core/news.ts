@@ -78,6 +78,19 @@ export function publishNewsToWiki(ctx: Ctx): "zapisane" | "bez_zmian" | "pominie
   return "zapisane";
 }
 
+/** Cuts a text into its leading part and the "## " sections, keeping whole sections only
+ *  while they fit `maxBytes` (the first section is always kept). */
+export function leadingSections(text: string, maxBytes: number): { text: string; cut: boolean } {
+  const parts = text.split(/^(?=## )/m);
+  let out = parts[0] ?? "";
+  let cut = false;
+  for (let i = 1; i < parts.length; i++) {
+    if (i > 1 && Buffer.byteLength(out) + Buffer.byteLength(parts[i]) > maxBytes) { cut = true; break; }
+    out += parts[i];
+  }
+  return { text: out, cut };
+}
+
 /** The news payload to append to a response. Returns content ONLY when the actor has not
  *  seen the current version - and marks it as delivered at once. */
 export function firstConnectNews(
@@ -91,5 +104,13 @@ export function firstConnectNews(
     | undefined;
   if (!row || row.news_seen === hash) return null;
   ctx.db.prepare("UPDATE actors SET news_seen = ? WHERE id = ?").run(hash, actorId);
-  return { prompt: NEWS_PROMPT, text: newsText() };
+  // First contact must stay small: the latest section only, and a pointer to the wiki page that
+  // holds the whole history (publishNewsToWiki keeps it there).
+  const { text, cut } = leadingSections(newsText(), 2500);
+  return {
+    prompt: NEWS_PROMPT,
+    text: cut || text.length < newsText().length
+      ? `${text.trimEnd()}\n\nOlder entries: wiki_read {slug: "${NEWS_SLUG}"} (REST: GET /api/wiki/${NEWS_SLUG}).`
+      : text,
+  };
 }

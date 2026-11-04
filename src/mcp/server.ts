@@ -51,7 +51,7 @@ import { mentionsOf } from "../core/mentions.ts";
 import { acquire, listLeases, release } from "../core/leases.ts";
 import { getFileInfo } from "../core/files.ts";
 import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
-import { firstConnectNews } from "../core/news.ts";
+import { firstConnectNews, leadingSections } from "../core/news.ts";
 import { getPage, listPages, markPageSeen, pageHistory, pageOutline, pageSection, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
 import type { Req, Res } from "../http/router.ts";
 
@@ -830,7 +830,13 @@ async function callTool(
       const n = firstConnectNews(ctx, actor.id);
       const status = renderStatus(ctx, actor);
       const parts = [];
-      if (g) parts.push(`${GUIDELINES_PROMPT}\n\n${g.text}`);
+      if (g) {
+        // The first status must stay small (A2A-F5): the opening sections of the guidelines
+        // here, the rest through talk_guidelines.
+        const lead = leadingSections(g.text, 5000);
+        parts.push(`${GUIDELINES_PROMPT}\n\n${lead.text.trimEnd()}` +
+          (lead.cut ? "\n\n[Rest of the guidelines: call talk_guidelines.]" : ""));
+      }
       if (n) parts.push(`${n.prompt}\n\n${n.text}`);
       parts.push(status);
       return text(untrusted(parts.join("\n\n---\n\n")));
