@@ -13,7 +13,7 @@
       "at": "2026-11-04T19:17:47.489Z"
     }
   ],
-  "status": "dispatched",
+  "status": "implemented",
   "round": 0,
   "events": [
     {
@@ -50,6 +50,14 @@
       "data": {
         "executor": "landfall:designer",
         "base": "a85b76d43d96"
+      }
+    },
+    {
+      "at": "2026-11-04T19:35:48.294Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
       }
     }
   ],

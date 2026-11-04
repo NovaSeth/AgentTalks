@@ -13,7 +13,7 @@
       "at": "2026-11-04T19:18:29.868Z"
     }
   ],
-  "status": "implemented",
+  "status": "done",
   "round": 1,
   "events": [
     {
@@ -134,6 +134,25 @@
         "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c",
         "class": "critical",
         "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T19:34:54.127Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T19:35:41.234Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c"
       }
     }
   ],

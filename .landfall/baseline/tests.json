@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "0450e435b870609c2b0eab47b486ef495943d916",
-  "collectedAt": "2026-11-04T17:23:24.965Z",
+  "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c",
+  "collectedAt": "2026-11-04T19:34:54.127Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -95,7 +95,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"A2A-F8: a missing atalk prints exactly one line on stderr and nothing on stdout\",1]",
+      "id": "[\"\",\"A2A-F8: a missing atalks prints exactly one line on stderr and nothing on stdout\",1]",
       "file": "",
       "skipped": false
     },
@@ -1330,6 +1330,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"S11: an ignore line that git does not honour (a later negation in the same .gitignore) -> refuse, no credential on disk, .gitignore unchanged, nothing trusted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"S13 CSS block exists, styles the labelled stats and uses Primer tokens, not literal rem\",1]",
       "file": "",
       "skipped": false
@@ -1705,52 +1710,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: #/wiki with no slug is the Wiki place's own route; #/wiki/<slug> still opens a page\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: collapsed-section storage keeps working for the wiki and leases sections in their new place\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: every new English string of the Wiki place has a Polish translation\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: setSidebarPlace keeps \\\"wiki\\\" as a third place; nonsense still falls back to Home\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: the Wiki place renders the tree and the leases, no channels, no people; Home renders no wiki\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: the Wiki place shows exactly the wiki tree and the claimed resources; Home shows neither\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: the rail has #rail-wiki (iconDoc) between Activity and Admin, for every signed-in actor\",1]",
+      "id": "[\"\",\"T-MG-41: with only the old atalk on PATH the hook falls back to it\",1]",
       "file": "",
       "skipped": false
     },
@@ -2350,6 +2310,21 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"a failing test gate prints the failing test name and failure, keeps the log, stops with exit 1 (T-MG-36)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a failing typecheck gate prints the tsc errors and stops with exit 1 (T-MG-36)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a failing-tests section longer than 150 lines still ends with the log path and STOP, exit 1 (T-MG-36)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"a file appears in a conversation as a message and a member can download it\",1]",
       "file": "",
       "skipped": false
@@ -2376,6 +2351,11 @@
     },
     {
       "id": "[\"\",\"a garbage code is rejected without creating an actor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a green gate stays quiet: one OK line, no test output (T-MG-36)\",1]",
       "file": "",
       "skipped": false
     },
@@ -2845,6 +2825,26 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"atalk login --local in a SUBDIRECTORY of a git repo: the token file is ignored by git (or the login refuses), never an un-ignored token\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk login --local refuses a symlinked .agenttalks.json: the link target is untouched\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk login --local refuses when .agenttalks.json is already tracked by git: nothing written\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk login --local: an ignore line git does not honour (a later negation) -> refuse, nothing written\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"atalk talks to a live server: whoami, say, read\",1]",
       "file": "",
       "skipped": false
@@ -2856,6 +2856,11 @@
     },
     {
       "id": "[\"\",\"atalk without a token returns an error code rather than throwing\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalks and the atalk compatibility alias resolve to the same installed implementation\",1]",
       "file": "",
       "skipped": false
     },
@@ -2876,6 +2881,11 @@
     },
     {
       "id": "[\"\",\"binding to loopback is always allowed\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"both client names print identical atalks help, usage and error hints\",1]",
       "file": "",
       "skipped": false
     },
@@ -3971,6 +3981,16 @@
     },
     {
       "id": "[\"\",\"migration row exceptions retain checks on incorrect mappings and old code usage\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"monitor --max-seconds 0: ends when its Claude Code process is gone, stays while it lives\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"monitor --max-seconds 0: ends when its stdout is closed, and a closed stdin alone does not end it\",1]",
       "file": "",
       "skipped": false
     },
@@ -5306,5 +5326,5 @@
     }
   ],
   "failing": [],
-  "sha256": "207c380b6d3391e98428f934cec5c2bed7486f6057e0abf8c9458ae0261c1ed8"
+  "sha256": "4c8e159673d6eaa2d957e6bdcb94e54f841f628664f3a46e2c2ba3f06395ef18"
 }

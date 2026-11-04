@@ -1,42 +1,33 @@
 {
   "schema": 1,
   "task": "T-MG-38",
-  "head": "0450e435b870609c2b0eab47b486ef495943d916",
+  "head": "b01c47f02ef7c7ad7ae806307873a488ea44a515",
   "gatesSha": "6748d3280c3d894aeee546d52b4cfeb374b94c2a6e123f58cb1ba32d325757c9",
   "baselineSha": "207c380b6d3391e98428f934cec5c2bed7486f6057e0abf8c9458ae0261c1ed8",
-  "class": "standard",
-  "startedAt": "2026-11-04T17:23:24.965Z",
-  "durationMs": 415041,
+  "class": "critical",
+  "startedAt": "2026-11-04T19:34:00.787Z",
+  "durationMs": 37656,
   "gates": [
     {
       "name": "test",
       "cmd": "NODE_OPTIONS=\"$NODE_OPTIONS --test-reporter=tap\" npm run test",
       "exit": 0,
-      "durationMs": 31823,
+      "durationMs": 32519,
       "result": "pass"
     },
     {
       "name": "typecheck",
       "cmd": "npm run typecheck",
       "exit": 0,
-      "durationMs": 4329,
+      "durationMs": 4504,
       "result": "pass"
     }
   ],
   "inventory": {
     "collector": "node-test",
-    "total": 1060,
+    "total": 1061,
     "added": [
-      "[\"\",\"T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing\",1]",
-      "[\"\",\"T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh\",1]",
-      "[\"\",\"T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched\",1]",
-      "[\"\",\"T38: #/wiki with no slug is the Wiki place's own route; #/wiki/<slug> still opens a page\",1]",
-      "[\"\",\"T38: collapsed-section storage keeps working for the wiki and leases sections in their new place\",1]",
-      "[\"\",\"T38: every new English string of the Wiki place has a Polish translation\",1]",
-      "[\"\",\"T38: setSidebarPlace keeps \\\"wiki\\\" as a third place; nonsense still falls back to Home\",1]",
-      "[\"\",\"T38: the Wiki place renders the tree and the leases, no channels, no people; Home renders no wiki\",1]",
-      "[\"\",\"T38: the Wiki place shows exactly the wiki tree and the claimed resources; Home shows neither\",1]",
-      "[\"\",\"T38: the rail has #rail-wiki (iconDoc) between Activity and Admin, for every signed-in actor\",1]"
+      "[\"\",\"T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki\",1]"
     ],
     "removed": [],
     "newlySkipped": [],
@@ -1755,6 +1746,11 @@
       },
       {
         "id": "[\"\",\"T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki\",1]",
         "file": "",
         "skipped": false
       },
@@ -5351,13 +5347,17 @@
   },
   "route": {
     "declared": "standard",
-    "actual": "standard",
-    "escalated": false,
-    "missingSteps": []
+    "actual": "critical",
+    "escalated": true,
+    "missingSteps": [
+      "spec-plan",
+      "cross-provider-review",
+      "rereview"
+    ]
   },
   "artifacts": {
     "report": true,
-    "review": "not-required"
+    "review": "missing"
   },
-  "result": "pass"
+  "result": "route-escalated"
 }

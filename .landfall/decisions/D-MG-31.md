@@ -2,12 +2,12 @@
 schema: 1
 id: D-MG-31
 title: "T-MG-18 gets a third fix round for F4 only: catch-up inserts missing messages, never overwrites"
-status: active
+status: superseded
 kind: general
 date: 2026-11-04
 author: MG
 supersedes: []
-supersededBy: null
+supersededBy: D-MG-40
 scope: [src/http/ui/js/sse-events.js]
 allowsTestRemoval: []
 ---

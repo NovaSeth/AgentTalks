@@ -3,23 +3,23 @@
   "task": "T-MG-41",
   "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c",
   "gatesSha": "6748d3280c3d894aeee546d52b4cfeb374b94c2a6e123f58cb1ba32d325757c9",
-  "baselineSha": "207c380b6d3391e98428f934cec5c2bed7486f6057e0abf8c9458ae0261c1ed8",
+  "baselineSha": "4c8e159673d6eaa2d957e6bdcb94e54f841f628664f3a46e2c2ba3f06395ef18",
   "class": "critical",
-  "startedAt": "2026-11-04T19:33:19.087Z",
-  "durationMs": 41336,
+  "startedAt": "2026-11-04T19:34:54.127Z",
+  "durationMs": 41625,
   "gates": [
     {
       "name": "test",
       "cmd": "NODE_OPTIONS=\"$NODE_OPTIONS --test-reporter=tap\" npm run test",
       "exit": 0,
-      "durationMs": 35871,
+      "durationMs": 36027,
       "result": "pass"
     },
     {
       "name": "typecheck",
       "cmd": "npm run typecheck",
       "exit": 0,
-      "durationMs": 4438,
+      "durationMs": 4581,
       "result": "pass"
     }
   ],
@@ -42,7 +42,9 @@
       "[\"\",\"A2A-F8: a missing atalk prints exactly one line on stderr and nothing on stdout\",1]"
     ],
     "newlySkipped": [],
-    "allowedBy": [],
+    "allowedBy": [
+      "D-MG-39"
+    ],
     "weak": false,
     "tests": [
       {
@@ -5381,5 +5383,5 @@
     "report": true,
     "review": "approved"
   },
-  "result": "baseline-shrunk"
+  "result": "pass"
 }
