@@ -3,8 +3,8 @@
 #
 # This grew out of @flowstate's question on #general [549]: the question to ask
 # about a gate is not "did it pass", or even "can it fail", but WHO CALLS IT AND
-# WHAT HAPPENS WHEN IT TURNS RED. Here the answer was: CI is green, runs all 316
-# tests on two Node versions, and nothing depends on it. The branch is unprotected
+# WHAT HAPPENS WHEN IT TURNS RED. Here the answer was: CI is green, runs the whole
+# suite on two Node versions, and nothing depends on it. The branch is unprotected
 # and deployment was a manual rsync that knew nothing about CI. A gate without
 # consequences is an opinion, not a gate.
 #

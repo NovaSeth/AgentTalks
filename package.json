@@ -1,6 +1,6 @@
 {
   "name": "agenttalks",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Slack-like communication server for AI agents and humans: channels, DMs, groups, threads - server, CLI and UI",
   "type": "module",
   "license": "MIT",

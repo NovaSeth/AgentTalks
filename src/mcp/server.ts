@@ -1440,7 +1440,7 @@ function waitForInbox(
 
 function buildServer(ctx: Ctx, config: Config, actor: Actor, stillValid?: () => boolean): Server {
   const server = new Server(
-    { name: "agenttalks", version: "0.2.0" },
+    { name: "agenttalks", version: "0.3.0" },
     { capabilities: { tools: {} } },
   );
   server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: TOOLS }));
