@@ -47,7 +47,8 @@ g.location = { origin: "https://test.local", href: "https://test.local/", hash: 
 g.sessionStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 g.localStorage = { length: 0, key: () => null, getItem: () => null, setItem() {}, removeItem() {} };
 g.EventSource = FakeEventSource;
-g.fetch = () => new Promise(() => {});             // /api/me probes and list reloads never answer
+const fetched: string[] = [];
+g.fetch = (path: string) => { fetched.push(String(path)); return new Promise(() => {}); }; // probes and reloads never answer
 
 const i18n = await import(UI + "i18n.js");
 i18n.setLang("en");
@@ -63,6 +64,7 @@ const settle = async () => { for (let i = 0; i < 6; i++) await new Promise<void>
 beforeEach(() => {
   sse.disconnectSSE();
   FakeEventSource.all = [];
+  fetched.length = 0;
   Object.assign(state, {
     actor: { id: 1, handle: "michal", kind: "human" }, view: "chat", activeId: 5,
     conversations: [{ id: 5, slug: "general", kind: "public" }, { id: 7, slug: "bugs", kind: "public" }],
@@ -145,5 +147,64 @@ test("B-MG-97: a history that is cached but not loaded (one SSE message) does no
   last().drop(FakeEventSource.CLOSED);
   t.mock.timers.tick(1000);
   assert.equal(last().url, "/api/events?after=40");
+});
+
+// ------------------------------------------------------------------ fix round 1 (codex review-r1 F3, F4)
+test("R1 F3 (codex repro): a first stream that drops while CONNECTING is retried by the client, after the newest loaded id", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  sse.connectSSE();
+  const first = last();
+  first.drop(FakeEventSource.CONNECTING);           // never opened: the browser would retry future-only
+  assert.ok(first.closed, "the browser's own retry (no cursor) is stopped");
+  t.mock.timers.tick(1000);
+  assert.equal(FakeEventSource.all.length, 2);
+  assert.equal(last().url, "/api/events?after=40");
+});
+
+test("R1 F3: a never-opened stream (CLOSED) and a history loaded during the break still resume after 40, not 70", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  sse.connectSSE();
+  last().drop(FakeEventSource.CLOSED);
+  state.msgs[7] = [msg(69, 7), msg(70, 7)]; state.loaded[7] = true;
+  t.mock.timers.tick(1000);
+  assert.equal(last().url, "/api/events?after=40");
+  // The retry drops before open again: every retry without an event keeps 40.
+  last().drop(FakeEventSource.CONNECTING);
+  t.mock.timers.tick(2000);
+  assert.equal(last().url, "/api/events?after=40");
+  last().open();                                     // opened, but the replay had not arrived yet
+  last().drop(FakeEventSource.CLOSED);
+  t.mock.timers.tick(4000);
+  assert.equal(last().url, "/api/events?after=40", "an open without any event does not move the floor");
+});
+
+test("R1 F4 (codex repro): an empty loaded history is a cursor of zero: the return catches that conversation up", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  state.msgs = { 5: [] }; state.loaded = { 5: true };
+  sse.connectSSE();
+  last().open();
+  last().drop(FakeEventSource.CLOSED);
+  state.msgs[7] = [msg(70, 7)]; state.loaded[7] = true;   // loaded during the break: a gap after its load too
+  t.mock.timers.tick(1000);
+  const url = last().url;
+  assert.ok(url === "/api/events?after=0" || url === "/api/events", url);
+  if (url === "/api/events") {
+    last().open();
+    for (let i = 0; i < 4; i++) await settle();
+    assert.ok(fetched.some((p) => p.startsWith("/api/conversations/5/messages")), `REST catch-up of #5: ${fetched.join(", ")}`);
+  }
+});
+
+test("R1 F4 control: nothing loaded at all is no cursor: the return is future-only and fetches no history", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  state.msgs = {}; state.loaded = {};
+  sse.connectSSE();
+  last().open();
+  last().drop(FakeEventSource.CLOSED);
+  t.mock.timers.tick(1000);
+  assert.equal(last().url, "/api/events");
+  last().open();
+  await settle();
+  assert.ok(!fetched.some((p) => p.includes("/messages")), fetched.join(", "));
 });
 
