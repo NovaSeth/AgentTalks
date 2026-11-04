@@ -3,9 +3,10 @@
  */
 import { claimLease, releaseLease } from "./actions.js";
 import { api, csrf } from "./api.js";
+import { badgeText } from "./counters.js";
 import { ensureActors, refreshDigestAndLeases } from "./data.js";
 import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
-import { iconCheck, iconChevron, iconDesktop, iconDigest, iconDoc, iconLock, iconMoon, iconQuestion, iconSearch, iconSun } from "./icons.js";
+import { iconCheck, iconChevron, iconDesktop, iconDigest, iconDoc, iconLock, iconMoon, iconQuestion, iconSearch, iconSun, iconThread } from "./icons.js";
 import { msg, t } from "./i18n.js";
 import { THEMES, currentTheme, setTheme } from "./theme.js";
 import { mdToHtml } from "./markdown.js";
@@ -16,6 +17,7 @@ import { openConversation, openNewConversationModal, openQuestionsPanel } from "
 import { bindLangSwitch, doLogout, langSwitchHtml } from "./view-login.js";
 import { newWikiPageModal, openWikiPage } from "./view-wiki.js";
 import { openProfile } from "./view-people.js";
+import { openThreadsView } from "./view-threads.js";
 
 // Idle thresholds for "Who is here" (proposed by @michal on #general [677]): two weeks of
 // silence fades the row, three months folds it into the archive. Milliseconds, because they
@@ -114,6 +116,10 @@ export function renderSidebar() {
     <button class="sb-searchbox" id="btn-search" aria-label="${t("Search and switch conversation (Cmd+K)")}" title="${t("Search (Cmd+K)")}">
       ${iconSearch()}<span class="sb-search-l">${t("Search")}</span><kbd aria-hidden="true">Cmd+K</kbd>
     </button>
+    <button class="conv sb-nav ${state.view === "threads" ? "active" : ""}" id="sb-threads" ${state.view === "threads" ? `aria-current="page"` : ""}
+      title="${t("Threads you started or replied to")}">
+      <span class="pre">${iconThread()}</span><span class="nm">${t("Threads")}</span>
+    </button>
     <div class="sb-scroll" id="sb-scroll"></div>
     <div class="sb-foot" id="sb-foot">
       <span id="sb-ui" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}"></span>
@@ -121,6 +127,8 @@ export function renderSidebar() {
   document.getElementById("btn-avatar").addEventListener("click", (e) => openAccountMenu(e.currentTarget));
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
+  // W5-S10-A: the Threads view had no visible entry; this row (and the rail button) open it.
+  document.getElementById("sb-threads").addEventListener("click", () => openThreadsView());
   // The UI version: what the user sees against what the server sends. A mismatch means a cache
   // somewhere along the way - and this is the only way to see it.
   const foot = document.getElementById("sb-ui");
@@ -151,16 +159,17 @@ export function updateConvRow(convId) {
   row.classList.toggle("unread", unread > 0);
   const name = row.querySelector(".nm")?.textContent ?? "";
   row.setAttribute("aria-label", `${name}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}`);
+  // The number is the one the tab title counts (unreadBadge: DMs and mentions, W2-S7-B); plain
+  // unread stays a bold row with no number, so the two never disagree.
   let badge = row.querySelector(".badge");
-  if (!unread) { badge?.remove(); return; }
+  if (!unread || !(state.unreadBadge[convId] || 0)) { badge?.remove(); return; }
   if (!badge) {
     badge = document.createElement("span");
     badge.className = "badge";
     badge.setAttribute("aria-hidden", "true");
     row.appendChild(badge);
   }
-  badge.classList.toggle("soft", (state.unreadBadge[convId] || 0) === 0);
-  badge.textContent = unread > 99 ? "99+" : String(unread);
+  badge.textContent = badgeText(state.unreadBadge[convId]);
 }
 
 /** Presence dots - the only thing a session heartbeat changes in the sidebar every 30 s.
@@ -210,7 +219,7 @@ export function renderSidebarList() {
         aria-label="${escapeHtml(label)}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}">
         ${pre}
         <span class="nm">${escapeHtml(label)}</span>
-        ${unread ? `<span class="badge ${(state.unreadBadge[c.id] || 0) > 0 ? "" : "soft"}" aria-hidden="true">${unread > 99 ? "99+" : unread}</span>` : ""}
+        ${unread && (state.unreadBadge[c.id] || 0) > 0 ? `<span class="badge" aria-hidden="true">${badgeText(state.unreadBadge[c.id])}</span>` : ""}
       </button>`;
   };
 
@@ -542,13 +551,14 @@ async function showAgentGuidelines() {
 
 /** A human claiming a resource. The lease board was for looking at only, and it
  *  was described in CLI commands - so a human saw a rule they had no way to
- *  follow. */
-function claimLeaseModal() {
+ *  follow. The ONE claim modal: the sidebar's "new lease" button and the composer's + menu and
+ *  /claim command (commands.js) all open it; `prefill` is the resource typed after /claim. */
+export function claimLeaseModal(prefill = "") {
   const { modal, close } = openModal(`
       <h2 id="m-title">${t("Claim a resource")}</h2>
       <p class="mhint">${t("Tell the others that you are touching this right now. They will see it on the list and wait, instead of walking into the same thing at once.")}</p>
       <div class="field"><label for="cl-res">${t("What you are claiming")}</label>
-        <input id="cl-res" placeholder="${t("e.g. deploy-production")}">
+        <input id="cl-res" value="${escapeHtml(typeof prefill === "string" ? prefill : "")}" placeholder="${t("e.g. deploy-production")}">
         <span class="fhint">${t("Any name, as long as everybody reads it the same way. No spaces.")}</span></div>
       <div class="field"><label for="cl-note">${t("What you are doing with it (optional)")}</label>
         <input id="cl-note" placeholder="${t("e.g. releasing version 2.4")}"></div>
@@ -570,6 +580,7 @@ function claimLeaseModal() {
       Number(modal.querySelector("#cl-ttl").value));
     if (ok) refreshDigestAndLeases(true);
   });
+  modal.querySelector("#cl-res")?.focus();
 }
 
 

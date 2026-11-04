@@ -60,6 +60,71 @@ export async function canLeaveWikiEditor() {
   });
 }
 
+// --------------------------------------------------- wiki tree keyboard navigation (S14)
+// The tree rows live in the sidebar (view-sidebar.js) and are re-rendered on every change, so
+// the keys are handled by ONE delegated listener on the document instead of a listener per row.
+// The pattern is Primer's TreeView: Up/Down walk the visible rows, Home/End jump to the ends,
+// Left closes a branch or climbs to the parent, Right opens a branch or steps into its first
+// child. Enter and Space stay native: the row is a button and already opens the page.
+
+/** The decision behind one key on a tree row. `row` says whether the page has subpages,
+ *  whether its branch is open, and whether its parent is on screen. Pure, for the test. */
+export function wikiTreeKeyAction(key, row) {
+  switch (key) {
+    case "ArrowDown": return "next";
+    case "ArrowUp": return "prev";
+    case "Home": return "first";
+    case "End": return "last";
+    case "ArrowLeft":
+      if (row.hasKids && row.expanded) return "collapse";
+      return row.hasParent ? "parent" : null;
+    case "ArrowRight":
+      if (!row.hasKids) return null;
+      return row.expanded ? "firstChild" : "expand";
+    default: return null;
+  }
+}
+
+function onWikiTreeKeydown(e) {
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  const rowEl = e.target?.closest?.(".conv-row");
+  const pageBtn = rowEl?.querySelector("[data-wikipage]");
+  if (!pageBtn) return;
+  const slug = pageBtn.dataset.wikipage;
+  const twist = rowEl.querySelector("[data-wikitwist]");
+  const page = state.wiki.pages.find((p) => p.slug === slug);
+  // Only the rendered rows: a closed branch has no rows, so the walk skips it by itself.
+  const rows = [...document.querySelectorAll(".conv-row [data-wikipage]")];
+  const idx = rows.indexOf(pageBtn);
+  const parentSlug = page?.parentSlug ?? null;
+  const action = wikiTreeKeyAction(e.key, {
+    hasKids: !!twist,
+    expanded: !!twist && twist.getAttribute("aria-expanded") === "true",
+    hasParent: !!parentSlug && rows.some((b) => b.dataset.wikipage === parentSlug),
+  });
+  if (!action) return;
+  e.preventDefault();
+  const focusSlug = (s) => rows.find((b) => b.dataset.wikipage === s)?.focus();
+  switch (action) {
+    case "next": rows[Math.min(idx + 1, rows.length - 1)]?.focus(); break;
+    case "prev": rows[Math.max(idx - 1, 0)]?.focus(); break;
+    case "first": rows[0]?.focus(); break;
+    case "last": rows[rows.length - 1]?.focus(); break;
+    case "firstChild": rows[idx + 1]?.focus(); break;   // an open branch's first child is the next visible row
+    case "parent": focusSlug(parentSlug); break;
+    case "collapse":
+    case "expand":
+      // The twist's click handler re-renders the sidebar, which drops the focused button; the
+      // row comes back under the same slug, so we put the focus back on it one frame later.
+      twist.click();
+      requestAnimationFrame(() => {
+        document.querySelector(`.conv-row [data-wikipage="${slug.replace(/"/g, '\\"')}"]`)?.focus();
+      });
+      break;
+  }
+}
+if (typeof document !== "undefined") document.addEventListener("keydown", onWikiTreeKeydown);
+
 // Pages we are deleting right now. The server broadcasts a `wiki` event for a deleted page as
 // well, and the handler for that event reopens the page when you are looking at it. The event
 // can outrun the response to DELETE, so the interface tried to load a page it had just told
@@ -388,8 +453,10 @@ function renderWikiContent(loading) {
           </select>
           <label class="sr-only" for="we-note">${t("Change description")}</label>
           <input id="we-note" class="we-note" placeholder="${t("What you are changing (optional)")}">
-          <button class="btn ghost" id="we-cancel">${t("Cancel")}</button>
-          <button class="btn slim" id="we-save">${t("Save")}</button>
+          <div class="we-actions">
+            <button class="btn ghost" id="we-cancel">${t("Cancel")}</button>
+            <button class="btn slim" id="we-save">${t("Save")}</button>
+          </div>
         </div>
       </div>`;
     const ti = el.querySelector("#we-title"), b = el.querySelector("#we-body"), n = el.querySelector("#we-note");

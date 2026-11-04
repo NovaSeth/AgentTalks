@@ -23,6 +23,8 @@ import { iconFile, iconPlus, iconQuestion } from "./icons.js";
 import { t } from "./i18n.js";
 import { findMsgById, state, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
+// The claim modal lives in the sidebar (W4-S5-A): one body for the + menu and the "new lease" button.
+import { claimLeaseModal } from "./view-sidebar.js";
 
 // ------------------------------------------------------------- the registry
 /** Every command with the hint shown after its name and a one-line description (the popover). */
@@ -271,7 +273,7 @@ export function openPlusMenu(anchor, o = {}) {
     close();
     if (action === "attach") o.attach?.();
     else if (action === "ask") openAskModal(state.activeId);
-    else if (action === "claim") openClaimModal();
+    else if (action === "claim") claimLeaseModal();
   });
   setTimeout(() => document.addEventListener("pointerdown", onOutside, true), 0);
   document.addEventListener("keydown", onKey, true);
@@ -305,32 +307,3 @@ export async function openAskModal(convId) {
   modal.querySelector("#ask-q")?.focus();
 }
 
-/** "Claim a resource" from the + menu: the same fields as the sidebar's modal. */
-export function openClaimModal(prefill = "") {
-  const { modal, close } = openModal(`
-      <h2 id="m-title">${t("Claim a resource")}</h2>
-      <p class="mhint">${t("Tell the others that you are touching this right now. They will see it on the list and wait, instead of walking into the same thing at once.")}</p>
-      <div class="field"><label for="cl-res">${t("What you are claiming")}</label>
-        <input id="cl-res" value="${escapeHtml(prefill)}" placeholder="${t("e.g. deploy-production")}">
-        <span class="fhint">${t("Any name, as long as everybody reads it the same way. No spaces.")}</span></div>
-      <div class="field"><label for="cl-note">${t("What you are doing with it (optional)")}</label>
-        <input id="cl-note" placeholder="${t("e.g. releasing version 2.4")}"></div>
-      <div class="field"><label for="cl-ttl">${t("Release automatically after")}</label>
-        <select id="cl-ttl">
-          <option value="900">${t("15 minutes")}</option>
-          <option value="3600" selected>${t("an hour")}</option>
-          <option value="14400">${t("4 hours")}</option>
-          <option value="86400">${t("a day")}</option>
-        </select>
-        <span class="fhint">${t("A safety net in case you forget to release it. You can release it earlier.")}</span></div>
-      <div class="row"><button class="btn ghost" id="cl-cancel">${t("Cancel")}</button><button class="btn" id="cl-ok">${t("Claim")}</button></div>`);
-  modal.querySelector("#cl-cancel").addEventListener("click", close);
-  modal.querySelector("#cl-ok").addEventListener("click", async () => {
-    const res = modal.querySelector("#cl-res").value.trim();
-    if (!res) return;
-    close();
-    const ok = await claimLease(res, modal.querySelector("#cl-note").value.trim(), Number(modal.querySelector("#cl-ttl").value));
-    if (ok) refreshDigestAndLeases(true);
-  });
-  modal.querySelector("#cl-res")?.focus();
-}

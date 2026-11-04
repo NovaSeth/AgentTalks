@@ -75,6 +75,7 @@ const UI_MODULES = [
   // T-MG-3 slices (S0 scaffolding): owned by later slices, registered here once.
   "router.js", "shortcuts.js", "composer.js", "view-people.js", "counters.js",
   "emoji.js",
+  "emoji-names-pl.js",
   "view-threads.js",
   "commands.js",
   "view-search.js",

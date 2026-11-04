@@ -6,7 +6,7 @@ import { api, csrf } from "./api.js";
 import { dividerAfter } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
 import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, scrollBehavior } from "./dom.js";
-import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconThread, iconWrench } from "./icons.js";
+import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./icons.js";
 import { renderBody } from "./markdown.js";
 import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
 import { openPlusMenu } from "./commands.js";
@@ -16,7 +16,6 @@ import { showError, showToast } from "./toasts.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { conversationRoute, permalink, syncRoute, unreadFrom } from "./router.js";
 import { bindProfileClicks, closeProfile, ensureHeaderMembers, headerFacesHtml, mountPeoplePicker, profileFacts, renderProfile, visibleMembers } from "./view-people.js";
-import { renderThreadsMain } from "./view-threads.js";
 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
@@ -29,6 +28,9 @@ export async function openConversation(id, focusMessageId) {
   // The "new messages" line disappears only on LEAVING a conversation - otherwise the one place
   // that said "this is where you stopped" gets lost while you are still reading.
   if (previousConversation && previousConversation !== id) delete state.readMark[previousConversation];
+  // W4-S6-C: the details and the pinned list describe ONE conversation; carried into the next one
+  // they showed the wrong members and pins. A profile is a person's, so it may stay.
+  if (previousConversation !== id) { state.detailsOpen = false; state.pinnedOpen = false; }
   state.view = "chat";
   state.activeId = id;
   try { localStorage.setItem("atalks_last_conv", String(id)); } catch { /* private browsing */ }
@@ -51,10 +53,14 @@ export async function openConversation(id, focusMessageId) {
   }
   views.render();
   if (!state.loaded[id]) {
-    state.loadingConv = true;
+    // W2-S2-B: the flag names the conversation being loaded. A boolean was shared by every open in
+    // flight: a slow load of one conversation kept the skeleton over another, already loaded one
+    // (a channel previewed from "Channels you can join" showed the loader, not its messages), and
+    // whichever load finished last switched it off for all.
+    state.loadingConv = id;
     renderMain();
     try { await loadMessages(id); } catch (e) { showError(e); }
-    state.loadingConv = false;
+    if (state.loadingConv === id) state.loadingConv = false;
   }
   if (focusMessageId && !(state.msgs[id] || []).some((m) => m.id === focusMessageId)) {
     try {
@@ -169,9 +175,9 @@ export function sidePanelOf(s) {
 
 // The panel last shown, so Mod+. can bring it back after closing it.
 let lastSidePanel = null;
-let sidePanelKeysBound = false;
 
-/** Mod+. : close the open panel, or reopen the one closed last (hook for S8's shortcut table). */
+/** Mod+. : close the open panel, or reopen the one closed last. The key itself is matched by the
+ *  shortcut table and run from app.js (W5-S8-C: one owner); this is only the action. */
 export async function toggleSidePanel() {
   const open = sidePanelOf(state);
   if (open) {
@@ -189,23 +195,17 @@ export async function toggleSidePanel() {
   if (findMsgById(lastSidePanel.id)) await openThread(lastSidePanel.id);
 }
 
-function bindSidePanelKeys() {
-  if (sidePanelKeysBound) return;
-  sidePanelKeysBound = true;
-  document.addEventListener("keydown", (e) => {
-    if (!(e.metaKey || e.ctrlKey) || e.key !== "." || !state.actor) return;
-    if (document.querySelector(".overlay")) return;
-    e.preventDefault();
-    toggleSidePanel();
-  });
-}
-
+/** The main column of the current view. Every view that is not the conversation goes through the
+ *  `views` registry (W5-S11-A): a direct renderMain() after a language switch or an SSE event
+ *  must not redraw the chat column over the search, threads or unreads view. */
 export function renderMain() {
   const el = document.getElementById("main");
   if (!el) return;
   if (state.view === "users") { views.users(); return; }
   if (state.view === "notifications") { views.notifications(); return; }
-  if (state.view === "threads") { renderThreadsMain(); return; }
+  if (state.view === "threads") { views.threads(); return; }
+  if (state.view === "unreads") { views.unreads(); return; }
+  if (state.view === "search") { views.search(); return; }
   if (state.view === "wiki") { renderWikiMain(); return; }
   if (!state.activeId) {
     // An empty state says what to do and gives a button for it - "choose a conversation" with
@@ -260,7 +260,6 @@ export function renderMain() {
       ${state.profileHandle ? `<div id="profile-slot"></div>` : ""}
     </aside>
   `;
-  bindSidePanelKeys();
   bindProfileClicks();
   document.getElementById("btn-menu").addEventListener("click", () => {
     state.drawerOpen = !state.drawerOpen; toggleDrawerClass();
@@ -283,7 +282,7 @@ export function renderMain() {
   });
   renderTopbar();
   bindScrollWatch(document.getElementById("messages"));
-  if (state.loadingConv) document.getElementById("messages").innerHTML = skeletonHtml();
+  if (state.loadingConv === state.activeId) document.getElementById("messages").innerHTML = skeletonHtml();
   else renderMessages();
   renderPresenceBar();
   if (isMember) { renderComposer(); bindDropZone(el); }
@@ -756,8 +755,10 @@ export function renderMessages() {
   if (state.hasMore[state.activeId] && !state.reportFilter) html += `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>`;
   const idx = threadIndex(state.activeId);
   // The divider position comes from counters.js: with a read mark it is the mark; on a first
-  // visit (mark 0) the server's unread count says where the new part begins (S7).
-  const mark = dividerAfter(list, state.readMark[state.activeId] || 0, state.unread[state.activeId], state.actor.id);
+  // visit (mark 0) the server's unread count says where the new part begins (S7); the newest unread
+  // id (W2-S7-A) keeps the line in place when the unread include thread replies the list does not show.
+  const mark = dividerAfter(list, state.readMark[state.activeId] || 0, state.unread[state.activeId], state.actor.id,
+    state.lastUnread[state.activeId]);
   let unreadLineShown = false;
   let lastDay = null, lastAuthor = null, lastTs = 0;
   for (const m of list) {
@@ -819,6 +820,41 @@ export function upsertMessageNode(msg) {
   el.insertAdjacentHTML("beforeend", messageHtml(msg, cont, { threads: idx }));
 }
 
+/** The tooltip of a reaction chip (S12): a sentence with the names, me first as "You". */
+export function reactionTooltip(emoji, handles, me) {
+  const others = handles.filter((h) => h !== me).map((h) => `@${h}`);
+  const mine = handles.includes(me);
+  let who;
+  if (mine && !others.length) who = t("You");
+  else if (mine) who = t("You and {who}", { who: others.join(", ") });
+  else if (others.length === 1) who = others[0];
+  else who = t("{list} and {last}", { list: others.slice(0, -1).join(", "), last: others[others.length - 1] });
+  return t("{who} reacted with {emoji}", { who, emoji });
+}
+
+/** The quick-react row (S12): the `n` most used emoji of the conversation, by count and then
+ *  first-seen order; the head of the palette fills what is missing. */
+export function topReactions(convId, n = 4) {
+  const counts = new Map();
+  for (const m of state.msgs[convId] || []) {
+    const r = state.reactions[m.id];
+    if (!r) continue;
+    for (const [emoji, handles] of Object.entries(r)) counts.set(emoji, (counts.get(emoji) || 0) + handles.length);
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([e]) => e);
+  for (const e of EMOJI_PALETTE) { if (top.length >= n) break; if (!top.includes(e)) top.push(e); }
+  return top.slice(0, n);
+}
+
+/** Only MY handle (W1-C): `mentionsMe` in state.js also answers true for @all / @channel, which
+ *  must not tint a whole row - everybody got it, nobody was singled out. */
+export function mentionsMeDirectly(text) {
+  const handle = state.actor?.handle;
+  if (!handle) return false;
+  const re = new RegExp(`(^|[\\s(>])@${handle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+  return re.test(String(text ?? ""));
+}
+
 function reactionChipsHtml(m) {
   const r = state.reactions[m.id];
   if (!r) return "";
@@ -827,8 +863,19 @@ function reactionChipsHtml(m) {
   return Object.entries(r).map(([emoji, handles]) => {
     const mine = handles.includes(state.actor.handle);
     const safeEmoji = escapeHtml(emoji);
-    return `<button class="react ${mine ? "mine" : ""}" data-react="${m.id}" data-emoji="${safeEmoji}"
-      title="${escapeHtml(handles.join(", "))}">${safeEmoji}<span class="n">${handles.length}</span></button>`;
+    const tip = escapeHtml(reactionTooltip(emoji, handles, state.actor.handle));
+    return `<button class="react ${mine ? "mine" : ""}" data-react="${m.id}" data-emoji="${safeEmoji}" aria-pressed="${mine}"
+      title="${tip}" aria-label="${tip}">${safeEmoji}<span class="n">${handles.length}</span></button>`;
+  }).join("");
+}
+
+/** The quick-react buttons of the hover bar (S12): the same `data-react` contract as a chip, so
+ *  one delegated handler serves both. */
+function quickReactHtml(m) {
+  return topReactions(m.conversationId).map((emoji) => {
+    const safe = escapeHtml(emoji);
+    const label = t("React with {emoji}", { emoji: safe });
+    return `<button class="qr" data-react="${m.id}" data-emoji="${safe}" aria-label="${label}" title="${label}">${safe}</button>`;
   }).join("");
 }
 
@@ -890,19 +937,36 @@ function attachmentHtml(m) {
 /**  else do you know whether the person you are writing to has any chance of reading it - and
 /**  it spoke like an engineer ("silent 47 min - wakeable", "unreachable"). Now every line is a
 /**  sentence: what is true now and what follows from it. */
-function deliveryHtml(m) {
+const DELIVERY_COLLAPSE_MS = 10_000;
+let deliveryTimer = null;
+
+export function deliveryHtml(m) {
   const d = state.lastDelivery;
   if (!d || d.conversationId !== m.conversationId || d.messageId !== m.id) return "";
   const parts = d.delivery.map((r) => {
     const who = `@${escapeHtml(r.handle)}`;
-    if (r.online) return `<span class="ok">${t("{who} is online now - will read it right away", { who: who })}</span>`;
+    if (r.online) return { cls: "ok", text: t("{who} is online now - will read it right away", { who: who }) };
     if (r.wakeable) {
       const elapsed = timeAgo(r.lastSeenAt).replace(/ (ago|temu)$/, "");
-      return `<span class="warn">${t("{who} has been asleep for {how_long} - the server will wake them with this message", { who: who, how_long: escapeHtml(elapsed) })}</span>`;
+      return { cls: "warn", text: t("{who} has been asleep for {how_long} - the server will wake them with this message", { who: who, how_long: escapeHtml(elapsed) }) };
     }
-    return `<span class="off">${t("{who} is offline - will see it when they are back", { who: who })}</span>`;
+    return { cls: "off", text: t("{who} is offline - will see it when they are back", { who: who }) };
   });
-  return `<div class="delivery">${parts.join(" · ")}</div>`;
+  // S12: the sentence has its moment right after the send; ten seconds later it folds into a
+  // small icon that still tells the whole story on hover. `shownAt` is remembered on the delivery
+  // record itself the first time it is drawn, and one timer redraws this bubble when it is due.
+  if (!d.shownAt) d.shownAt = Date.now();
+  const age = Date.now() - d.shownAt;
+  if (age < DELIVERY_COLLAPSE_MS) {
+    clearTimeout(deliveryTimer);
+    deliveryTimer = setTimeout(() => {
+      if (state.lastDelivery === d) upsertMessageNode(findMsgById(d.messageId));
+    }, DELIVERY_COLLAPSE_MS - age + 50);
+    return `<div class="delivery">${parts.map((p) => `<span class="${p.cls}">${p.text}</span>`).join(" · ")}</div>`;
+  }
+  const plain = parts.map((p) => p.text.replace(/<[^>]+>/g, "")).join(" · ");
+  const worst = parts.some((p) => p.cls === "off") ? "off" : parts.some((p) => p.cls === "warn") ? "warn" : "ok";
+  return `<div class="delivery compact"><span class="${worst}" tabindex="0" role="img" title="${plain}" aria-label="${t("Delivery: {status}", { status: plain })}">${iconSend()}</span></div>`;
 }
 
 /* The entry animation only on a message's FIRST render. Every re-render (a reaction,
@@ -956,7 +1020,7 @@ function reportControls(m, mine) {
   return { report, canFix, canResolve };
 }
 
-function messageHtml(m, cont, opts = {}) {
+export function messageHtml(m, cont, opts = {}) {
   const handle = actorHandle(m.actorId);
   const kind = actorKind(m.actorId);
   const mine = m.actorId === state.actor.id;
@@ -984,7 +1048,7 @@ function messageHtml(m, cont, opts = {}) {
       </div>
     </div>`;
   }
-  const mentionsCurrentActor = mentionsMe(m.body);
+  const mentionsCurrentActor = mentionsMeDirectly(m.body);
   const isAsk = m.kind === "ask";
   const qid = state.openQuestions[m.id];
   const askOpen = isAsk && qid !== undefined;
@@ -1003,10 +1067,10 @@ function messageHtml(m, cont, opts = {}) {
   if (fresh) animatedMsgs.add(m.id);
   return `
     <div class="msg ${fresh ? "enter" : ""} ${cont ? "cont" : ""} ${m.deletedAt ? "deleted" : ""} ${mentionsCurrentActor ? "mine-mention" : ""} ${isAsk ? "ask" : ""} ${m.kind === "answer" ? "answer" : ""} ${resolved ? "resolved" : ""}" data-msg="${m.id}">
-      ${avatarHtml(handle)}
+      <button type="button" class="av-btn" data-profile="${escapeHtml(handle)}" aria-label="${t("Open the profile of @{handle}", { handle: escapeHtml(handle) })}" ${cont ? "tabindex=\"-1\"" : ""}>${avatarHtml(handle)}</button>
       <div class="body">
         <div class="head">
-          <span class="author">@${escapeHtml(handle)}</span>
+          <button type="button" class="author" data-profile="${escapeHtml(handle)}" title="${t("Open the profile of @{handle}", { handle: escapeHtml(handle) })}">@${escapeHtml(handle)}</button>
           <span class="kindtag ${kind}">${kind === "human" ? t("human") : t("agent")}</span>
           <span class="time">${fmtTime(m.ts)}</span>
           ${m.editedAt ? `<span class="edited">${t("(edited)")}</span>` : ""}
@@ -1025,21 +1089,25 @@ function messageHtml(m, cont, opts = {}) {
           <button class="answerbtn" data-answer="${qid}" data-msg-ref="${m.id}">${iconReply()} ${t("Answer")}</button>
         </div>` : ""}
         ${(() => {
-          // One fixed row under an entry, as in other chat tools: the reaction chips, then a visible "add a
-          // reaction" button, and the thread replies on the right.
+          // One fixed row under an entry, as in other chat tools: the reaction chips, an "add a reaction"
+          // chip next to them ONLY when there already are some (S12: otherwise the hover bar carries it),
+          // and the thread replies on the right.
           if (m.deletedAt) return "";
           const tlink = !m.threadId && !opts.noThreadLink ? threadLinkHtml(m, opts.threads) : "";
+          if (!chips && !tlink) return "";
           return `<div class="reacts">${chips}
-            <button class="react addreact" data-addreact="${m.id}" aria-label="${t("Add a reaction")}" title="${t("Add a reaction")}">${iconAddReaction()}</button>
+            ${chips ? `<button class="react addreact" data-addreact="${m.id}" aria-label="${t("Add a reaction")}" title="${t("Add a reaction")}">${iconAddReaction()}</button>` : ""}
             ${tlink}</div>`;
         })()}
         ${mine ? deliveryHtml(m) : ""}
       </div>
       ${!m.deletedAt ? `
       <div class="actions" role="group" aria-label="${t("Actions for the message from @{handle}", { handle: escapeHtml(handle) })}">
+        ${quickReactHtml(m)}
+        <button data-addreact="${m.id}" aria-label="${t("Add a reaction")}" title="${t("Add a reaction")}">${iconAddReaction()}</button>
+        <button data-reply="${m.id}" aria-label="${t("Reply in a thread")}" title="${t("Reply in a thread")}">${iconThread()}</button>
         ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? t("Take back the confirmation") : t("Confirm fixed")}" title="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}">${iconCheck(true)}</button>` : ""}
         ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark fixed")}" title="${m.fixedAt ? t("Take back “fixed”") : t("Mark: I fixed it, waiting for confirmation")}">${iconWrench()}</button>` : ""}
-        <button data-reply="${m.id}" aria-label="${t("Reply in a thread")}" title="${t("Reply in a thread")}">${iconThread()}</button>
         ${mine && m.kind === "text" ? `<button data-edit="${m.id}" aria-label="${t("Edit the message")}" title="${t("Edit")}">${iconEdit()}</button>` : ""}
         <button data-more="${m.id}" data-pinned="${pinned ? "1" : ""}" data-report="${report ? "1" : ""}"
           aria-label="${t("More actions")}" aria-haspopup="menu" title="${t("More")}">${iconMore()}</button>

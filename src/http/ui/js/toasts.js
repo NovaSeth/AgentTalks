@@ -63,5 +63,8 @@ export function showToast(msg, opts = {}) {
 /**  in forty places - otherwise every new call again dumps text written for an agent onto the
 /**  user. */
 export function showError(e, context) {
+  // A lost session already said so ("session ended, draft kept"); the failing caller's own
+  // sentence next to it would only confuse (W2-S7-C).
+  if (e && e.sessionLost) return;
   showToast(describeError(e, context), { alert: true });
 }

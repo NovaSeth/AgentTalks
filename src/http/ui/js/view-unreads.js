@@ -9,6 +9,7 @@ import { avatarHtml, emptyStateHtml, escapeHtml, fmtTime, hamburgerHtml, toggleD
 import { iconCheck, iconChat } from "./icons.js";
 import { t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
+import { syncRoute } from "./router.js";
 import { actorHandle, dmLabel, state, views } from "./state.js";
 
 const MAX_LAZY_LOADS = 8;
@@ -39,12 +40,9 @@ export function unreadGroups(s) {
   return out;
 }
 
-/** Unread messages in direct and group conversations I belong to: the DMs rail badge (W2-S1-C). */
-export function unreadDmCount(s) {
-  return (s.conversations || [])
-    .filter((c) => s.memberships?.[c.id] && (c.kind === "dm" || c.kind === "group"))
-    .reduce((n, c) => n + (s.unread?.[c.id] || 0), 0);
-}
+/** Unread messages in direct and group conversations I belong to. The body lives in counters.js
+ *  (W5-S8-B: one badge source, `railBadges(state).dms`); re-exported here for the S8 callers. */
+export { unreadDmCount } from "./counters.js";
 
 /** Screen reader name of one row: "@who in #where: excerpt". */
 function rowLabel(m, c) {
@@ -105,10 +103,12 @@ export function renderUnreadsMain() {
     b.addEventListener("click", () => views.openConversation(Number(b.dataset.open))));
 }
 
-/** Mod+Shift+A: show the view, then fetch the histories it is missing (a few at a time). */
+/** Mod+Shift+A and `#/unreads` (W5-S8-A: the view has a URL, so F5 and Back keep it): show the
+ *  view, then fetch the histories it is missing (a few at a time). */
 export async function openUnreadsView() {
   state.view = "unreads";
   state.drawerOpen = false;
+  syncRoute("#/unreads");
   views.shell();
   toggleDrawerClass();
   const pending = unreadGroups(state).filter((g) => g.pending).slice(0, MAX_LAZY_LOADS);

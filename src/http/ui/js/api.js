@@ -40,8 +40,13 @@ export async function api(method, path, body) {
     err.code = data && englishCode(data.code, res.status);
     err.status = res.status;
     err.message = describeError(err);
-    if (res.status === 401 && unauthorized && !SESSION_FREE.test(path)) {
-      try { unauthorized(err, path); } catch { /* the caller still gets its error */ }
+    if (res.status === 401 && !SESSION_FREE.test(path)) {
+      // The session-lost handler shows ONE toast; the failing caller must not add its own
+      // (W2-S7-C): showError skips an error flagged this way.
+      err.sessionLost = true;
+      if (unauthorized) {
+        try { unauthorized(err, path); } catch { /* the caller still gets its error */ }
+      }
     }
     throw err;
   }

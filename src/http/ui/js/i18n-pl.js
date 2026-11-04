@@ -113,8 +113,6 @@ export const PL = {
   "online now": "jest teraz online",
   "offline": "offline",
   "in:": "w:",
-  "tok.": "tok.",
-  "{n} msg.": "{n} wiad.",
 
   // --- search palette ---
   "Jump to a conversation or search": "Przejdź do rozmowy albo szukaj",
@@ -556,8 +554,6 @@ export const PL = {
   "Revoke token {name}": "Odwołaj token {name}",
   "Revoke token": "Odwołaj token",
   "This account has no token.": "To konto nie ma żadnego tokenu.",
-  "A new token is issued through an invite (button at the top). Swapping the token of an existing account still needs server access - the panel cannot do it.":
-    "Nowy token wystawia się przez zaproszenie (przycisk u góry). Wymiana tokenu istniejącemu kontu wymaga na razie dostępu do serwera - panel tego nie potrafi.",
   "Recent activity": "Ostatnia aktywność",
   "content not shown": "treść niejawna",
   "This account has not written anything yet.": "To konto jeszcze nic nie napisało.",
@@ -934,6 +930,37 @@ export const PL = {
   "Message from @{who} in {where}, {when}: open it": "Wiadomość od @{who} w {where}, {when}: otwórz",
   "in a thread": "w wątku",
   // === S12 ===
+  "You": "Ty",
+  "You and {who}": "Ty i {who}",
+  "{list} and {last}": "{list} i {last}",
+  "{who} reacted with {emoji}": "{who}: reakcja {emoji}",
+  "React with {emoji}": "Zareaguj {emoji}",
+  "Delivery: {status}": "Doręczenie: {status}",
   // === S13 ===
+  "Account @{handle}, {kind}{admin}{off}: {presence}": "Konto @{handle}, {kind}{admin}{off}: {presence}",
+  "admin": "admin",
+  "messages": "wiadomości",
+  "active tokens": "aktywne tokeny",
+  "New token": "Nowy token",
+  "New token for @{handle}": "Nowy token dla @{handle}",
+  "A new token replaces nothing by itself: revoke the old one once the agent runs on the new one.":
+    "Nowy token sam nic nie zastępuje: odwołaj stary, gdy agent działa już na nowym.",
+  "The account keeps its name and history. The old tokens stay valid until you revoke them on the row.":
+    "Konto zachowuje nazwę i historię. Stare tokeny działają, dopóki nie odwołasz ich w wierszu konta.",
+  "Token label": "Etykieta tokenu",
+  "e.g. laptop, CI, after the leak": "np. laptop, CI, po wycieku",
+  "For you only - so you later know which token to revoke.": "Tylko dla Ciebie - żebyś później wiedział, który token odwołać.",
+  "3 months": "3 miesiące",
+  "1 year": "1 rok",
+  "Token ready for @{handle}": "Token gotowy dla @{handle}",
+  "You can see this token <b>only now</b> - only its fingerprint is stored. Copy the text and pass it to the agent, then revoke the old token on the row.":
+    "Ten token widzisz <b>tylko teraz</b> - zapisany jest wyłącznie jego odcisk. Skopiuj tekst i przekaż agentowi, a potem odwołaj stary token w wierszu konta.",
+  "Token text to paste to the agent": "Tekst z tokenem do wklejenia agentowi",
+  "This token cannot be recovered. It stays on the list unused - revoke it there and create a new one.":
+    "Tego tokenu nie da się odzyskać. Zostaje na liście nieużywany - odwołaj go tam i utwórz nowy.",
   // === S14 ===
+  // === C1 ===
+  "Find in this conversation": "Szukaj w tej rozmowie",
+  // === C2 ===
+  "Files go to the conversation: attach them in the main message box": "Pliki trafiają do rozmowy: dołącz je w głównym polu wiadomości",
 };

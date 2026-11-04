@@ -46,10 +46,9 @@ export async function openSearchView(q) {
   state.drawerOpen = false;
   state.threadOpen = null;
   syncRoute(buildRoute({ view: "search", q: query }));
-  // The shell draws the rail and the main column; what goes into the column is ours. renderMain
-  // (view-chat.js) does not know this view yet, so we paint over its fallback right away.
+  // The shell draws the rail, the sidebar and the main column; renderMain hands the column to
+  // `views.search` (registered in app.js, W5-S11-A), which is renderSearchMain below.
   views.shell();
-  renderSearchMain();
   toggleDrawerClass();
   if (!parsed.text) return;
   const params = searchParams(parsed, state.conversations);
@@ -164,20 +163,19 @@ function resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q })
   }).join("");
 }
 
-// ------------------------------------------------------------- Cmd+F in a conversation
-// Inside a conversation the browser's find is the wrong tool: the list holds only the loaded
-// page. Cmd+F opens the palette with `in:` pre-filled for this conversation instead; outside a
-// conversation (wiki, Activity, admin) the key keeps its browser meaning.
-document.addEventListener("keydown", (e) => {
-  if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
-  if (String(e.key).toLowerCase() !== "f") return;
-  if (!state.actor || state.view !== "chat" || !state.activeId) return;
-  if (document.querySelector(".overlay")) return;
+// ------------------------------------------------------------- Mod+F in a conversation
+/** Inside a conversation the browser's find is the wrong tool: the list holds only the loaded
+ *  page. Mod+F opens the palette with `in:` pre-filled for this conversation instead. The key is
+ *  matched by the shortcut table (W5-S11-C: `findInConversation` in shortcuts.js, so the help
+ *  sheet lists it) and run from app.js; `false` means "not in a conversation" and the key keeps
+ *  its browser meaning (wiki, Activity, admin, a group conversation without one name). */
+export function findInConversation() {
+  if (!state.actor || state.view !== "chat" || !state.activeId) return false;
   const c = state.conversations.find((x) => x.id === state.activeId);
-  if (!c) return;
+  if (!c) return false;
   const others = dmOthers(c);
   const where = c.slug ? `#${c.slug}` : others.length === 1 ? `@${others[0].handle}` : null;
-  if (!where) return;
-  e.preventDefault();
+  if (!where) return false;
   openSearchPalette({ query: `in:${where} ` });
-});
+  return true;
+}

@@ -83,6 +83,19 @@ export function bindLangSwitch(id) {
 }
 
 // ------------------------------------------------------------- login screen
+/** The browser remembers that a passkey for this origin was enrolled or used here (M17). Before
+ *  that, offering the fingerprint button only yields the browser's "no passkeys" dialog, because
+ *  having an authenticator is not the same as having a passkey on it. */
+export const PASSKEY_KNOWN_KEY = "atalks_passkey_known";
+
+export function passkeyKnownHere(storage = globalThis.localStorage) {
+  try { return storage?.getItem(PASSKEY_KNOWN_KEY) === "1"; } catch { return false; }
+}
+
+export function markPasskeyKnownHere(storage = globalThis.localStorage) {
+  try { storage?.setItem(PASSKEY_KNOWN_KEY, "1"); } catch { /* private mode: the offer simply waits */ }
+}
+
 export function renderLogin(errorMsg) {
   $app.innerHTML = `
     <div class="login">
@@ -117,9 +130,11 @@ export function renderLogin(errorMsg) {
     }
   });
   // Passkey (Touch ID / Face ID): the button appears only where the browser
-  // actually has a platform authenticator.
+  // actually has a platform authenticator AND a passkey was enrolled or used in
+  // this browser before (M17) - otherwise the first click opens a dialog that
+  // says there is nothing to sign in with.
   const pk = document.getElementById("btn-passkey");
-  if (window.PublicKeyCredential
+  if (passkeyKnownHere() && window.PublicKeyCredential
       && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
     PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then((ok) => {
       if (ok) pk.hidden = false;
@@ -173,6 +188,7 @@ async function passkeyLogin() {
     authenticatorData: bufToB64u(cred.response.authenticatorData),
     signature: bufToB64u(cred.response.signature),
   });
+  markPasskeyKnownHere(); // a passkey just worked here: the button has earned its place
   state.actor = data.actor;
   claimLocalData(data.actor.id);
   setCsrf(data.csrf);
@@ -214,6 +230,7 @@ async function passkeyEnroll() {
     attestationObject: bufToB64u(cred.response.attestationObject),
     label: navigator.platform || t("device"),
   });
+  markPasskeyKnownHere();
 }
 
 /** After a password login: if this is a human, the device supports it and there

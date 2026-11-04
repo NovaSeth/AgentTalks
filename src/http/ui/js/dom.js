@@ -4,7 +4,7 @@
 import { badgeText, titleCount } from "./counters.js";
 import { iconMenu } from "./icons.js";
 import { locale, t } from "./i18n.js";
-import { avatarUrl, state } from "./state.js";
+import { avatarUrl, handleKind, state } from "./state.js";
 
 export const $app = document.getElementById("app");
 
@@ -72,7 +72,9 @@ export function avatarHtml(handle, size) {
   const c = colorFor(handle || "?");
   // Small avatars: proportionally smaller initials and a lighter cut (class sm).
   const style = size ? `width:${size}px;height:${size}px;font-size:${Math.max(7, Math.round(size * 0.36))}px` : "";
-  const cls = size && size <= 28 ? "av sm" : "av";
+  // Agent faces are square-cornered, human ones round (spec A8), in every list at once: the
+  // class rides on the avatar itself instead of on each container (W4-S6-B).
+  const cls = (size && size <= 28 ? "av sm" : "av") + (handleKind(handle) === "agent" ? " agent" : "");
   // An image when the actor has one; initials when they do not. A vanished file
   // must produce the dot, not an empty frame with a broken-image icon - same
   // place, same size, no layout jump.

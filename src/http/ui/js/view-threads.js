@@ -14,7 +14,7 @@
 import { avatarHtml, emptyStateHtml, escapeHtml, hamburgerHtml, timeAgo, toggleDrawerClass } from "./dom.js";
 import { iconThread } from "./icons.js";
 import { t } from "./i18n.js";
-import { conversationRoute, parseRoute, syncRoute } from "./router.js";
+import { conversationRoute, syncRoute } from "./router.js";
 import { actorHandle, dmLabel, dmOthers, state, views } from "./state.js";
 
 const SEEN_KEY = "atalks_threads_seen";
@@ -75,6 +75,8 @@ function placeLabel(c) {
 }
 
 // ------------------------------------------------------------------ the view
+/** Opened from the rail, the sidebar row and `#/threads` (applyRoute in app.js, W5-S10-B: one
+ *  router, so a page loaded at the route and Back both land here). */
 export async function openThreadsView() {
   state.view = "threads";
   state.drawerOpen = false;
@@ -155,14 +157,4 @@ async function openOne(btn) {
     return;
   }
   location.hash = hash;
-}
-
-// `#/threads` typed, pasted or walked to with Back: app.js leaves unknown views alone, so this
-// view listens for its own route. An echo of our own push is a no-op (the view is already up).
-if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-  window.addEventListener("hashchange", () => {
-    if (!state.actor || parseRoute(location.hash).view !== "threads") return;
-    if (state.view === "threads") return;
-    openThreadsView();
-  });
 }

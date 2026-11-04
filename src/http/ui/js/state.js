@@ -11,6 +11,7 @@ export const state = {
   memberships: {},         // convId -> membership
   unread: {},              // convId -> number of unread (bold + counter)
   unreadBadge: {},         // convId -> how many of them "weigh" (DM/group: every one; channel: mentions)
+  lastUnread: {},          // convId -> id of the newest unread message (the server's unread row, W2-S7-A)
   activeId: null,
   msgs: {},                // convId -> Message[] (ascending by id)
   loaded: {},              // convId -> whether the history was FETCHED (not: whether any messages exist)
@@ -28,6 +29,8 @@ export const state = {
   detailsOpen: false,      // the conversation details panel (members/pins/actions)
   convMembers: [],         // members of the active conversation (from GET /:id)
   convPins: [],            // pins of the active conversation
+  convMembersFor: null,    // which conversation convMembers belong to (S6 details panel)
+  profileHandle: null,     // the handle whose profile card is open (S6), null when none
   replyTo: null,
   drawerOpen: false,
   loadingConv: false,
@@ -104,6 +107,14 @@ export function actorHandle(id) { return (state.actorsCache[id] && state.actorsC
 
 export function actorKind(id) { return (state.actorsCache[id] && state.actorsCache[id].kind) || "agent"; }
 
+/** The kind of the actor behind a handle (with or without "@"); null when the directory does
+ *  not know the handle yet, so a caller can keep a neutral default. */
+export function handleKind(handle) {
+  const h = String(handle || "").replace(/^@/, "");
+  for (const a of Object.values(state.actorsCache)) if (a && a.handle === h) return a.kind || "agent";
+  return null;
+}
+
 export function mergeActors(map) { Object.assign(state.actorsCache, map || {}); }
 
 /** An actor's avatar URL, or null (then we draw the dot with initials).
@@ -165,9 +176,13 @@ export function upsertMessage(convId, msg) {
 export function applyUnreadRows(rows) {
   state.unread = {};
   state.unreadBadge = {};
+  state.lastUnread = {};
   for (const row of rows || []) {
     state.unread[row.conversationId] = row.unread || 0;
     state.unreadBadge[row.conversationId] = row.badge || 0;
+    // The newest unread id bounds the "New messages" divider: the server's `unread` counts
+    // thread replies the main list hides, so a count alone puts the line too high (W2-S7-A).
+    if (row.lastUnreadMessageId) state.lastUnread[row.conversationId] = row.lastUnreadMessageId;
   }
 }
 

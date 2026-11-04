@@ -4,7 +4,7 @@
  * Routes (spec section 1):
  *   #/c/<slug>                 a channel          #/c/<slug>/m/<id>   one message (scroll + flash)
  *   #/c/<slug>/t/<rootId>      a thread           #/dm/<handle>[,<handle>]  a direct conversation
- *   #/wiki/<slug>              a wiki page        #/activity  #/dms  #/admin  #/threads  #/search?q=
+ *   #/wiki/<slug>              a wiki page        #/activity  #/dms  #/admin  #/threads  #/unreads  #/search?q=
  *
  * parseRoute() turns a hash into a plain object the views can read; buildRoute() is its inverse.
  * Both are pure. syncRoute() is the one place that writes `location.hash`: it records what it
@@ -26,6 +26,7 @@ export function parseRoute(hash) {
   if (head === "dms" && parts.length === 1) return { view: "dms" };
   if (head === "admin" && parts.length === 1) return { view: "admin" };
   if (head === "threads" && parts.length === 1) return { view: "threads" };
+  if (head === "unreads" && parts.length === 1) return { view: "unreads" };
   if (head === "search" && parts.length === 1) {
     const q = new URLSearchParams(query).get("q") ?? "";
     return { view: "search", q };
@@ -57,6 +58,7 @@ export function buildRoute(route) {
     case "dms": return "#/dms";
     case "admin": return "#/admin";
     case "threads": return "#/threads";
+    case "unreads": return "#/unreads";
     case "search": return `#/search?q=${encodeURIComponent(route.q ?? "")}`;
     default: return "";
   }
@@ -98,9 +100,21 @@ export function syncRoute(hash) {
   location.hash = hash;
 }
 
-/** Called by the `hashchange` listener: true when this event only echoes our own push. */
-export function consumeOwnPush(hash) {
-  if (!ownPushes.has(hash)) return false;
+/** The hash a `hashchange` event moved to. Keyed on the EVENT, not on `location.hash`
+ *  (W5-S10-D): two pushes in one tick fire two events while `location.hash` already holds the
+ *  second, so reading the location consumed the second push twice and left the first in the set.
+ *  A plain string is accepted too (a caller that already holds the hash). */
+export function hashOfEvent(e) {
+  if (typeof e === "string") return e;
+  const url = e && typeof e.newURL === "string" ? e.newURL : "";
+  const i = url.indexOf("#");
+  return i < 0 ? "" : url.slice(i);
+}
+
+/** Called by the `hashchange` listener with the event: true when it only echoes our own push. */
+export function consumeOwnPush(e) {
+  const hash = hashOfEvent(e);
+  if (!hash || !ownPushes.has(hash)) return false;
   ownPushes.delete(hash);
   return true;
 }

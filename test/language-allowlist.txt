@@ -506,6 +506,9 @@ strings	src/core/news.ts	"nowosci"	Stable wiki slug already stored on production
 # strings: src/http/ui/js/i18n-pl.js
 strings	src/http/ui/js/i18n-pl.js	"*"	The optional Polish UI locale intentionally keeps Polish values; identifiers and comments are still checked.
 
+# strings: src/http/ui/js/emoji-names-pl.js
+strings	src/http/ui/js/emoji-names-pl.js	"rakieta start wdrozenie"	Polish emoji search names are locale DATA (one value per emoji, ASCII-folded for a plain keyboard); the file holds them so emoji.js stays English (W3-S4-A). Comments and identifiers in the file are still checked.
+
 # strings: src/http/ui/js/i18n.js
 strings	src/http/ui/js/i18n.js	"Polski"	Native name of Polish in the language selector.
 

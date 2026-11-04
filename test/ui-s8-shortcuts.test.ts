@@ -254,7 +254,7 @@ test("W2-S1-A: refreshNotifications keeps the rail button named Activity", async
 
 test("W2-S1-C: the DMs rail badge is derived (unreadDmCount) and repainted when a row's unread changes", async () => {
   const src = readFileSync(UI + "app.js", "utf8");
-  assert.match(src, /unreadDmCount\(state\)/);
+  assert.match(src, /railBadges\(state\)\.dms/, "the DMs badge comes from counters.railBadges (W5-S8-B: one badge source)");
   assert.doesNotMatch(src, /const dmUnread = state\.conversations\s*\n?\s*\.filter/);
   assert.match(src, /function paintDmBadge/);
   assert.match(src, /conversationRow:[^\n]*paintDmBadge/);

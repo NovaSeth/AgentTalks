@@ -103,8 +103,9 @@ test("dividerAfter ignores pending (non-numeric id) entries", async () => {
 // ------------------------------------------------------------ railBadges
 test("railBadges derives the Activity badge from notifUnread and formats 99+", async () => {
   const { counters } = await loadUi();
-  assert.deepEqual(counters.railBadges({ notifUnread: 3 }), { activity: 3 });
-  assert.deepEqual(counters.railBadges({}), { activity: 0 });
+  // W5-S8-B (C2): the DMs badge joined the same source; with no conversations it is 0.
+  assert.deepEqual(counters.railBadges({ notifUnread: 3 }), { activity: 3, dms: 0 });
+  assert.deepEqual(counters.railBadges({}), { activity: 0, dms: 0 });
   assert.equal(counters.badgeText(3), "3");
   assert.equal(counters.badgeText(150), "99+");
 });

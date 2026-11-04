@@ -15,19 +15,22 @@ import {
 } from "./data.js";
 import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
-import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
+import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconThread, iconUsers } from "./icons.js";
 import { dmOthers, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { startDirect } from "./actions.js";
-import { buildRoute, consumeOwnPush, parseRoute, syncRoute } from "./router.js";
+import { buildRoute, consumeOwnPush, hashOfEvent, parseRoute, syncRoute } from "./router.js";
 import { showToast } from "./toasts.js";
 import { openSearchPalette, openSearchRoute } from "./search.js";
 import { matchShortcut, openShortcutHelp, stepConversation, stepUnread } from "./shortcuts.js";
-import { openUnreadsView, renderUnreadsMain, unreadDmCount } from "./view-unreads.js";
+import { railBadges } from "./counters.js";
+import { openUnreadsView, renderUnreadsMain } from "./view-unreads.js";
+import { openThreadsView, renderThreadsMain } from "./view-threads.js";
+import { findInConversation, renderSearchMain } from "./view-search.js";
 import { openUsersView, renderUsersMain, resetUsersError } from "./view-admin.js";
 import {
   bindMessageEvents, closeThread, openConversation, openThread, refreshDetailsData, renderComposer,
   renderDetails, renderMain, renderMessages, renderPresenceBar, renderThread, renderTopbar,
-  typingFacesHtml, updateOfflineBar, upsertMessageNode,
+  toggleSidePanel, typingFacesHtml, updateOfflineBar, upsertMessageNode,
 } from "./view-chat.js";
 import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./view-login.js";
 import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./view-notifications.js";
@@ -47,24 +50,22 @@ function renderShell() {
   // ("where we talk"), users ("who has access"). The badge on the bell is the one
   // counter visible without entering anything.
   const adminHuman = state.actor?.isAdmin && state.actor?.kind === "human";
-  // The side panel belongs to CONVERSATIONS, not to the whole application: it
-  // holds channels, DMs and the wiki tree. In notifications and in accounts there
-  // is nothing to pick from it - it stood there only because the shell rendered it
-  // unconditionally, and it took a third of the screen width for a list that leads
-  // nowhere in that view (reported by @michal).
-  const withSidebar = state.view === "chat" || state.view === "wiki" || state.view === "unreads";
+  const withSidebar = hasSidebar();
+  const inConv = inConversations();
   // The DMs place counts every unread message in a direct or group conversation I belong to
-  // (W2-S1-C: derived in one place, repainted by paintDmBadge when a row's unread changes).
-  const dmUnread = unreadDmCount(state);
+  // (W2-S1-C: derived in one place, repainted by paintDmBadge when a row's unread changes;
+  // W5-S8-B: that place is counters.railBadges, the one source of both rail badges).
+  const dmUnread = railBadges(state).dms;
   $app.innerHTML = `
     <div class="shell with-rail ${withSidebar ? "" : "without-sidebar"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
       <div class="scrim" id="scrim"></div>
       <nav class="rail" id="rail" aria-label="${t("Main navigation")}">
-        ${railButton("rail-chats", t("Home"), t("Conversations and wiki"), iconChat(), withSidebar && getSidebarPlace() === "home")}
-        ${railButton("rail-dms", t("DMs"), t("Direct messages"), iconSend(), withSidebar && getSidebarPlace() === "dms",
+        ${railButton("rail-chats", t("Home"), t("Conversations and wiki"), iconChat(), inConv && getSidebarPlace() === "home")}
+        ${railButton("rail-dms", t("DMs"), t("Direct messages"), iconSend(), inConv && getSidebarPlace() === "dms",
           { id: "rail-dm-badge", count: dmUnread, label: t("{n} unread", { n: dmUnread }) }, t("Direct messages"))}
         ${railButton("rail-notif", t("Activity"), t("Notifications: mentions, direct messages, reactions, changes to your wiki pages"), iconBell(), state.view === "notifications",
           { id: "rail-badge", count: state.notifUnread, label: t("{n} new", { n: state.notifUnread }) })}
+        ${railButton("rail-threads", t("Threads"), t("Threads you started or replied to"), iconThread(), state.view === "threads")}
         ${adminHuman ? railButton("rail-users", t("Admin"), t("Accounts and access"), iconUsers(), state.view === "users") : ""}
         ${railButton("rail-search", t("Search"), t("Search conversations, people and messages"), iconSearch(), false, undefined, t("Search"), "rail-phone")}
       </nav>
@@ -75,6 +76,9 @@ function renderShell() {
   document.getElementById("rail-notif").addEventListener("click", () => { syncRoute("#/activity"); openNotificationsView(); });
   document.getElementById("rail-chats").addEventListener("click", () => goPlace("home"));
   document.getElementById("rail-dms").addEventListener("click", () => { syncRoute("#/dms"); goPlace("dms"); });
+  // W5-S10-A: the Threads view (S10) had no visible entry; the rail button and the sidebar row
+  // under the workspace header (view-sidebar.js) both open #/threads.
+  document.getElementById("rail-threads").addEventListener("click", () => openThreadsView());
   const ru = document.getElementById("rail-users");
   if (ru) ru.addEventListener("click", () => { syncRoute("#/admin"); openUsersView(); });
   // S9: the fourth phone tab. On the desktop the switcher has Cmd+K and the sidebar box, so the
@@ -82,22 +86,33 @@ function renderShell() {
   document.getElementById("rail-search").addEventListener("click", () => openSearchPalette());
   bindViewportKeyboard();
   if (withSidebar) renderSidebar();
-  renderMainView();
-}
-
-/** The main column of the current view. view-chat's renderMain dispatches the views it knows;
- *  the all-unreads view (S8) is dispatched here so view-chat stays untouched. */
-function renderMainView() {
-  if (state.view === "unreads") { renderUnreadsMain(); return; }
   renderMain();
 }
 
+/** Whether the current view keeps the sidebar (W5-S11-B). The sidebar belongs to the places one
+ *  navigates FROM: conversations and the wiki, and the views that list messages across them
+ *  (search, threads, all unreads), where the next click is usually a sidebar row. Activity and
+ *  the accounts view have none: there the channel list took a third of the screen for a list
+ *  that leads nowhere in that view (reported by @michal), and Activity is its own list. */
+function hasSidebar() {
+  return state.view === "chat" || state.view === "wiki" || state.view === "search"
+    || state.view === "threads" || state.view === "unreads";
+}
+
+/** Whether the Home/DMs rail places are the view on screen (their `on` state): the sidebar may be
+ *  visible in the search or threads view, but those are places of their own. */
+function inConversations() {
+  return ["chat", "wiki"].includes(state.view);
+}
+
 /** The DMs rail badge without redrawing the shell (W2-S1-C): called from the conversationRow
- *  view, which is what the data layer repaints when a conversation's unread count changes. */
+ *  view, which is what the data layer repaints when a conversation's unread count changes. The
+ *  number was unreadDmCount(state) from view-unreads.js; it is railBadges(state).dms now, the
+ *  same function behind counters.js (W5-S8-B). */
 function paintDmBadge() {
   const badge = document.getElementById("rail-dm-badge");
   if (!badge) return;
-  const n = unreadDmCount(state);
+  const n = railBadges(state).dms;
   badge.textContent = n > 99 ? "99+" : String(n);
   badge.classList.toggle("off", !n);
   document.getElementById("rail-dms")?.setAttribute("aria-label", `${t("Direct messages")}${n ? `, ${t("{n} unread", { n })}` : ""}`);
@@ -150,10 +165,9 @@ function railButton(id, label, title, icon, on, badge, ariaName = label, extraCl
  *  direct conversations and people. Picking a place from another view returns to the chat. */
 function goPlace(place) {
   resetUsersError();
-  const withSidebar = state.view === "chat" || state.view === "wiki";
   const samePlace = getSidebarPlace() === place;
   setSidebarPlace(place);
-  if (!withSidebar) { state.view = "chat"; renderShell(); return; }
+  if (!inConversations()) { state.view = "chat"; renderShell(); return; }
   if (window.matchMedia("(max-width:760px)").matches) {
     // On a phone the drawer is the only route to the list: the same place toggles it,
     // another place opens it with the new filter.
@@ -172,11 +186,11 @@ function goPlace(place) {
 
 /** The `on` state of the two places without redrawing the whole shell. */
 function paintRail() {
-  const withSidebar = state.view === "chat" || state.view === "wiki";
+  const inConv = inConversations();
   for (const [id, place] of [["rail-chats", "home"], ["rail-dms", "dms"]]) {
     const b = document.getElementById(id);
     if (!b) continue;
-    const on = withSidebar && getSidebarPlace() === place;
+    const on = inConv && getSidebarPlace() === place;
     b.classList.toggle("on", on);
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   }
@@ -189,7 +203,7 @@ function paintRail() {
 registerViews({
   render,
   shell: renderShell,
-  main: renderMainView,
+  main: renderMain,
   sidebar: renderSidebarList,
   conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
@@ -213,6 +227,11 @@ registerViews({
   wiki: renderWikiMain,
   notifications: renderNotificationsMain,
   users: renderUsersMain,
+  // W5-S11-A: the cross-conversation views go through the registry too, so view-chat's renderMain
+  // can hand them their column instead of redrawing the chat over them.
+  threads: renderThreadsMain,
+  unreads: renderUnreadsMain,
+  search: renderSearchMain,
   bindContent: bindMessageEvents,
   typing: typingFacesHtml,
   detailsData: refreshDetailsData,
@@ -338,6 +357,9 @@ async function applyRoute(route) {
       return;
     // S11 (W3-S3-A): a query opens the results view with it applied; no query opens the palette.
     case "search": await openSearchRoute(route.q); return;
+    // W5-S10-B, W5-S8-A: a page loaded at #/threads or #/unreads (F5, a bookmark, Back) shows it.
+    case "threads": await openThreadsView(); return;
+    case "unreads": await openUnreadsView(); return;
     default: return;
   }
 }
@@ -365,12 +387,13 @@ function renderNoAccess(route) {
 }
 
 // Back and Forward (and a link clicked in a message) change the hash; our own pushes echo here
-// too and are skipped, so opening a conversation does not open it twice.
-window.addEventListener("hashchange", () => {
-  const hash = location.hash;
-  if (consumeOwnPush(hash)) return;
+// too and are skipped, so opening a conversation does not open it twice. The hash is read from
+// the EVENT (W5-S10-D): with two pushes in one tick `location.hash` already holds the second
+// when the first event arrives.
+window.addEventListener("hashchange", (e) => {
+  if (consumeOwnPush(e)) return;
   if (!state.actor) return;
-  const route = parseRoute(hash);
+  const route = parseRoute(hashOfEvent(e) || location.hash);
   if (route.view === "home") return;
   applyRoute(route);
 });
@@ -401,12 +424,12 @@ window.addEventListener("drop", (e) => e.preventDefault());
 window.addEventListener("beforeunload", () => saveDraft());
 
 // S8: every window-wide shortcut comes from the table in shortcuts.js (the Mod+/ sheet lists the
-// same table). Mod+. is matched here too but acted on by view-chat's own listener (S2 hook), so
-// the handler only names it. Escape stays below: it is a layer closer, not a shortcut.
+// same table) and is run by runShortcut below - Mod+. and Mod+F included (W5-S8-C, W5-S11-C: one
+// owner per key). Escape stays below: it is a layer closer, not a shortcut.
 document.addEventListener("keydown", (e) => {
   if (!state.actor) return;
   const name = matchShortcut(e);
-  if (name && name !== "sidePanel") {
+  if (name) {
     const inModal = !!document.querySelector(".overlay");
     if (!inModal || name === "search" || name === "help") {
       if (runShortcut(name)) { e.preventDefault(); return; }
@@ -445,6 +468,9 @@ function runShortcut(name) {
     case "help": openShortcutHelp(); return true;
     case "allUnreads": openUnreadsView(); return true;
     case "dms": syncRoute("#/dms"); goPlace("dms"); return true;
+    // Both need a conversation; outside one the key keeps its default (Mod+F: the browser's find).
+    case "sidePanel": if (state.view !== "chat" || !state.activeId) return false; toggleSidePanel(); return true;
+    case "findInConversation": return findInConversation();
     case "back": history.back(); return true;
     case "forward": history.forward(); return true;
     case "prevConversation":

@@ -28,21 +28,36 @@ export function titleCount(state) {
   return badges + wiki;
 }
 
-/** The rail badges: Activity (the bell) shows the notification center count. */
+/** Unread messages in the direct and group conversations I belong to: the DMs rail badge. */
+export function unreadDmCount(state) {
+  return (state?.conversations || [])
+    .filter((c) => state.memberships?.[c.id] && (c.kind === "dm" || c.kind === "group"))
+    .reduce((n, c) => n + (Number(state.unread?.[c.id]) || 0), 0);
+}
+
+/** The rail badges, ONE source (W5-S8-B): Activity (the bell) shows the notification center
+ *  count, DMs the unread of my direct and group conversations. */
 export function railBadges(state) {
-  return { activity: Number(state?.notifUnread) || 0 };
+  return { activity: Number(state?.notifUnread) || 0, dms: unreadDmCount(state) };
 }
 
 /** Where the "New messages" divider goes. Returns a MARK: the divider is drawn before the first
  *  message by somebody else whose id is above it; null means no divider.
  *  - mark > 0 (the server's last read id): that mark, when somebody else wrote after it.
  *  - mark 0 (never read here, or a first visit): the server still knows how many are unread, so
- *    the line goes above the `unread`-th message from the end (own messages do not count). */
-export function dividerAfter(list, mark, unread, me) {
-  const others = (list || []).filter((m) => m && typeof m.id === "number" && m.actorId !== me);
+ *    the line goes above the `unread`-th message from the end (own messages do not count).
+ *    `lastUnreadId` (the server's newest unread id, W2-S7-A) bounds that estimate: a message
+ *    above it is read and does not count, and the count never reaches past the oldest visible
+ *    candidate, so the thread replies the server counted and the main list hides cannot push
+ *    the line higher than the first message. */
+export function dividerAfter(list, mark, unread, me, lastUnreadId = 0) {
+  let others = (list || []).filter((m) => m && typeof m.id === "number" && m.actorId !== me);
   if (mark > 0) return others.some((m) => m.id > mark) ? mark : null;
   const n = Number(unread) || 0;
   if (n <= 0 || !others.length) return null;
+  const last = Number(lastUnreadId) || 0;
+  if (last > 0) others = others.filter((m) => m.id <= last);
+  if (!others.length) return null;
   const first = others[Math.max(0, others.length - n)];
   return first.id - 1;
 }

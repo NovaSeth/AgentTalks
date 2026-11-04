@@ -198,6 +198,9 @@ export async function loadPins(convId) {
     if (state.activeId !== convId) return;
     state.convPins = data.pins || [];
     views.messages();
+    // W5-S10-C: the header's pins pill lives in the topbar meta, which only the presence glue
+    // repaints; without this the pill appeared on the second open, never on the first.
+    views.presence();
   } catch { /* pins are optional */ }
 }
 
@@ -222,7 +225,7 @@ export function markReadDebounced(convId, messageId) {
       // A frozen mark of 0 ("never read here") still produced a divider from the unread count;
       // that count is about to become 0, so the mark takes over the divider's position first.
       if (state.readMark[convId] === 0 && state.actor) {
-        const frozen = dividerAfter(state.msgs[convId], 0, state.unread[convId], state.actor.id);
+        const frozen = dividerAfter(state.msgs[convId], 0, state.unread[convId], state.actor.id, state.lastUnread[convId]);
         if (frozen !== null) state.readMark[convId] = frozen;
       }
       // We clear it ONLY after the server confirms: a counter that lied once stops being read at all.

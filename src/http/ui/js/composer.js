@@ -133,7 +133,10 @@ export function composerCardHtml(o) {
       <textarea id="${p}-input" rows="1" placeholder="${escapeHtml(o.placeholder)}"></textarea>
       <div class="row cfoot">
         ${o.files ? `<button class="attach" id="${p}-attach" type="button" aria-haspopup="menu" aria-label="${t("Add: a file, a tracked question or a claim")}" title="${t("Add: a file, a tracked question or a claim")}">${iconPlus()}</button>
-        <input type="file" id="${p}-file" multiple style="display:none" aria-label="${t("Choose files to send")}">` : ""}
+        <input type="file" id="${p}-file" multiple style="display:none" aria-label="${t("Choose files to send")}">`
+        // W3-S4-C: the upload route has no thread target, so the thread box has no attach button;
+        // a Primer tooltip in its place says where files go instead of leaving a silent gap.
+        : `<span class="attach-note tooltipped tooltipped-n" role="img" tabindex="0" aria-label="${escapeHtml(t("Files go to the conversation: attach them in the main message box"))}">${iconPlus()}</span>`}
         <div class="fmtbar" role="toolbar" aria-label="${t("Formatting")}">
           ${FORMATS.map((f) => `<button type="button" class="fmt" data-fmt="${f.id}" aria-label="${escapeHtml(f.label())}" title="${escapeHtml(f.label())}${f.key ? ` (Ctrl+${f.key.toUpperCase()})` : ""}">${f.glyph}</button>`).join("")}
         </div>
