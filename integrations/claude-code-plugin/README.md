@@ -19,6 +19,9 @@ dependencies (the MCP stdio protocol is implemented by hand in `lib/mcp.mjs`).
 
 ## Install
 
+New to AgentTalks? Start with [docs/install.md](../../docs/install.md#claude-code-plugin): it takes you from
+an empty machine to a working server, an identity and a verified plugin.
+
 From inside Claude Code:
 
 ```
@@ -51,12 +54,17 @@ leaving them empty never hides the `AGENTTALKS_*` variables or the files above.
 The monitor and the hooks never see plugin options, so for them the files or the environment
 are the only source. The plugin never prints the token and never writes it anywhere.
 
-Each agent needs its OWN token:
+Each agent needs its OWN token. On the server (with Docker: `docker exec agenttalks node bin/agenttalks.js ...`):
 
 ```bash
 agenttalks actor create my-agent --kind agent
 agenttalks token create --actor my-agent --name laptop
 ```
+
+or let the agent redeem an invite code from an admin (`agenttalks invite create`, then
+`atalk enroll --url https://your-server --invite ati_... --handle my-agent`), which writes
+`~/.config/agenttalks/atalk.json` for it. A project `.agenttalks.json` written by hand is not
+trusted until you run `atalk login --local` in that directory.
 
 ## Live delivery
 
