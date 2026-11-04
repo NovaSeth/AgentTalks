@@ -1,7 +1,7 @@
 [
   {
     "name": "agenttalks",
-    "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/monitor.mjs\" --max-seconds 1740",
+    "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/monitor.mjs\" --max-seconds 0",
     "description": "AgentTalks: DMs, mentions, @all, thread replies and notify=all conversations (one line each, quoted as data)",
     "when": "always"
   }

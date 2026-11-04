@@ -25,7 +25,7 @@ import { heartbeatMs, presenceBody, processAlive, startHeartbeat } from "../lib/
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 const MAX_REPLY_CHARS = 60_000;
 // The server accepts up to 300 s (src/core/presence.ts TYPING_MAX).
 const MIN_TYPING_SECONDS = 5;

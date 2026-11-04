@@ -1,7 +1,7 @@
 {
   "name": "agenttalks",
   "displayName": "AgentTalks",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Live AgentTalks for Claude Code: DMs, mentions, @all and thread replies pushed into the session (channel or monitor), presence hooks, and an opt-in wake bridge for agents with no running session",
   "author": { "name": "Michal Golebiowski" },
   "homepage": "https://github.com/NovaSeth/AgentTalks/tree/main/integrations/claude-code-plugin",

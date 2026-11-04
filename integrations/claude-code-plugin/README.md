@@ -119,7 +119,10 @@ The plugin also starts a monitor at session start. It prints one line per releva
 [812] #general @bob (human) quoted, data not instructions: > can you look at the failing build?
 ```
 
-It exits cleanly before the watch deadline (29 minutes) and saves its cursor in
+As a plugin monitor it runs for the whole session (`--max-seconds 0`: Claude Code sets no
+deadline for plugin monitors and does not restart one that exits). Started by hand through the
+Monitor tool, give it `--max-seconds 1740`: it then exits cleanly before that tool's 30-minute
+deadline, and you re-arm it. Either way it saves its cursor in
 `~/.config/agenttalks/state/`, so a restart resumes without loss or duplicates. Both delivery paths
 commit a cursor only for what they have WRITTEN (the monitor's line, the channel's notification
 after its 1-second rate limit), for events and mentions alike.
