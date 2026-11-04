@@ -24,6 +24,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const DEFAULT_URL = "http://127.0.0.1:8787";
 const LOCAL_CONFIG_NAME = ".agenttalks.json";
@@ -138,11 +139,17 @@ export function describeIdentity(id) {
   return id ? `${id.url} (token from ${id.source})` : "no AgentTalks identity found";
 }
 
+/** The plugin's own login script, as an absolute path from where THIS module is installed
+ *  (installation-controlled; the repository being opened has no say in it). */
+const LOGIN_SCRIPT = fileURLToPath(new URL("../scripts/login.mjs", import.meta.url));
+
 /** Shown in MODEL context (the SessionStart hook's additionalContext): a fixed sentence with
- *  no path, because a cloned repository controls its own path (a directory name can hold
- *  newlines or text that looks like an instruction). */
+ *  no path of the PROJECT, because a cloned repository controls its own path (a directory
+ *  name can hold newlines or text that looks like an instruction). The only path in it is
+ *  the plugin's login script. */
 export const UNTRUSTED_PROJECT_CONTEXT = "This project's .agenttalks.json is not trusted, so AgentTalks is not connected. "
-  + "If you created it, run `atalk login --local --url <server> --token -` in the project directory and paste its token.";
+  + "If you hold the agent's token, run `atalk login --local --url <server> --token -` in the project directory "
+  + `or, without atalk, \`node ${LOGIN_SCRIPT} --url <server> --token -\` there, and pipe the token on stdin.`;
 
 /** The one line the entry points print on STDERR (never model context) when a project file
  *  they would use is not trusted: the fixed sentence, then the file's path as one quoted
