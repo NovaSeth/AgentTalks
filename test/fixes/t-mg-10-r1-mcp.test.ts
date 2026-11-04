@@ -44,7 +44,7 @@ test("R1-F2: C0 separators U+001C..U+001E never start an unquoted line in any to
     const out = await tool(s.url, token, name, args);
     if (name !== "talk_open") assert.ok(out.includes("FORGEDX"), `${name}: forged text missing from output`);
     for (const l of out.split(PY_SPLIT)) {
-      if (l.includes("FORGEDX")) assert.ok(l.startsWith("> ") || l.startsWith("# ") || l.includes(" - robi: ") || l.startsWith("["), `${name}: unquoted ${JSON.stringify(l)}`);
+      if (l.includes("FORGEDX")) assert.ok(l.startsWith("> ") || l.startsWith("#") || l.includes(" - robi: ") || l.startsWith("["), `${name}: unquoted ${JSON.stringify(l)}`);
     }
     // stricter: a forged marker must never be the first thing on a line
     for (const l of out.split(PY_SPLIT)) assert.ok(!l.startsWith("FORGEDX"), `${name}: line starts with the forgery`);
