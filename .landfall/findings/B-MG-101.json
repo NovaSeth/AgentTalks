@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-101",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 5,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F3",
+  "severity": "blocking",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 1486,
+  "rule": "COD-2",
+  "text": "Acceptance 14: a delayed send inserts its reply into whichever thread is currently open. Deferred-response DOM reproduction: send in thread 90, switch to 91, then complete the POST; output is current root 91, reply roots [null,90], and the isolation assertion fails. Capture the conversation and thread before awaiting; update the panel only if both still match, with a regression test for switching or closing threads during sends.",
+  "filedAt": "2026-11-04T00:45:53.446Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-13",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

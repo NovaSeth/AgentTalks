@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-99",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 5,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F1",
+  "severity": "blocking",
+  "path": "src/core/files.ts",
+  "line": 141,
+  "rule": "SEC-8",
+  "text": "Acceptance 1/5: uploader ownership bypasses current conversation access. In-memory route reproduction: remove the uploader from a private channel; GET conversation returns 403, but GET file returns 200 with 1146 fixture bytes and GET file/info returns 200. Require canRead for conversation attachments, including their uploader; retain owner-only access for files without a conversation.",
+  "filedAt": "2026-11-04T00:45:53.446Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-13",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}
