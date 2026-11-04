@@ -16,7 +16,7 @@ import {
 import { sessionGeneration } from "./api.js";
 import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, repinIfPinned, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
-import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
+import { iconBell, iconChat, iconDoc, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
 import { dmOthers, lastConvId, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { startDirect } from "./actions.js";
 import { buildRoute, consumeOwnPush, hashOfEvent, parseRoute, syncRoute } from "./router.js";
@@ -61,11 +61,12 @@ function renderShell() {
     <div class="shell with-rail ${withSidebar ? "" : "without-sidebar"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
       <div class="scrim" id="scrim"></div>
       <nav class="rail" id="rail" aria-label="${t("Main navigation")}">
-        ${railButton("rail-chats", t("Home"), t("Conversations and wiki"), iconChat(), inConv && getSidebarPlace() === "home")}
+        ${railButton("rail-chats", t("Home"), t("Channels and conversations"), iconChat(), inConv && getSidebarPlace() === "home")}
         ${railButton("rail-dms", t("DMs"), t("Direct messages"), iconSend(), inConv && getSidebarPlace() === "dms",
           { id: "rail-dm-badge", count: dmUnread, label: t("{n} unread", { n: dmUnread }) }, t("Direct messages"))}
         ${railButton("rail-notif", t("Activity"), t("Notifications: mentions, direct messages, reactions, changes to your wiki pages"), iconBell(), state.view === "notifications",
           { id: "rail-badge", count: state.notifUnread, label: t("{n} new", { n: state.notifUnread }) })}
+        ${railButton("rail-wiki", t("Wiki"), t("Wiki and claimed resources"), iconDoc(), inConv && getSidebarPlace() === "wiki")}
         ${adminHuman ? railButton("rail-users", t("Admin"), t("Accounts and access"), iconUsers(), state.view === "users") : ""}
         ${railButton("rail-search", t("Search"), t("Search conversations, people and messages"), iconSearch(), false, undefined, t("Search"), "rail-phone")}
       </nav>
@@ -76,6 +77,7 @@ function renderShell() {
   document.getElementById("rail-notif").addEventListener("click", () => { syncRoute("#/activity"); openNotificationsView(); });
   document.getElementById("rail-chats").addEventListener("click", () => goPlace("home"));
   document.getElementById("rail-dms").addEventListener("click", () => { syncRoute("#/dms"); goPlace("dms"); });
+  document.getElementById("rail-wiki").addEventListener("click", () => { syncRoute("#/wiki"); goPlace("wiki"); });
   // W5-S10-A gave the Threads view two entries; U16 (decision) keeps ONE: the sidebar row under
   // the workspace header (view-sidebar.js), the top section of the list. No rail or tab button.
   const ru = document.getElementById("rail-users");
@@ -160,8 +162,9 @@ function railButton(id, label, title, icon, on, badge, ariaName = label, extraCl
         </button>`;
 }
 
-/** Home and DMs are two PLACES of the same sidebar: Home shows every section, DMs narrows it to
- *  direct conversations and people. Picking a place from another view returns to the chat. */
+/** Home, DMs and Wiki are three PLACES of the same sidebar: Home shows the conversations, DMs
+ *  narrows it to direct conversations and people, Wiki holds the tree and the claimed resources
+ *  (T-MG-38). Picking a place from another view returns to the chat. */
 function goPlace(place) {
   resetUsersError();
   const samePlace = getSidebarPlace() === place;
@@ -183,10 +186,10 @@ function goPlace(place) {
   renderSidebarList();
 }
 
-/** The `on` state of the two places without redrawing the whole shell. */
+/** The `on` state of the three places without redrawing the whole shell. */
 function paintRail() {
   const inConv = inConversations();
-  for (const [id, place] of [["rail-chats", "home"], ["rail-dms", "dms"]]) {
+  for (const [id, place] of [["rail-chats", "home"], ["rail-dms", "dms"], ["rail-wiki", "wiki"]]) {
     const b = document.getElementById(id);
     if (!b) continue;
     const on = inConv && getSidebarPlace() === place;
@@ -199,11 +202,30 @@ function paintRail() {
 // The only place where the data and action layers "learn about" the views. Any
 // other route (importing a view inside actions.js) would close a cycle: the view
 // calls the action, the action redraws the view.
+/** T-MG-38: a wiki page you open puts the rail on the Wiki place, so the tree of the page you are
+ *  reading is visible: from a sidebar row, a [[link]], a `#/wiki/<slug>` deep link, a search
+ *  result or a notification alike. Every one of those goes through openWikiPage, which sets the
+ *  view and the slug and then asks for the sidebar - this hook is that one funnel. It acts on the
+ *  TRANSITION (into the wiki view, or to another page), not on the state: a presence tick redraws
+ *  the sidebar too, and must not drag a reader who chose Home from the rail back to Wiki.
+ *  A conversation opened from the Wiki place keeps the place, as DMs does today: Home is one
+ *  click away, and the place you chose is yours until you choose another. */
+let followedWiki = null;
+function renderSidebarFollowingWiki() {
+  const here = state.view === "wiki" ? state.wiki.slug : null;
+  if (here !== null && here !== followedWiki && getSidebarPlace() !== "wiki") {
+    setSidebarPlace("wiki");
+    paintRail();
+  }
+  followedWiki = here;
+  renderSidebarList();
+}
+
 registerViews({
   render,
   shell: renderShell,
   main: renderMain,
-  sidebar: renderSidebarList,
+  sidebar: renderSidebarFollowingWiki,
   conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
   // refreshPresence does not have to know where the dots, the bar, the topbar and
@@ -387,6 +409,7 @@ async function applyRoute(route) {
     case "wiki": await openWikiPage(route.slug); return;
     case "activity": await openNotificationsView(); return;
     case "dms": goPlace("dms"); return;
+    case "wikiPlace": goPlace("wiki"); return;
     case "admin":
       if (state.actor?.isAdmin && state.actor?.kind === "human") await openUsersView();
       else renderNoAccess(route);

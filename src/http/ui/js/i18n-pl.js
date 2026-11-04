@@ -55,7 +55,8 @@ export const PL = {
   "Notifications": "Powiadomienia",
   "Notifications: mentions, direct messages, reactions, changes to your wiki pages":
     "Powiadomienia: wzmianki, wiadomości prywatne, reakcje, zmiany Twoich stron wiki",
-  "Conversations and wiki": "Rozmowy i wiki",
+  "Channels and conversations": "Kanały i rozmowy",
+  "Wiki and claimed resources": "Wiki i zajęte zasoby",
   "Accounts and access": "Konta i dostęp",
   "Channels, messages and wiki": "Kanały, wiadomości i wiki",
   "Conversation list": "Lista rozmów",

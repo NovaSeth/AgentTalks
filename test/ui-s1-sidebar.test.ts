@@ -76,7 +76,9 @@ test("S1: the rail places know which sections they show", async () => {
   const { sidebar } = await loadUi();
   assert.deepEqual(sidebar.sectionsFor("dms"), ["directs", "people"]);
   assert.ok(sidebar.sectionsFor("home").includes("channels"));
-  assert.ok(sidebar.sectionsFor("home").includes("wiki"));
+  // T-MG-38: the wiki tree moved from Home to its own Wiki place (ui-t38-wiki-place.test.ts).
+  assert.ok(!sidebar.sectionsFor("home").includes("wiki"));
+  assert.ok(sidebar.sectionsFor("wiki").includes("wiki"));
   assert.deepEqual(sidebar.sectionsFor("nonsense"), sidebar.sectionsFor("home"), "an unknown place behaves like Home");
 });
 
@@ -146,7 +148,7 @@ test("S1: the DMs place renders no channel rows, only direct conversations and p
 
 test("S1: the rail offers Home, DMs, Activity and Admin and the sidebar header drops the duplicate sign-out", () => {
   const app = readFileSync(UI + "app.js", "utf8");
-  for (const id of ["rail-chats", "rail-dms", "rail-notif", "rail-users"]) {
+  for (const id of ["rail-chats", "rail-dms", "rail-notif", "rail-wiki", "rail-users"]) {
     assert.ok(app.includes(`"${id}"`), `app.js rail has #${id}`);
   }
   assert.ok(app.includes('t("Activity")'), "the bell is named Activity");

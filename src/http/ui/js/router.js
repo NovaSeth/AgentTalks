@@ -4,7 +4,8 @@
  * Routes (spec section 1):
  *   #/c/<slug>                 a channel          #/c/<slug>/m/<id>   one message (scroll + flash)
  *   #/c/<slug>/t/<rootId>      a thread           #/dm/<handle>[,<handle>]  a direct conversation
- *   #/wiki/<slug>              a wiki page        #/activity  #/dms  #/admin  #/threads  #/unreads  #/people  #/search?q=
+ *   #/wiki/<slug>              a wiki page        #/wiki  the Wiki place (the tree and the claimed resources)
+ *   #/activity  #/dms  #/admin  #/threads  #/unreads  #/people  #/search?q=
  *
  * parseRoute() turns a hash into a plain object the views can read; buildRoute() is its inverse.
  * Both are pure. syncRoute() is the one place that writes `location.hash`: it records what it
@@ -24,6 +25,8 @@ export function parseRoute(hash) {
   const head = parts[0];
   if (head === "activity" && parts.length === 1) return { view: "activity" };
   if (head === "dms" && parts.length === 1) return { view: "dms" };
+  // T-MG-38: the Wiki place has an address of its own, like DMs; a slug opens a page instead.
+  if (head === "wiki" && parts.length === 1) return { view: "wikiPlace" };
   if (head === "admin" && parts.length === 1) return { view: "admin" };
   if (head === "threads" && parts.length === 1) return { view: "threads" };
   if (head === "unreads" && parts.length === 1) return { view: "unreads" };
@@ -58,6 +61,7 @@ export function buildRoute(route) {
     case "wiki": return route.slug ? `#/wiki/${encodeURIComponent(route.slug)}` : "";
     case "activity": return "#/activity";
     case "dms": return "#/dms";
+    case "wikiPlace": return "#/wiki";
     case "admin": return "#/admin";
     case "threads": return "#/threads";
     case "unreads": return "#/unreads";

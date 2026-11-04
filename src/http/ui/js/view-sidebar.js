@@ -41,14 +41,18 @@ let archiveOpen = (() => {
 
 // ------------------------------------------------- sections, places, collapse (S1)
 // The sidebar is a list of SECTIONS; the rail picks a PLACE, which is a subset of them.
-// Home shows everything, DMs narrows the list to direct conversations and people.
-const SECTIONS_HOME = ["catchup", "channels", "discover", "directs", "people", "wiki", "leases"];
+// Home shows the conversations, DMs narrows the list to direct conversations and people, and
+// Wiki (T-MG-38) holds the wiki tree and the claimed resources: the shared memory and the shared
+// things, which used to sit under the fold of Home behind a list that grows without end.
+const SECTIONS_HOME = ["catchup", "channels", "discover", "directs", "people"];
 const SECTIONS_DMS = ["directs", "people"];
+const SECTIONS_WIKI = ["wiki", "leases"];
+const PLACES = { home: SECTIONS_HOME, dms: SECTIONS_DMS, wiki: SECTIONS_WIKI };
 let sidebarPlace = "home";
 
-export function sectionsFor(place) { return place === "dms" ? SECTIONS_DMS : SECTIONS_HOME; }
+export function sectionsFor(place) { return PLACES[place] || SECTIONS_HOME; }
 export function getSidebarPlace() { return sidebarPlace; }
-export function setSidebarPlace(place) { sidebarPlace = place === "dms" ? "dms" : "home"; }
+export function setSidebarPlace(place) { sidebarPlace = PLACES[place] ? place : "home"; }
 
 // Which sections are folded is remembered per browser under ONE key, as an object of
 // `sectionId -> true`; absent means open. Only `true` is kept so the stored object never grows
@@ -411,7 +415,8 @@ export function renderSidebarList() {
       { extra: plus("lease", t("Claim a resource")),
         attrs: ` title="${t("Before anyone touches something shared (a deployment, a migration, a configuration file), they claim it here. Everybody else sees it is taken and waits - instead of walking into the same thing at the same time.")}"` }),
   };
-  // The rail's place decides which sections are drawn: Home shows all, DMs only the direct ones.
+  // The rail's place decides which sections are drawn: Home the conversations, DMs only the
+  // direct ones, Wiki the tree and the claimed resources.
   el.innerHTML = sectionsFor(sidebarPlace).map((id) => sections[id]()).join("");
   el.scrollTop = scrollTop;
   // S6 (G11): a people row opens the PROFILE (with its "Message" button), not a conversation at once.
