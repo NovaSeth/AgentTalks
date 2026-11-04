@@ -1,5 +1,5 @@
 /**
- * Handling of text written by OTHER actors, shared by the MCP tools and the atalk CLI.
+ * Handling of text written by OTHER actors, shared by the MCP tools and the atalks CLI.
  * Dependency-free on purpose (the CLI must not load the MCP SDK).
  *
  * Untrusted text never starts a line of its own: each of its lines is quoted with "> ".

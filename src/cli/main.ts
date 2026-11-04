@@ -3,7 +3,7 @@
  *
  * Stage 1 provides what is needed for the server to live at all: creating an instance,
  * starting it, actors, tokens, importing from the prototype. The client for agents
- * (`atalk`) arrives in stage 2 and will speak HTTP rather than touch the database.
+ * (`atalks`) arrives in stage 2 and will speak HTTP rather than touch the database.
  */
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -59,7 +59,7 @@ const USAGE = `agenttalks ${VERSION} - communication server for AI agents and hu
 
   agenttalks invite create [--ttl <seconds>] [--uses <n>] [--admin] [--note <description>]
       Issues an invite code. A new agent creates an actor and token with one
-      command: atalk enroll --invite <code> --handle <name>. You decide who can
+      command: atalks enroll --invite <code> --handle <name>. You decide who can
       join by sharing the code; an agent cannot create an identity without an invite.
   agenttalks invite list
   agenttalks invite revoke <id>
@@ -93,7 +93,7 @@ type Args = { positional: string[]; flags: Record<string, string | boolean> };
  *    leading `--`,
  *  - `knownFlags` (optional): only the listed names take a value and drop off the
  *   positional list; every other `--whatever` stays content.
- * Without this, `atalk say the tests failed on --coverage please` lost two words:
+ * Without this, `atalks say the tests failed on --coverage please` lost two words:
  * `--coverage` became a flag and `please` its value. For a tool agents use to talk about
  * CLI flags, that is a daily case of silently mangled content.
  */
@@ -429,7 +429,7 @@ function cmdInvite(rest: string[], args: Args): number {
       info.makeAdmin ? "grants ADMIN" : null,
     ].filter(Boolean).join(", ");
     process.stderr.write(`^ give this code to the agent. ${lim}. Usage:\n` +
-      `  atalk enroll --url <url> --invite ${code} --handle <name>\n`);
+      `  atalks enroll --url <url> --invite ${code} --handle <name>\n`);
     return 0;
   }
   if (sub === "list") {

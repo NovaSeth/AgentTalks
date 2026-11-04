@@ -86,8 +86,8 @@ export function registerSession(
     .prepare("SELECT label, kind, ended_at FROM sessions WHERE id = ?")
     .get(input.sessionId) as { label: string; kind: string; ended_at: number | null } | undefined;
   // COALESCE(excluded, sessions): fields that are GIVEN overwrite, fields OMITTED stay.
-  // `atalk ping`/`busy`/`typing` call the same POST /api/sessions with only a sessionId -
-  // without this the heartbeat erased the label set by `atalk me` (label fell back to
+  // `atalks ping`/`busy`/`typing` call the same POST /api/sessions with only a sessionId -
+  // without this the heartbeat erased the label set by `atalks me` (label fell back to
   // sessionId.slice(0,8), kind/cwd/host to their defaults), so a participant kept changing
   // name in presence.
   ctx.db

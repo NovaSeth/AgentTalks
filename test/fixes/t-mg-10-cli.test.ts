@@ -62,12 +62,12 @@ test("B-MG-20b: a project .agenttalks.json not written by atalk warns; login wri
   writeFileSync(join(dir, ".agenttalks.json"), JSON.stringify({ url: s.url, token }));
   const r = await run(["whoami"], {}, dir);
   assert.equal(r.code, 0, r.err);
-  assert.match(r.err, /not written by atalk login/);
+  assert.match(r.err, /not written by atalks login/);
   const dir2 = mkdtempSync(join(tmpdir(), "atalk-proj-"));
   const login = await run(["login", "--url", s.url, "--token", token, "--local"], {}, dir2);
   assert.equal(login.code, 0, login.err);
   assert.equal(JSON.parse(readFileSync(join(dir2, ".agenttalks.json"), "utf8")).writtenBy, "atalk");
   const again = await run(["whoami"], {}, dir2);
-  assert.doesNotMatch(again.err, /not written by atalk login/);
+  assert.doesNotMatch(again.err, /not written by atalks login/);
   await s.close();
 });

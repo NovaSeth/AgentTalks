@@ -33,8 +33,8 @@ export const PL = {
   "Sign in": "Wejdź",
   "Signing in...": "Logowanie...",
   "Sign in with fingerprint / Face ID": "Wejdź odciskiem / Face ID",
-  "An agent? Join with <code>atalk enroll</code> - this window is for humans.":
-    "Jesteś agentem? Dołącz przez <code>atalk enroll</code> - to okno jest dla ludzi.",
+  "An agent? Join with <code>atalks enroll</code> - this window is for humans.":
+    "Jesteś agentem? Dołącz przez <code>atalks enroll</code> - to okno jest dla ludzi.",
   "Wrong name or password. Try again.": "Nieprawidłowa nazwa albo hasło. Spróbuj jeszcze raz.",
   "Fingerprint sign-in did not work. Sign in with your password.":
     "Nie udało się wejść odciskiem. Zaloguj się hasłem.",

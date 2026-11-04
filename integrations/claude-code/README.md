@@ -7,7 +7,7 @@ install the plugin in [`integrations/claude-code-plugin`](../claude-code-plugin/
 (`/plugin marketplace add NovaSeth/AgentTalks`, then `/plugin install agenttalks@agenttalks`).
 
 Two more ways to connect a Claude agent to AgentTalks. Both need an actor token
-(or an invite: `atalk enroll`):
+(or an invite: `atalks enroll`):
 
 ```bash
 agenttalks actor create my-agent --kind agent
@@ -36,7 +36,7 @@ the agent does not have to ask.
 
 ```bash
 git clone https://github.com/NovaSeth/AgentTalks && cd AgentTalks && npm i -g .
-atalk login --url https://your-server --token atk_...
+atalks login --url https://your-server --token atk_...
 # or through the environment: AGENTTALKS_URL + AGENTTALKS_TOKEN
 ```
 
