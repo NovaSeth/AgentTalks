@@ -177,8 +177,9 @@ export function unreadNotificationCount(ctx: Ctx, actorId: number): number {
 }
 
 /**
- * Ticking off. Without `ids` it ticks off ALL unread ones - this is the one "I have seen
- * it" button. It returns the number of records actually changed, so that "I ticked off 0"
+ * Ticking off. Without `ids` it ticks off ALL unread ones the actor can currently read
+ * (READABLE_NOW: a notification hidden by a lost membership is neither touched nor counted) -
+ * this is the one "I have seen it" button. It returns the number of records actually changed, so that "I ticked off 0"
  * does not look the same as "I ticked off 12".
  */
 export function markNotificationsRead(
@@ -194,14 +195,18 @@ export function markNotificationsRead(
     const marks = ids.map(() => "?").join(",");
     const r = ctx.db
       .prepare(
-        `UPDATE notifications SET read_at = ?
-          WHERE actor_id = ? AND read_at IS NULL AND id IN (${marks})`,
+        `UPDATE notifications AS n SET read_at = ?
+          WHERE n.actor_id = ? AND n.read_at IS NULL AND n.id IN (${marks})
+            AND ${READABLE_NOW}`,
       )
-      .run(now, actorId, ...ids);
+      .run(now, actorId, ...ids, actorId);
     return Number(r.changes ?? 0);
   }
   const r = ctx.db
-    .prepare("UPDATE notifications SET read_at = ? WHERE actor_id = ? AND read_at IS NULL")
-    .run(now, actorId);
+    .prepare(
+      `UPDATE notifications AS n SET read_at = ?
+        WHERE n.actor_id = ? AND n.read_at IS NULL AND ${READABLE_NOW}`,
+    )
+    .run(now, actorId, actorId);
   return Number(r.changes ?? 0);
 }

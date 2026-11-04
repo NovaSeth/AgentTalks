@@ -24,7 +24,7 @@
  */
 import { onCommitted, tx } from "../store/db.ts";
 import type { Ctx } from "./ctx.ts";
-import { badRequest, conflict, forbidden, notFound } from "./errors.ts";
+import { badRequest, conflict, forbidden, notFound, tooMany } from "./errors.ts";
 import { ftsMatch, normalizeSlug } from "./ids.ts";
 import { allActorIds } from "./presence.ts";
 import { excerptOf, notify } from "./notifications.ts";
@@ -240,7 +240,20 @@ function assertNoClobber(
   );
 }
 
-/** Creates or updates a page. It always appends a revision - in one transaction, so that a
+/** One actor may save one page at most this many times per hour (revisions grow forever). */
+const MAX_SAVES_PER_HOUR = 60;
+function assertSaveRate(ctx: Ctx, pageIdValue: number, actorId: number, now: number): void {
+  const r = ctx.db
+    .prepare("SELECT COUNT(*) AS n FROM wiki_revisions WHERE page_id = ? AND actor_id = ? AND created_at > ?")
+    .get(pageIdValue, actorId, now - 3600) as { n: number };
+  if (r.n >= MAX_SAVES_PER_HOUR) {
+    throw tooMany("wiki_save_rate",
+      `you saved this page ${MAX_SAVES_PER_HOUR} times in the last hour (the limit per hour); ` +
+      `batch your edits into fewer saves and try again later`);
+  }
+}
+
+/** Creates or updates a page. A save identical to the current page is a no-op; otherwise it appends a revision - in one transaction, so that a
  *  page and its history can never drift apart. parentSlug: undefined = leave the placement,
  *  null = the root, slug = a subpage of that page. */
 export function savePage(
@@ -270,6 +283,13 @@ export function savePage(
       const parentId = input.parentSlug === undefined
         ? existing.parent_id
         : resolveParent(ctx, existing.id, input.parentSlug);
+      // Nothing changes: no new revision (history would grow with every repeated save), no
+      // event, no notification. The answer carries the current revision id.
+      if (existing.title === title && existing.body === body && existing.parent_id === parentId) {
+        markPageSeen(ctx, slug, input.actorId);
+        return toPage(ctx, existing);
+      }
+      assertSaveRate(ctx, existing.id, input.actorId, now);
       ctx.db
         .prepare(
           "UPDATE wiki_pages SET title = ?, body = ?, parent_id = ?, updated_by = ?, updated_at = ? WHERE id = ?",
