@@ -26,24 +26,32 @@ const LOCK_NAME = "trusted-projects.json.lock";
 /** @param {number} ms */
 function sleep(ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
 
-/** Whether the lock's owner is provably gone: same host AND no such process (ESRCH).
- *  Anything else (other host, unreadable content, EPERM, a live pid) counts as held.
+/** Diagnostic ONLY (never deletes anything): who the lock file names and whether that pid
+ *  is alive on this host.
  *  @param {string} lockPath */
-function ownerIsDead(lockPath) {
+function describeOwner(lockPath) {
   let owner;
-  try { owner = JSON.parse(readFileSync(lockPath, "utf8")); } catch { return false; }
-  if (!owner || !Number.isInteger(owner.pid) || owner.pid <= 0) return false;
-  if (owner.host !== hostname()) return false;
-  try { process.kill(owner.pid, 0); return false; } catch (err) { return /** @type {any} */ (err)?.code === "ESRCH"; }
+  try { owner = JSON.parse(readFileSync(lockPath, "utf8")); } catch { return "an unreadable lock"; }
+  if (!owner || !Number.isInteger(owner.pid) || owner.pid <= 0) return "an unreadable lock";
+  let state = "running on another host: cannot tell";
+  if (owner.host === hostname()) {
+    try { process.kill(owner.pid, 0); state = "running"; } catch (err) {
+      state = /** @type {any} */ (err)?.code === "ESRCH" ? "not running" : "running";
+    }
+  }
+  return "pid " + owner.pid + " on " + owner.host + " (" + state + ")";
 }
 
 /**
  * Runs `fn` while holding `<dir>/trusted-projects.json.lock` (created with wx, 0600, content
- * {"pid","host","at"}). The one lock for every writer of the trust list. It is evicted ONLY
- * when its owner is provably dead (same host, pid gone); never by age. Retried every 50 ms up
- * to `timeoutMs` (default 5000, or AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS); then throws
- * Error("trust list is locked by another login (lock: <path>) ..."). Released in a finally,
- * only while the file still holds our pid+host+at.
+ * {"pid","host","at"}). The one lock for every writer of the trust list. Acquired ONLY by
+ * creating the file; a lock this process did not create is NEVER deleted (any automatic
+ * eviction races with a second evictor and loses an entry). Retried every 50 ms up to
+ * `timeoutMs` (default 5000, or AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS); then throws
+ * Error("trust list is locked by pid N on <host> (running|not running): ... delete <path>").
+ * A stale lock exists only if a login crashed inside its sub-second critical section; the
+ * failure is closed (nothing written) and the message tells the human the fix. Released in a
+ * finally, only while the file still holds our pid+host+at.
  * @template T
  * @param {string} dir @param {() => T} fn @param {{ timeoutMs?: number }} [opts] @returns {T}
  */
@@ -60,12 +68,8 @@ export function withTrustLock(dir, fn, opts = {}) {
       break;
     } catch (err) {
       if (/** @type {any} */ (err)?.code !== "EEXIST") throw err;
-      if (ownerIsDead(lockPath)) {
-        try { unlinkSync(lockPath); } catch { /* raced away */ }
-        continue;
-      }
       if (Date.now() >= deadline) {
-        throw new Error(`trust list is locked by another login (lock: ${lockPath}); try again, or remove that file if no login is running`);
+        throw new Error("trust list is locked by " + describeOwner(lockPath) + ": if no login is running, delete " + lockPath + " and retry");
       }
       sleep(POLL_MS);
     }
