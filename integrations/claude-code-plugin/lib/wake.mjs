@@ -13,7 +13,8 @@
  *      not be absurdly far ahead; a body without `exp` (the current server) must carry a
  *      `ts` at most 10 minutes old (401),
  *   4. replay: the `nonce`, or for a body without one the SHA-256 of the body, must not have
- *      been seen while the body could still be fresh (409).
+ *      woken a session already while the body could still be fresh (409). Only a knock that
+ *      wakes a session is recorded: a woke:false answer leaves the retry open.
  *
  * Spawning: an argv array without a shell (`shell: false`), so nothing in the body can
  * become shell syntax; the prompt is one argument after a `--` separator (`--tools` and
@@ -27,19 +28,30 @@
  *     still runs file reads, read-only shell commands and anything a `permissions.allow` rule
  *     in the resumed session's user/project/local settings pre-approves (allow lists merge
  *     across scopes, so `--settings` cannot empty them).
- *   - `--allowedTools` pre-approves only the AgentTalks tools; under dontAsk every other MCP
- *     tool call is denied instead of waiting for an absent human.
+ *   - `--allowedTools` pre-approves ONLY the plugin channel's own tools (reply, mark_read),
+ *     which refuse to act as anyone but the verified principal (AGENTTALKS_EXPECT_*); under
+ *     dontAsk every other MCP tool call is denied instead of waiting for an absent human. A
+ *     wider list is a startup error (checkAllowedTools).
+ *   - `--disallowedTools mcp__agenttalks__*` denies the remote AgentTalks MCP server even if
+ *     the user's settings pre-approve it: it carries its own URL and bearer, possibly another
+ *     actor's on another server (codex T-MG-14 r2 F4).
+ *   - `--strict-mcp-config` is NOT used: `claude --help` (2.1.318) does not say whether
+ *     plugin MCP servers still load under it, and without the channel the run cannot answer.
  * Residual: an MCP tool of ANOTHER server that the user's own settings pre-approve (an allow
- * rule such as `mcp__github__*`) stays callable; hooks and installed mods still run.
+ * rule such as `mcp__github__*`, or a second AgentTalks server under another name) stays
+ * callable; hooks and installed mods still run.
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
+import { homedir } from "node:os";
 import { dirname, isAbsolute } from "node:path";
 import { PREAMBLE, quoteBody, safeLabel } from "./frame.mjs";
 import { readSessions } from "./sessions.mjs";
+import { normalizeUrl as normalizeIdentityUrl, resolveIdentity } from "./identity.mjs";
+import { createApi } from "./api.mjs";
 
 export const MAX_BODY_BYTES = 16 * 1024;
 export const LEGACY_MAX_AGE_SEC = 600;
@@ -48,7 +60,25 @@ export const MAX_EXP_AHEAD_SEC = 3600;
 /** D-MG-17: this plugin's own tools (a plugin MCP server's tools are named
  *  mcp__plugin_<plugin>_<server>__<tool>) and the remote AgentTalks MCP server added as
  *  `agenttalks`. Both are conversation tools only; a woken agent must be able to answer. */
-export const DEFAULT_ALLOWED_TOOLS = "mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*";
+export const DEFAULT_ALLOWED_TOOLS = "mcp__plugin_agenttalks_agenttalks__reply,mcp__plugin_agenttalks_agenttalks__mark_read";
+/** The plugin channel's own tools: the only AgentTalks tools that enforce the principal the
+ *  bridge verified (AGENTTALKS_EXPECT_*). A remote AgentTalks MCP server the user configured
+ *  (name `agenttalks`, its own URL and bearer) checks nothing of the sort: it could be
+ *  another actor on another server (codex T-MG-14 r2 F4). */
+const CHANNEL_TOOLS = new Set(["mcp__plugin_agenttalks_agenttalks__reply", "mcp__plugin_agenttalks_agenttalks__mark_read"]);
+/** Denied outright in a woken run, whatever the user's settings pre-approve. */
+export const DISALLOWED_TOOLS = "mcp__agenttalks__*";
+
+/** null when every entry names one of the channel's own tools, else the reason.
+ *  @param {string} list */
+export function checkAllowedTools(list) {
+  const entries = String(list).split(/[\s,]+/).filter(Boolean);
+  if (entries.length === 0) return "allowed tools: the list is empty";
+  const foreign = entries.filter((e) => !CHANNEL_TOOLS.has(e));
+  return foreign.length
+    ? `allowed tools: only the plugin channel's own tools (${[...CHANNEL_TOOLS].join(", ")}) may be pre-approved for a woken run, not ${foreign.join(", ")}`
+    : null;
+}
 const MAX_SEEN = 10_000;
 
 /** An IPv4 address in any form getaddrinfo/inet_aton accepts ("0", "0x0", "0.0.0.00",
@@ -135,35 +165,86 @@ export function wakePrompt(body) {
 /** A resumed run gets at most this long: a hung run would otherwise keep its session marked
  *  as running and block every later wake for it. */
 export const MAX_RUN_MS = 15 * 60 * 1000;
+/** How long the bridge waits for a resumed run's process to exist before it answers 503. */
+export const START_TIMEOUT_MS = 10_000;
+
+/** The AgentTalks credential variables (lib/identity.mjs): the bridge's own never reach a
+ *  woken run. */
+const CREDENTIAL_VARS = new Set([
+  "AGENTTALKS_URL", "AGENTTALKS_TOKEN", "ATALKS_URL", "ATALKS_TOKEN",
+  "AGENTTALKS_PLUGIN_URL", "AGENTTALKS_PLUGIN_TOKEN",
+  // set fresh for each run by the bridge (the verified principal), never inherited
+  "AGENTTALKS_EXPECT_SERVER_URL", "AGENTTALKS_EXPECT_ACTOR",
+]);
 
 /**
  * The environment of the woken claude: the bridge's own, minus the wake secrets the bridge
- * was configured with (AGENTTALKS_WAKE_*). The woken session's hooks, MCP servers and tools
- * run under it, so they must not see the secret that authenticates knocks. Everything else
- * stays: PATH and HOME, claude's own credentials, and the AgentTalks identity variables the
- * plugin's channel server uses to answer.
+ * was configured with (AGENTTALKS_WAKE_*) and minus every AgentTalks credential variable.
+ * The woken session's hooks, MCP servers and tools run under it, so they must not see the
+ * secret that authenticates knocks, and they must not act with the BRIDGE's AgentTalks
+ * identity (another actor, maybe on another server) instead of the session's own: the
+ * woken session resolves its identity from its own directory (a trusted project file, the
+ * global file), which the bridge checks before it spawns (item 4). Everything else stays:
+ * PATH and HOME, claude's own credentials.
  * @param {NodeJS.ProcessEnv} env @returns {NodeJS.ProcessEnv}
  */
 export function wakeEnv(env) {
   /** @type {NodeJS.ProcessEnv} */
   const out = {};
-  for (const [k, v] of Object.entries(env)) if (!k.startsWith("AGENTTALKS_WAKE_")) out[k] = v;
+  for (const [k, v] of Object.entries(env)) {
+    if (!k.startsWith("AGENTTALKS_WAKE_") && !CREDENTIAL_VARS.has(k)) out[k] = v;
+  }
   return out;
 }
 
-/** @type {(cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv, timeoutMs?: number }) => Promise<void>} */
-export const spawnRunner = (cmd, argv, opts) => new Promise((resolve) => {
-  const child = spawn(cmd, argv, {
-    cwd: opts.cwd, env: opts.env ?? wakeEnv(process.env), shell: false, stdio: ["ignore", "ignore", "inherit"],
+/** Who a token belongs to, asked of the server it is for. @param {{ url: string, token: string }} id */
+async function whoamiOnServer(id) {
+  const me = await createApi(id, { timeoutMs: 5000 }).get("/api/me");
+  return { handle: String(me?.actor?.handle ?? ""), id: Number(me?.actor?.id) };
+}
+
+/**
+ * A run: the promise settles when the run is over (exit, kill at the time limit, or a
+ * failure to start); its `started` promise resolves once the process exists (the child's
+ * 'spawn' event) and rejects when it never started (ENOENT, EACCES): the bridge commits a
+ * knock only to a run that started (codex T-MG-14 r1 F3).
+ * @typedef {Promise<void> & { started?: Promise<void> }} Run
+ * @type {(cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv, timeoutMs?: number }) => Run}
+ */
+export const spawnRunner = (cmd, argv, opts) => {
+  /** @type {(v?: unknown) => void} */
+  let onSpawn = () => {};
+  /** @type {(err: unknown) => void} */
+  let onFail = () => {};
+  const started = new Promise((resolve, reject) => { onSpawn = resolve; onFail = reject; });
+  started.catch(() => {}); // observed by the caller; never an unhandled rejection
+  /** @type {Run} */
+  const run = new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(cmd, argv, {
+        cwd: opts.cwd, env: opts.env ?? wakeEnv(process.env), shell: false, stdio: ["ignore", "ignore", "inherit"],
+      });
+    } catch (err) {
+      // spawn() can THROW instead of emitting 'error' (E2BIG, invalid arguments): the run
+      // never started, and `started` must say so, or the caller waits forever (r2 F5).
+      onFail(err);
+      resolve();
+      return;
+    }
+    const limit = setTimeout(() => {
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+    }, opts.timeoutMs ?? MAX_RUN_MS);
+    const done = () => { clearTimeout(limit); resolve(); };
+    child.on("spawn", () => onSpawn());
+    child.on("error", (err) => { onFail(err); done(); });
+    child.on("exit", done);
   });
-  const limit = setTimeout(() => {
-    child.kill("SIGTERM");
-    setTimeout(() => child.kill("SIGKILL"), 5000).unref();
-  }, opts.timeoutMs ?? MAX_RUN_MS);
-  const done = () => { clearTimeout(limit); resolve(); };
-  child.on("error", done);
-  child.on("exit", done);
-});
+  run.started = started.then(() => undefined);
+  run.started.catch(() => {});
+  return run;
+};
 
 /**
  * A wake secret belongs to ONE actor on ONE server: the server that issued it at
@@ -184,11 +265,7 @@ export const spawnRunner = (cmd, argv, opts) => new Promise((resolve) => {
  * @param {unknown} url @returns {string | null}
  */
 export function normalizeUrl(url) {
-  if (typeof url !== "string" || !url.trim()) return null;
-  let u;
-  try { u = new URL(url.trim()); } catch { return null; }
-  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-  return u.origin + u.pathname.replace(/\/+$/, "");
+  return normalizeIdentityUrl(url);
 }
 
 /**
@@ -236,11 +313,13 @@ export function checkWakeConfig(secrets) {
  * @param {{
  *   secrets: WakeSecret[] | Map<string, string>,
  *   sessionsDir: string,
- *   runner?: (cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv }) => Promise<void>,
+ *   runner?: (cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv }) => Promise<void> & { started?: Promise<void> },
  *   claudeBin?: string,
  *   allowedTools?: string,
  *   replayFile?: string | null,
  *   env?: NodeJS.ProcessEnv,
+ *   whoami?: (id: { url: string, token: string }) => Promise<{ handle: string, id?: number }>,
+ *   startTimeoutMs?: number,
  *   now?: () => number,
  *   log?: (line: string) => void,
  * }} opts
@@ -250,6 +329,8 @@ export function createWakeBridge(opts) {
   const now = opts.now ?? Date.now;
   const log = opts.log ?? (() => {});
   const allowedTools = opts.allowedTools ?? DEFAULT_ALLOWED_TOOLS;
+  const toolProblem = checkAllowedTools(allowedTools);
+  if (toolProblem) throw new Error(toolProblem);
   const secrets = normalizeSecrets(opts.secrets);
   const problem = checkWakeConfig(secrets);
   if (problem) throw new Error(problem);
@@ -257,6 +338,9 @@ export function createWakeBridge(opts) {
   const seen = new Map();
   /** Claude Code session ids with a resumed run in progress */
   const running = new Set();
+  /** Replay keys of knocks being checked right now (the identity check awaits the server). */
+  const checking = new Set();
+  const whoami = opts.whoami ?? whoamiOnServer;
   const replayFile = opts.replayFile ?? null;
   if (replayFile) loadReplay(replayFile);
 
@@ -366,12 +450,13 @@ export function createWakeBridge(opts) {
       const plainKey = typeof body.nonce === "string" && body.nonce.length > 0 && body.nonce.length <= 128
         ? `n:${body.nonce}` : `b:${createHash("sha256").update(raw).digest("hex")}`;
       const key = createHash("sha256").update(plainKey).digest("hex");
-      if (seen.has(key)) {
+      if (seen.has(key) || checking.has(key)) {
         log("rejected: replay");
         return reply(res, 409, { error: "replay" });
       }
-      seen.set(key, keepUntil);
-      saveReplay();
+      // The knock is recorded only once it wakes a session (below): a woke:false answer
+      // consumes nothing, so the sender's retry can still wake it (codex r4 F11). Between
+      // this check and the record nothing awaits, so two copies cannot both pass.
 
       // Only a session recorded for the server that holds this secret (every secret has one:
       // checked at construction), compared in normalized form.
@@ -388,14 +473,74 @@ export function createWakeBridge(opts) {
       if (running.has(rec.sessionId)) {
         return reply(res, 202, { ok: true, woke: false, reason: "a resumed run is still in progress" });
       }
-      const argv = ["-p", "--resume", rec.sessionId, "--permission-mode", "dontAsk",
-        "--tools", "", "--allowedTools", allowedTools, "--", wakePrompt(body)];
-      running.add(rec.sessionId);
-      log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
-      void runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env: wakeEnv(opts.env ?? process.env) })
-        .catch(() => {})
-        .finally(() => running.delete(rec.sessionId));
-      return reply(res, 202, { ok: true, woke: true });
+      // The woken run acts as the session's OWN principal, never the bridge's (item 4): its
+      // environment carries no AgentTalks credentials, so it resolves its identity from its
+      // directory exactly as below. That identity must be on the server that holds this
+      // secret and belong to the recorded actor (asked of that server), or nothing runs.
+      const env = wakeEnv(opts.env ?? process.env);
+      const home = typeof env.HOME === "string" && env.HOME ? env.HOME : homedir();
+      const id = resolveIdentity({ env, cwd: rec.cwd, home });
+      if (!id || normalizeUrl(id.url) !== server) {
+        log(`not waking @${safeLabel(body.actor)}: the session's AgentTalks identity is not on the knocking server`);
+        return reply(res, 202, { ok: true, woke: false, reason: "the session's AgentTalks identity does not match" });
+      }
+      checking.add(key);
+      void (async () => {
+        let me = null;
+        try { me = await whoami({ url: id.url, token: id.token }); } catch { me = null; }
+        const recordedId = /** @type {any} */ (rec).actorId;
+        const matches = me && me.handle === rec.handle && me.handle === body.actor
+          && (typeof recordedId !== "number" || me.id === recordedId);
+        if (!matches || running.has(rec.sessionId)) {
+          checking.delete(key);
+          if (!matches) log(`not waking @${safeLabel(body.actor)}: the session's AgentTalks identity is another actor or unverifiable`);
+          return reply(res, 202, { ok: true, woke: false, reason: matches
+            ? "a resumed run is still in progress" : "the session's AgentTalks identity does not match" });
+        }
+        const argv = ["-p", "--resume", rec.sessionId, "--permission-mode", "dontAsk",
+          "--tools", "", "--allowedTools", allowedTools, "--disallowedTools", DISALLOWED_TOOLS,
+          "--", wakePrompt(body)];
+        running.add(rec.sessionId);
+        log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
+        // The key stays reserved (checking) until the process exists: only a run that
+        // STARTED uses up the knock; one that cannot start leaves the retry open (r1 F3).
+        // The verified principal goes along: the channel server Claude Code starts in the
+        // woken session (with ITS plugin options) refuses to act as anyone else (r1 F1).
+        const runEnv = { ...env, AGENTTALKS_EXPECT_SERVER_URL: server, AGENTTALKS_EXPECT_ACTOR: body.actor };
+        const run = runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env: runEnv });
+        void Promise.resolve(run).catch(() => {}).finally(() => running.delete(rec.sessionId));
+        const started = run?.started ?? Promise.resolve();
+        const TIMED_OUT = Symbol("timed out");
+        /** @type {ReturnType<typeof setTimeout> | undefined} */
+        let startTimer;
+        try {
+          // Bounded: the ANSWER never waits forever (r2 F5).
+          const outcome = await Promise.race([
+            started,
+            new Promise((resolve) => { startTimer = setTimeout(() => resolve(TIMED_OUT), opts.startTimeoutMs ?? START_TIMEOUT_MS); }),
+          ]);
+          if (outcome === TIMED_OUT) {
+            // Not known yet whether it starts: the knock stays RESERVED (a retry is 409) until
+            // the process reports. A late 'spawn' uses it up, so no retry can start a second
+            // run; only a start that provably failed frees it (F5 follow-up).
+            started.then(() => { seen.set(key, keepUntil); checking.delete(key); saveReplay(); },
+              () => { checking.delete(key); running.delete(rec.sessionId); });
+            log("the resumed run has not started yet: answering 503, the knock stays reserved");
+            return reply(res, 503, { ok: false, woke: false, reason: "spawn pending" });
+          }
+        } catch (err) {
+          // It provably never started (a throw, or 'error' before 'spawn'): the retry is open.
+          checking.delete(key);
+          running.delete(rec.sessionId);
+          log(`could not start the resumed run: ${err instanceof Error ? err.message : err}`);
+          return reply(res, 503, { ok: false, woke: false, reason: "spawn failed" });
+        }
+        finally { clearTimeout(startTimer); }
+        seen.set(key, keepUntil);
+        checking.delete(key);
+        saveReplay();
+        reply(res, 202, { ok: true, woke: true });
+      })();
     });
   });
 }

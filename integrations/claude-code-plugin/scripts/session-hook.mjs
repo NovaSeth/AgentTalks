@@ -16,7 +16,7 @@
  */
 import { hostname } from "node:os";
 import { basename } from "node:path";
-import { resolveIdentity } from "../lib/identity.mjs";
+import { resolveIdentity, UNTRUSTED_PROJECT_CONTEXT, expectedPrincipal, principalProblem } from "../lib/identity.mjs";
 import { createApi } from "../lib/api.mjs";
 import { PREAMBLE, header, quoteBody, safeLabel } from "../lib/frame.mjs";
 import { deriveSessionId, recordSession, sessionsDir } from "../lib/sessions.mjs";
@@ -90,8 +90,36 @@ async function main() {
   const input = await readInput();
   const claudeSession = typeof input.session_id === "string" ? input.session_id : "";
   const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
-  const identity = resolveIdentity({ cwd, report: (/** @type {string} */ r) => process.stderr.write(`[agenttalks-hook] ${r}\n`) });
+  let refused = false;
+  const identity = resolveIdentity({ cwd, report: (/** @type {string} */ r) => {
+    refused = true;
+    process.stderr.write(`[agenttalks-hook] ${r}\n`);
+  } });
+  if (!identity && refused && mode === "start") {
+    // An untrusted project file: nothing connects, nothing is recorded for the wake bridge;
+    // the session learns why in ONE fixed line - never the path, which the repository
+    // controls (the path goes to stderr only).
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: UNTRUSTED_PROJECT_CONTEXT },
+    }) + "\n");
+    return;
+  }
   if (!identity || !claudeSession) return;
+  // A woken run acts only as the principal the wake bridge verified (codex T-MG-14 r1 F1):
+  // another server -> no request at all; another actor -> nothing after GET /api/me (no
+  // presence, no wake record).
+  const expect = expectedPrincipal(process.env);
+  if (expect) {
+    const serverProblem = principalProblem(identity, expect);
+    if (serverProblem) { process.stderr.write(`[agenttalks-hook] ${serverProblem}\n`); return; }
+    let handle;
+    try { handle = String((await createApi(identity, { timeoutMs: 3000 }).get("/api/me"))?.actor?.handle ?? ""); } catch {
+      process.stderr.write("[agenttalks-hook] could not verify the identity this run was woken for: not connecting\n");
+      return;
+    }
+    const actorProblem = principalProblem(identity, expect, handle);
+    if (actorProblem) { process.stderr.write(`[agenttalks-hook] ${actorProblem}\n`); return; }
+  }
   const sessionId = deriveSessionId(claudeSession);
 
   if (mode === "end") {
@@ -129,7 +157,7 @@ async function main() {
 
   try {
     recordSession(sessionsDir(), {
-      sessionId: claudeSession, cwd, handle: me.actor.handle, url: identity.url, updatedAt: Date.now(),
+      sessionId: claudeSession, cwd, handle: me.actor.handle, actorId: me.actor.id, url: identity.url, updatedAt: Date.now(),
     });
   } catch (err) {
     process.stderr.write(`[agenttalks-hook] could not record the session: ${err instanceof Error ? err.message : err}\n`);

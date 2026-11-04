@@ -9,7 +9,12 @@
  *      their OWN names: an option left empty is substituted as "", and under the shared names
  *      that "" would overwrite the AGENTTALKS_* the session inherited before this code ran.
  *   1. AGENTTALKS_URL / AGENTTALKS_TOKEN (ATALKS_* aliases). An EMPTY value counts as unset.
- *   2. the nearest `.agenttalks.json`, walking up from the session's cwd,
+ *   2. the nearest `.agenttalks.json`, walking up from the session's cwd - ONLY when the user
+ *      vouched for it with `atalk login --local` (isTrustedProject). A cloned repository can
+ *      ship one with its own token and url, which would attach the agent's live channel to a
+ *      foreign server; an untrusted project file that would supply the token or the url makes
+ *      resolveIdentity return null and report untrustedProjectNotice (stricter than atalk,
+ *      which only refuses a mixed identity),
  *   3. `~/.config/agenttalks/atalk.json`.
  *
  * The token is returned to the caller and goes into an Authorization header only. Nothing
@@ -115,12 +120,13 @@ export function resolveIdentity(opts = {}) {
 
   const token = envToken ?? storedToken;
   if (!token) return null;
-  // Fail closed, as atalk does: a project file nobody vouched for (a cloned repository, say)
-  // must not choose the server that receives a token that came from elsewhere.
-  if (envToken && !envUrl && storedSource === "project" && storedUrl && storedPath
-      && !isTrustedProject(storedPath, env, home)) {
-    report(`the project file ${storedPath} is not trusted, so its url is not used with the token from the environment; `
-      + "run `atalk login --local` in that directory (if you wrote it) or set AGENTTALKS_URL");
+  // Fail closed: a project file nobody vouched for (a cloned repository, say) supplies
+  // nothing - neither the server nor the token. An identity wholly from the environment (or
+  // the plugin options) does not use the file, and the global file is not a project file.
+  const usesProject = storedSource === "project" && storedPath
+    && ((!envToken && storedToken) || (!envUrl && storedUrl));
+  if (usesProject && storedPath && !isTrustedProject(storedPath, env, home)) {
+    report(untrustedProjectNotice(storedPath));
     return null;
   }
   const url = (envUrl ?? storedUrl ?? DEFAULT_URL).replace(/\/+$/, "");
@@ -130,4 +136,70 @@ export function resolveIdentity(opts = {}) {
 /** A log-safe description: never the token. @param {Identity | null} id */
 export function describeIdentity(id) {
   return id ? `${id.url} (token from ${id.source})` : "no AgentTalks identity found";
+}
+
+/** Shown in MODEL context (the SessionStart hook's additionalContext): a fixed sentence with
+ *  no path, because a cloned repository controls its own path (a directory name can hold
+ *  newlines or text that looks like an instruction). */
+export const UNTRUSTED_PROJECT_CONTEXT = "This project's .agenttalks.json is not trusted, so AgentTalks is not connected. "
+  + "If you created it, run `atalk login --local` in the project directory.";
+
+/** The one line the entry points print on STDERR (never model context) when a project file
+ *  they would use is not trusted: the fixed sentence, then the file's path as one quoted
+ *  JSON string with control and line-separator characters replaced, so a crafted directory
+ *  name cannot add a line of its own.
+ *  @param {string} path */
+export function untrustedProjectNotice(path) {
+  const safe = (/** @type {string} */ s) => s.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "?");
+  return `${UNTRUSTED_PROJECT_CONTEXT} File: ${JSON.stringify(safe(path))}`;
+}
+
+/**
+ * A server URL in one comparable form: scheme and host lowercased, the default port dropped
+ * (the URL parser does both), the path kept without trailing slashes (two servers can share
+ * an origin under different paths), query and fragment dropped. null for anything that is
+ * not an absolute http(s) URL.
+ * @param {unknown} url @returns {string | null}
+ */
+export function normalizeUrl(url) {
+  if (typeof url !== "string" || !url.trim()) return null;
+  let u;
+  try { u = new URL(url.trim()); } catch { return null; }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  return u.origin + u.pathname.replace(/\/+$/, "");
+}
+
+/**
+ * The principal a woken run must act as (codex T-MG-14 r1 F1): the wake bridge verified it
+ * and names it in AGENTTALKS_EXPECT_SERVER_URL / AGENTTALKS_EXPECT_ACTOR (not secrets).
+ * Claude Code substitutes the plugin options into the channel server's env at launch, which
+ * the bridge cannot scrub, so every entry point checks its own resolved identity against
+ * this. null when neither is set (an ordinary session). Either one set makes it binding; a
+ * missing or invalid half never matches.
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ serverUrl: string | null, actor: string | null } | null}
+ */
+export function expectedPrincipal(env) {
+  const url = firstSet(env, ["AGENTTALKS_EXPECT_SERVER_URL"]);
+  const actor = firstSet(env, ["AGENTTALKS_EXPECT_ACTOR"]);
+  if (url === undefined && actor === undefined) return null;
+  return { serverUrl: normalizeUrl(url), actor: actor ?? null };
+}
+
+/**
+ * Null when `identity` (and, once known, the token's actor `handle`) is the expected
+ * principal; else ONE line saying why the entry point does not connect.
+ * @param {Identity | null} identity
+ * @param {{ serverUrl: string | null, actor: string | null }} expect
+ * @param {string} [handle]
+ */
+export function principalProblem(identity, expect, handle) {
+  const who = `@${String(expect.actor ?? "?").replace(/[^A-Za-z0-9_.-]/g, "?")}`;
+  const where = expect.serverUrl ?? "an invalid server URL";
+  const lead = `AgentTalks is not connected: this run was woken for ${who} on ${where}, but`;
+  if (!expect.serverUrl || !expect.actor) return `${lead} the expectation is incomplete.`;
+  if (!identity) return `${lead} no AgentTalks identity resolves here.`;
+  if (normalizeUrl(identity.url) !== expect.serverUrl) return `${lead} the identity here is for another server.`;
+  if (handle !== undefined && handle !== expect.actor) return `${lead} the identity here is another actor.`;
+  return null;
 }

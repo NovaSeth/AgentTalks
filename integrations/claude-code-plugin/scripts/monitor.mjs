@@ -19,8 +19,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { resolveIdentity, describeIdentity } from "../lib/identity.mjs";
+import { resolveIdentity, describeIdentity, expectedPrincipal, principalProblem } from "../lib/identity.mjs";
 import { createFeed } from "../lib/feed.mjs";
+import { createApi } from "../lib/api.mjs";
 import { frameLine } from "../lib/frame.mjs";
 import {
   channelAlive, claudeAncestor, heartbeatFile, monitorMode, readHeartbeat, removeHeartbeat,
@@ -46,10 +47,25 @@ function parseArgs(argv) {
 
 const { maxSeconds, stateDir } = parseArgs(process.argv.slice(2));
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const identity = resolveIdentity({ cwd, report: log });
+let refused = false;
+const identity = resolveIdentity({ cwd, report: (notice) => { refused = true; log(notice); } });
 if (!identity) {
-  log("no AgentTalks identity (AGENTTALKS_TOKEN, .agenttalks.json or ~/.config/agenttalks/atalk.json): nothing to watch");
+  // An untrusted project file: its one notice line (already printed) says it all.
+  if (!refused) log("no AgentTalks identity (AGENTTALKS_TOKEN, .agenttalks.json or ~/.config/agenttalks/atalk.json): nothing to watch");
   process.exit(0);
+}
+// A woken run acts only as the principal the wake bridge verified (codex T-MG-14 r1 F1).
+const expect = expectedPrincipal(process.env);
+if (expect) {
+  const serverProblem = principalProblem(identity, expect);
+  if (serverProblem) { log(serverProblem); process.exit(0); }
+  let handle;
+  try { handle = String((await createApi(identity, { timeoutMs: 5000 }).get("/api/me"))?.actor?.handle ?? ""); } catch (err) {
+    log(`could not verify the identity this run was woken for (${err instanceof Error ? err.message : "error"}): not connecting`);
+    process.exit(0);
+  }
+  const actorProblem = principalProblem(identity, expect, handle);
+  if (actorProblem) { log(actorProblem); process.exit(0); }
 }
 log(describeIdentity(identity));
 const mode = monitorMode();
@@ -62,28 +78,29 @@ if (mode === "off") {
 const stateFile = join(stateDir,
   "monitor-" + createHash("sha256").update(`${identity.url}\n${cwd}`).digest("hex").slice(0, 16) + ".json");
 
-/** @returns {{ lastEventId: number | null, mentionCursor: number | null }} */
+/** @returns {{ lastEventId: number | null, mentionCursor: number | null, replayFloor: number | null }} */
 function loadState() {
   try {
     const v = JSON.parse(readFileSync(stateFile, "utf8"));
     if (typeof v?.savedAt !== "number" || Date.now() - v.savedAt > RESUME_MAX_AGE_MS) {
-      return { lastEventId: null, mentionCursor: null };
+      return { lastEventId: null, mentionCursor: null, replayFloor: null };
     }
     return {
       lastEventId: Number.isInteger(v.lastEventId) ? v.lastEventId : null,
       mentionCursor: Number.isInteger(v.mentionCursor) ? v.mentionCursor : null,
+      replayFloor: Number.isInteger(v.replayFloor) ? v.replayFloor : null,
     };
   } catch {
-    return { lastEventId: null, mentionCursor: null };
+    return { lastEventId: null, mentionCursor: null, replayFloor: null };
   }
 }
 
-/** @param {number | null} lastEventId @param {number} mentionCursor */
-function saveState(lastEventId, mentionCursor) {
+/** @param {number | null} lastEventId @param {number} mentionCursor @param {number | null} replayFloor */
+function saveState(lastEventId, mentionCursor, replayFloor) {
   try {
     if (!existsSync(stateDir)) mkdirSync(stateDir, { recursive: true, mode: 0o700 });
     const tmp = `${stateFile}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ lastEventId, mentionCursor, savedAt: Date.now() }) + "\n", { mode: 0o600 });
+    writeFileSync(tmp, JSON.stringify({ lastEventId, mentionCursor, replayFloor, savedAt: Date.now() }) + "\n", { mode: 0o600 });
     chmodSync(tmp, 0o600);
     renameSync(tmp, stateFile);
   } catch (err) {
@@ -130,21 +147,25 @@ if (mode === "standby") {
 
 const resumed = loadState();
 // Taking over from the channel: resume where IT stopped, not from an older monitor cursor.
-if (handover && handover.lastEventId !== null) {
+// A null event cursor with a mention cursor is real delivered state too (the channel stopped
+// before its stream floor was safe to report, codex r4 F10).
+if (handover && (handover.lastEventId !== null || handover.mentionCursor !== null || handover.replayFloor !== null)) {
   resumed.lastEventId = handover.lastEventId;
   resumed.mentionCursor = handover.mentionCursor;
+  resumed.replayFloor = handover.replayFloor;
 }
 const feed = createFeed({
   identity,
   log,
   lastEventId: resumed.lastEventId,
   mentionCursor: resumed.mentionCursor,
+  replayFloor: resumed.replayFloor,
   // Delivered = the line is handed to stdout (its write callback): only then may the cursor
   // pass it.
   onItem: (item) => new Promise((resolve, reject) => {
     process.stdout.write(frameLine(item) + "\n", (err) => (err ? reject(err) : resolve(undefined)));
   }),
-  onCursor: (id) => saveState(id, feed.mentionCursor),
+  onCursor: (id) => saveState(id, feed.mentionCursor, feed.replayFloor),
   onState: (state) => {
     if (state === "unauthorized") {
       log("the server rejected the token (401/403): stopping");
@@ -164,7 +185,7 @@ async function finish(code, notice) {
   // or lines not yet written, the saved ids stay before them and the next run gets them
   // again by replay. The SSE receive cursor is never saved.
   await Promise.race([feed.idle(), new Promise((r) => setTimeout(r, 2000))]);
-  saveState(feed.lastEventId, feed.mentionCursor);
+  saveState(feed.lastEventId, feed.mentionCursor, feed.replayFloor);
   if (notice) process.stdout.write(notice + "\n");
   process.exit(code);
 }

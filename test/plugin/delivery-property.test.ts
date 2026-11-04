@@ -59,7 +59,7 @@ async function scenario(seed: number, steps: number) {
   const trace: string[] = [];
   const record = (ids: number[]) => { for (const id of ids) delivered.set(id, (delivered.get(id) ?? 0) + 1); };
 
-  let cursors: { lastEventId: number | null; mentionCursor: number | null } = { lastEventId: null, mentionCursor: null };
+  let cursors: { lastEventId: number | null; mentionCursor: number | null; replayFloor: number | null } = { lastEventId: null, mentionCursor: null, replayFloor: null };
   let current: Proc | null = null;
   let generation = 0;
 
@@ -83,6 +83,7 @@ async function scenario(seed: number, steps: number) {
       onItem: onItem as any,
       lastEventId: cursors.lastEventId,
       mentionCursor: cursors.mentionCursor,
+      replayFloor: cursors.replayFloor,
       sse: { initialBackoffMs: 20, maxBackoffMs: 50 },
       retry: { initialMs: 20, maxMs: 60 },
     } as any);
@@ -103,7 +104,7 @@ async function scenario(seed: number, steps: number) {
   function sigterm() {
     if (!current) return;
     // What the channel's heartbeat / the monitor's state file would carry at this instant.
-    cursors = { lastEventId: current.feed.lastEventId, mentionCursor: current.feed.mentionCursor };
+    cursors = { lastEventId: current.feed.lastEventId, mentionCursor: current.feed.mentionCursor, replayFloor: current.feed.replayFloor };
     trace.push(`SIGTERM ${current.kind} @ ${JSON.stringify(cursors)}`);
     current.kill();
     current = null;
@@ -122,7 +123,7 @@ async function scenario(seed: number, steps: number) {
   await startProc("monitor");
   let newDm = 20;
   for (let i = 0; i < steps; i++) {
-    const action = pick(["dm", "dm", "chatter", "mention", "call", "thread", "own", "newdm", "fail", "fail", "sigterm", "sigterm", "wait"]);
+    const action = pick(["dm", "dm", "chatter", "mention", "call", "thread", "own", "newdm", "fail", "fail", "sigterm", "sigterm", "pending", "wait"]);
     switch (action) {
       case "dm": post({ conversationId: 9, actorId: BOB, body: `dm ${i}`, threadId: null }, true, false); break;
       case "chatter": post({ conversationId: 3, actorId: BOB, body: `chatter ${i}`, threadId: null }, false, false); break;
@@ -143,6 +144,25 @@ async function scenario(seed: number, steps: number) {
         sigterm();
         await startProc(generation % 2 === 0 ? "monitor" : "channel");
         break;
+      case "pending": {
+        // A restart while a mention is still undelivered (codex r4 F10): a mention (member or
+        // a call from outside) lands, then the process dies a moment later - often while the
+        // channel's rate limit still holds it or the mention list read is in flight - and
+        // sometimes dies again right after the next one starts.
+        if (rnd() < 0.6) post({ conversationId: 3, actorId: BOB, body: `@nestor quick ${i}`, threadId: null }, true, true);
+        else post({ conversationId: 5, actorId: BOB, body: `@nestor out here ${i}`, threadId: null }, true, true, false);
+        // ... often with a DM right behind it, held behind the mention (codex T-MG-14 r1 F2).
+        if (rnd() < 0.6) post({ conversationId: 9, actorId: BOB, body: `dm behind ${i}`, threadId: null }, true, false);
+        await new Promise((r) => setTimeout(r, Math.floor(rnd() * 15)));
+        sigterm();
+        await startProc(generation % 2 === 0 ? "monitor" : "channel");
+        if (rnd() < 0.4) {
+          await new Promise((r) => setTimeout(r, Math.floor(rnd() * 10)));
+          sigterm();
+          await startProc(generation % 2 === 0 ? "monitor" : "channel");
+        }
+        break;
+      }
       case "wait": break;
     }
     await new Promise((r) => setTimeout(r, Math.floor(rnd() * 60)));
@@ -161,7 +181,7 @@ async function scenario(seed: number, steps: number) {
   return { missing, twice, unwanted, trace };
 }
 
-for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
   test(`property (seed ${seed}): every message the agent should get is delivered exactly once across handovers, failures and restarts`, async () => {
     const r = await scenario(seed, 40);
     const why = `seed ${seed}\n${r.trace.join("\n")}`;

@@ -101,3 +101,64 @@ test("feed restart with mentionCursor 0 (no mention existed when the last run st
   await new Promise((r) => setTimeout(r, 200));
   assert.deepEqual(delivered, [51]);
 });
+
+for (const status of [true, false]) test(`restart while a member mention is still undelivered: neither the status watermark nor the first event id is delivered state, so the mention is fetched again and delivered once (${status ? "server with" : "server without"} GET /api/status) (codex r4 F10)`, async (t) => {
+  const fake = await fakeAt();
+  t.after(() => fake.close());
+  gapFake(fake);
+  if (status) fake.status = { status: 200, body: { ok: true, lastMessageId: 51 } };
+  // Run 1: resumes (null, 10), bootstraps the stream at 51 and starts delivering 51 from the
+  // mention list, but the write never completes (held by the rate limit) before the stop.
+  const held: number[] = [];
+  const first = createFeed({
+    identity: { url: fake.url, token: "atk_test" },
+    onItem: (it: any) => { held.push(it.id); return new Promise(() => {}); },
+    lastEventId: null, mentionCursor: 10,
+    sse: { initialBackoffMs: 50, maxBackoffMs: 100 },
+    retry: { initialMs: 50, maxMs: 100 },
+  } as any);
+  await first.start();
+  await waitFor(() => held.length === 1, 3000);
+  // A later event arrives while 51 is still in flight.
+  fake.emit({ id: 52, conversationId: 3, actorId: BOB, body: "chatter", threadId: null });
+  await new Promise((r) => setTimeout(r, 150));
+  const saved = { lastEventId: first.lastEventId, mentionCursor: first.mentionCursor };
+  first.stop();
+  assert.equal(saved.mentionCursor, 10, "51 was never delivered");
+  await waitFor(() => fake.streams() === 0, 3000);
+  // Run 2 resumes from what run 1 saved.
+  const { feed, delivered } = await run(t, fake, saved);
+  await waitFor(() => delivered.length >= 1, 3000).catch(() => assert.fail(`51 was lost after the restart: saved=${JSON.stringify(saved)}`));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepEqual(delivered, [51]);
+  assert.equal(feed.mentionCursor, 51);
+});
+
+test("restart while a mention AND a later DM are undelivered: the next run replays from the previous run's floor, not from the newest status, so the DM is not skipped (codex T-MG-14 r1 F2)", async (t) => {
+  const fake = await fakeAt();
+  t.after(() => fake.close());
+  gapFake(fake);
+  fake.conversations = convs([{ id: 3, kind: "public", slug: "general", notify: "mentions" }, { id: 9, kind: "dm", notify: "all" }]);
+  fake.status = { status: 200, body: { ok: true, lastMessageId: 51 } };
+  const held: number[] = [];
+  const first = createFeed({
+    identity: { url: fake.url, token: "atk_test" },
+    onItem: (it: any) => { held.push(it.id); return new Promise(() => {}); },
+    lastEventId: null, mentionCursor: 10,
+    sse: { initialBackoffMs: 50, maxBackoffMs: 100 },
+    retry: { initialMs: 50, maxMs: 100 },
+  } as any);
+  await first.start();
+  await waitFor(() => fake.streams() === 1, 3000);
+  await waitFor(() => held.length === 1, 3000);
+  fake.emit({ id: 52, conversationId: 9, actorId: BOB, body: "are you there?", threadId: null });
+  await waitFor(() => held.length === 2, 3000);
+  const saved = { lastEventId: first.lastEventId, mentionCursor: first.mentionCursor, replayFloor: (first as any).replayFloor };
+  first.stop();
+  await waitFor(() => fake.streams() === 0, 3000);
+  fake.status = { status: 200, body: { ok: true, lastMessageId: 52 } };
+  const { delivered } = await run(t, fake, saved as any);
+  await waitFor(() => delivered.length >= 2, 3000).catch(() => {});
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepEqual(delivered, [51, 52], `saved=${JSON.stringify(saved)}`);
+});
