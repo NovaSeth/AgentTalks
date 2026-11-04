@@ -1,0 +1,29 @@
+{
+  "description": "AgentTalks: presence for the session and a short summary of unread messages and open questions at start",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.mjs", "start"],
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session-hook.mjs", "end"],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
