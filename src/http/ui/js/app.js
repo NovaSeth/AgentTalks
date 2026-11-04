@@ -13,6 +13,7 @@ import {
   conversationBySlug, ensureActors, loadConversationsList, loadWikiList, markReadDebounced, refreshDigestAndLeases,
   refreshNotifications, refreshPresence, registerPresenceSession, startDigestTimer,
 } from "./data.js";
+import { sessionGeneration } from "./api.js";
 import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, repinIfPinned, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
 import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
@@ -351,12 +352,21 @@ async function applyRoute(route) {
     case "chat": {
       // U30 (r4): a slug this page has not seen yet (a channel created after it loaded, an
       // agent's link) is looked up on the server once before it counts as "no access".
+      // F6 (r5): the lookup may wait on the server. Its answer opens a conversation (or the
+      // no-access screen) only if, meanwhile, no other route was applied (state.route is this
+      // one), the address did not change (a sidebar click writes the hash without a route) and
+      // the session is the same (no sign-out, no other account).
       const known = state.conversations.length;
+      const hash = location.hash;
+      const gen = sessionGeneration();
+      const current = () => state.route === route && gen === sessionGeneration();
       const c = await conversationBySlug(route.slug);
+      if (gen !== sessionGeneration()) return;
       if (state.conversations.length !== known) renderSidebarList();
+      if (!current() || location.hash !== hash) return;
       if (!c) { renderNoAccess(route); return; }
       await openConversation(c.id, route.messageId);
-      if (route.threadId && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
+      if (route.threadId && current() && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
       return;
     }
     case "dm": {

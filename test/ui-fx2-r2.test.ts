@@ -187,7 +187,17 @@ test("U7: a send that fails while the offline bar is up adds no toast (the bar a
   state.online = true;
   const r2 = await sendMessage("hello while online", { conversationId: 1 });
   assert.equal(r2, null);
-  assert.equal(toasts(created).length, before + 1, "with no offline bar the toast is still the only notice");
+  // r5 U40: online too, the "not sent" row on screen (its .failwhy sentence and Send again) is the
+  // one notice; a toast would only cover it. Before r5 this expected one toast here.
+  assert.equal(toasts(created).length, before, "the bubble's own row is the only notice while it is on screen");
+  assert.ok((state.pending[1] || []).some((p: any) => p.failed && p.error), "the row carries the error sentence");
+  state.pending = {};
+  // A failure the user cannot see (another conversation is open) still gets the toast.
+  state.activeId = 2;
+  const r3 = await sendMessage("hello to a conversation that is not open", { conversationId: 1 });
+  assert.equal(r3, null);
+  assert.equal(toasts(created).length, before + 1, "no row on screen: the toast is the notice");
+  state.activeId = 1;
   state.pending = {};
 });
 

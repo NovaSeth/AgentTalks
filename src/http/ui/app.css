@@ -1143,6 +1143,11 @@ details.arch[open] summary::before{transform:rotate(90deg)}
   /* The bar is the first thing to go on a narrow screen: the box, emoji and send stay. */
   .fmtbar{display:none}
 }
+/* U43: the main dock's card is as wide as the message column (the 44rem cap stays on .composer
+   for the thread box, where the panel is the limit anyway); its side gutters are the message
+   rows' 20 px (12 px on a phone), so the card's edges line up with the text above it. */
+.dock > .composer{max-width:none;padding-left:var(--base-size-20);padding-right:var(--base-size-20)}
+@media (max-width:760px){.dock > .composer{padding-left:var(--base-size-12);padding-right:var(--base-size-12)}}
 /* === S5 === */
 /* Slash commands in the one autocomplete popover: name + hint on the first line, a one-line
    description under it - the command menu shape every chat tool uses. */
@@ -1403,13 +1408,18 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 /* === S11 === */
 /* The search results column: a query box under the topbar, then hits grouped by conversation.
    The group heading carries a Primer Counter; a hit is a button laid out like a message row. */
-.search-view{display:flex;flex-direction:column;min-height:0;height:100%}
+.search-view{display:flex;flex-direction:column;min-height:0;height:100%;--search-col:44rem}
+/* U42: the query box keeps to the result column: the bar's divider still spans the view, but its
+   side padding grows with the view so the box inside is exactly the column (16 px gutters below
+   the column width). */
 .search-bar{display:flex;gap:var(--base-size-8);align-items:center;flex:0 0 auto;
-  padding:var(--base-size-8) var(--base-size-16);border-bottom:var(--borderWidth-thin) solid var(--borderColor-default)}
+  padding:var(--base-size-8) var(--base-size-16);border-bottom:var(--borderWidth-thin) solid var(--borderColor-default);
+  padding-left:max(var(--base-size-16),calc((100% - var(--search-col)) / 2));
+  padding-right:max(var(--base-size-16),calc((100% - var(--search-col)) / 2))}
 .search-bar input{flex:1;min-width:0}
 .search-bar .btn{width:auto;flex:0 0 auto}
 .search-results{flex:1;min-height:0;overflow-y:auto;padding:var(--base-size-8) 0 var(--base-size-32);
-  max-width:44rem;margin:0 auto;width:100%}
+  max-width:var(--search-col);margin:0 auto;width:100%}
 .search-group{margin:0 0 var(--base-size-16)}
 .search-group-h{display:flex;align-items:center;gap:var(--base-size-8);margin:0 var(--base-size-16) var(--base-size-4);
   font-size:var(--text-body-size-small);font-weight:var(--base-text-weight-semibold);color:var(--fgColor-muted);
@@ -1496,6 +1506,18 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .topbar .iconbtn.danger{color:var(--fgColor-danger)}
 .topbar .iconbtn.danger:hover{background:var(--bgColor-danger-muted);color:var(--fgColor-danger)}
 .topbar .iconbtn.danger:focus-visible{outline:2px solid var(--focus-outlineColor);outline-offset:-2px}
+/* U41: the page header's title is a flex row (icon, breadcrumb, title, typing bubble), and a flex
+   row cannot ellipsize a bare text node: the title text is its own span and shrinks with an
+   ellipsis like the channel title; the breadcrumb gives way first (a shrink weight of 99 against
+   the title's 1, down to a five-character floor) so the page's own name keeps its letters; the
+   typing bubble never shrinks. The sub-line keeps its ellipsis and gets min-width:0 so a long "last changed by"
+   cannot widen the column. */
+.topbar .title .t .wt{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar .title .t .crumbs{flex:0 99 auto;min-width:5ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar .title .t #wiki-typing{flex:0 0 auto}
+/* An empty typing bubble must not cost the row a flex gap: on a phone that gap is the last letter. */
+.topbar .title .t #wiki-typing:empty{display:none}
+.topbar .title .topic{min-width:0}
 /* === R4 (UX review round 2: U31-U36) === */
 /* U31: the thread card (380 px) keeps bold, italic, code and link; the rest sits behind "More
    formatting". The tools row may wrap but never overflows: the send button stays in view. */
@@ -1528,14 +1550,13 @@ details.arch[open] summary::before{transform:rotate(90deg)}
   :root[lang="pl"] .shell.with-rail{grid-template-columns:var(--base-size-80) var(--sbw) 1fr}
   :root[lang="pl"] .shell.with-rail.without-sidebar{grid-template-columns:var(--base-size-80) 1fr}
 }
-/* U36: toasts sit bottom-centre above the composer dock (--dock-h is mirrored on the root by
-   dom.js), never over the channel header's buttons; on a phone also above the tab bar. */
-.toast-stack{top:auto;bottom:calc(var(--dock-h,var(--base-size-80)) + var(--base-size-16));right:auto;left:50%;transform:translateX(-50%);
+/* U36 + U40: toasts sit top-centre, 16 px under the 56 px header (64 + 8): never over the
+   header's buttons (U36), and never over the dock, the composer or the last message row with its
+   "Send again" buttons (U40). The phone's tab bar is at the bottom, so nothing extra is needed
+   there. The stack drops in from above. */
+.toast-stack{top:calc(var(--base-size-64) + var(--base-size-8));bottom:auto;right:auto;left:50%;transform:translateX(-50%);
   align-items:center;max-width:min(calc(var(--base-size-128) * 3.5),calc(100vw - var(--base-size-32)))}
 .toast{animation-name:toast-up}
 .toast.leaving{animation-name:toast-down}
-@keyframes toast-up{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
-@keyframes toast-down{to{opacity:0;transform:translateY(12px) scale(.97)}}
-@media (max-width:760px){
-  .toast-stack{bottom:calc(var(--dock-h,var(--base-size-80)) + var(--base-size-64) + env(safe-area-inset-bottom,0px))}
-}
+@keyframes toast-up{from{opacity:0;transform:translateY(-12px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes toast-down{to{opacity:0;transform:translateY(-12px) scale(.97)}}

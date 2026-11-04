@@ -119,11 +119,16 @@ export async function sendMessage(text, opts = {}) {
     rec.pending = false; rec.failed = true; rec.error = describeError(e);
     persistUnsent(convId);
     // U1 (r4): the bubble grows by its "Send again" row; a list that was at the bottom follows.
-    if (state.activeId === convId && inMainList) { views.message(rec); views.repin?.(); }
+    const rowShown = state.activeId === convId && inMainList;
+    if (rowShown) { views.message(rec); views.repin?.(); }
+    // U40 (r5): the "not sent" row on screen already carries the error sentence and the retry
+    // buttons; a toast with the same words would only cover them. A toast is for a failure the
+    // user cannot see: a thread reply (its text goes back to the thread box) or another
+    // conversation.
     // U7: with the offline bar already up, a connection error is told twice (the bar, the
     // "not sent" bubble with Send again) - a toast saying the same again only covers the bar.
     const connectionLost = !state.online && !e.status && !e.code;
-    if (!connectionLost) showError(e);
+    if (!rowShown && !connectionLost) showError(e);
     return null;
   }
 }

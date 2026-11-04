@@ -379,13 +379,16 @@ test("F2: sign-out clears only the signing-out account's keys (drafts, wiki, nav
   assert.equal(a2.loadDraft(5)?.text, "ALICE");
   assert.equal(a2.loadWikiDraft("home")?.body, "ALICE_WIKI");
   assert.equal(a2.lastConvId(), 5);
-  assert.deepEqual(JSON.parse(storage.getItem("atalks_unsent_5")!).map((u: Any) => u.clientMsgId), ["m-a"], "A's unsent entry stays, B's is gone");
+  // F5 (r5): unsent messages are per actor too.
+  assert.deepEqual(JSON.parse(storage.getItem("atalks_unsent_1_5")!).map((u: Any) => u.clientMsgId), ["m-a"], "A's unsent entry stays");
+  assert.equal(storage.getItem("atalks_unsent_2_5"), null, "B's is gone");
   const b2 = await tab("b6", B);
   assert.equal(b2.loadDraft(5), null);
   assert.equal(b2.loadWikiDraft("home"), null);
   assert.equal(b2.lastConvId(), null);
   a2.clearLocalAccountData(1);
-  assert.deepEqual([...storage.data.keys()].filter((k) => k.startsWith("atalks_")), [], "nothing of either account is left");
+  // The storage-layout flag (F4 r5) is browser-level and names no account.
+  assert.deepEqual([...storage.data.keys()].filter((k) => k.startsWith("atalks_") && k !== "atalks_storage_v"), [], "nothing of either account is left");
 });
 
 test("F2: legacy un-namespaced keys go once to the actor the old marker names, and the marker goes", async () => {
@@ -401,7 +404,9 @@ test("F2: legacy un-namespaced keys go once to the actor the old marker names, a
   assert.equal(b.lastConvId(), null);
   assert.equal(storage.getItem("atalks_owner"), null, "the marker is gone");
   assert.equal(storage.getItem("atalks_draft_5"), null, "the legacy key is gone");
-  assert.equal(JSON.parse(storage.getItem("atalks_unsent_5")!)[0].ownerId, 1, "the legacy unsent entry is A's");
+  assert.equal(storage.getItem("atalks_unsent_5"), null, "the shared legacy list is gone");
+  assert.equal(JSON.parse(storage.getItem("atalks_unsent_1_5")!)[0].clientMsgId, "old", "the legacy unsent entry is A's (in A's key, F5 r5)");
+  assert.equal(storage.getItem("atalks_unsent_2_5"), null, "and not B's");
   const a = await tab("a7", A);
   assert.equal(a.loadDraft(5)?.text, "LEGACY_A");
   assert.equal(a.loadWikiDraft("home")?.body, "LEGACY_WIKI");
@@ -409,12 +414,13 @@ test("F2: legacy un-namespaced keys go once to the actor the old marker names, a
   assert.ok(a.visibleMessages(5).some((m: Any) => m.body === "legacy unsent"));
 });
 
-test("F2: legacy keys with no marker at all are claimed once by the first sign-in", async () => {
+test("F2/F4 (r5): legacy keys with no marker at all are quarantined, never claimed by a sign-in", async () => {
   storage.setItem("atalks_draft_9", "old draft");
   const c = await tab("c1", { id: 3, handle: "c" });
-  assert.equal(c.loadDraft(9)?.text, "old draft");
+  assert.equal(c.loadDraft(9), null, "the first sign-in does not inherit unattributed data");
   const d = await tab("d1", { id: 4, handle: "d" });
-  assert.equal(d.loadDraft(9), null, "once claimed, another account does not inherit it");
+  assert.equal(d.loadDraft(9), null, "nor does any later one");
+  assert.equal(storage.getItem("atalks_draft_9"), null, "the legacy key is deleted");
 });
 
 // ------------------------------------------------------------------ F3

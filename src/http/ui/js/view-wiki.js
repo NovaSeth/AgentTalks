@@ -338,7 +338,7 @@ export function renderWikiMain(loading) {
     <div class="topbar">
       ${hamburgerHtml()}
       <div class="title">
-        <div class="t">${iconDoc()} ${wikiBreadcrumbHtml(page)}${escapeHtml(title ?? "")}
+        <div class="t">${iconDoc()} ${wikiBreadcrumbHtml(page)}<span class="wt">${escapeHtml(title ?? "")}</span>
           <span id="wiki-typing">${views.typing(`w:${w.slug}`)}</span></div>
         <div class="topic">${page ? t("version {n} · last changed by @{who} {when}", { n: page.revisions, who: escapeHtml(page.updatedBy ?? "?"), when: timeAgo(page.updatedAt) }) : t("a new page, not saved yet")}</div>
       </div>

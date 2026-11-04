@@ -88,14 +88,15 @@ test("the same account signing in again gets its draft back", async () => {
   assert.equal(s.data["atalks_draft_1_5"], "secret of A", "stored in A's namespace");
 });
 
-test("a legacy draft without an owner marker is kept once and claimed by the first sign-in", async () => {
+test("a legacy draft without an owner marker is quarantined: no sign-in claims it (F4 r5)", async () => {
   const s = await setup();
   s.data["atalks_draft_9"] = "old draft";
   s.claimLocalData(3);
-  assert.equal(s.data["atalks_draft_9"], undefined, "the legacy key is migrated");
-  assert.equal(s.data["atalks_draft_3_9"], "old draft", "into the first signer's namespace");
+  assert.equal(s.data["atalks_draft_9"], undefined, "the legacy key is gone");
+  assert.equal(s.data["atalks_draft_3_9"], undefined, "not moved into the first signer's namespace");
   s.claimLocalData(4);
-  assert.equal(s.data["atalks_draft_4_9"], undefined, "once claimed, another account does not inherit it");
+  assert.equal(s.data["atalks_draft_4_9"], undefined, "nor into another account's");
+  assert.ok(!Object.values(s.data).includes("old draft"), "deleted, never assigned");
 });
 
 test("saveDraft never stores a draft without an owner", async () => {

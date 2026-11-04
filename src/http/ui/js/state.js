@@ -204,20 +204,29 @@ export function mergeReactions(messages, reactions) {
 // two accounts at once (the session lives in sessionStorage). A single "owner" marker therefore
 // could not decide whose data a key is: tab B overwrote it and read tab A's drafts. Every
 // per-account key now carries the actor in its name, every read and write goes through the
-// current actor's namespace, and nothing global decides visibility. Unsent messages stay one
-// list per conversation with an `ownerId` on every entry (8c92d64).
+// current actor's namespace, and nothing global decides visibility. F5 (r5): unsent messages too,
+// so no account ever reads, filters or rewrites another account's list.
 const DRAFT_KEY = (owner, id) => `atalks_draft_${owner}_${id}`;
 const WIKI_DRAFT_KEY = (owner, slug) => `atalks_wiki_draft_${owner}_${slug}`;
 const LAST_CONV_KEY = (owner) => `atalks_last_conv_${owner}`;
 const RECENT_KEY = (owner) => `atalks_recent_${owner}`;
 // r4 (item 9): the Threads view's "seen" marks (root id -> last reply id seen) per actor too.
 const THREADS_SEEN_KEY = (owner) => `atalks_threads_seen_${owner}`;
-const LEGACY_THREADS_SEEN_KEY = "atalks_threads_seen";
-// Written before r3: one marker for the whole browser and un-namespaced keys. Read only by the
-// one-time migration below.
+const UNSENT_KEY = (owner, convId) => `atalks_unsent_${owner}_${convId}`;
+const UNSENT_PREFIX = (owner) => `atalks_unsent_${owner}_`;
+// Written before r3 (and by a tab still running that code): one marker for the whole browser and
+// un-namespaced keys; before r5 one unsent list per conversation shared by every account. Read
+// only by the migration below.
 const LEGACY_OWNER_KEY = "atalks_owner";
 const LEGACY_DRAFT = /^atalks_draft_(\d+)$/;
 const LEGACY_WIKI_PREFIX = "atalks_wiki_draft_";
+const LEGACY_THREADS_SEEN_KEY = "atalks_threads_seen";
+const LEGACY_UNSENT = /^atalks_unsent_(\d+)$/;
+// F4 (r5): the migration's versioned flag. Once it is set, a legacy key is something an old,
+// unreloaded tab wrote AFTER the migration: there is no owner it can be proven to belong to, so it
+// is dropped, never claimed.
+const STORAGE_VERSION_KEY = "atalks_storage_v";
+const STORAGE_VERSION = "2";
 
 /** The account whose namespace this tab reads and writes: the signed-in actor, or during a lost
  *  session the one the in-memory drafts are kept for. null = no account: nothing is stored. */
@@ -234,71 +243,100 @@ function storageKeys() {
   return keys;
 }
 
-/** The one-time migration of pre-r3 data: un-namespaced keys go to the actor the old marker
- *  names (or, with no marker at all, to `fallback`: the first account that signs in), legacy
- *  unsent entries without an ownerId get the marker's id, and the marker is removed. A namespaced
- *  key that already exists wins over its legacy copy. Idempotent: with nothing legacy left it
- *  changes nothing. A legacy wiki slug that itself starts with digits and "_" reads as namespaced
- *  and is left alone (it then belongs to nobody visible). */
-function migrateLegacy(fallback) {
+function readList(key) {
   try {
+    const list = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+}
+
+/** The migration of legacy (un-namespaced) data, run before every claim and every sign-out.
+ *  First run (no flag): un-namespaced keys go to the actor the old owner marker names, and only to
+ *  it; with no valid marker they are deleted. A pre-r5 shared unsent list is split by each entry's
+ *  own `ownerId` (the marker's actor for an entry without one; deleted with no marker). A
+ *  namespaced key that already exists wins over its legacy copy. The flag is then recorded and the
+ *  marker removed. Every later run deletes whatever legacy key or marker an old tab wrote since:
+ *  unattributed data is quarantined, never handed to whoever signs in next (F4 r5). A legacy wiki
+ *  slug that itself starts with digits and "_" reads as namespaced and is left alone (it belongs
+ *  to nobody visible). */
+function migrateLegacy() {
+  try {
+    const firstRun = localStorage.getItem(STORAGE_VERSION_KEY) !== STORAGE_VERSION;
     const marker = localStorage.getItem(LEGACY_OWNER_KEY);
-    const owner = marker ?? (fallback == null ? null : String(fallback));
+    const owner = firstRun && marker != null && /^\d+$/.test(marker) ? marker : null;
     const move = (from, to) => {
       const value = localStorage.getItem(from);
-      if (owner != null && value != null && localStorage.getItem(to) == null) localStorage.setItem(to, value);
+      if (owner != null && value != null) {
+        const target = to(owner);
+        if (localStorage.getItem(target) == null) localStorage.setItem(target, value);
+      }
       localStorage.removeItem(from);
     };
     for (const key of storageKeys()) {
       let m;
-      if ((m = LEGACY_DRAFT.exec(key))) move(key, DRAFT_KEY(owner, m[1]));
+      if ((m = LEGACY_DRAFT.exec(key))) { const id = m[1]; move(key, (o) => DRAFT_KEY(o, id)); }
       else if (key.startsWith(LEGACY_WIKI_PREFIX) && !/^\d+_/.test(key.slice(LEGACY_WIKI_PREFIX.length))) {
-        move(key, WIKI_DRAFT_KEY(owner, key.slice(LEGACY_WIKI_PREFIX.length)));
-      } else if (key === "atalks_last_conv") move(key, LAST_CONV_KEY(owner));
-      else if (key === "atalks_recent") move(key, RECENT_KEY(owner));
-      else if (key === LEGACY_THREADS_SEEN_KEY) move(key, THREADS_SEEN_KEY(owner));
-      else if (marker !== null && key.startsWith(UNSENT_PREFIX)) {
-        // Written by 4aa92d5 before entries carried an owner: the old marker is all we have.
-        let list = null;
-        try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* a broken entry */ }
-        if (!Array.isArray(list) || !list.some((u) => u && u.ownerId == null)) continue;
-        for (const u of list) if (u && u.ownerId == null) u.ownerId = Number(marker);
-        localStorage.setItem(key, JSON.stringify(list));
+        const slug = key.slice(LEGACY_WIKI_PREFIX.length);
+        move(key, (o) => WIKI_DRAFT_KEY(o, slug));
+      } else if (key === "atalks_last_conv") move(key, LAST_CONV_KEY);
+      else if (key === "atalks_recent") move(key, RECENT_KEY);
+      else if (key === LEGACY_THREADS_SEEN_KEY) move(key, THREADS_SEEN_KEY);
+      else if ((m = LEGACY_UNSENT.exec(key))) {
+        if (firstRun) splitLegacyUnsent(key, m[1], owner);
+        localStorage.removeItem(key);
       }
     }
     localStorage.removeItem(LEGACY_OWNER_KEY);
+    if (firstRun) localStorage.setItem(STORAGE_VERSION_KEY, STORAGE_VERSION);
   } catch { /* private browsing */ }
 }
 
+/** First run only: a pre-r5 shared list `atalks_unsent_<conv>` into the per-actor keys. An entry
+ *  names its writer in `ownerId` (8c92d64); one written before that (4aa92d5) has only the old
+ *  marker. An entry with neither is deleted. */
+function splitLegacyUnsent(key, convId, markerOwner) {
+  const byOwner = new Map();
+  for (const u of readList(key)) {
+    if (!u || !u.clientMsgId) continue;
+    const who = u.ownerId != null ? String(u.ownerId) : markerOwner;
+    if (who == null || !/^\d+$/.test(who)) continue;
+    const entry = { ...u };
+    delete entry.ownerId;                  // the key names the owner now
+    if (!byOwner.has(who)) byOwner.set(who, []);
+    byOwner.get(who).push(entry);
+  }
+  for (const [who, entries] of byOwner) {
+    const target = UNSENT_KEY(who, convId);
+    const kept = readList(target);
+    const ids = new Set(kept.map((u) => u && u.clientMsgId));
+    localStorage.setItem(target, JSON.stringify([...kept, ...entries.filter((u) => !ids.has(u.clientMsgId))]));
+  }
+}
+
 /** Sign-out: removes the persisted UI data of THIS account only (drafts, wiki drafts, the last
- *  conversation, the recent list, its unsent entries). Another account signed in in another tab
- *  keeps all of its own. */
+ *  conversation, the recent list, the Threads marks, its unsent messages). Only keys in this
+ *  account's namespace are touched - removed, never read and rewritten - so another account
+ *  signed in in another tab keeps all of its own, including what it writes meanwhile (F5 r5). */
 export function clearLocalAccountData(actorId) {
   if (actorId == null) return;
-  migrateLegacy(actorId);
+  migrateLegacy();
   const me = String(actorId);
   try {
     for (const key of storageKeys()) {
-      if (key.startsWith(DRAFT_KEY(me, "")) || key.startsWith(WIKI_DRAFT_KEY(me, ""))
+      if (key.startsWith(DRAFT_KEY(me, "")) || key.startsWith(WIKI_DRAFT_KEY(me, "")) || key.startsWith(UNSENT_PREFIX(me))
           || key === LAST_CONV_KEY(me) || key === RECENT_KEY(me) || key === THREADS_SEEN_KEY(me)) {
         localStorage.removeItem(key);
-      } else if (key.startsWith(UNSENT_PREFIX)) {
-        let list = null;
-        try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* a broken entry */ }
-        const rest = Array.isArray(list) ? list.filter((u) => u && String(u.ownerId) !== me) : [];
-        if (rest.length) localStorage.setItem(key, JSON.stringify(rest));
-        else localStorage.removeItem(key);
       }
     }
   } catch { /* Storage may be unavailable in private browsing. */ }
 }
 
-/** Called right after the signed-in actor is known: pre-r3 data is migrated once, the memory of
- *  another account (a lost session followed by a different sign-in) is dropped, and this
+/** Called right after the signed-in actor is known: legacy data is migrated (or quarantined), the
+ *  memory of another account (a lost session followed by a different sign-in) is dropped, and this
  *  account's unsent messages come back. Storage of other accounts is left alone: it is not
  *  readable from this namespace. */
 export function claimLocalData(actorId) {
-  migrateLegacy(actorId);
+  migrateLegacy();
   if (state.draftsOwner != null && String(state.draftsOwner) !== String(actorId)) { state.drafts = {}; state.pending = {}; }
   state.draftsOwner = actorId;
   restoreUnsent(actorId);
@@ -360,36 +398,30 @@ export function lastConvId() {
 // "not sent" bubble rather than folded into the composer text (T-MG-3 F3, W3-S4-B): the bubble
 // keeps its clientMsgId, so "Send again" can never post it twice even when the first attempt
 // did land, a thread reply stays a thread reply, and two failed messages stay two. They are
-// stored per conversation, every entry with the `ownerId` that wrote it, so only the account that
-// wrote them gets them back.
-const UNSENT_PREFIX = "atalks_unsent_";
+// stored per account and conversation (`atalks_unsent_<actorId>_<conv>`, F5 r5), so only the
+// account that wrote them gets them back and no other account's cleanup can rewrite them.
 
-/** Writes the conversation's in-flight and failed messages to storage (or removes the key).
- *  Storage is shared by every tab of the browser, so the stored list is MERGED: entries another
- *  tab wrote stay, unless this tab holds them or has just sent or discarded them (`done`).
- *  Every entry stores the `ownerId` that wrote it. Entries of another account are kept untouched
- *  (a different account in another tab may still need them): never re-owned, never shown. */
+/** Writes the conversation's in-flight and failed messages to this account's key (or removes it).
+ *  Two tabs of the SAME account share the key, so the stored list is merged: entries the other
+ *  tab wrote stay, unless this tab holds them or has just sent or discarded them (`done`). */
 export function persistUnsent(convId, done = []) {
-  const owner = state.actor?.id ?? state.draftsOwner;
+  const owner = storageOwner();
   if (owner == null) return;               // no known account: writing an unattributed entry would leak it
+  const key = UNSENT_KEY(owner, convId);
   const mine = (state.pending[convId] || []).map((p) => ({
-    ownerId: owner, clientMsgId: p.clientMsgId, body: p.body, threadId: p.threadId ?? null, ts: p.ts,
+    clientMsgId: p.clientMsgId, body: p.body, threadId: p.threadId ?? null, ts: p.ts,
     // An in-flight entry has no error yet; if it comes back from storage, it was never confirmed.
     error: p.failed ? p.error || null : null,
   }));
   const skip = new Set([...done, ...mine.map((u) => u.clientMsgId)]);
   let others = [];
   try {
-    const stored = JSON.parse(localStorage.getItem(UNSENT_PREFIX + convId) || "[]");
-    if (Array.isArray(stored)) others = stored.filter((u) => u && u.clientMsgId && !skip.has(u.clientMsgId));
-  } catch { /* unreadable or unavailable: this tab's list replaces it */ }
+    others = readList(key).filter((u) => u && u.clientMsgId && !skip.has(u.clientMsgId));
+  } catch { /* unavailable: this tab's list replaces it */ }
   const list = [...others, ...mine];
   try {
-    if (list.length) {
-      localStorage.setItem(UNSENT_PREFIX + convId, JSON.stringify(list));
-    } else {
-      localStorage.removeItem(UNSENT_PREFIX + convId);
-    }
+    if (list.length) localStorage.setItem(key, JSON.stringify(list));
+    else localStorage.removeItem(key);
   } catch { /* private browsing: the memory copy is all there is */ }
 }
 
@@ -409,27 +441,18 @@ export function preserveUnsent() {
   }
 }
 
-/** Sign-in: the stored unsent messages of THIS account (entries of any other account are
- *  skipped by their ownerId) come back as failed bubbles, merged with what the tab still holds. */
+/** Sign-in: this account's stored unsent messages (its own keys only) come back as failed
+ *  bubbles, merged with what the tab still holds. */
 function restoreUnsent(actorId) {
+  const prefix = UNSENT_PREFIX(actorId);
   let keys = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(UNSENT_PREFIX)) keys.push(key);
-    }
-  } catch { return; }
+  try { keys = storageKeys().filter((key) => key.startsWith(prefix)); } catch { return; }
   for (const key of keys) {
-    const convId = Number(key.slice(UNSENT_PREFIX.length));
-    let list = [];
-    try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* a broken entry */ }
-    if (!Number.isFinite(convId) || !Array.isArray(list)) continue;
-    for (const u of list) {
+    const rest = key.slice(prefix.length);
+    if (!/^\d+$/.test(rest)) continue;
+    const convId = Number(rest);
+    for (const u of readList(key)) {
       if (!u || typeof u.body !== "string" || !u.clientMsgId) continue;
-      // An entry with no ownerId left after the migration (no old marker named anyone) belongs
-      // to nobody we can prove: it is never shown.
-      if (u.ownerId == null || String(u.ownerId) !== String(actorId)) continue;
-      // Created only for an entry of this account: another account's list leaves no trace here.
       const mine = state.pending[convId] || (state.pending[convId] = []);
       if (mine.some((p) => p.clientMsgId === u.clientMsgId)) continue;
       mine.push({

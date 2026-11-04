@@ -337,14 +337,18 @@ test("U35: rail labels have side padding and an ellipsis; the Polish rail is wid
   assert.match(CSS, /@media \(min-width:761px\)\{[^}]*:root\[lang="pl"\] \.shell\.with-rail\{grid-template-columns:var\(--base-size-80\)/);
 });
 
-test("U36: toasts are anchored bottom-centre above the dock, not over the header", () => {
+test("U36: toasts are centred and never over the header's buttons (r5 U40: under the header, not over the dock)", () => {
   const rules = CSS.match(/\.toast-stack\{[^}]*\}/g)!;
   const desktop = rules.find((r) => r.includes("left:50%"));
-  assert.ok(desktop, "a bottom-centre rule exists");
-  assert.match(desktop!, /bottom:calc\(var\(--dock-h/);
-  assert.match(desktop!, /top:auto/);
-  // The phone rule lifts the stack above the tab bar as well.
-  assert.ok(rules.some((r) => r.includes("env(safe-area-inset-bottom") && r.includes("--base-size-64")));
+  assert.ok(desktop, "a centred rule exists");
+  // r4 anchored the stack bottom-centre above the dock; r5 (U40) found it covering the failed
+  // message's "Send again" row there and moved it 16 px under the 56 px header. The U36 point
+  // (clear of the header's buttons) holds: the stack starts below the header's full height.
+  assert.match(desktop!, /top:calc\(var\(--base-size-64\) \+ var\(--base-size-8\)\)/);
+  assert.match(desktop!, /bottom:auto/);
+  assert.doesNotMatch(desktop!, /top:auto/);
+  // No phone rule is needed any more: the tab bar is at the bottom, the stack at the top.
+  assert.ok(!rules.some((r) => r.includes("env(safe-area-inset-bottom")));
 });
 
 // ------------------------------------------------------------------ 9: threads seen per actor
@@ -358,7 +362,9 @@ test("9: the Threads view's seen marks are stored per actor (atalks_threads_seen
   assert.doesNotMatch(VIEW_THREADS, /"atalks_threads_seen"/, "view-threads.js has no bare key");
 });
 
-test("9: a pre-r4 browser-wide seen map migrates to the signing-in actor and sign-out clears only that actor's", () => {
+test("9: a pre-r4 browser-wide seen map migrates to the old marker's actor and sign-out clears only that actor's", () => {
+  // F4 (r5): only the actor the old owner marker names claims legacy data (no marker: deleted).
+  storage.setItem("atalks_owner", "1");
   storage.setItem("atalks_threads_seen", JSON.stringify({ 9: 3 }));
   model.claimLocalData(1);
   assert.equal(storage.getItem("atalks_threads_seen"), null);

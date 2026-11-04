@@ -176,9 +176,10 @@ test("(b) B persists after A wrote: A's entry stays, is not re-owned, is not sho
   assert.deepEqual(failedBodies(ui), []);
   ui.st.state.pending[5] = [{ clientMsgId: "m-b", body: "b-text", ts: 2, failed: true, error: null }];
   ui.st.persistUnsent(5);
-  const stored = JSON.parse(store["atalks_unsent_5"]);
-  assert.equal(stored.find((u: Any) => u.clientMsgId === "m-a").ownerId, 1, "A's entry keeps its owner");
-  assert.equal(stored.find((u: Any) => u.clientMsgId === "m-b").ownerId, 2);
+  // F5 (r5): one key per account; the pre-r5 shared list was split by ownerId at sign-in.
+  assert.equal(store["atalks_unsent_5"], undefined, "no shared list is left");
+  assert.deepEqual(JSON.parse(store["atalks_unsent_1_5"]).map((u: Any) => u.clientMsgId), ["m-a"], "A's entry stays A's, untouched by B's write");
+  assert.deepEqual(JSON.parse(store["atalks_unsent_2_5"]).map((u: Any) => u.clientMsgId), ["m-b"], "B's entry only in B's key");
   assert.equal(store["atalks_owner"], undefined, "persistUnsent never writes the owner marker (the migration removed it, F2 r3)");
   ui.st.state.pending = {};
   ui.st.claimLocalData(2);
@@ -194,7 +195,8 @@ test("(b2) persistUnsent leaves the marker alone even when it was never set", as
   ui.st.state.pending[5] = [{ clientMsgId: "m-a", body: "a-text", ts: 2, failed: true, error: null }];
   ui.st.persistUnsent(5);
   assert.equal(store["atalks_owner"], undefined);
-  assert.equal(JSON.parse(store["atalks_unsent_5"])[0].ownerId, 1);
+  assert.equal(JSON.parse(store["atalks_unsent_1_5"])[0].clientMsgId, "m-a", "stored in A's own key (F5 r5)");
+  assert.equal(store["atalks_unsent_5"], undefined);
 });
 
 test("(c) a legacy entry without ownerId goes to the marker's account once, never to another", async (t) => {
@@ -205,7 +207,7 @@ test("(c) a legacy entry without ownerId goes to the marker's account once, neve
   seed(5, [entry("old", "legacy-text")]);
   await signIn(ui, A, setFetch);
   assert.deepEqual(failedBodies(ui), ["legacy-text"]);
-  assert.equal(JSON.parse(store["atalks_unsent_5"])[0].ownerId, 1, "claimed by A");
+  assert.equal(JSON.parse(store["atalks_unsent_1_5"])[0].clientMsgId, "old", "claimed by A, into A's key (F5 r5)");
 
   freshState(ui);
   store["atalks_owner"] = "2";
