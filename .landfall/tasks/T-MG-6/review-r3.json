@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F7",
+      "severity": "minor",
+      "path": "src/http/auth.ts",
+      "line": 80,
+      "rule": "OWA-7",
+      "text": "Acceptance 6: at_dev's 180-day expiry is client-only. Day-181 replay still exempts a correct-password login after 20 failures (200; no cookie:429). Sign and check expiry. F6 ADDRESSED: 24 IPs cause 20 scrypt calls; correct guess25=429. F3 ADDRESSED: after 12 shared-IP failures, trusted login=200. F5 ADDRESSED via CLI logging: one secret-free invite_minted. Typecheck and in-memory checks passed; socket tests, full suite and secrets scan blocked by EPERM."
+    }
+  ],
+  "run": "codex-T-MG-6-reviewer-2",
+  "sha256": "5197c32cbed29393a5d9359c0b89a045147c7c91f123131f206e641249280350"
+}

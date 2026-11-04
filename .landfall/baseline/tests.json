@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "694017705f33ab046ca3ec693be884edb1df8141",
-  "collectedAt": "2026-11-04T00:08:17.140Z",
+  "head": "dcc38a7d7255a78dff53db2548eefcc1aa20cb88",
+  "collectedAt": "2026-11-04T00:18:22.312Z",
   "tests": [
     {
       "id": "[\"\",\"/api/me pokazuje, kto pisze - bez pytania o liste obecnych\",1]",
@@ -100,12 +100,32 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"a message immediately restores an actor silent for 14 days without fetching\",1]",
+      "id": "[\"\",\"a disabled actor is not woken and is not wakeable (B-MG-3)\",1]",
       "file": "",
       "skipped": false
     },
     {
-      "id": "[\"\",\"a message immediately restores an actor silent for 90 days without fetching\",1]",
+      "id": "[\"\",\"a failed login writes exactly one security: line without the password (B-MG-51)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a forged or other-actor at_dev does not exempt (item 1c)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a high handle-wide failure count refuses a browser without at_dev (item 3, D-MG-14)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a known browser (valid at_dev) logs in despite the account cap (item 1b)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a valid at_dev also skips the IP+handle cap, the plain IP cap stays (item 2)\",1]",
       "file": "",
       "skipped": false
     },
@@ -130,6 +150,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"agenttalks invite create writes an invite_minted line with by cli (item 3)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"aktor bez hasla nie zaloguje sie pustym haslem\",1]",
       "file": "",
       "skipped": false
@@ -141,6 +166,16 @@
     },
     {
       "id": "[\"\",\"aktor z zywym SSE nie jest budzony - push juz dotarl\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"an '@' prefix does not open fresh limiter buckets (item 1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"an agent admin cannot create actors, a human admin can (B-MG-8)\",1]",
       "file": "",
       "skipped": false
     },
@@ -281,6 +316,11 @@
     },
     {
       "id": "[\"\",\"displayName domyslnie rowna sie handle i daje sie zmienic bez ruszania handle\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"distributed guesser: 25th IP with the right password and no at_dev gets 429, unverified (item 1a)\",1]",
       "file": "",
       "skipped": false
     },
@@ -470,6 +510,21 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"interleaved successful logins do not reset the guess counter on a victim (B-MG-44)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"invite minted and actor disabled are logged, enroll limit is logged (item 5)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"isBlockedIp blocks NAT64 and 6to4 ranges (B-MG-19)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"isBlockedIp: prywatne blokowane, publiczne przepuszczane, loopback za zgoda\",1]",
       "file": "",
       "skipped": false
@@ -600,57 +655,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"listActors does not expose the timestamp of a deleted public message\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors does not expose the timestamp of a dm message\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors does not expose the timestamp of a group message\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors does not expose the timestamp of a private message\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors looks up activity by actor without scanning message or session history\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"listActors sortuje po handle\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors uses account creation when an actor has no activity\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors uses the newest created timestamp for lastActiveAt\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors uses the newest message timestamp for lastActiveAt\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors uses the newest session timestamp for lastActiveAt\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"listActors uses the newest token timestamp for lastActiveAt\",1]",
       "file": "",
       "skipped": false
     },
@@ -685,6 +690,26 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"logout invalidates the cookie server-side and requires CSRF (B-MG-45)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"logout with a bad CSRF clears the cookie, keeps the epoch and answers 403 (item 4)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"long-poll answers 401 after the actor was disabled mid-wait (B-MG-2)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"long-poll answers 401 after the token was revoked mid-wait (B-MG-2)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"long-poll bez uwierzytelnienia daje 401\",1]",
       "file": "",
       "skipped": false
@@ -701,6 +726,11 @@
     },
     {
       "id": "[\"\",\"long-poll nie zwraca wlasnych wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"long-poll of a cookie session answers 401 after a password change (B-MG-50)\",1]",
       "file": "",
       "skipped": false
     },
@@ -870,11 +900,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"online presence wins over old activity\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"openDb jest idempotentne na TYM SAMYM pliku\",1]",
       "file": "",
       "skipped": false
@@ -941,6 +966,16 @@
     },
     {
       "id": "[\"\",\"parser argumentow: nieznana flaga zostaje trescia, terminator konczy flagi\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"passkey counter: 5->0 and 5->5 rejected, 5->6 ok, never lowered (B-MG-5)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"passkey counter: an always-zero authenticator stays allowed (B-MG-52)\",1]",
       "file": "",
       "skipped": false
     },
@@ -1135,6 +1170,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"security lines never contain the handle string a user typed (item 2)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"sensitive bez TTL dostaje domyslny TTL i wygasa\",1]",
       "file": "",
       "skipped": false
@@ -1151,21 +1191,6 @@
     },
     {
       "id": "[\"\",\"sfalszowane i wygasle cookie sesji daje 401 przez API\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"sidebar classifies 13 silent days as active\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"sidebar classifies 14 silent days as faded\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"sidebar classifies 90 silent days as archived\",1]",
       "file": "",
       "skipped": false
     },
@@ -1275,7 +1300,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"the actor directory cache retains uploaded avatars\",1]",
+      "id": "[\"\",\"the michal, @michal, @@michal, @@@michal sequence is limited from the 9th (item 1)\",1]",
       "file": "",
       "skipped": false
     },
@@ -1286,6 +1311,11 @@
     },
     {
       "id": "[\"\",\"token dla nieistniejacego aktora konczy sie kodem 1, nie wyjatkiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"token mint and revoke and a denied admin action are logged without secrets (B-MG-51)\",1]",
       "file": "",
       "skipped": false
     },
@@ -1386,6 +1416,11 @@
     },
     {
       "id": "[\"\",\"w kontenerze bind na 0.0.0.0 jest dozwolony\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake body carries a signed exp (now+300) and a random nonce (B-MG-19)\",1]",
       "file": "",
       "skipped": false
     },
@@ -1701,5 +1736,5 @@
     }
   ],
   "failing": [],
-  "sha256": "c9e69f2c68193750b3f3a9077e6a2590bfe70d64cc3a6e3212ea5a6513da2a60"
+  "sha256": "bea437fa842bc25af9ef641be1b4caacd03e1e1918031002c281b1405071f797"
 }

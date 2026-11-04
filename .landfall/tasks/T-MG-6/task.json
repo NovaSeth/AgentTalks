@@ -13,7 +13,7 @@
       "at": "2026-11-03T23:49:26.815Z"
     }
   ],
-  "status": "fix-round",
+  "status": "done",
   "round": 2,
   "events": [
     {
@@ -139,6 +139,46 @@
         "round": 2,
         "addressed": 3,
         "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T00:18:21.803Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:18:22.312Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T00:18:22.312Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "dcc38a7d7255a78dff53db2548eefcc1aa20cb88",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:18:38.164Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "dcc38a7d7255a78dff53db2548eefcc1aa20cb88"
       }
     }
   ],
