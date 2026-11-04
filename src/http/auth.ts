@@ -50,7 +50,7 @@ export function makeCookie(
     "SameSite=Lax",
     `Max-Age=${Math.max(ttlSec, 0)}`,
   ];
-  if (secure || config.trustProxy) attrs.push("Secure");
+  if (cookieIsSecure(config, secure)) attrs.push("Secure");
   return attrs.join("; ");
 }
 
@@ -83,7 +83,7 @@ export function makeDeviceCookie(
     `${DEVICE_COOKIE}=${mac}.${nonce}.${actorId}.${nowSec}.${epoch}`,
     "Path=/api/login", "HttpOnly", "SameSite=Lax", `Max-Age=${DEVICE_TTL_SEC}`,
   ];
-  if (secure || config.trustProxy) attrs.push("Secure");
+  if (cookieIsSecure(config, secure)) attrs.push("Secure");
   return attrs.join("; ");
 }
 
@@ -246,4 +246,10 @@ export function assertCsrf(rc: RouteCtx, req: Req): void {
 /**  own frontend knows it from login. One secret is enough, because the input is already secret. */
 export function csrfFor(sessionCookieValue: string): string {
   return createHmac("sha256", "at-csrf").update(sessionCookieValue).digest("hex").slice(0, 32);
+}
+
+/** A cookie is Secure when the request is secure, behind a trusted proxy, or when the
+ *  deployment's public address is https (so it never travels over plain http). */
+function cookieIsSecure(config: Config, secure: boolean): boolean {
+  return secure || config.trustProxy || /^https:\/\//i.test(config.baseUrl ?? "");
 }
