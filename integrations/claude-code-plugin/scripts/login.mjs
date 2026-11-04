@@ -21,13 +21,17 @@ import { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, renameSyn
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createApi } from "../lib/api.mjs";
-import { trustDir, trustProjectFile } from "../lib/trust.mjs";
+import { trustDir, trustProjectFile, withTrustLock } from "../lib/trust.mjs";
 
 const NAME = ".agenttalks.json";
 
 /** Undoes the credential write when a later step fails (set once the credential is written).
  *  @type {(() => void) | null} */
 let undo = null;
+
+/** A refusal raised while the trust lock is held: the lock is released (finally) before
+ *  the process exits, then it is reported through fail(). */
+class Refusal extends Error {}
 
 /** @param {string} msg @returns {never} */
 function fail(msg) {
@@ -128,7 +132,7 @@ function writeAtomic(path, data, mode, quiet = false) {
   } catch (err) {
     try { unlinkSync(tmp); } catch { /* not created */ }
     if (quiet) throw err;
-    fail(`could not write ${path} (${err instanceof Error ? err.name : "error"})`);
+    throw new Refusal(`could not write ${path} (${err instanceof Error ? err.name : "error"})`);
   }
 }
 
@@ -188,49 +192,64 @@ if (tracked === "unknown") {
     + "refusing to write a token into a possible repository; nothing was written");
 }
 
-// 1. The ignore line first, so the credential is never unignored.
+// Everything that writes runs under the trust-list lock, taken FIRST: a lock timeout leaves
+// zero writes and an existing credential untouched.
 let ignored = false;
-if (willTouchGi) {
-  const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
-  if (!current.split("\n").some((l) => l.trim() === NAME)) {
-    writeAtomic(gi, current + (current && !current.endsWith("\n") ? "\n" : "") + NAME + "\n",
-      existsSync(gi) ? lstatSync(gi).mode & 0o777 : 0o644);
-    ignored = true;
-  }
-}
-
-// 2. The credential. A failure from here on restores the previous bytes or removes it.
-const previous = kindOf(file) === "file" ? readFileSync(file) : null;
 const content = Buffer.from(JSON.stringify({ url, token, writtenBy: "agenttalks-plugin-login" }, null, 2) + "\n");
-writeAtomic(file, content, 0o600);
-undo = () => {
-  // Only while the file is still what this run wrote: never clobber someone else's file.
-  let now = null;
-  try { now = readFileSync(file); } catch { /* gone */ }
-  if (now !== null && !now.equals(content)) return;
-  if (previous !== null) writeAtomic(file, previous, 0o600, true);
-  else unlinkSync(file);
-};
-
-// Test seam (never set in production): runs a script between the rename and the verify.
-const seam = env.AGENTTALKS_LOGIN_TEST_AFTER_RENAME;
-if (seam) { try { execFileSync(process.execPath, [seam, file], { stdio: "ignore" }); } catch { /* the script's own failure is not login's */ } }
-
-// 3. Trust binds to the bytes this run wrote: if the file is not exactly those, trust nothing.
-let onDisk = null;
-try { onDisk = readFileSync(file); } catch { /* gone */ }
-if (onDisk === null || !onDisk.equals(content)) {
-  undo = null;
-  fail("the file changed while saving; nothing trusted");
-}
 try {
-  trustProjectFile(file, content, { env });
+  withTrustLock(tdir, () => {
+    try {
+      // 1. The ignore line first, so the credential is never unignored.
+      if (willTouchGi) {
+        const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
+        if (!current.split("\n").some((l) => l.trim() === NAME)) {
+          writeAtomic(gi, current + (current && !current.endsWith("\n") ? "\n" : "") + NAME + "\n",
+            existsSync(gi) ? lstatSync(gi).mode & 0o777 : 0o644);
+          ignored = true;
+        }
+      }
+
+      // 2. The credential. A failure from here on restores the previous bytes or removes it.
+      const previous = kindOf(file) === "file" ? readFileSync(file) : null;
+      writeAtomic(file, content, 0o600);
+      undo = () => {
+        // Only while the file is still what this run wrote: never clobber someone else's file.
+        let now = null;
+        try { now = readFileSync(file); } catch { /* gone */ }
+        if (now !== null && !now.equals(content)) return;
+        if (previous !== null) writeAtomic(file, previous, 0o600, true);
+        else unlinkSync(file);
+      };
+
+      // Test seam (never set in production): runs a script between the rename and the verify.
+      const seam = env.AGENTTALKS_LOGIN_TEST_AFTER_RENAME;
+      if (seam) { try { execFileSync(process.execPath, [seam, file], { stdio: "ignore" }); } catch { /* the script's own failure is not login's */ } }
+
+      // 3. Trust binds to the bytes this run wrote: if the file is not exactly those, trust nothing.
+      let onDisk = null;
+      try { onDisk = readFileSync(file); } catch { /* gone */ }
+      if (onDisk === null || !onDisk.equals(content)) {
+        undo = null;
+        throw new Refusal("the file changed while saving; nothing trusted");
+      }
+      try {
+        trustProjectFile(file, content, { env, alreadyLocked: true });
+      } catch (err) {
+        throw new Refusal(`could not update the trust list (${err instanceof Error ? err.name : "error"}); nothing was trusted`);
+      }
+      undo = null;
+    } catch (err) {
+      // Roll back while the lock is still held.
+      if (undo) { const u = undo; undo = null; try { u(); } catch { /* best effort */ } }
+      throw err;
+    }
+  });
 } catch (err) {
+  if (err instanceof Refusal) fail(err.message);
   fail(/locked/.test(String(/** @type {any} */ (err)?.message))
-    ? "trust list is locked by another login; try again; nothing was trusted"
-    : `could not update the trust list (${err instanceof Error ? err.name : "error"}); nothing was trusted`);
+    ? `${/** @type {Error} */ (err).message}; nothing was written`
+    : `could not update the trust list (${err instanceof Error ? err.name : "error"}); nothing was written`);
 }
-undo = null;
 
 const safeHandle = String(actor.handle).replace(/[^A-Za-z0-9_.-]/g, "?");
 const safeKind = String(actor.kind ?? "actor").replace(/[^A-Za-z0-9_.-]/g, "?");
