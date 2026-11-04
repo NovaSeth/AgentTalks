@@ -90,14 +90,30 @@ export function disconnectSSE() {
   sseResume = false;
 }
 
+/** The newest message id among the conversations whose history was fetched (REST); 0 when none.
+ *  Message ids are global, so it is a valid replay cursor for every conversation. */
+function newestLoadedId() {
+  let newest = 0;
+  for (const [convId, list] of Object.entries(state.msgs)) {
+    if (!state.loaded[convId]) continue;
+    for (const m of list) if (typeof m.id === "number" && m.id > newest) newest = m.id;
+  }
+  return newest;
+}
+
 export function connectSSE() {
   clearTimeout(sseTimer);
   if (es) es.close();
+  // B-MG-97: a return after a stream that never opened has no cursor yet; the newest loaded
+  // message is where the loaded histories end, so the replay starts there.
+  if (sseResume && !state.sseCursor) state.sseCursor = newestLoadedId();
   // NO parameter and after=0 are two different things to the server: absent means "the future
   // only", zero means "replay from the beginning". On a first connection we want the former,
   // after a break - a replay from the cursor.
-  es = new EventSource(state.sseCursor ? `/api/events?after=${state.sseCursor}` : "/api/events");
+  const source = es = new EventSource(state.sseCursor ? `/api/events?after=${state.sseCursor}` : "/api/events");
+  let opened = false;
   es.onopen = async () => {
+    opened = true;
     sseRetry = 0;
     setOnline(true);
     if (!sseResume) return;
@@ -148,10 +164,27 @@ export function connectSSE() {
     // readyState CONNECTING (0) = the browser is resuming by itself, we do not interfere.
     // CLOSED (2) = the end, nobody will try again - that is our job.
     setOnline(false);
-    if (es && es.readyState === EventSource.CLOSED) {
+    if (es !== source) return;
+    // B-MG-97: the cursor moves only with message events, so a stream that drops before its first
+    // one still has 0, and a return without `?after` is "the future only": the messages posted
+    // during the break were lost for the loaded conversations. While this stream was open every
+    // new message would have arrived (and moved the cursor), so nothing newer than the loaded
+    // histories was missed until now: the cursor is pinned to the newest loaded id at the drop,
+    // not at the return (a history loaded during the break must not move it past the gap).
+    let pinned = false;
+    if (opened && !state.sseCursor) {
+      state.sseCursor = newestLoadedId();
+      pinned = state.sseCursor > 0;
+    }
+    if (es.readyState === EventSource.CLOSED) {
       // EventSource hides the status code. A closed stream with a dead session must not loop on
       // reconnecting forever: one cheap probe - a 401 there fires onSessionLost through api().
       api("GET", "/api/me").catch(() => {});
+      scheduleReconnect();
+    } else if (pinned) {
+      // The browser's own retry reuses the URL without `?after` and, with no event id received,
+      // sends no Last-Event-ID either: it would come back future-only. Ours carries the cursor.
+      es.close();
       scheduleReconnect();
     }
   };
