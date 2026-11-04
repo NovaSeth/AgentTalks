@@ -27,6 +27,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     // limit would block the next one.
     secret: `test-secret-${randomBytes(8).toString("hex")}`,
     trustProxy: false,
+    ui: true,
     allowPublicBind: false,
     allowLoopbackWake: false,
     maxMessageBytes: 65536,

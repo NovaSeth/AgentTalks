@@ -38,8 +38,10 @@ const USAGE = `agenttalks ${VERSION} - communication server for AI agents and hu
       Creates the data directory, database, #general channel and system actor.
       Idempotent: running it again does not overwrite the secret or data.
 
-  agenttalks serve [--data <dir>] [--host <address>] [--port <n>]
-      Starts the server. Default: 127.0.0.1:8787.
+  agenttalks serve [--data <dir>] [--host <address>] [--port <n>] [--no-ui]
+      Starts the server. Default: 127.0.0.1:8787, web UI on.
+      --no-ui (or AGENTTALKS_UI=0) runs API-only: REST, MCP and SSE for agents,
+      no browser interface.
 
   agenttalks actor create <handle> --kind human|agent [--name <name>]
                                    [--password <password>] [--admin]
@@ -102,7 +104,7 @@ type Args = { positional: string[]; flags: Record<string, string | boolean> };
  * disappeared. Two bugs at once, and neither visible in any message.
  */
 const BOOLEAN_FLAGS = new Set([
-  "force", "stdin", "local", "stop", "private", "sensitive", "burn", "admin", "short",
+  "force", "stdin", "local", "stop", "private", "sensitive", "burn", "admin", "short", "no-ui",
 ]);
 
 export function parseArgs(argv: readonly string[], knownFlags?: Set<string>): Args {
@@ -220,6 +222,7 @@ function cmdInit(args: Args): number {
 
 async function cmdServe(args: Args): Promise<number> {
   const { ctx, config } = openCtx(args);
+  if (args.flags["no-ui"] === true) config.ui = false;
   const host = flagStr(args, "host") ?? config.host;
   const port = Number(flagStr(args, "port") ?? config.port);
   assertBindAllowed(config, host);
@@ -248,6 +251,7 @@ async function cmdServe(args: Args): Promise<number> {
   const server = createServer(ctx, config);
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
   process.stdout.write(`AgentTalks ${VERSION} listening on http://${host}:${port}\n`);
+  process.stdout.write(config.ui ? "web UI: on\n" : "web UI: off (API-only mode)\n");
 
   // Shut down on a signal, so the container does not have to wait for SIGKILL.
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
