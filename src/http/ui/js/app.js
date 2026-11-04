@@ -29,7 +29,7 @@ import { openThreadsView, renderThreadsMain } from "./view-threads.js";
 import { findInConversation, renderSearchMain } from "./view-search.js";
 import { openUsersView, renderUsersMain, resetUsersError } from "./view-admin.js";
 import {
-  bindMessageEvents, closeThread, openConversation, openConversationInBackground, openThread, refreshDetailsData, renderComposer,
+  bindMessageEvents, closeThread, fadeUnreadHighlights, noteTabVisible, openConversation, openConversationInBackground, openThread, refreshDetailsData, renderComposer,
   renderDetails, renderMain, renderMessages, renderPresenceBar, renderThread, renderTopbar,
   toggleSidePanel, typingFacesHtml, updateOfflineBar, upsertMessageNode,
 } from "./view-chat.js";
@@ -214,6 +214,8 @@ registerViews({
   render,
   shell: renderShell,
   main: renderMain,
+  // T-MG-44: the unread highlight fades only once the server confirmed the read mark (data.js).
+  readConfirmed: fadeUnreadHighlights,
   sidebar: () => { renderSidebarList(); paintRail(); },
   conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
@@ -458,6 +460,8 @@ window.addEventListener("hashchange", (e) => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !state.actor) return;
   ensureSSE();
+  // T-MG-44: what landed while the tab was hidden is tinted as unread (the unread highlight).
+  noteTabVisible();
   // Returning to the tab = only now is what the user is looking at "read" (and
   // only when they really see the newest messages, i.e. are at the bottom).
   if (state.view === "chat" && state.activeId && state.memberships[state.activeId]

@@ -435,6 +435,8 @@ export function markReadDebounced(convId, messageId) {
       state.unreadBadge[convId] = 0;
       views.conversationRow(convId);
       updateTitleBadge();
+      // T-MG-44: the unread highlight fades from the CONFIRMED mark, never from the request.
+      views.readConfirmed?.(convId, messageId);
     } catch { /* best effort */ }
   }, 500);
 }
