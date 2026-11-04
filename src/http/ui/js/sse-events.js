@@ -117,11 +117,19 @@ function newestLoadedId() {
 // has succeeded in full; live events and refreshes in between never raise it.
 let gapFloors = {};
 
+// T-MG-18 fix round 2 (codex F2, F3): a pending floor is captured at EVERY break for each loaded
+// conversation that has none (an older unresolved floor is lower and still owed, so it is never
+// overwritten), and cleared only by that conversation's full catch-up.
+function captureGapFloors() {
+  for (const id of Object.keys(state.loaded)) {
+    if (state.loaded[id] && gapFloors[id] === undefined) gapFloors[id] = newestIdOf(Number(id));
+  }
+}
+
 function captureReplayFloor() {
+  captureGapFloors();
   if (state.sseCursor || replayFloor !== undefined) return;
   replayFloor = newestLoadedId();
-  gapFloors = {};
-  for (const id of Object.keys(state.loaded)) if (state.loaded[id]) gapFloors[id] = newestIdOf(Number(id));
 }
 
 /** The messages of one conversation after `floor`, page by page (the route's limit is 500) until a
@@ -174,14 +182,15 @@ export function connectSSE() {
   // after a break - a replay from the cursor: the last event's id, or (B-MG-97, F3) the floor
   // captured before the first attempt while no event has arrived.
   const after = state.sseCursor || (sseResume ? replayFloor : undefined);
-  const catchUp = sseResume && !state.sseCursor && replayFloor === 0;
   const source = es = new EventSource(after ? `/api/events?after=${after}` : "/api/events");
   es.onopen = async () => {
     sseRetry = 0;
     setOnline(true);
     if (!sseResume) return;
     sseResume = false;
-    if (catchUp) catchUpLoadedHistories(sessionGeneration());
+    // The REST catch-up is independent of the stream's cursor: each conversation pages from its own
+    // pending floor, whatever events the stream has delivered meanwhile.
+    catchUpLoadedHistories(sessionGeneration());
     // After a break the unread counters and list contents can be arbitrarily stale - a replay
     // carries messages only, not state.
     try { await loadConversationsList(); views.sidebar(); updateTitleBadge(); }

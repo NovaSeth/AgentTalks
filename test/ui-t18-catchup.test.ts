@@ -12,6 +12,7 @@ type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 class FakeEventSource {
   static all: FakeEventSource[] = [];
+  static CLOSED = 2;
   url: string; readyState = 0;
   listeners: Record<string, ((e: Any) => unknown)[]> = {};
   onopen: (() => unknown) | null = null;
