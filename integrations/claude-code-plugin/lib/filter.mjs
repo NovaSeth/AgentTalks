@@ -99,8 +99,11 @@ export function classify(event, state, opts = {}) {
   if (mem.kind === "dm" || mem.kind === "group") return { kind: "dm" };
 
   const handles = mentionsIn(msg.body ?? "");
-  if (handles.has(transliterate(state.me.handle)) || opts.serverMention) return { kind: "mention" };
+  if (handles.has(transliterate(state.me.handle))) return { kind: "mention" };
   for (const h of handles) if (ALL_ALIASES.has(h)) return { kind: "all" };
+  // The server's mention list also lists @all calls: only a call it lists that the parse
+  // did not explain is a personal mention.
+  if (opts.serverMention) return { kind: "mention" };
   if (msg.threadId && state.threads.has(msg.threadId)) return { kind: "thread" };
   if (mem.notify === "all") return { kind: "channel" };
   return null;
