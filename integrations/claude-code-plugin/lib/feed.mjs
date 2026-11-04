@@ -31,6 +31,7 @@ const ROSTER_REFRESH_MIN_MS = 30_000;
  *   onState?: (state: string, info?: object) => void,
  *   onCursor?: (lastEventId: number) => void,
  *   lastEventId?: number | null,
+ *   mentionCursor?: number | null,
  *   log?: (line: string) => void,
  *   fetchImpl?: typeof fetch,
  *   sse?: { initialBackoffMs?: number, maxBackoffMs?: number, idleMs?: number },
@@ -49,7 +50,7 @@ export function createFeed(opts) {
   const seen = new Set();
   /** thread roots already looked up on the server (negative answers included) */
   const threadChecked = new Set();
-  let mentionCursor = 0;
+  let mentionCursor = opts.mentionCursor ?? 0;
   let rosterAt = 0;
   /** @type {Promise<void>} */
   let chain = Promise.resolve();
@@ -183,14 +184,21 @@ export function createFeed(opts) {
       for (const c of me.conversations ?? []) labels.set(c.id, labelOf(c));
       await refreshMemberships();
       try { await refreshRoster(); } catch { /* handles on events are the fallback */ }
-      // Start the mention cursor at "now": older mentions are the SessionStart summary's job.
-      try {
-        const r = await api.get("/api/mentions?limit=1");
-        for (const m of r.messages ?? []) {
-          mentionCursor = Math.max(mentionCursor, m.id);
-          markSeen(m.id);
-        }
-      } catch { /* starts from 0: at worst old mentions are pushed once */ }
+      if (opts.mentionCursor) {
+        // A resumed feed (the monitor after a restart): mentions after the saved cursor are
+        // read now, so a call into a non-member conversation during the gap is not lost.
+        try { await pullMentions(); } catch { /* the next notification retries */ }
+      } else {
+        // A fresh feed starts the mention cursor at "now": older mentions are the
+        // SessionStart summary's job.
+        try {
+          const r = await api.get("/api/mentions?limit=1");
+          for (const m of r.messages ?? []) {
+            mentionCursor = Math.max(mentionCursor, m.id);
+            markSeen(m.id);
+          }
+        } catch { /* starts from 0: at worst old mentions are pushed once */ }
+      }
       if (stopped) return;
       stream = openEventStream({
         url: opts.identity.url,
@@ -213,6 +221,7 @@ export function createFeed(opts) {
     /** @returns {{ handle: string, id: number } | null} */
     get me() { return state ? state.me : null; },
     get lastEventId() { return stream?.lastEventId ?? opts.lastEventId ?? null; },
+    get mentionCursor() { return mentionCursor; },
     stop() {
       stopped = true;
       stream?.close();
