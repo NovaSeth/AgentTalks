@@ -7,7 +7,7 @@ import { react, reactionsFor } from "../../core/reactions.ts";
 import { search } from "../../core/search.ts";
 import {
   endSession,
-  presence,
+  presenceFor,
   registerSession,
   setDoing,
   signal,
@@ -106,8 +106,10 @@ export function registerMessageRoutes(router: Router): void {
   });
 
   router.add("GET", "/api/presence", (_req, res, rc) => {
-    requireAuth(rc);
-    json(res, 200, { presence: presence(rc.ctx) });
+    const { actor } = requireAuth(rc);
+    // Filtered for the caller: no typing locations in conversations it cannot read, no
+    // session ids or working directories of other actors (B-MG-6, B-MG-53).
+    json(res, 200, { presence: presenceFor(rc.ctx, actor.id) });
   });
 
   /** Registration and heartbeat in one: an agent calls this at startup and then periodically,

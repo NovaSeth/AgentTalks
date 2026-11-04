@@ -115,13 +115,35 @@ export function notify(
  */
 const PRZECZYTANE_DNI = 30;
 const WSZYSTKIE_DNI = 180;
+/** The sweep is two full-table DELETEs; running them on EVERY notify() made each message
+ *  with a mention pay for the whole table. Retention measured in days does not need
+ *  second precision, so it runs at most once per SWEEP_EVERY_SEC per database and process. */
+const SWEEP_EVERY_SEC = 60;
+const lastSweepAt = new WeakMap<Ctx["db"], number>();
 function sprzatnijStare(ctx: Ctx): void {
   const now = ctx.now();
+  const last = lastSweepAt.get(ctx.db);
+  if (last !== undefined && now - last < SWEEP_EVERY_SEC && now >= last) return;
+  lastSweepAt.set(ctx.db, now);
   ctx.db.prepare("DELETE FROM notifications WHERE read_at IS NOT NULL AND read_at < ?")
     .run(now - PRZECZYTANE_DNI * 24 * 3600);
   ctx.db.prepare("DELETE FROM notifications WHERE created_at < ?")
     .run(now - WSZYSTKIE_DNI * 24 * 3600);
 }
+
+/**
+ * canRead at READ time, in SQL (the same rule as conversations.canRead: a public channel or
+ * a current membership). A notification is written while the recipient has access; without
+ * this filter an actor removed from a private channel kept its excerpts for up to 180 days.
+ * A notification without a conversation (wiki) is not restricted. Takes one parameter: the
+ * reading actor's id.
+ */
+const READABLE_NOW = `(n.conversation_id IS NULL OR EXISTS (
+    SELECT 1 FROM conversations c
+     WHERE c.id = n.conversation_id
+       AND (c.kind = 'public'
+            OR EXISTS (SELECT 1 FROM members m
+                        WHERE m.conversation_id = c.id AND m.actor_id = ?))))`;
 
 export function listNotifications(
   ctx: Ctx,
@@ -136,17 +158,21 @@ export function listNotifications(
          FROM notifications n
          LEFT JOIN actors a ON a.id = n.from_actor_id
         WHERE n.actor_id = ?${opts.unreadOnly ? " AND n.read_at IS NULL" : ""}
+          AND ${READABLE_NOW}
         ORDER BY n.id DESC
         LIMIT ?`,
     )
-    .all(actorId, limit) as Row[];
+    .all(actorId, actorId, limit) as Row[];
   return rows.map(toNotification);
 }
 
 export function unreadNotificationCount(ctx: Ctx, actorId: number): number {
   const r = ctx.db
-    .prepare("SELECT COUNT(*) AS n FROM notifications WHERE actor_id = ? AND read_at IS NULL")
-    .get(actorId) as { n: number };
+    .prepare(
+      `SELECT COUNT(*) AS n FROM notifications n
+        WHERE n.actor_id = ? AND n.read_at IS NULL AND ${READABLE_NOW}`,
+    )
+    .get(actorId, actorId) as { n: number };
   return r.n;
 }
 
