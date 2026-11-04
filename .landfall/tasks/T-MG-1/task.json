@@ -13,7 +13,7 @@
       "at": "2026-11-03T23:24:42.214Z"
     }
   ],
-  "status": "dispatched",
+  "status": "implemented",
   "round": 0,
   "events": [
     {
@@ -111,6 +111,24 @@
         "round": 5,
         "verdict": "needs-fixes",
         "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:56:48.401Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 6,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:56:48.709Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
       }
     }
   ],

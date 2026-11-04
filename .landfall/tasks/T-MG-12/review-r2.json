@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 178,
+      "rule": "AGT-3",
+      "text": "Acceptance 5: wake authentication is not bound to the session's server. In-memory test: record @nestor on A, then B; configure A's secret and omit optional serverUrl; an A-signed wake returns {status:202,woke:true} and resumes session-b000. A server can therefore inject a prompt into another server's session. Bind each secret to a server URL and require that URL when selecting the session; reject ambiguous configuration."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/.claude-plugin/plugin.json",
+      "line": 16,
+      "rule": "AGT-3",
+      "text": "Acceptance 1: empty user_config options overwrite inherited AGENTTALKS_URL/TOKEN before resolveIdentity can apply its fallback. In-memory launch-env test with env credentials for intended.example and a global config for other.example prints 'env https://intended.example -> global https://other.example'; without the global file it returns null. Use separate plugin-option environment names and fall back to the intact inherited variables."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 36,
+      "rule": "REV-2",
+      "text": "Acceptance 5: the default wake allowlist excludes this plugin's tools, so a marketplace-only installation cannot reply in the resumed dontAsk session. Reproduction: match DEFAULT_ALLOWED_TOOLS ('mcp__agenttalks__*') against 'mcp__plugin_agenttalks_agenttalks__reply': false; the injected runner receives that same default. Include the actual plugin namespace in the default, as the report's D-MG-17 resolution requires, and test it."
+    },
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/feed.mjs",
+      "line": 126,
+      "rule": "OWA-10",
+      "text": "Acceptance 2: a transient membership lookup failure permanently drops a new DM: the catch uses stale membership, then markSeen and onCursor acknowledge the rejected message. In-memory test: event 41 plus GET /api/conversations=503 gives pushes=[] cursor=[41]; restore membership and replay 41 then 42, and pushes=[42]. Retry unresolved membership/thread lookups without marking the message seen or advancing the committed cursor."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/scripts/monitor.mjs",
+      "line": 115,
+      "rule": "OWA-10",
+      "text": "Acceptance 3: shutdown saves the SSE receive cursor even when queued events have not been delivered. In-memory test: receive thread replies 51/52, block the thread lookup, stop and execute the same two-second idle race: savedCursor=52, delivered=[], completedCursors=[]. Restart then skips both replies. Persist only the last successfully handled cursor, including for mentions, when draining times out."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/sessions.mjs",
+      "line": 59,
+      "rule": "OWA-6",
+      "text": "Acceptance 4: atomic rename does not protect the shared session registry's read-modify-write from concurrent hooks. In-memory interleaving test: A reads an empty registry, B records session-b000, then A finishes; stored ids=['session-a000'], losing B and its wake target. Serialize the entire update across processes or store each session separately; add a concurrent-writer regression test."
+    }
+  ],
+  "run": "codex-T-MG-12-reviewer-1",
+  "sha256": "341cda0e9d14d02c774fe71876a82f39d489faf5fbdebc98a458bbb358c899ee"
+}
