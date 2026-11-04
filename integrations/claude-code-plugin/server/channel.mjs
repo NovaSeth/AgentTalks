@@ -20,6 +20,9 @@ import { createPusher } from "../lib/pusher.mjs";
 import { frameMany } from "../lib/frame.mjs";
 import { createStdioServer } from "../lib/mcp.mjs";
 import { deriveSessionId } from "../lib/sessions.mjs";
+import { HEARTBEAT_REFRESH_MS, claudeAncestor, heartbeatFile, writeHeartbeat } from "../lib/launch.mjs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const VERSION = "0.1.0";
 const MAX_REPLY_CHARS = 60_000;
@@ -137,6 +140,36 @@ const server = createStdioServer({
   },
 });
 
+// The proof of life the monitor waits for (lib/launch.mjs): keyed by the claude process this
+// server belongs to, "open" and refreshed while the AgentTalks stream is open, "closed" (with
+// the handled cursors, for a monitor that takes over) when it stops.
+const claude = claudeAncestor();
+const heartbeatPath = claude ? heartbeatFile(join(homedir(), ".config", "agenttalks", "state"), claude.pid) : null;
+/** @type {ReturnType<typeof setInterval> | null} */
+let heartbeatTimer = null;
+let everOpened = false;
+/** @param {"open" | "closed"} state */
+function beat(state) {
+  if (!heartbeatPath || (state === "closed" && !everOpened)) return;
+  if (state === "open") everOpened = true;
+  writeHeartbeat(heartbeatPath, state, { lastEventId: feed?.lastEventId, mentionCursor: feed?.mentionCursor });
+}
+/** @param {"open" | "pause" | "down"} state */
+function heartbeat(state) {
+  if (!heartbeatPath) return;
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+  if (state === "open") {
+    beat("open");
+    heartbeatTimer = setInterval(() => beat("open"), HEARTBEAT_REFRESH_MS);
+    heartbeatTimer.unref();
+  } else if (state === "down") {
+    beat("closed");
+  }
+  // "pause" (reconnecting): not refreshed, so it goes stale unless the stream comes back.
+}
+process.on("exit", () => beat("closed"));
+for (const sig of /** @type {const} */ (["SIGTERM", "SIGINT", "SIGHUP"])) process.on(sig, () => process.exit(0));
+
 /** @param {import("../lib/feed.mjs").FeedItem[]} items @param {{ dropped: number }} info */
 function send(items, info) {
   let content = frameMany(items);
@@ -172,6 +205,9 @@ async function startFeed() {
       if (state === "unauthorized") log("the server rejected the token (401/403): stopped; fix the token and restart the session");
       else if (state === "reconnecting") log(`stream interrupted, reconnecting in ${/** @type {any} */ (info)?.delayMs ?? "?"} ms`);
       else if (state === "open") log("stream open");
+      // The heartbeat says "this channel delivers": only while the stream is open. During a
+      // reconnect it is not refreshed and goes stale; a dead token removes it at once.
+      heartbeat(state === "open" ? "open" : state === "reconnecting" ? "pause" : "down");
     },
   });
   // The first contact can fail (server down while the session starts): retry with backoff

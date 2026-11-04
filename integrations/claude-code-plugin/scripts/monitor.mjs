@@ -22,9 +22,12 @@ import { join } from "node:path";
 import { resolveIdentity, describeIdentity } from "../lib/identity.mjs";
 import { createFeed } from "../lib/feed.mjs";
 import { frameLine } from "../lib/frame.mjs";
-import { monitorShouldRun } from "../lib/launch.mjs";
+import {
+  channelAlive, claudeAncestor, heartbeatFile, monitorMode, readHeartbeat, removeHeartbeat,
+} from "../lib/launch.mjs";
 
 const RESUME_MAX_AGE_MS = 60 * 60 * 1000;
+const STARTED_AT = Date.now();
 
 /** @param {string} line */
 const log = (line) => process.stderr.write(`[agenttalks-monitor] ${line}\n`);
@@ -49,9 +52,9 @@ if (!identity) {
   process.exit(0);
 }
 log(describeIdentity(identity));
-if (!monitorShouldRun()) {
-  // The channel delivers the same events; a second copy of each would only be noise.
-  log("the agenttalks channel is enabled in this session: the monitor stands down");
+const mode = monitorMode();
+if (mode === "off") {
+  log("AGENTTALKS_MONITOR=off: the monitor stands down");
   process.exit(0);
 }
 
@@ -88,7 +91,49 @@ function saveState(lastEventId, mentionCursor) {
   }
 }
 
+// Standby: the session asked for the channel. Deliver nothing while the channel proves alive
+// (its heartbeat, lib/launch.mjs); take over when it never shows up within the grace period
+// (not allowlisted, blocked by policy, no identity, crashed at start) or stops delivering.
+const env = process.env;
+/** @type {import("../lib/launch.mjs").Heartbeat | null} */
+let handover = null;
+if (mode === "standby") {
+  // Nothing to save while standing by: a stop or the deadline just ends the process.
+  const quit = () => process.exit(0);
+  process.on("SIGTERM", quit);
+  process.on("SIGINT", quit);
+  const deadline = maxSeconds > 0 ? setTimeout(quit, Math.max(1, maxSeconds) * 1000) : null;
+  const claude = claudeAncestor();
+  const hb = claude ? heartbeatFile(join(homedir(), ".config", "agenttalks", "state"), claude.pid) : null;
+  const poll = Number(env.AGENTTALKS_CHANNEL_POLL_MS) > 0 ? Number(env.AGENTTALKS_CHANNEL_POLL_MS) : 2000;
+  const grace = Number(env.AGENTTALKS_CHANNEL_GRACE_MS) > 0 ? Number(env.AGENTTALKS_CHANNEL_GRACE_MS) : 30_000;
+  const since = Date.now();
+  let seenAlive = false;
+  while (hb) {
+    if (channelAlive(hb)) {
+      if (!seenAlive) log("the agenttalks channel delivers in this session: the monitor is standing by");
+      seenAlive = true;
+    } else if (seenAlive || Date.now() - since >= grace) {
+      log(seenAlive
+        ? "the agenttalks channel stopped delivering: the monitor is taking over"
+        : "the session has the channel flag but no agenttalks channel proved alive (not allowlisted, blocked by policy, or not started): the monitor is taking over");
+      handover = readHeartbeat(hb);
+      removeHeartbeat(hb);
+      break;
+    }
+    await new Promise((r) => setTimeout(r, poll));
+  }
+  if (deadline) clearTimeout(deadline);
+  process.off("SIGTERM", quit);
+  process.off("SIGINT", quit);
+}
+
 const resumed = loadState();
+// Taking over from the channel: resume where IT stopped, not from an older monitor cursor.
+if (handover && handover.lastEventId !== null) {
+  resumed.lastEventId = handover.lastEventId;
+  resumed.mentionCursor = handover.mentionCursor;
+}
 const feed = createFeed({
   identity,
   log,
@@ -127,7 +172,7 @@ if (maxSeconds > 0) {
   setTimeout(() => {
     void finish(0, "[agenttalks monitor] stopping before the watch deadline; the cursor is saved, "
       + "start the agenttalks monitor again to keep receiving AgentTalks events");
-  }, Math.max(1, maxSeconds) * 1000);
+  }, Math.max(1000, maxSeconds * 1000 - (Date.now() - STARTED_AT)));
 }
 
 for (let delay = 1000; ; delay = Math.min(delay * 2, 60_000)) {
