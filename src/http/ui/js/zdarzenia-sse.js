@@ -115,6 +115,7 @@ export function connectSSE() {
 
 async function onMessageEvent(ev) {
   const convId = ev.conversationId, msg = ev.message;
+  const isUpdate = ev.type === "message_updated";
   const known = state.conversations.some((c) => c.id === convId);
   if (!known) { await loadConversationsList(); widok.sidebar(); }
   // An unknown author: we fetch the ACTOR DIRECTORY, not the messages. Reloading the list
@@ -139,14 +140,14 @@ async function onMessageEvent(ev) {
   // empty-but-existing one then looked like "history already loaded", and after entering you
   // saw one message with nothing before it.
   if (state.loaded[convId] || otwarta) upsertMessage(convId, msg);
-  else if (msg.id > state.sseCursor) state.sseCursor = msg.id;
+  if (msg.id > state.sseCursor) state.sseCursor = msg.id;
   if (msg.kind === "ask" || msg.kind === "answer") refreshQuestions(convId);
   // "Looking at a conversation" is not the same as "seeing the newest": with the history
   // scrolled up, messages were neither counted nor marked - the client showed 0 while the
   // server knew about thirty.
   const viewing = otwarta && document.visibilityState === "visible";
   const widzeNajnowsze = viewing && atBottom;
-  if (!widzeNajnowsze && !wasMine) {
+  if (!isUpdate && !widzeNajnowsze && !wasMine) {
     state.unread[convId] = (state.unread[convId] || 0) + 1;
     const conv = state.conversations.find((c) => c.id === convId);
     const direct = !!conv && (conv.kind === "dm" || conv.kind === "group");
@@ -159,11 +160,13 @@ async function onMessageEvent(ev) {
   }
   if (otwarta) {
     widok.wiadomosc(msg);
-    if (atBottom || wasMine) { scrollToBottom(true); }
-    else if (!wasMine) { state.newBelow += 1; }  // przyszlo poza polem widzenia
-    updateJumpPill();
-    if (widzeNajnowsze && !wasMine) markReadDebounced(convId, msg.id);
-    if (!wasMine) announce(`@${actorHandle(msg.actorId)}: ${String(msg.body ?? "").slice(0, 160)}`);
+    if (!isUpdate) {
+      if (atBottom || wasMine) { scrollToBottom(true); }
+      else if (!wasMine) { state.newBelow += 1; }
+      updateJumpPill();
+      if (widzeNajnowsze && !wasMine) markReadDebounced(convId, msg.id);
+      if (!wasMine) announce(`@${actorHandle(msg.actorId)}: ${String(msg.body ?? "").slice(0, 160)}`);
+    }
   }
   if (state.threadOpen && (msg.id === state.threadOpen || msg.threadId === state.threadOpen)) {
     const i = state.threadMsgs.findIndex((m) => m.id === msg.id);

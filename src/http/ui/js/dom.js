@@ -225,15 +225,17 @@ export function confirmModal({ title, body, ok, cancel, danger = false }) {
         <button class="btn ${danger ? "danger" : ""}" id="cf-yes">${escapeHtml(okLabel)}</button>
       </div>`);
     let answered = false;
-    const finish = (v) => { if (answered) return; answered = true; resolve(v); };
+    const finish = (v) => {
+      if (answered) return;
+      answered = true;
+      document.removeEventListener("keydown", onEscape, true);
+      resolve(v);
+    };
+    const onEscape = (e) => { if (e.key === "Escape") finish(false); };
     // Escape and a backdrop click mean "no" - without that the promise would
     // never settle and the caller would wait forever.
     modal.closest(".overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) finish(false); });
-    document.addEventListener("keydown", function esc(e) {
-      if (e.key !== "Escape") return;
-      document.removeEventListener("keydown", esc, true);
-      finish(false);
-    }, true);
+    document.addEventListener("keydown", onEscape, true);
     modal.querySelector("#cf-no").addEventListener("click", () => { close(); finish(false); });
     modal.querySelector("#cf-yes").addEventListener("click", () => { close(); finish(true); });
     // Focus on the way out, not on the action: an Enter pressed reflexively in a
