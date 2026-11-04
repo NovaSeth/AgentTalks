@@ -38,7 +38,7 @@ function bladSkladni(src: string, nazwa: string): string | null {
   return `${nazwa}: ${(r.stderr || "").trim().split("\n").slice(0, 3).join(" ")}`;
 }
 
-test("kazdy modul UI parsuje sie jako modul ES", () => {
+test("every UI module parses as an ES module", () => {
   const pliki = readdirSync(UI).filter((f) => f.endsWith(".js"));
   assert.ok(pliki.length >= 15, `czujnik widzi tylko ${pliki.length} plikow UI - katalog sie przeniosl?`);
   const zle = pliki
@@ -47,7 +47,7 @@ test("kazdy modul UI parsuje sie jako modul ES", () => {
   assert.deepEqual(zle, [], zle.map((x) => `${x.f}: ${x.blad}`).join("\n"));
 });
 
-test("bramka skladni POTRAFI zawiesc - probka celowo zepsuta", () => {
+test("the syntax gate CAN fail - a deliberately broken sample", () => {
   // Input of the same shape as the real thing (an import + an export), with one explicit error.
   // If the gate were blind - as `node --check` is on a file of ambiguous type - this line would
   // pass green and the test above would mean nothing.

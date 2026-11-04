@@ -15,9 +15,9 @@ async function loadUi() {
   g.window = { matchMedia: () => ({ matches: false }) };
   g.sessionStorage = { getItem: () => null };
   g.localStorage = { getItem: () => null };
-  const sidebar = await import(UI + "widok-sidebar.js");
-  const data = await import(UI + "dane.js");
-  const store = await import(UI + "stan.js");
+  const sidebar = await import(UI + "view-sidebar.js");
+  const data = await import(UI + "data.js");
+  const store = await import(UI + "state.js");
   return { sidebar, data, ...store };
 }
 
@@ -49,8 +49,8 @@ test("the actor directory cache retains uploaded avatars", async (t) => {
 
 for (const days of [14, 90]) {
   test(`a message immediately restores an actor silent for ${days} days without fetching`, async (t) => {
-    const { sidebar, data, state, widok } = await loadUi();
-    const events = await import(UI + "zdarzenia-sse.js");
+    const { sidebar, data, state, views } = await loadUi();
+    const events = await import(UI + "sse-events.js");
     t.mock.method(Date, "now", () => NOW * 1000);
     const panel = { innerHTML: "", scrollTop: 0, querySelectorAll: () => [], querySelector: () => null };
     t.mock.method(document, "getElementById", (id: string) => id === "sb-scroll" ? panel as unknown as HTMLElement : null);
@@ -81,7 +81,7 @@ for (const days of [14, 90]) {
     assert.match(panel.innerHTML, /class="conv person faded"/);
     assert.equal(panel.innerHTML.includes('id="sb-arch"'), days === 90);
     let renders = 0;
-    t.mock.method(widok, "sidebar", () => { renders++; sidebar.renderSidebarList(); });
+    t.mock.method(views, "sidebar", () => { renders++; sidebar.renderSidebarList(); });
     events.connectSSE();
     const receive = listeners.get("message");
     assert.ok(receive, "the real SSE connection must register the message handler");

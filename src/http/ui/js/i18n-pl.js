@@ -11,6 +11,20 @@
  * `n === 1 ? a : b` here would be wrong for "2 wiadomości" versus "5 wiadomości".
  */
 export const PL = {
+  "pasted-{stamp}.{extension}": "wklejone-{stamp}.{extension}",
+  "Close notification": "Zamknij powiadomienie",
+  "Copy": "Kopiuj",
+  "Wiki page": "strona wiki",
+  "This page does not exist yet - click to create it": "strona jeszcze nie istnieje - klik zaklada",
+  "Drop to attach": "Upuść, żeby załączyć",
+  "This space is private. Enter the access password to see the sign-in screen.":
+    "To miejsce jest prywatne. Podaj hasło dostępu, aby zobaczyć ekran logowania.",
+  "Access password": "Hasło dostępu",
+  "Continue": "Dalej",
+  "Checking...": "Sprawdzanie...",
+  "Wrong password. Try again.": "Nieprawidłowe hasło. Spróbuj ponownie.",
+  "Too many attempts - wait a moment and try again.": "Za dużo prób - poczekaj chwilę i spróbuj ponownie.",
+  "The server is not responding. Try again shortly.": "Serwer nie odpowiada. Spróbuj ponownie za chwilę.",
   // --- login and identity ---
   "Sign in to join the conversation": "Zaloguj się, żeby wejść do rozmowy",
   "Name": "Nazwa",

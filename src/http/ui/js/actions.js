@@ -1,13 +1,13 @@
 /**
  * Message actions: sending (optimistic, with retry), reactions, editing,
- * deleting. Drawing goes through the `widok` registry.
+ * deleting. Drawing goes through the `views` registry.
  */
 import { api } from "./api.js";
-import { loadConversationsList, mySessionId, refreshQuestions } from "./dane.js";
-import { iconCheck } from "./ikony.js";
+import { loadConversationsList, mySessionId, refreshQuestions } from "./data.js";
+import { iconCheck } from "./icons.js";
 import { t } from "./i18n.js";
-import { clearDraft, findMsgById, saveDraft, state, upsertMessage, widok } from "./stan.js";
-import { showError, showToast } from "./toasty.js";
+import { clearDraft, findMsgById, saveDraft, state, upsertMessage, views } from "./state.js";
+import { showError, showToast } from "./toasts.js";
 
 // Optimistic send. The bubble appears IMMEDIATELY (greyed out), because the
 // moment the text field is cleared it is the only copy of what the user wrote.
@@ -35,7 +35,7 @@ export async function sendMessage(text, opts = {}) {
     list.push(rec);
   }
   rec.pending = true; rec.failed = false;
-  if (state.activeId === convId && !rec.threadId) { widok.wiadomosc(rec); widok.naDol(true); }
+  if (state.activeId === convId && !rec.threadId) { views.message(rec); views.scrollToBottom(true); }
   try {
     const data = await api("POST", `/api/conversations/${convId}/messages`, {
       body: rec.body, clientMsgId, threadId: rec.threadId || undefined, sessionId: mySessionId || undefined,
@@ -75,18 +75,18 @@ export async function sendMessage(text, opts = {}) {
       }
       if (state.activeId === convId) {
         if (rec.threadId) {
-          widok.wiadomosc(findMsgById(rec.threadId));   // the "N replies" bar under the root
-          widok.otworzWatek(rec.threadId);              // and the thread itself, so the sent message is visible
+          views.message(findMsgById(rec.threadId));   // the "N replies" bar under the root
+          views.openThread(rec.threadId);              // and the thread itself, so the sent message is visible
         } else {
-          widok.wiadomosc(data.message);
-          widok.naDol(true);
+          views.message(data.message);
+          views.scrollToBottom(true);
         }
       }
     }
     return data.message;
   } catch (e) {
     rec.pending = false; rec.failed = true; rec.error = e.message;
-    if (state.activeId === convId && !rec.threadId) widok.wiadomosc(rec);
+    if (state.activeId === convId && !rec.threadId) views.message(rec);
     showError(e);
     return null;
   }
@@ -113,13 +113,13 @@ export async function toggleReaction(messageId, emoji) {
   // from the SSE echo of that same click.
   try {
     const res = await api("POST", `/api/messages/${messageId}/reactions`, { emoji });
-    const mapa = state.reactions[messageId] || (state.reactions[messageId] = {});
-    const kto = (mapa[emoji] || []).filter((h) => h !== state.actor.handle);
-    if (res && res.on) kto.push(state.actor.handle);
-    if (kto.length) mapa[emoji] = kto; else delete mapa[emoji];
-    if (!Object.keys(mapa).length) delete state.reactions[messageId];
-    if (state.view === "chat") widok.wiadomosc(findMsgById(messageId));
-    if (state.threadOpen) widok.watek();
+    const reactionMap = state.reactions[messageId] || (state.reactions[messageId] = {});
+    const who = (reactionMap[emoji] || []).filter((h) => h !== state.actor.handle);
+    if (res && res.on) who.push(state.actor.handle);
+    if (who.length) reactionMap[emoji] = who; else delete reactionMap[emoji];
+    if (!Object.keys(reactionMap).length) delete state.reactions[messageId];
+    if (state.view === "chat") views.message(findMsgById(messageId));
+    if (state.threadOpen) views.thread();
   } catch (e) { showError(e); }
 }
 
@@ -131,8 +131,8 @@ function applyMessageUpdate(msg) {
   upsertMessage(msg.conversationId ?? state.activeId, msg);
   const i = state.threadMsgs.findIndex((m) => m.id === msg.id);
   if (i >= 0) state.threadMsgs[i] = msg;
-  if (state.view === "chat") widok.wiadomosc(msg);
-  if (state.threadOpen) widok.watek();
+  if (state.view === "chat") views.message(msg);
+  if (state.threadOpen) views.thread();
 }
 
 export async function deleteMsg(messageId) {
@@ -164,9 +164,9 @@ export async function resolveMsg(messageId, resolved) {
 /** Pinning a message. The API existed from the start, but the interface only had
  *  a "Pinned" section - that is, you could see the result of an action you had no
  *  way to perform. */
-export async function togglePin(messageId, przypnij) {
+export async function togglePin(messageId, pin) {
   try {
-    if (przypnij) {
+    if (pin) {
       const data = await api("POST", `/api/messages/${messageId}/pin`, {});
       state.convPins = [...state.convPins.filter((p) => p.messageId !== messageId), data.pin];
       showToast(t("Pinned. You will find it in the conversation details."));
@@ -175,8 +175,8 @@ export async function togglePin(messageId, przypnij) {
       state.convPins = state.convPins.filter((p) => p.messageId !== messageId);
       showToast(t("Unpinned."));
     }
-    widok.wiadomosc(findMsgById(messageId));
-    if (state.detailsOpen) widok.szczegoly();
+    views.message(findMsgById(messageId));
+    if (state.detailsOpen) views.details();
   } catch (e) { showError(e); }
 }
 
@@ -219,7 +219,7 @@ export async function answerQuestion(questionId, text) {
   const data = await api("POST", `/api/questions/${questionId}/answer`, { body: text, sessionId: mySessionId || undefined });
   upsertMessage(state.activeId, data.message);
   await refreshQuestions(state.activeId);
-  widok.wiadomosci();
+  views.messages();
 }
 
 export async function joinChannel(id, btn) {
@@ -228,7 +228,7 @@ export async function joinChannel(id, btn) {
     await api("POST", `/api/conversations/${id}/join`, {});
     if (btn) btn.innerHTML = iconCheck();
     await loadConversationsList();
-    setTimeout(() => { widok.sidebar(); widok.glowny(); }, 350);
+    setTimeout(() => { views.sidebar(); views.main(); }, 350);
   } catch (e) { showError(e); if (btn) { btn.disabled = false; btn.textContent = t("Join"); } }
 }
 
@@ -237,7 +237,7 @@ export async function startDirect(handle) {
   try {
     const data = await api("POST", "/api/conversations", { kind: "dm", members: [handle] });
     await loadConversationsList();
-    widok.sidebar();
-    widok.otworzRozmowe(data.conversation.id);
+    views.sidebar();
+    views.openConversation(data.conversation.id);
   } catch (e) { showError(e); }
 }

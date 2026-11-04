@@ -116,9 +116,9 @@ test("UI compatibility map equals LEGACY and stale server codes retain behavior"
   const reverse = Object.fromEntries(Object.entries(LEGACY).map(([code, oldCode]) => [oldCode, code]));
   assert.deepEqual(ui.LEGACY, reverse);
   for (const code of Object.keys(LEGACY)) {
-    assert.equal(ui.opiszBlad({ code: LEGACY[code] }, undefined), ui.opiszBlad({ code }, undefined));
+    assert.equal(ui.describeError({ code: LEGACY[code] }, undefined), ui.describeError({ code }, undefined));
   }
-  assert.equal(ui.opiszBlad({ code: LEGACY.wiki_conflict }, { wiki_conflict: "Keep your draft" }), "Keep your draft");
+  assert.equal(ui.describeError({ code: LEGACY.wiki_conflict }, { wiki_conflict: "Keep your draft" }), "Keep your draft");
   for (const [raw, expected, httpStatus] of [
     [LEGACY.wiki_conflict, "wiki_conflict", 409],
     ["wiki_conflict", "wiki_conflict", 409],

@@ -1,6 +1,6 @@
 /**
  * Application state and pure operations on it. It does NOT import views - communication in
- * that direction goes through the `widok` registry (injected drawing functions).
+ * that direction goes through the `views` registry (injected drawing functions).
  */
 import { t } from "./i18n.js";
 
@@ -12,16 +12,16 @@ export const state = {
   unread: {},              // convId -> number of unread (bold + counter)
   unreadBadge: {},         // convId -> how many of them "weigh" (DM/group: every one; channel: mentions)
   activeId: null,
-  msgs: {},                // convId -> Message[] (rosnaco po id)
+  msgs: {},                // convId -> Message[] (ascending by id)
   loaded: {},              // convId -> whether the history was FETCHED (not: whether any messages exist)
-  readMark: {},            // convId -> id ostatniej przeczytanej, ZAMROZONE przy wejsciu (kreska "nowe")
+  readMark: {},            // convId -> last read id, FROZEN on entry (the new-messages divider)
   drafts: {},              // convId -> {text, replyTo} - a draft surviving a conversation switch
   pending: {},             // convId -> local in-flight messages (ids "tmp-...")
   actorsCache: {},         // id -> {handle, displayName, kind}
-  actorsAt: 0,             // kiedy ostatnio pobrano katalog aktorow (TTL)
-  online: true,            // czy strumien zdarzen zyje (stopka sidebara)
+  actorsAt: 0,             // when the actor directory was last fetched (TTL)
+  online: true,            // whether the event stream is alive (connection status)
   reactions: {},           // messageId -> {emoji: [handle,...]}
-  presence: [],            // PresenceRow[] (sesje)
+  presence: [],            // PresenceRow[] (sessions)
   threadOpen: null,
   threadMsgs: [],
   detailsOpen: false,      // the conversation details panel (members/pins/actions)
@@ -33,20 +33,20 @@ export const state = {
   guidelines: null,
   news: null,              // "What's new" from /api/me - shown once, then null
   digest: null,            // "What you missed" from GET /api/digest (null = nothing)
-  leases: [],              // aktywne dzierzawy zasobow (GET /api/leases)
+  leases: [],              // active resource leases (GET /api/leases)
   hasMore: {},             // convId -> whether there are older messages to load
   actorsList: [],
-  openQuestions: {},       // messageId -> questionId (otwarte, widoczne dla mnie)
-  lastDelivery: null,      // {conversationId, messageId, delivery[]} z ostatniej wysylki
+  openQuestions: {},       // messageId -> questionId (open and visible to me)
+  lastDelivery: null,      // {conversationId, messageId, delivery[]} from the last send
   pendingFiles: [],        // files waiting to be sent (previews in the composer)
   sseCursor: 0,            // highest message id delivered by SSE, never by REST
   newBelow: 0,             // how many new ones arrived while the list was scrolled up
   view: "chat",            // "chat" | "wiki" | "users" | "notifications"
-  notifUnread: 0,          // licznik centrum powiadomien (dzwonek w sidebarze)
-  notifications: [],       // ostatnie powiadomienia (GET /api/notifications)
+  notifUnread: 0,          // notification center count (the bell badge)
+  notifications: [],       // recent notifications (GET /api/notifications)
   wiki: {
     pages: [], slug: null, page: null, files: [], history: [],
-    revision: null,        // podgladana STARA rewizja (null = najnowsza)
+    revision: null,        // OLD revision being previewed (null = latest)
     editing: false, tab: "info", draft: null,
   },
 };
@@ -58,7 +58,7 @@ export function resetState() {
   Object.assign(state, structuredClone(initialState));
   for (const id of Object.keys(dmMembersCache)) delete dmMembersCache[id];
   animatedMsgs.clear();
-  zgloszenia.clear();
+  reports.clear();
   resetMentionRe();
 }
 
@@ -67,33 +67,33 @@ export function resetState() {
 /**  register here once, at startup; the rest of the code calls them through this object. The
 /**  default empty functions mean everything works even before any view exists at all (say, an
 /**  error during login). */
-export const widok = {
+export const views = {
   render: () => {},           // the whole screen: login or the shell
-  powloka: () => {},          // rail + panel boczny + kolumna glowna
-  glowny: () => {},           // kolumna glowna biezacego widoku
+  shell: () => {},          // rail + sidebar + main column
+  main: () => {},           // main column of the current view
   sidebar: () => {},          // the list of channels, messages and wiki
-  wiersz: () => {},           // ONE conversation row (bold + badge)
-  obecnosc: () => {},         // kropki, pasek "pisze/pracuje", topbar, kuleczki wiki
-  wiadomosci: () => {},       // the whole message list
-  wiadomosc: () => {},        // ONE bubble
-  naDol: () => {},            // scrolling the list to the newest
-  watek: () => {},
-  otworzWatek: () => {},      // opening the thread panel for a given root
-  pasekOffline: () => {},     // the "no connection" bar above the conversation
+  conversationRow: () => {},           // ONE conversation row (bold + badge)
+  presence: () => {},         // presence dots, typing/working bar, topbar and wiki typing bubbles
+  messages: () => {},       // the whole message list
+  message: () => {},        // ONE bubble
+  scrollToBottom: () => {},            // scrolling the list to the newest
+  thread: () => {},
+  openThread: () => {},      // opening the thread panel for a given root
+  offlineBar: () => {},     // the "no connection" bar above the conversation
   composer: () => {},
-  szczegoly: () => {},
+  details: () => {},
   wiki: () => {},
-  powiadomienia: () => {},
-  uzytkownicy: () => {},
-  podepnijTresc: () => {},    // delegated events in freshly rendered content
-  pisze: () => "",            // HTML kuleczek piszacych dla danego miejsca
-  szczegolyDane: async () => {},
-  otworzRozmowe: () => {},
-  otworzWiki: () => {},
-  poZalogowaniu: async () => {},
+  notifications: () => {},
+  users: () => {},
+  bindContent: () => {},    // delegated events in freshly rendered content
+  typing: () => "",            // typing-bubble HTML for a given location
+  detailsData: async () => {},
+  openConversation: () => {},
+  openWiki: () => {},
+  afterLogin: async () => {},
 };
 
-export function zarejestrujWidoki(fns) { Object.assign(widok, fns); }
+export function registerViews(fns) { Object.assign(views, fns); }
 
 export function actorHandle(id) { return (state.actorsCache[id] && state.actorsCache[id].handle) || "?"; }
 
@@ -119,14 +119,14 @@ function actorIdByHandle(h) {
 // Aliases that call the whole channel - EXACTLY the same list as in the core
 // (core/mentions.ts), otherwise an @all announcement would count for less on the client than
 // on the server and the counter would change on a mere refresh.
-const WOLANIA_OGOLNE = ["all", "channel", "here", "wszyscy", "kanal"];
+const CHANNEL_MENTIONS = ["all", "channel", "here", "wszyscy", "kanal"];
 
 /** "Does this message call me" - an expression built ONCE after login, rather than for every
 /**  bubble on every render. The character class before @ is the same as in mdInline, so
 /**  "(@michal" counts the same as " @michal". */
 // A handle allows a dot and a hyphen (core/ids.ts), and a dot in a regular expression means
 // "any character" - without escaping, "@jan.kowalski" would match "@janXkowalski".
-// The helper lives here rather than in dom.js, because stan.js deliberately imports nothing.
+// The helper lives here rather than in dom.js, because state.js deliberately imports nothing.
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 let mentionRe = null;
@@ -137,7 +137,7 @@ export function resetMentionRe() { mentionRe = null; }
 
 export function rebuildMentionRe() {
   const mine = state.actor ? escapeRe(state.actor.handle) : null;
-  const alias = [...(mine ? [mine] : []), ...WOLANIA_OGOLNE].join("|");
+  const alias = [...(mine ? [mine] : []), ...CHANNEL_MENTIONS].join("|");
   mentionRe = new RegExp(`(^|[\\s(>])@(${alias})\\b`, "i");
 }
 
@@ -192,7 +192,7 @@ export function saveDraft() {
   const files = state.pendingFiles;
   if (text.trim() || state.replyTo || files.length) {
     state.drafts[id] = { text, replyTo: state.replyTo, files };
-    try { localStorage.setItem(DRAFT_KEY(id), text); } catch { /* prywatny tryb */ }
+    try { localStorage.setItem(DRAFT_KEY(id), text); } catch { /* private browsing */ }
   } else {
     clearDraft(id);
   }
@@ -203,25 +203,25 @@ export function loadDraft(convId) {
   try {
     const text = localStorage.getItem(DRAFT_KEY(convId));
     if (text) return (state.drafts[convId] = { text, replyTo: null, files: [] });
-  } catch { /* prywatny tryb */ }
+  } catch { /* private browsing */ }
   return null;
 }
 
 export function clearDraft(convId) {
   delete state.drafts[convId];
-  try { localStorage.removeItem(DRAFT_KEY(convId)); } catch { /* prywatny tryb */ }
+  try { localStorage.removeItem(DRAFT_KEY(convId)); } catch { /* private browsing */ }
 }
 
 /** The history of conversations we are not looking at must not grow in the tab forever.
 /**  We delete it TOGETHER with the "loaded" marker, so that returning fetches it exactly as it
 /**  did the first time - the state and the memory must not drift apart. */
-const CACHE_ROZMOW = 5;
+const CONVERSATION_CACHE_LIMIT = 5;
 
-export function przytnijCache() {
-  const zostaw = new Set([state.activeId, ...recentConvIds().slice(0, CACHE_ROZMOW)]);
+export function trimConversationCache() {
+  const keep = new Set([state.activeId, ...recentConvIds().slice(0, CONVERSATION_CACHE_LIMIT)]);
   for (const key of Object.keys(state.msgs)) {
     const id = Number(key);
-    if (zostaw.has(id)) continue;
+    if (keep.has(id)) continue;
     delete state.msgs[id];
     delete state.loaded[id];
     delete state.hasMore[id];
@@ -283,10 +283,10 @@ export function dmLabel(c) {
 /**  report") is kept here, in the tab's memory. Without it both buttons hung next to EVERY
 /**  message from somebody else, including in a private conversation about lunch, and an
 /**  accidental click sent somebody a false request to confirm something they never reported. */
-export const zgloszenia = new Set();
+export const reports = new Set();
 
-export function czyZgloszenie(m) {
-  return !!(m && (m.fixedAt || m.resolvedAt || zgloszenia.has(m.id)));
+export function isReport(m) {
+  return !!(m && (m.fixedAt || m.resolvedAt || reports.has(m.id)));
 }
 
 /** Whether I can manage this conversation (an admin role in the channel, or the instance admin). */
@@ -297,7 +297,7 @@ export function canManageActive() {
 
 /** Messages visible in the main list: those from the server plus in-flight (optimistic)
 /**  entries. Thread replies do not stand in the main list. */
-export function widoczneWiadomosci(convId) {
+export function visibleMessages(convId) {
   const msgs = (state.msgs[convId] || []).filter((m) => !m.threadId);
   const pend = (state.pending[convId] || []).filter((m) => !m.threadId);
   return pend.length ? [...msgs, ...pend] : msgs;
@@ -318,14 +318,14 @@ function recentConvIds() {
 }
 
 export function pushRecent(id) {
-  const lista = [id, ...recentConvIds().filter((x) => x !== id)].slice(0, 12);
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(lista)); } catch { /* prywatny tryb */ }
+  const list = [id, ...recentConvIds().filter((x) => x !== id)].slice(0, 12);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* private browsing */ }
 }
 
-export function ostatnieRozmowy(moje) {
-  const kolejnosc = recentConvIds();
-  const wg = new Map(moje.map((c) => [c.id, c]));
-  const out = kolejnosc.map((id) => wg.get(id)).filter(Boolean);
-  for (const c of moje) if (!out.includes(c)) out.push(c);
+export function recentConversations(myConversations) {
+  const order = recentConvIds();
+  const byId = new Map(myConversations.map((c) => [c.id, c]));
+  const out = order.map((id) => byId.get(id)).filter(Boolean);
+  for (const c of myConversations) if (!out.includes(c)) out.push(c);
   return out;
 }

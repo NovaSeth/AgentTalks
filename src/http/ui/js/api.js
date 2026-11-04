@@ -219,13 +219,13 @@ const STATUSES = {
 
 /** A human sentence for an error from /api/*.
  *  @param e error from api()
- *  @param kontekst per-call-site overrides, e.g. { slug: "Invalid page address..." }
+ *  @param context per-call-site overrides, e.g. { slug: "Invalid page address..." }
  *         - the same code means different things for a channel and for the wiki.
  *         Values are already translated by the caller. */
-export function opiszBlad(e, kontekst) {
+export function describeError(e, context) {
   if (!e) return t("Something went wrong.");
   const code = englishCode(e.code, e.status);
-  if (kontekst && code && kontekst[code]) return kontekst[code];
+  if (context && code && context[code]) return context[code];
   if (code && ERRORS[code]) return t(ERRORS[code]);
   if (e.status && STATUSES[e.status]) return t(STATUSES[e.status]);
   // No network: fetch throws a TypeError with no status - that is not a server error.

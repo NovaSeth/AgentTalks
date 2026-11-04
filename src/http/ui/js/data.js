@@ -1,10 +1,11 @@
 /**
- * Fetching and refreshing data. It calls drawing through the `widok` registry.
+ * Fetching and refreshing data. It calls drawing through the `views` registry.
  */
 import { SID_KEY, api } from "./api.js";
 import { updateTitleBadge } from "./dom.js";
-import { animatedMsgs, applyUnreadRows, mergeActors, mergeReactions, state, upsertMessage, widok } from "./stan.js";
-import { showError } from "./toasty.js";
+import { t } from "./i18n.js";
+import { animatedMsgs, applyUnreadRows, mergeActors, mergeReactions, state, upsertMessage, views } from "./state.js";
+import { showError } from "./toasts.js";
 
 // ----------------------------------------------------------------- loading
 export async function loadConversationsList() {
@@ -20,13 +21,13 @@ export async function loadConversationsList() {
 // (roughly what fits on a screen); older ones load themselves, 20 at a time, as you scroll
 // up. Fetching 200 messages on open was paying in time-to-first-view for history nobody
 // reads.
-const PIERWSZA_PACZKA = 30;
+const INITIAL_BATCH_SIZE = 30;
 
-const STARSZA_PACZKA = 20;
+const OLDER_BATCH_SIZE = 20;
 
 export async function loadMessages(convId) {
-  const pierwszyRaz = !state.loaded[convId];
-  const data = await api("GET", `/api/conversations/${convId}/messages?limit=${PIERWSZA_PACZKA}`);
+  const firstLoad = !state.loaded[convId];
+  const data = await api("GET", `/api/conversations/${convId}/messages?limit=${INITIAL_BATCH_SIZE}`);
   // We MERGE rather than replace the array: assigning `state.msgs[id] = ...` erased everything
   // the user had loaded by scrolling up.
   // History enters without animation - the "slide in" is played only by a message that arrived
@@ -37,45 +38,45 @@ export async function loadMessages(convId) {
   state.loaded[convId] = true;
   // A full batch = there is probably older history to load. When refreshing an already loaded
   // conversation, a new batch says nothing about what lies ABOVE our list.
-  if (pierwszyRaz) state.hasMore[convId] = data.messages.length >= PIERWSZA_PACZKA;
+  if (firstLoad) state.hasMore[convId] = data.messages.length >= INITIAL_BATCH_SIZE;
   mergeActors(data.actors);
   mergeReactions(data.messages, data.reactions);
   // Thread replies do not stand in the main list, so a batch of 30 messages can produce a
   // screen with three. We fetch more until there is something to scroll - without that, lazy
   // loading would never start, because there simply is no scrollbar.
-  let dobrane = 0;
+  let extraBatches = 0;
   while (
-    state.hasMore[convId] && dobrane < 4 &&
+    state.hasMore[convId] && extraBatches < 4 &&
     (state.msgs[convId] || []).filter((m) => !m.threadId).length < 15
   ) {
-    dobrane++;
+    extraBatches++;
     await loadOlderMessages(convId);
   }
 }
 
 /** Loading older history above what we already have - keeping the scroll position (the content
 /**  must not run away from your eyes when older messages slide in above it). */
-let doladowanieTrwa = false;
+let loadingOlder = false;
 
 export async function loadOlderMessages(convId) {
   const list = state.msgs[convId] || [];
   const oldest = list[0];
-  if (!oldest || doladowanieTrwa || !state.hasMore[convId]) return;
-  doladowanieTrwa = true;
+  if (!oldest || loadingOlder || !state.hasMore[convId]) return;
+  loadingOlder = true;
   try {
-    const data = await api("GET", `/api/conversations/${convId}/messages?before=${oldest.id}&limit=${STARSZA_PACZKA}`);
+    const data = await api("GET", `/api/conversations/${convId}/messages?before=${oldest.id}&limit=${OLDER_BATCH_SIZE}`);
     for (const m of data.messages) { upsertMessage(convId, m); animatedMsgs.add(m.id); }
     mergeActors(data.actors);
     mergeReactions(data.messages, data.reactions);
-    state.hasMore[convId] = data.messages.length >= STARSZA_PACZKA;
+    state.hasMore[convId] = data.messages.length >= OLDER_BATCH_SIZE;
     const el = document.getElementById("messages");
     const beforeH = el ? el.scrollHeight : 0, beforeTop = el ? el.scrollTop : 0;
-    widok.wiadomosci();
+    views.messages();
     // An anchor: after adding older messages above, what you are looking at has to stay under the
     // same finger - otherwise lazy loading "yanks" the view.
     if (el) el.scrollTop = beforeTop + (el.scrollHeight - beforeH);
   } catch (e) { showError(e); }
-  finally { doladowanieTrwa = false; }
+  finally { loadingOlder = false; }
 }
 
 // The handle of the periodic leases/digest refresh. In a module variable, because without it
@@ -106,8 +107,8 @@ export async function refreshDigestAndLeases(force) {
     ]);
     state.digest = d.digest || null;
     state.leases = l.leases || [];
-    widok.sidebar();
-  } catch { /* dodatki, nie fundament */ }
+    views.sidebar();
+  } catch { /* optional additions, not core functionality */ }
 }
 
 /** The reactions of ONE message. There is no dedicated endpoint, but `before=<id+1>&limit=1`
@@ -127,15 +128,15 @@ export async function loadReactionsForMessage(convId, messageId) {
 // it when the list was empty; a new conversation did the same; the details panel had its own
 // way). A simple TTL plus a shared request, so that a run of messages from unknown authors
 // does not fire a run of identical requests.
-const AKTORZY_TTL_MS = 60000;
+const ACTORS_TTL_MS = 60000;
 
-let pobieranieAktorow = null;
+let actorsRequest = null;
 
 export async function ensureActors(opts = {}) {
-  const swieze = Date.now() - state.actorsAt < (opts.maxAgeMs ?? AKTORZY_TTL_MS);
-  if (!opts.force && swieze && state.actorsList.length) return state.actorsList;
-  if (pobieranieAktorow) return pobieranieAktorow;
-  pobieranieAktorow = api("GET", "/api/actors")
+  const fresh = Date.now() - state.actorsAt < (opts.maxAgeMs ?? ACTORS_TTL_MS);
+  if (!opts.force && fresh && state.actorsList.length) return state.actorsList;
+  if (actorsRequest) return actorsRequest;
+  actorsRequest = api("GET", "/api/actors")
     .then((d) => {
       state.actorsList = d.actors || [];
       for (const a of state.actorsList) {
@@ -151,8 +152,8 @@ export async function ensureActors(opts = {}) {
       return state.actorsList;
     })
     .catch(() => state.actorsList)
-    .finally(() => { pobieranieAktorow = null; });
-  return pobieranieAktorow;
+    .finally(() => { actorsRequest = null; });
+  return actorsRequest;
 }
 
 export async function refreshPresence() {
@@ -162,8 +163,8 @@ export async function refreshPresence() {
     // Pointwise: presence changes ONLY the dots in the sidebar. Web sessions beat a heartbeat
     // every 30 s, so a full rebuild of the list on every breath would yank the list out from
     // under the user's cursor.
-    widok.obecnosc();
-  } catch { /* obecnosc nie jest krytyczna */ }
+    views.presence();
+  } catch { /* presence is not critical */ }
 }
 
 export async function refreshQuestions(convId) {
@@ -173,11 +174,11 @@ export async function refreshQuestions(convId) {
     for (const q of data.questions) open[q.message.id] = q.id;
     // Without this comparison, every entry into a conversation and every reply redrew the whole
     // message list, usually in order to change nothing.
-    const zmiana = Object.keys(open).join(",") !== Object.keys(state.openQuestions).join(",");
+    const changed = Object.keys(open).join(",") !== Object.keys(state.openQuestions).join(",");
     state.openQuestions = open;
-    if (!zmiana) return;
-    widok.sidebar();
-    if (state.view === "chat" && (!convId || convId === state.activeId)) widok.wiadomosci();
+    if (!changed) return;
+    views.sidebar();
+    if (state.view === "chat" && (!convId || convId === state.activeId)) views.messages();
   } catch { /* best effort */ }
 }
 
@@ -189,15 +190,15 @@ export async function loadPins(convId) {
     const data = await api("GET", `/api/conversations/${convId}/pins`);
     if (state.activeId !== convId) return;
     state.convPins = data.pins || [];
-    widok.wiadomosci();
-  } catch { /* piny sa dodatkiem */ }
+    views.messages();
+  } catch { /* pins are optional */ }
 }
 
 export async function loadWikiList() {
   try {
     const data = await api("GET", "/api/wiki");
     state.wiki.pages = data.pages;
-    widok.sidebar();
+    views.sidebar();
   } catch { /* best effort */ }
 }
 
@@ -214,7 +215,7 @@ export function markReadDebounced(convId, messageId) {
       // We clear it ONLY after the server confirms: a counter that lied once stops being read at all.
       state.unread[convId] = 0;
       state.unreadBadge[convId] = 0;
-      widok.wiersz(convId);
+      views.conversationRow(convId);
       updateTitleBadge();
     } catch { /* best effort */ }
   }, 500);
@@ -240,7 +241,7 @@ export async function registerPresenceSession() {
     heartbeatTimer = setInterval(() => {
       api("POST", "/api/sessions", { sessionId: mySessionId, label: "web", kind: "ephemeral" }).catch(() => {});
     }, 30000);
-  } catch { /* obecnosc opcjonalna */ }
+  } catch { /* presence is optional */ }
 }
 
 let lastTypingSignal = 0;
@@ -264,12 +265,12 @@ export async function refreshNotifications() {
     state.notifUnread = data.unread;
     updateTitleBadge();
     const rail = document.getElementById("rail-notif");
-    if (rail) rail.setAttribute("aria-label", `Powiadomienia${state.notifUnread ? `, ${state.notifUnread} nowych` : ""}`);
+    if (rail) rail.setAttribute("aria-label", `${t("Notifications")}${state.notifUnread ? `, ${t("{n} new", { n: state.notifUnread })}` : ""}`);
     const badge = document.getElementById("rail-badge");
     if (badge) {
       badge.textContent = state.notifUnread > 99 ? "99+" : String(state.notifUnread);
       badge.classList.toggle("off", !state.notifUnread);
     }
-    if (state.view === "notifications") widok.powiadomienia();
-  } catch { /* powiadomienia sa dodatkiem, nie fundamentem */ }
+    if (state.view === "notifications") views.notifications();
+  } catch { /* notifications are optional, not core functionality */ }
 }

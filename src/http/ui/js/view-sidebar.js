@@ -1,37 +1,37 @@
 /**
  * The side panel: channels, messages, the wiki tree, leases, digest.
  */
-import { claimLease, releaseLease, startDirect } from "./akcje.js";
+import { claimLease, releaseLease, startDirect } from "./actions.js";
 import { api, csrf } from "./api.js";
-import { ensureActors, refreshDigestAndLeases } from "./dane.js";
+import { ensureActors, refreshDigestAndLeases } from "./data.js";
 import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
-import { iconChevron, iconDigest, iconDoc, iconLock, iconOut, iconQuestion, iconSearch } from "./ikony.js";
+import { iconChevron, iconDigest, iconDoc, iconLock, iconOut, iconQuestion, iconSearch } from "./icons.js";
 import { msg, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
-import { actorHandle, dmLabel, dmOthers, handleOnline, state, widok, wikiCollapsed } from "./stan.js";
-import { openSearchPalette } from "./szukaj.js";
-import { showError, showToast } from "./toasty.js";
-import { openConversation, openNewConversationModal, openQuestionsPanel } from "./widok-czat.js";
-import { bindLangSwitch, doLogout, langSwitchHtml } from "./widok-login.js";
-import { newWikiPageModal, openWikiPage } from "./widok-wiki.js";
+import { actorHandle, dmLabel, dmOthers, handleOnline, state, views, wikiCollapsed } from "./state.js";
+import { openSearchPalette } from "./search.js";
+import { showError, showToast } from "./toasts.js";
+import { openConversation, openNewConversationModal, openQuestionsPanel } from "./view-chat.js";
+import { bindLangSwitch, doLogout, langSwitchHtml } from "./view-login.js";
+import { newWikiPageModal, openWikiPage } from "./view-wiki.js";
 
 // Idle thresholds for "Who is here" (proposed by @michal on #general [677]): two weeks of
 // silence fades the row, three months folds it into the archive. Milliseconds, because they
 // are compared against Date.now() minus a seconds-based lastActiveAt * 1000.
-const FADE_PO_MS = 14 * 24 * 3600 * 1000;
-const ARCHIWUM_PO_MS = 90 * 24 * 3600 * 1000;
+const FADE_AFTER_MS = 14 * 24 * 3600 * 1000;
+const ARCHIVE_AFTER_MS = 90 * 24 * 3600 * 1000;
 
 /** Activity timestamps use Unix seconds; the render clock uses milliseconds. */
 export function presenceBucket(lastActiveAt, online, now = Date.now()) {
   if (online || lastActiveAt == null) return "active";
   const idleMs = now - lastActiveAt * 1000;
-  if (idleMs >= ARCHIWUM_PO_MS) return "archived";
-  return idleMs >= FADE_PO_MS ? "faded" : "active";
+  if (idleMs >= ARCHIVE_AFTER_MS) return "archived";
+  return idleMs >= FADE_AFTER_MS ? "faded" : "active";
 }
 
 // Whether the archive <details> is unfolded survives re-renders (the sidebar redraws on every
 // presence tick, which would otherwise slam it shut under the reader's cursor) and page loads.
-let archiwumOtwarte = (() => {
+let archiveOpen = (() => {
   try { return localStorage.getItem("atalks_arch_open") === "1"; } catch { return false; }
 })();
 
@@ -58,7 +58,7 @@ export function renderSidebar() {
     <div class="sb-foot" id="sb-foot">
       <span id="sb-ui" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}"></span>
     </div>`;
-  document.getElementById("btn-avatar").addEventListener("click", zmienAwatar);
+  document.getElementById("btn-avatar").addEventListener("click", changeAvatar);
   document.getElementById("btn-logout").addEventListener("click", doLogout);
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
@@ -91,8 +91,8 @@ export function updateConvRow(convId) {
   if (!row) return;
   const unread = state.unread[convId] || 0;
   row.classList.toggle("unread", unread > 0);
-  const nazwa = row.querySelector(".nm")?.textContent ?? "";
-  row.setAttribute("aria-label", `${nazwa}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}`);
+  const name = row.querySelector(".nm")?.textContent ?? "";
+  row.setAttribute("aria-label", `${name}${unread ? `, ${t("{n} unread", { n: unread })}` : ""}`);
   let badge = row.querySelector(".badge");
   if (!unread) { badge?.remove(); return; }
   if (!badge) {
@@ -138,13 +138,13 @@ export function renderSidebarList() {
     const unread = state.unread[c.id] || 0;
     const isDirect = c.kind === "dm" || c.kind === "group";
     const label = isDirect ? dmLabel(c) : (c.slug || c.topic || t("unnamed"));
-    const inni = isDirect ? dmOthers(c) : [];
-    const online = inni.some((o) => handleOnline(o.handle));
+    const others = isDirect ? dmOthers(c) : [];
+    const online = others.some((o) => handleOnline(o.handle));
     // A direct conversation gets a FACE, not just a dot: names and avatars now arrive from the
     // server (`others`) together with the conversation list, so there is no need to wait for the
     // conversation to open to see who you are talking to.
     const pre = isDirect
-      ? `<span class="conv-face">${avatarHtml(inni[0]?.handle ?? "?", 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>`
+      ? `<span class="conv-face">${avatarHtml(others[0]?.handle ?? "?", 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>`
       : c.kind === "private" ? `<span class="pre">${iconLock()}</span>` : `<span class="pre">#</span>`;
     return `
       <button class="conv ${active ? "active" : ""} ${unread ? "unread" : ""}" data-open="${c.id}"
@@ -160,44 +160,44 @@ export function renderSidebarList() {
   // server's roster could be seen ONLY in the details panel of a single conversation, which
   // means a human did not know who they could talk to at all.
   // A click starts a direct conversation - the only thing that makes sense to do with
-  const ludzieHtml = () => {
-    const lista = state.actorsList.filter((a) => a.handle !== state.actor.handle && a.kind !== "system");
-    if (!lista.length) return sidebarEmptyHtml(t("You are alone here for now. Invite an agent or a human."));
+  const peopleHtml = () => {
+    const list = state.actorsList.filter((a) => a.handle !== state.actor.handle && a.kind !== "system");
+    if (!list.length) return sidebarEmptyHtml(t("You are alone here for now. Invite an agent or a human."));
     // "Who is here" should measure PRESENCE, not the length of the roster: an actor silent for
     // two weeks fades, one silent for three months folds into a collapsed archive at the bottom.
     // Both states are computed from lastActiveAt and undo themselves on the actor's next sign of
     // life - nothing is stored, so there is no second account and no admin action to revert.
     // Being online right now always wins over any age of the last trace.
-    const teraz = Date.now();
-    const bucket = (a) => presenceBucket(a.lastActiveAt, handleOnline(a.handle), teraz);
-    const osobaHtml = (a, wyblakly) => {
+    const now = Date.now();
+    const bucket = (a) => presenceBucket(a.lastActiveAt, handleOnline(a.handle), now);
+    const personHtml = (a, faded) => {
       const online = handleOnline(a.handle);
       return `
-      <button class="conv person${wyblakly ? " faded" : ""}" data-person="${escapeHtml(a.handle)}"
+      <button class="conv person${faded ? " faded" : ""}" data-person="${escapeHtml(a.handle)}"
         title="${t("Write to @{handle} privately", { handle: escapeHtml(a.handle) })}"
-        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`}${wyblakly ? `, ${t("no activity for over two weeks")}` : ""} - ${t("write privately")}">
+        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`}${faded ? `, ${t("no activity for over two weeks")}` : ""} - ${t("write privately")}">
         <span class="conv-face">${avatarHtml(a.handle, 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>
         <span class="nm">@${escapeHtml(a.handle)}</span>
         <span class="kindtag ${a.kind}">${a.kind === "human" ? t("human") : t("agent")}</span>
       </button>`;
     };
-    const biezacy = [], archiwum = [];
-    for (const a of lista) {
-      (bucket(a) === "archived" ? archiwum : biezacy).push(a);
+    const currentActors = [], archivedActors = [];
+    for (const a of list) {
+      (bucket(a) === "archived" ? archivedActors : currentActors).push(a);
     }
     // The present first, then the rest - "who can I talk to now" is the first question.
-    const wg = [...biezacy].sort((a, b) => {
+    const sortedActors = [...currentActors].sort((a, b) => {
       const oa = handleOnline(a.handle), ob = handleOnline(b.handle);
       if (oa !== ob) return oa ? -1 : 1;
       return a.handle.localeCompare(b.handle, "pl");
     });
-    const glowni = wg.map((a) => osobaHtml(a, bucket(a) === "faded")).join("");
-    if (!archiwum.length) return glowni;
-    archiwum.sort((a, b) => a.handle.localeCompare(b.handle, "pl"));
-    return `${glowni}
-      <details class="arch" id="sb-arch"${archiwumOtwarte ? " open" : ""}>
-        <summary>${t("Archive ({n})", { n: archiwum.length })}</summary>
-        ${archiwum.map((a) => osobaHtml(a, true)).join("")}
+    const currentHtml = sortedActors.map((a) => personHtml(a, bucket(a) === "faded")).join("");
+    if (!archivedActors.length) return currentHtml;
+    archivedActors.sort((a, b) => a.handle.localeCompare(b.handle, "pl"));
+    return `${currentHtml}
+      <details class="arch" id="sb-arch"${archiveOpen ? " open" : ""}>
+        <summary>${t("Archive ({n})", { n: archivedActors.length })}</summary>
+        ${archivedActors.map((a) => personHtml(a, true)).join("")}
       </details>`;
   };
 
@@ -262,9 +262,9 @@ export function renderSidebarList() {
   //
   // Open questions and the digest went into ONE section: they spoke about the same thing in
   // three languages, in three places, with three counters.
-  const doNadrobienia = openCount > 0 || (state.digest && state.digest.count > 0);
+  const hasCatchUp = openCount > 0 || (state.digest && state.digest.count > 0);
   el.innerHTML = `
-    ${doNadrobienia ? `
+    ${hasCatchUp ? `
     <div class="sb-group">
       <h3>${t("To catch up on")}</h3>
       ${state.digest && state.digest.count > 0 ? `
@@ -292,7 +292,7 @@ export function renderSidebarList() {
     </div>
     <div class="sb-group">
       <h3>${t("Who is here")}</h3>
-      ${ludzieHtml()}
+      ${peopleHtml()}
     </div>
     <div class="sb-group">
       <h3>${t("Wiki")} ${plus("wiki", t("New wiki page"))}</h3>
@@ -301,13 +301,13 @@ export function renderSidebarList() {
     <div class="sb-group">
       <h3 title="${t("Before anyone touches something shared (a deployment, a migration, a configuration file), they claim it here. Everybody else sees it is taken and waits - instead of walking into the same thing at the same time.")}">${t("Claimed resources")} ${plus("lease", t("Claim a resource"))}</h3>
       ${state.leases.length ? state.leases.map((l) => {
-        const moj = l.handle === state.actor.handle;
+        const mine = l.handle === state.actor.handle;
         return `
       <div class="lease-row" title="${t("“{resource}” is held by @{handle}{note}. It releases itself in {left}.", { resource: escapeHtml(l.resource), handle: escapeHtml(l.handle), note: l.note ? ` - ${escapeHtml(l.note)}` : "", left: leaseCountdown(l.expiresAt) })}">
         <span class="pre">${iconLock()}</span>
         <span class="nm"><b>${escapeHtml(l.resource)}</b> · @${escapeHtml(l.handle)}</span>
         <span class="lease-ttl">${leaseCountdown(l.expiresAt)}</span>
-        ${moj ? `<button class="lease-free" data-freelease="${escapeHtml(l.resource)}"
+        ${mine ? `<button class="lease-free" data-freelease="${escapeHtml(l.resource)}"
           aria-label="${t("Release {resource}", { resource: escapeHtml(l.resource) })}" title="${t("Release - others will be able to touch it")}">${t("Release")}</button>` : ""}
       </div>`;
       }).join("") : sidebarEmptyHtml(t("Nobody is blocking anything right now."),
@@ -318,8 +318,8 @@ export function renderSidebarList() {
   el.querySelectorAll("[data-person]").forEach((b) =>
     b.addEventListener("click", () => startDirect(b.dataset.person)));
   el.querySelector("#sb-arch")?.addEventListener("toggle", (e) => {
-    archiwumOtwarte = e.target.open;
-    try { localStorage.setItem("atalks_arch_open", archiwumOtwarte ? "1" : "0"); } catch { /* prywatny tryb */ }
+    archiveOpen = e.target.open;
+    try { localStorage.setItem("atalks_arch_open", archiveOpen ? "1" : "0"); } catch { /* private browsing */ }
   });
   el.querySelector("#sb-new-chan")?.addEventListener("click", () => openNewConversationModal("channel"));
   el.querySelector("#sb-new-dm")?.addEventListener("click", () => openNewConversationModal("dm"));
@@ -489,45 +489,45 @@ function claimLeaseModal() {
  * The file travels as BYTES - the server fetches nothing from a URL (see
  * core/awatary.ts), so the browser does exactly what an agent does over REST.
  */
-function zmienAwatar() {
-  const ma = Boolean(state.actorsCache[state.actor.id]?.avatar);
-  const wybor = document.createElement("input");
-  wybor.type = "file";
-  wybor.accept = "image/png,image/jpeg,image/webp,image/gif";
-  wybor.addEventListener("change", async () => {
-    const plik = wybor.files?.[0];
-    if (!plik) return;
+function changeAvatar() {
+  const hasAvatar = Boolean(state.actorsCache[state.actor.id]?.avatar);
+  const filePicker = document.createElement("input");
+  filePicker.type = "file";
+  filePicker.accept = "image/png,image/jpeg,image/webp,image/gif";
+  filePicker.addEventListener("change", async () => {
+    const file = filePicker.files?.[0];
+    if (!file) return;
     try {
-      const odp = await fetch("/api/me/avatar", {
+      const response = await fetch("/api/me/avatar", {
         method: "PUT",
-        headers: { "content-type": plik.type || "application/octet-stream", "x-at-csrf": csrf },
-        body: plik,
+        headers: { "content-type": file.type || "application/octet-stream", "x-at-csrf": csrf },
+        body: file,
       });
-      const dane = await odp.json().catch(() => ({}));
-      if (!odp.ok) throw new Error(dane.error || `HTTP ${odp.status}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
       // The actor directory holds the fingerprint the image URL is built from - without this update
       // the avatar would change only after a page refresh.
-      if (state.actorsCache[state.actor.id]) state.actorsCache[state.actor.id].avatar = dane.avatar?.hash ?? null;
-      widok.sidebar();
-      widok.glowny();
+      if (state.actorsCache[state.actor.id]) state.actorsCache[state.actor.id].avatar = data.avatar?.hash ?? null;
+      views.sidebar();
+      views.main();
       showToast(t("Avatar changed."));
     } catch (e) {
       showError(e);
     }
   });
-  if (ma) {
+  if (hasAvatar) {
     // There already is an avatar, so TWO things make sense rather than one - and a
     // two-item menu is a cheaper question than a modal.
-    const usun = window.confirm(t("OK - pick a new image.\nCancel - go back to the dot with initials."));
-    if (!usun) {
+    const remove = window.confirm(t("OK - pick a new image.\nCancel - go back to the dot with initials."));
+    if (!remove) {
       fetch("/api/me/avatar", { method: "DELETE", headers: { "x-at-csrf": csrf } })
         .then(() => {
           if (state.actorsCache[state.actor.id]) state.actorsCache[state.actor.id].avatar = null;
-          widok.sidebar(); widok.glowny(); showToast(t("Avatar removed - the initials are back."));
+          views.sidebar(); views.main(); showToast(t("Avatar removed - the initials are back."));
         })
         .catch(showError);
       return;
     }
   }
-  wybor.click();
+  filePicker.click();
 }

@@ -68,10 +68,10 @@ function baseUrlFrom(req: IncomingMessage, config: Config): string {
 // path from user input, even with normalisation, sooner or later gives path traversal; a
 // list of names never does.
 const UI_MODULES = [
-  "app.js", "dom.js", "ikony.js", "markdown.js", "api.js", "stan.js", "toasty.js",
-  "dane.js", "akcje.js", "zdarzenia-sse.js", "widok-login.js", "widok-sidebar.js",
-  "widok-czat.js", "widok-wiki.js", "widok-powiadomienia.js", "widok-admin.js", "szukaj.js",
-  "i18n.js", "i18n-pl.js",
+  "app.js", "dom.js", "icons.js", "markdown.js", "api.js", "state.js", "toasts.js",
+  "data.js", "actions.js", "sse-events.js", "view-login.js", "view-sidebar.js",
+  "view-chat.js", "view-wiki.js", "view-notifications.js", "view-admin.js", "search.js",
+  "i18n.js", "i18n-pl.js", "gate.js",
 ];
 const UI_MODULE_SET = new Set(UI_MODULES);
 
@@ -87,14 +87,14 @@ export function assetStamp(): string {
   for (const name of UI_MODULES) {
     try {
       h.update(readFileSync(uiFile(`js/${name}`)));
-    } catch { /* jw. */ }
+    } catch { /* missing file; stamp the available content */ }
   }
   stampCache = h.digest("hex").slice(0, 8);
   return stampCache;
 }
 
 // We attach the stamp to the URLs inside imports as well: a fresh app.js with ?v=X has to
-// pull a fresh ./stan.js?v=X rather than an old copy from the bare address - otherwise the
+// pull a fresh ./state.js?v=X rather than an old copy from the bare address - otherwise the
 // browser mixes a new module with an old one and the failure looks random.
 const moduleCache = new Map<string, string>();
 function serveModule(res: ServerResponse, name: string): void {
@@ -179,6 +179,8 @@ const GATE_TTL_SEC = 180 * 24 * 3600; // half a year - this is an anti-bot gate,
 // The icons are public: a browser fetches the favicon on the gate page too, and iOS fetches
 // apple-touch-icon on "add to home screen".
 const PUBLIC = new Set([
+  // The password gate uses the same language preference and translations as the UI.
+  "/js/gate.js", "/js/i18n.js", "/js/i18n-pl.js",
   "/robots.txt", "/install", "/install.md", "/skill.md", "/skill.version", "/favicon.ico",
   "/favicon.svg", "/apple-touch-icon.png",
   "/icons/icon-16.png", "/icons/icon-32.png", "/icons/icon-180.png",
@@ -260,7 +262,8 @@ export function siteGateBlocks(
     "content-type": TYPES.html, "x-robots-tag": "noindex, nofollow",
     "cache-control": "no-store, must-revalidate",
   });
-  res.end(readOnce(uiFile("gate.html")));
+  res.end(readOnce(uiFile("gate.html"))
+    .replace('src="/js/gate.js"', `src="/js/gate.js?v=${assetStamp()}"`));
   return true;
 }
 

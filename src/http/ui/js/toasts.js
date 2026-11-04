@@ -1,7 +1,9 @@
 /**
  * A stack of messages in the corner of the screen. A live region for a screen reader.
  */
-import { opiszBlad } from "./api.js";
+import { describeError } from "./api.js";
+import { escapeHtml } from "./dom.js";
+import { t } from "./i18n.js";
 
 // ------------------------------------------------------------------ toasts
 // A stack in the top right corner - every message has its OWN timer, hovering pauses the
@@ -10,7 +12,7 @@ const TOAST_MS = 4200;
 
 // A message WITH AN ACTION ("Undo") lives longer: four seconds is not enough to read a
 // sentence, understand that something went wrong, and still manage to click.
-const TOAST_AKCJA_MS = 9000;
+const TOAST_ACTION_MS = 9000;
 
 let toastStack = null;
 
@@ -39,11 +41,11 @@ export function showToast(msg, opts = {}) {
   if (opts.alert) el.setAttribute("role", "alert");
   el.innerHTML = `<span class="tmsg"></span>
     ${opts.action ? `<button class="taction"></button>` : ""}
-    <button class="tclose" aria-label="Zamknij powiadomienie" title="Zamknij"><span aria-hidden="true">&times;</span></button>`;
+    <button class="tclose" aria-label="${escapeHtml(t("Close notification"))}" title="${escapeHtml(t("Close"))}"><span aria-hidden="true">&times;</span></button>`;
   el.querySelector(".tmsg").textContent = msg;
   if (opts.action) el.querySelector(".taction").textContent = opts.action.label;
   stack.appendChild(el);
-  let remaining = opts.action ? TOAST_AKCJA_MS : TOAST_MS, startedAt = Date.now();
+  let remaining = opts.action ? TOAST_ACTION_MS : TOAST_MS, startedAt = Date.now();
   let timer = setTimeout(dismiss, remaining);
   function dismiss() {
     clearTimeout(timer);
@@ -60,6 +62,6 @@ export function showToast(msg, opts = {}) {
 /** An error from /api/* shown in human terms. One entry point instead of `showToast(e.message)`
 /**  in forty places - otherwise every new call again dumps text written for an agent onto the
 /**  user. */
-export function showError(e, kontekst) {
-  showToast(opiszBlad(e, kontekst), { alert: true });
+export function showError(e, context) {
+  showToast(describeError(e, context), { alert: true });
 }

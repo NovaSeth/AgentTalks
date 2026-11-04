@@ -1,15 +1,15 @@
 /**
  * The Cmd+K palette: conversations and people first (no network), content after.
  */
-import { startDirect } from "./akcje.js";
+import { startDirect } from "./actions.js";
 import { api } from "./api.js";
-import { ensureActors } from "./dane.js";
+import { ensureActors } from "./data.js";
 import { avatarHtml, escapeHtml, timeAgo } from "./dom.js";
-import { iconDoc, iconSearch } from "./ikony.js";
+import { iconDoc, iconSearch } from "./icons.js";
 import { t } from "./i18n.js";
-import { actorHandle, dmLabel, mergeActors, ostatnieRozmowy, state } from "./stan.js";
-import { openConversation } from "./widok-czat.js";
-import { openWikiPage } from "./widok-wiki.js";
+import { actorHandle, dmLabel, mergeActors, recentConversations, state } from "./state.js";
+import { openConversation } from "./view-chat.js";
+import { openWikiPage } from "./view-wiki.js";
 
 // ============================================================= SEARCH (Cmd+K)
 let searchOverlay = null;
@@ -26,35 +26,35 @@ export function openSearchPalette() {
       <div class="pal-results" id="pal-results"></div>
     </div>`;
   document.body.appendChild(searchOverlay);
-  const wrocDo = document.activeElement;
+  const returnFocus = document.activeElement;
   const input = searchOverlay.querySelector("#pal-input");
   const results = searchOverlay.querySelector("#pal-results");
   let items = [], remote = [], sel = 0, debounce = null, seq = 0;
   // The list of people can be stale, and the palette has to be able to start a
   // conversation - so we fetch it in the background without blocking the window.
-  ensureActors().then(() => przebuduj());
+  ensureActors().then(() => rebuild());
 
   const close = () => {
     searchOverlay.remove();
     searchOverlay = null;
     document.removeEventListener("keydown", onKey, true);
-    if (wrocDo && document.contains(wrocDo)) wrocDo.focus();
+    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
   };
   searchOverlay.addEventListener("click", (e) => { if (e.target === searchOverlay) close(); });
 
   // Conversations and people are ALREADY in the client's memory, so this section
   // does not wait for the network and sits on top: "jump to #bugs" happens dozens
   // of times a day, "find a message containing bugs" - a few times a week.
-  const nazwaRozmowy = (c) => (c.kind === "dm" || c.kind === "group") ? dmLabel(c) : `#${c.slug || c.topic || c.id}`;
-  const lokalne = (q) => {
+  const conversationName = (c) => (c.kind === "dm" || c.kind === "group") ? dmLabel(c) : `#${c.slug || c.topic || c.id}`;
+  const localResults = (q) => {
     const norm = q.trim().toLowerCase();
-    const moje = state.conversations.filter((c) => state.memberships[c.id]);
-    const wybrane = norm
-      ? moje.filter((c) => nazwaRozmowy(c).toLowerCase().includes(norm))
-      : ostatnieRozmowy(moje);
-    const out = wybrane.slice(0, 6).map((c) => ({
+    const myConversations = state.conversations.filter((c) => state.memberships[c.id]);
+    const selected = norm
+      ? myConversations.filter((c) => conversationName(c).toLowerCase().includes(norm))
+      : recentConversations(myConversations);
+    const out = selected.slice(0, 6).map((c) => ({
       section: t("Conversations"),
-      html: `<span class="pal-title">${escapeHtml(nazwaRozmowy(c))}</span>
+      html: `<span class="pal-title">${escapeHtml(conversationName(c))}</span>
              <span class="pal-where">${c.topic ? escapeHtml(c.topic) : ""}</span>`,
       go: () => openConversation(c.id),
     }));
@@ -62,8 +62,8 @@ export function openSearchPalette() {
     for (const a of state.actorsList) {
       if (out.length >= 10) break;
       if (a.handle === state.actor.handle) continue;
-      const pasuje = a.handle.toLowerCase().includes(norm) || (a.displayName || "").toLowerCase().includes(norm);
-      if (!pasuje) continue;
+      const matches = a.handle.toLowerCase().includes(norm) || (a.displayName || "").toLowerCase().includes(norm);
+      if (!matches) continue;
       out.push({
         section: t("People"),
         html: `${avatarHtml(a.handle, 22)}<span class="pal-title">@${escapeHtml(a.handle)}</span>
@@ -74,9 +74,9 @@ export function openSearchPalette() {
     return out;
   };
 
-  const przebuduj = () => {
+  const rebuild = () => {
     if (!searchOverlay) return;
-    items = [...lokalne(input.value), ...remote];
+    items = [...localResults(input.value), ...remote];
     sel = Math.min(sel, Math.max(0, items.length - 1));
     renderResults();
   };
@@ -109,7 +109,7 @@ export function openSearchPalette() {
 
   const doSearch = async (q) => {
     const my = ++seq;
-    if (!q.trim()) { remote = []; przebuduj(); return; }
+    if (!q.trim()) { remote = []; rebuild(); return; }
     try {
       const [wiki, msgs] = await Promise.all([
         api("GET", `/api/wiki/search?q=${encodeURIComponent(q)}&limit=5`).catch(() => ({ hits: [] })),
@@ -138,13 +138,13 @@ export function openSearchPalette() {
         });
       }
       sel = 0;
-      przebuduj();
-    } catch { if (my === seq) { remote = []; przebuduj(); } }
+      rebuild();
+    } catch { if (my === seq) { remote = []; rebuild(); } }
   };
 
   input.addEventListener("input", () => {
     // The local section reacts IMMEDIATELY; the network only after 250 ms of stillness.
-    przebuduj();
+    rebuild();
     clearTimeout(debounce);
     debounce = setTimeout(() => doSearch(input.value), 250);
   });
@@ -160,5 +160,5 @@ export function openSearchPalette() {
   };
   document.addEventListener("keydown", onKey, true);
   input.focus();
-  przebuduj();   // with an empty field: the most recently opened conversations
+  rebuild();   // with an empty field: the most recently opened conversations
 }

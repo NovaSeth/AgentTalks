@@ -153,10 +153,10 @@ Object.assign(globals, {
   window: { matchMedia: () => ({ matches: false }), innerHeight: 800 },
 });
 const base = new URL("../../src/http/ui/js/", import.meta.url).href;
-const { state, widok, resetState, upsertMessage } = await import(base + "stan.js");
-const { renderMain, renderMessages, renderThread, upsertMessageNode, openConversation, openThread } = await import(base + "widok-czat.js");
-const { showNewsModal, renderNotificationsMain } = await import(base + "widok-powiadomienia.js");
-const { openSearchPalette } = await import(base + "szukaj.js");
+const { state, views, resetState, upsertMessage } = await import(base + "state.js");
+const { renderMain, renderMessages, renderThread, upsertMessageNode, openConversation, openThread } = await import(base + "view-chat.js");
+const { showNewsModal, renderNotificationsMain } = await import(base + "view-notifications.js");
+const { openSearchPalette } = await import(base + "search.js");
 const ownMessage = { id: 29, conversationId: 7, actorId: 1, body: "original text", kind: "text", ts: 1, threadId: null };
 let serverMessages: any[] = [];
 let requests: { method: string; path: string; body: any }[] = [];
@@ -183,9 +183,9 @@ beforeEach((t) => {
   state.activeId = 7; state.loaded[7] = true; state.loaded[8] = true;
   state.msgs[7] = [{ ...ownMessage }]; state.msgs[8] = [];
   serverMessages = [{ ...ownMessage }];
-  Object.assign(widok, {
-    render: renderMain, glowny: renderMain, wiadomosci: renderMessages, wiadomosc: upsertMessageNode,
-    watek: renderThread, otworzRozmowe: openConversation, powiadomienia: renderNotificationsMain,
+  Object.assign(views, {
+    render: renderMain, main: renderMain, messages: renderMessages, message: upsertMessageNode,
+    thread: renderThread, openConversation: openConversation, notifications: renderNotificationsMain,
   });
   globals.fetch = async (path: string, options: { method: string; body?: string }) => {
     const body = options.body ? JSON.parse(options.body) : undefined;

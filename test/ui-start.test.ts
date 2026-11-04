@@ -63,7 +63,7 @@ function podstawPrzegladarke(): void {
   g.fetch = async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => "" });
 }
 
-test("kazdy modul UI wykonuje sie przy ladowaniu, nie tylko parsuje", async () => {
+test("every UI module executes at load time, not just parses", async () => {
   podstawPrzegladarke();
   const moduly = readdirSync(UI).filter((f) => f.endsWith(".js") && f !== "app.js").sort();
   assert.ok(moduly.length >= 15, `czujnik widzi tylko ${moduly.length} modulow - katalog sie przeniosl?`);
@@ -75,7 +75,7 @@ test("kazdy modul UI wykonuje sie przy ladowaniu, nie tylko parsuje", async () =
   assert.deepEqual(bledy, [], `moduly, ktore rzucaja przy ladowaniu:\n${bledy.join("\n")}`);
 });
 
-test("punkt wejscia (app.js) startuje bez wyjatku, takze gdy serwer nie odpowiada", async () => {
+test("the entry point (app.js) starts without throwing even when the server is unavailable", async () => {
   // app.js is separate because it is the only one that BOOTS: it registers the views
   // and immediately tries to restore a session. That is exactly the path @zelda's
   // build could not see - and it is what a human's browser runs first.

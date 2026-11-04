@@ -153,8 +153,8 @@ Object.assign(globals, {
   window: { matchMedia: () => ({ matches: false }), innerHeight: 800 },
 });
 const base = new URL("../../src/http/ui/js/", import.meta.url).href;
-const { state, widok, resetState } = await import(base + "stan.js");
-const { renderMain, renderMessages, renderThread, upsertMessageNode, openConversation, openThread } = await import(base + "widok-czat.js");
+const { state, views, resetState } = await import(base + "state.js");
+const { renderMain, renderMessages, renderThread, upsertMessageNode, openConversation, openThread } = await import(base + "view-chat.js");
 const msg = (id: number, threadId: number | null, body: string) =>
   ({ id, conversationId: 7, actorId: 1, body, kind: "text", ts: 1, threadId });
 const response = (data: unknown, ok = true) => ({ ok, status: ok ? 200 : 500, json: async () => data });
@@ -182,9 +182,9 @@ beforeEach((t) => {
   state.memberships = { 7: { conversationId: 7, role: "member" } };
   state.activeId = 7; state.loaded[7] = true;
   state.msgs[7] = roots.map((m) => ({ ...m }));
-  Object.assign(widok, {
-    render: renderMain, glowny: renderMain, wiadomosci: renderMessages, wiadomosc: upsertMessageNode,
-    watek: renderThread, otworzRozmowe: openConversation,
+  Object.assign(views, {
+    render: renderMain, main: renderMain, messages: renderMessages, message: upsertMessageNode,
+    thread: renderThread, openConversation: openConversation,
   });
   globals.fetch = async (path: string, options: { method: string; body?: string }) => {
     const body = options.body ? JSON.parse(options.body) : undefined;

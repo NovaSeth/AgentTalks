@@ -1,10 +1,8 @@
-/* AgentTalks - interfejs webowy. Waniliowy CSS, zero zaleznosci. */
+/* AgentTalks web interface. Vanilla CSS, no dependencies. */
 :root{
-  /* --faint jest kolorem TEKSTU w kilkunastu miejscach i wszedzie w malym
-     rozmiarze (.72-.85rem), a #9aa2b5 na bieli dawal 2,56:1 przy progu 4,5:1.
-     Roznice miedzy "wazne" a "poboczne" budujemy rozmiarem i waga, nie
-     jasnoscia - stad --faint rowny --muted, ktory kontrast przechodzi.
-     --faint-line zostaje jasny, bo dotyczy KRESEK, nie tekstu. */
+  /* --faint is used for small text (.72-.85rem). #9aa2b5 on white had 2.56:1 contrast
+     against a 4.5:1 threshold. Use size and weight to distinguish secondary text,
+     so --faint matches the accessible --muted. Keep --faint-line light: it colors lines, not text. */
   --bg:#f7f7f9; --surface:#ffffff; --surface-2:#f0f1f4; --sidebar:#f4f2ef;
   --ink:#1b2030; --muted:#6b7488; --faint:#6b7488; --faint-line:#9aa2b5;
   --amber:#8a5d00; --amber-soft:#c98a1f;
@@ -61,7 +59,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   border-radius:22px;box-shadow:var(--shadow-lg);padding:2.2rem 2rem;
   animation:pop .5s cubic-bezier(.2,.9,.3,1.2) both}
 .brand{display:flex;align-items:center;gap:.6rem;justify-content:center;margin-bottom:.3rem}
-/* Sam glif, bez kafla - dymek w kolorze tekstu (bialy na ciemnym tle). */
+/* The glyph alone, without a tile: a speech bubble in the text color (white on dark backgrounds). */
 .brand .logo{width:2.4rem;height:2.4rem;display:grid;place-items:center;color:var(--ink)}
 .brand .logo svg{width:2rem;height:2rem}
 .brand h1{font-family:var(--round);font-weight:800;font-size:1.6rem;margin:0;letter-spacing:-.02em}
@@ -79,8 +77,8 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .err{background:var(--coral-soft);color:var(--coral);border-radius:10px;padding:.6rem .8rem;
   font-size:.9rem;margin-bottom:.9rem;animation:shake .4s}
 .login .hint{text-align:center;font-size:.82rem;color:var(--faint);margin-top:1.2rem}
-/* Przelacznik jezyka. Na ekranie logowania stoi pod wszystkim, bo jest decyzja
-   rzadka; w panelu bocznym siedzi w naglowku obok reszty ikon. */
+/* Language switch. Below the login form because it is rarely changed;
+   in the sidebar header alongside the other icons. */
 .langsw{display:flex;gap:.25rem;justify-content:center;margin-top:.9rem}
 .lang-opt{font:inherit;font-size:.72rem;font-weight:700;letter-spacing:.03em;
   padding:.2rem .5rem;border-radius:999px;border:1px solid var(--line);
@@ -92,13 +90,12 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
 /* ---------- SHELL ---------- */
 .shell{height:100%;display:grid;grid-template-columns:var(--sbw) 1fr}
-/* Icon-rail: stala kolumna nawigacji na skrajnej lewej (powiadomienia / rozmowy /
-   uzytkownicy). Wraca po feedbacku: to sa TRZY MIEJSCA, a nie trzy skroty do tego
-   samego, wiec maja byc widoczne bez wchodzenia w zadne z nich. */
+/* Icon rail: persistent navigation on the far left (notifications, conversations, accounts).
+   These are three destinations, so each must be visible without entering another. */
 .shell.with-rail{grid-template-columns:3.4rem var(--sbw) 1fr}
-/* Widoki bez panelu bocznego (powiadomienia, konta) - dwie kolumny zamiast
-   trzech, zeby tresc zajela zwolnione miejsce zamiast zostawiac dziure. */
-.shell.with-rail.bez-panelu{grid-template-columns:3.4rem 1fr}
+/* Views without a sidebar (notifications, accounts) use two columns instead of three,
+   allowing the content to fill the space. */
+.shell.with-rail.without-sidebar{grid-template-columns:3.4rem 1fr}
 .rail{background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;
   align-items:center;gap:.4rem;padding:.7rem 0;z-index:20}
 .rail-btn{position:relative;width:2.5rem;height:2.5rem;border-radius:11px;display:grid;place-items:center;
@@ -106,15 +103,14 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .rail-btn svg{width:1.25em;height:1.25em}
 .rail-btn:hover{background:var(--surface-2);color:var(--ink)}
 .rail-btn.on{background:var(--accent-soft);color:var(--accent-ink)}
-/* Plakietka siedzi NA ikonie: licznik ma byc widoczny z kazdego widoku, takze
-   gdy lista rozmow jest schowana. Zero nie jest pokazywane - alarm, ktory nigdy
-   nie gasnie, uczy sie ignorowac. */
+/* The badge sits ON the icon so the count remains visible even when conversations are hidden.
+   Hide zero: an alarm that never stops teaches people to ignore it. */
 .rail-badge{position:absolute;top:-.15rem;right:-.15rem;min-width:1.05rem;height:1.05rem;padding:0 .25rem;
   border-radius:999px;background:var(--accent);color:#fff;font-size:.66rem;font-weight:700;
   display:grid;place-items:center;border:2px solid var(--sidebar);font-variant-numeric:tabular-nums}
 .rail-badge.off{display:none}
 
-/* Taby Rozmowy/Uzytkownicy w sidebarze (admin-czlowiek) - zamiast osobnego raila. */
+/* Conversations/Accounts sidebar tabs for human admins, instead of a separate rail. */
 .sb-tabs{display:flex;gap:.3rem;padding:.4rem .6rem;border-bottom:1px solid var(--line)}
 .sb-tabs button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:.35rem;
   padding:.4rem .5rem;border-radius:9px;color:var(--muted);font-size:.85rem;font-weight:650;
@@ -122,7 +118,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .sb-tabs button svg{width:1.05em;height:1.05em}
 .sb-tabs button:hover{background:var(--surface-2);color:var(--ink)}
 .sb-tabs button.on{background:var(--accent-soft);color:var(--accent-ink)}
-/* Panel Uzytkownicy. */
+/* Accounts panel. */
 .u-wrap{overflow-y:auto;flex:1;padding:1rem 1.2rem 2rem;max-width:64rem}
 .u-row{border:1px solid var(--line);border-radius:12px;margin-bottom:.5rem;background:var(--surface)}
 .u-row.off{opacity:.6}
@@ -148,25 +144,21 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 /* ---------- SIDEBAR ---------- */
 .sidebar{background:var(--sidebar);border-right:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0}
-/* Ta sama wysokosc co .topbar (56px) - obie dolne kreski maja biec jedna linia. */
+/* Match the .topbar height (56px) so both bottom borders align. */
 .sb-head{height:56px;flex:0 0 auto;padding:0 .9rem;display:flex;align-items:center;gap:.6rem;border-bottom:1px solid var(--line)}
 .sb-head .who{min-width:0;flex:1}
-/* overflow:hidden lezy na SPANIE z tekstem, nie na calym .me - inaczej ucina
-   poswiate kropki obecnosci przy krawedzi. */
-/* Wlasny awatar w naglowku panelu jest PRZYCISKIEM (zmiana obrazka), wiec musi
-   wygladac jak etykieta, a zachowywac sie jak przycisk: kursor, hover i ramka
-   fokusu - inaczej klawiatura go nie znajdzie, a mysz nie zgadnie, ze jest
-   klikalny. Reset `background/border/font` bo domyslny wyglad przycisku
-   zniszczylby naglowek. */
+/* Keep overflow:hidden on the text span, not .me, to avoid clipping the presence glow. */
+/* The avatar in the sidebar header is a BUTTON for changing the image. Keep its label-like
+   appearance while exposing interaction through a pointer, hover and focus ring.
+   Reset background, border and font so default button styles do not disrupt the header. */
 .sb-head .me{font-family:var(--round);font-weight:700;font-size:.98rem;color:var(--ink);
   display:flex;align-items:center;gap:.4rem;min-width:0;
   background:none;border:0;padding:.15rem .25rem;border-radius:6px;cursor:pointer;text-align:left}
 .sb-head .me:hover{background:var(--surface-2)}
 .sb-head .me:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-/* Kanaly do dolaczenia stoja TUZ POD wlasnymi, bo tam czlowiek szuka kanalow -
-   wczesniej byly ostatnia sekcja, pod calym drzewem wiki (45 stron w tej
-   instancji), czyli technicznie widoczne i praktycznie nieosiagalne. Lekki
-   odstep oddziela "gdzie jestem" od "gdzie moge wejsc". */
+/* Joinable channels sit directly below joined channels, where people look for them.
+   Previously they followed the entire wiki tree (45 pages in this instance).
+   A small gap separates current channels from available ones. */
 .sb-group.discover{margin-top:.1rem}
 .sb-group.discover .conv{opacity:.72}
 .sb-group.discover .conv:hover{opacity:1}
@@ -194,13 +186,12 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   animation:pop .3s cubic-bezier(.2,.9,.3,1.4)}
 .conv.active .badge{background:var(--on-accent);color:var(--accent)}
 .conv.unread .nm{color:var(--ink);font-weight:650}
-/* Nowe bez wzmianki (kanal): licznik stonowany. Koral zostaje dla DM i wzmianek. */
+/* Unread channel messages without mentions have a muted counter. Coral is reserved for DMs and mentions. */
 .conv .badge.soft{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
 .conv.active .badge.soft{background:var(--on-accent);color:var(--accent);border-color:transparent}
 .conv .ppresence{width:.5rem;height:.5rem;border-radius:50%;background:var(--faint-line);flex:0 0 auto}
 .conv .ppresence.on{background:var(--green)}
-/* Chevron galezi wiki jest osobnym przyciskiem OBOK wiersza (patrz .twist na
-   koncu pliku) - obrocony znaczy "rozwinieta". */
+/* The wiki branch chevron is a separate button beside the row (see .twist below). Rotation means expanded. */
 
 /* ---------- MAIN ---------- */
 .main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--surface);position:relative}
@@ -209,41 +200,37 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   backdrop-filter:saturate(1.4) blur(8px);position:relative;z-index:2}
 .topbar .hamburger{display:none}
 .topbar .title{min-width:0;flex:1}
-/* Przyciski w pasku gornym NIE moga byc na cala szerokosc. `.btn` jest szeroki
-   z zalozenia (jego dom to formularz), a tutaj rozpychal sie na caly pasek i
-   zgniatal tytul do zera - widok powiadomien nie mial naglowka, mimo ze jest
-   w kodzie. Widac to bylo dopiero, gdy panel boczny przestal zwezac te kolumne. */
+/* Topbar buttons must not span the full width. The form-oriented .btn default used to
+   squeeze the notifications title to zero, revealed when the sidebar was removed. */
 .topbar .btn, .topbar .pillbtn{width:auto;flex:0 0 auto}
 .topbar .title .t{font-family:var(--round);font-weight:800;font-size:1.05rem;line-height:1.15;
   display:flex;align-items:center;gap:.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .topbar .title .topic{font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* Okruszki drzewa wiki w naglowku strony. */
+/* Wiki tree breadcrumbs in the page header. */
 .topbar .crumbs{color:var(--muted);font-weight:600}
 .topbar .crumbs a{color:var(--muted);text-decoration:none}
 .topbar .crumbs a:hover{color:var(--accent);text-decoration:underline}
 .topbar .crumbs .sep{margin:0 .3rem;color:var(--faint)}
-/* Znaczniki wiki [[strona]] w tresci: istniejaca = akcent, brakujaca = koral
-   (klik zaklada strone, jak w kazdej porzadnej wiki). */
+/* Wiki [[page]] links in content: accent for existing pages, coral for missing ones.
+   Clicking a missing page creates it. */
 .wikilink{color:var(--accent);text-decoration:none;border-bottom:1px dashed color-mix(in srgb,var(--accent) 55%,transparent);font-weight:600}
 .wikilink:hover{border-bottom-style:solid}
 .wikilink.missing{color:var(--coral);border-bottom-color:color-mix(in srgb,var(--coral) 55%,transparent)}
-/* Zapas u dolu = wysokosc doku: ostatnia wiadomosc da sie doczytac nad kapsula. */
+/* Bottom padding equals the dock height, keeping the last message readable above the composer. */
 .messages{flex:1;overflow-y:auto;padding:1.1rem 0 5.5rem;min-height:0;scroll-behavior:smooth}
 .day{display:flex;align-items:center;gap:.8rem;margin:1rem 1.2rem .4rem;color:var(--faint);
   font-size:.76rem;font-weight:700}
 .day::before,.day::after{content:"";height:1px;background:var(--line);flex:1}
-/* Odstep miedzy wiadomosciami: wiersz reakcji nie moze dotykac autora nastepnej. */
+/* Space between messages keeps reactions clear of the next author. */
 .msg{display:flex;gap:.7rem;padding:.3rem 1.2rem;position:relative}
 .msg.cont{padding-top:.12rem;padding-bottom:.12rem}
 .msg:hover{background:var(--surface-2)}
-/* Awatar jest kolem WSZEDZIE - takze w panelach i listach, nie tylko przy
-   wiadomosciach (feedback: "kwadraty a mialy byc kolka"). Male (.sm) maja
-   lzejszy kroj - bold w 8px zamienia inicjaly w kleks. */
+/* Avatars are circular everywhere, including panels and lists. Small (.sm) initials
+   use a lighter weight: bold at 8px becomes a blot. */
 .av{border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;flex:0 0 auto}
 .av.sm{font-weight:500;letter-spacing:0}
-/* Awatar-obrazek zajmuje DOKLADNIE to samo miejsce co kropka z inicjalami:
-   object-fit przycina do kwadratu, wiec zdjecie w dowolnych proporcjach nie
-   rozpycha ukladu ani nie zostawia pustych pasow. */
+/* Image avatars occupy exactly the same space as initials. object-fit crops any
+   aspect ratio to a square without stretching the layout or leaving empty bands. */
 .av.avimg{object-fit:cover;background:var(--faint-line);display:block}
 .msg .av{width:2.2rem;height:2.2rem;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
   font-weight:800;color:#fff;font-size:.9rem;margin-top:.15rem}
@@ -262,15 +249,15 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   padding:0 .2em;font-weight:600}
 .msg.mine-mention{background:color-mix(in srgb,var(--coral) 8%,transparent)}
 .msg .text .me-mention{background:var(--coral-soft);color:var(--coral)}
-/* @all - wzmianka calego kanalu, mocniejszy akcent (to budzi wszystkich). */
+/* @all mentions the whole channel: a stronger accent because it wakes everyone. */
 .mention-all{background:var(--coral);color:#fff;border-radius:5px;padding:0 .2em;font-weight:700}
 .mention-pop .mention-all-ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
   background:var(--coral);color:#fff;font-weight:800;flex:0 0 auto}
 .msg.deleted .text{color:var(--faint);font-style:italic}
 .msg .edited{font-size:.7rem;color:var(--faint)}
-/* Pasek akcji ukrywamy WIZUALNIE, nie przez display:none - display usuwa przyciski
-   z kolejnosci Tab i z drzewa dostepnosci, a to jedyna droga do zalozenia watku,
-   edycji, usuniecia i domkniecia zgloszenia (WCAG 2.1.1). */
+/* Hide actions visually, not with display:none, which removes them from Tab order
+   and the accessibility tree. These buttons are the only way to create threads,
+   edit, delete and resolve reports (WCAG 2.1.1). */
 .msg .actions{position:absolute;top:-.7rem;right:1.2rem;display:flex;gap:.15rem;background:var(--surface);
   border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);padding:.15rem;
   opacity:0;pointer-events:none;transition:opacity .12s}
@@ -279,10 +266,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .msg .actions button{width:1.8rem;height:1.8rem;border-radius:6px;display:grid;place-items:center;font-size:1rem}
 .msg .actions button:hover{background:var(--surface-2)}
 .msg .actions button.on{color:var(--green)}
-/* Rozwiazane zgloszenie: subtelny zielony akcent po lewej + wygaszona tresc. */
+/* Resolved report: a subtle green left accent and muted content. */
 .msg.resolved{background:color-mix(in srgb,var(--green) 6%,transparent)}
 .msg.resolved .text{opacity:.75}
-/* Tabele markdown w tresci - przewijalne w poziomie na waskim ekranie. */
+/* Markdown tables scroll horizontally on narrow screens. */
 .mdtable{overflow-x:auto;margin:.5rem 0;border:1px solid var(--line);border-radius:10px}
 .mdtable table{border-collapse:collapse;width:100%;font-size:.9rem}
 .mdtable th,.mdtable td{padding:.4rem .7rem;text-align:left;border-bottom:1px solid var(--line);
@@ -297,9 +284,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .react:hover{transform:translateY(-1px);border-color:var(--accent)}
 .react.mine{background:var(--accent-soft);border-color:var(--accent)}
 .react .n{font-weight:700;color:var(--muted);font-size:.76rem}
-/* dodaj-reakcje - pod tresc, po lewej, jak w Slacku (nie w rogu na hover) */
-/* "Dodaj reakcje": staly, widoczny chip pod wpisem (jak w Slacku), obok chipow
-   reakcji; pasek watku laduje w tym samym wierszu po prawej. */
+/* Add reaction: below the content on the left, as in Slack, rather than in a hover-only corner. */
+/* The persistent Add reaction chip sits beside reaction chips.
+   The thread bar occupies the right side of the same row. */
 .react.addreact{color:var(--muted);padding:.14rem .5rem;border-style:dashed}
 .react.addreact svg{width:1.05rem;height:1.05rem;display:block}
 .react.addreact:hover{border-color:var(--accent);color:var(--accent);border-style:solid}
@@ -310,8 +297,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .emoji-pop button{width:2rem;height:2rem;border-radius:8px;font-size:1.15rem;display:grid;place-items:center;
   transition:background .12s,transform .1s}
 .emoji-pop button:hover{background:var(--surface-2);transform:scale(1.12)}
-/* Pasek watku jak w Slack: awatary uczestnikow + licznik + czas; hover unosi
-   go na powierzchnie, zeby wygladal na klikalny. */
+/* Thread bar: participant avatars, reply count and time. Hover raises it to signal interaction. */
 .msg .thread-link{font-size:.8rem;color:var(--accent);font-weight:600;
   display:inline-flex;gap:.45rem;align-items:center;white-space:nowrap;
   padding:.25rem .5rem .25rem .3rem;border-radius:9px;border:1px solid transparent;
@@ -323,8 +309,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .tl-faces .av:last-child{margin-right:0}
 .tl-more{font-size:.7rem;color:var(--muted);margin-left:.35rem}
 .tl-when{color:var(--faint);font-weight:500}
-/* Kuleczki piszacych: TEN SAM wyglad co mini-awatary watku; kazdy piszacy
-   aktor to jedna kuleczka, podskakujaca z wlasna faza. */
+/* Typing bubbles share the thread mini-avatar style. Each actor has a bubble with its own animation phase. */
 .typing-faces{display:inline-flex;align-items:center;gap:.1rem}
 .typing-faces .tf{display:inline-grid;animation:tf-bounce 1.1s ease-in-out infinite}
 .typing-faces .tf .av{width:20px;height:20px;font-size:8px;border:2px solid var(--surface)}
@@ -332,11 +317,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 @keyframes tf-bounce{0%,55%,100%{transform:none}25%{transform:translateY(-4px)}}
 .enter{animation:enter .32s cubic-bezier(.2,.8,.3,1) both}
 
-/* ---------- COMPOSER (kapsula plywajaca nad czatem - jak Gemini) ---------- */
-/* Dok = pelnoszerokosciowa warstwa nad wiadomosciami. Backdrop-blur + gradient
-   sprawiaja, ze tekst przewijajacy sie POD kapsula jest rozmyty i wygaszony,
-   a nie prześwituje surowo (feedback 2026-08-08). Wiadomosci maja zapas
-   padding-bottom, wiec da sie doczytac ostatnia bez zasloniecia. */
+/* ---------- COMPOSER (a capsule floating above the chat, as in Gemini) ---------- */
+/* The full-width dock overlays messages. Backdrop blur and a gradient soften text
+   scrolling underneath (feedback 2026-08-08). Message bottom padding keeps
+   the last entry readable above it. */
 .dock{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;flex-direction:column;
   align-items:center;padding-bottom:.2rem;pointer-events:none}
 .dock::before{content:"";position:absolute;inset:0;pointer-events:none;
@@ -345,7 +329,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   -webkit-mask:linear-gradient(to bottom, transparent, #000 42%);
   mask:linear-gradient(to bottom, transparent, #000 42%)}
 .dock > *{pointer-events:auto}
-/* Pill "nowe ponizej": nad kapsula, pojawia sie gdy nie jestes na dole. */
+/* The new-below pill appears above the composer while the list is scrolled up. */
 .jump-newest{position:absolute;bottom:100%;left:50%;transform:translate(-50%,8px);
   display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .9rem;border-radius:99px;
   background:var(--accent);color:var(--on-accent);font-size:.83rem;font-weight:700;
@@ -369,16 +353,15 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .composer .card:focus-within{background:var(--surface);box-shadow:0 0 0 2px var(--accent) inset,0 10px 30px rgba(0,0,0,.2)}
 .composer .card:has(.previews:not(:empty)){border-radius:20px}
 .composer .row{display:flex;align-items:flex-end;gap:.35rem}
-/* Pusty pasek podgladow ZNIKA z layoutu - inaczej gap kolumny .card odpycha
-   wiersz od srodka i tresc composera wisi ponizej osi pigulki. */
+/* An empty preview row leaves the layout entirely, so the .card gap does not
+   push the composer content below the capsule center. */
 .composer .previews{display:flex;flex-wrap:wrap;gap:.5rem}
 .composer .previews:empty{display:none}
 .composer .previews:not(:empty){padding:.35rem .35rem 0}
 .preview{position:relative;flex:0 0 auto}
-/* Opcje pliku byly rzedem trzech nieopisanych piktogramow (tarcza, plomien,
-   lista) - w tym "spal po odczycie", czyli czynnosc nieodwracalna na jeden klik
-   w obrazek. Zastapione zwinietym menu z pelnymi etykietami; jego style stoja
-   w sekcji poprawek po audycie, razem z reszta tej zmiany. */
+/* File options used to be three unlabeled icons, including a one-click irreversible
+   burn-after-reading action. A collapsed menu with full labels replaces them;
+   its styles are in the UX audit fixes section. */
 .preview.img{width:4.2rem;border-radius:12px;overflow:visible;border:0}
 .preview.img img{width:4.2rem;height:4.2rem;border-radius:12px;border:1px solid var(--line)}
 .preview.file .pv-main{display:flex;align-items:center;gap:.4rem}
@@ -393,8 +376,8 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .preview.file [data-rmpv]{position:static;margin-left:.1rem;background:none;color:var(--faint);box-shadow:none;width:1.1rem;height:1.1rem}
 .preview.file [data-rmpv]:hover{color:var(--coral)}
 .preview [data-rmpv]:hover{transform:scale(1.12)}
-/* + i strzalka: 2.5rem = dokladnie wysokosc jednoliniowej textarea (padding
-   .57rem*2 + linia 1.45*15px), wiec w stanie pustym wszystko lezy w pionowej osi */
+/* Plus and send buttons: 2.5rem matches a single-line textarea
+   (.57rem padding twice + 1.45*15px line height), centering the empty composer. */
 .composer .attach{width:2.5rem;height:2.5rem;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
   color:var(--muted);transition:background .15s,color .15s}
 .composer .attach:hover{background:var(--surface);color:var(--ink)}
@@ -402,8 +385,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .composer textarea{flex:1;background:none;border:0;resize:none;max-height:40vh;
   padding:.57rem .15rem;line-height:1.45;overflow-y:hidden}
 .composer textarea:focus{outline:none}
-/* Wyslij: zawsze widoczne kolo. Pusto = przygaszone kolo na powierzchni,
-   z trescia = pelny akcent. */
+/* Send is always a visible circle: muted when empty, accented when content is ready. */
 .composer .send{width:2.5rem;height:2.5rem;border-radius:50%;background:var(--surface);color:var(--faint);
   display:grid;place-items:center;flex:0 0 auto;transition:background .18s,color .18s,transform .12s,filter .15s}
 .composer .send[disabled]{cursor:default}
@@ -429,7 +411,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   z-index:5;animation:slidein .28s cubic-bezier(.2,.8,.3,1) both}
 .thread .th-head{height:56px;display:flex;align-items:center;gap:.5rem;padding:0 1rem;border-bottom:1px solid var(--line);font-family:var(--round);font-weight:800}
 .thread .th-head .close{margin-left:auto}
-/* Ikona naglowka szuflady bez wlasnego rozmiaru nie moze rozsadzic layoutu. */
+/* The drawer header icon needs an explicit size to avoid expanding the layout. */
 .thread .th-head > svg{width:1.15rem;height:1.15rem;flex:0 0 auto}
 .thread .th-msgs{flex:1;overflow-y:auto;padding:.6rem 0}
 
@@ -448,7 +430,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:2rem}
 .empty .big{font-size:2.6rem;margin-bottom:.4rem}
 .empty h2{font-family:var(--round);color:var(--ink);margin:.2rem 0}
-/* stos powiadomien - prawy gorny rog, kazdy komunikat niezalezny */
+/* Toast stack in the top right corner; each message is independent. */
 .toast-stack{position:fixed;top:1.1rem;right:1.1rem;z-index:50;display:flex;flex-direction:column;
   gap:.55rem;align-items:flex-end;max-width:min(22rem,calc(100vw - 2.2rem))}
 .toast{pointer-events:auto;display:flex;align-items:center;gap:.7rem;background:var(--ink);color:var(--bg);
@@ -473,76 +455,71 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 @keyframes slidein{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 @keyframes shimmer{to{background-position:-200% 0}}
 @keyframes shake{10%,90%{transform:translateX(-1px)}30%,70%{transform:translateX(3px)}50%{transform:translateX(-4px)}}
-/* "Mniej ruchu" musi wygrywac z KAZDA regula: samo `*` bez !important przegrywalo
-   ze zwyklym `.messages{scroll-behavior:smooth}` (klasa ma wyzsza specyficznosc),
-   a przejscia i animacje bez konca (spin, pulsowanie, kuleczki) chodzily dalej,
-   bo regula ruszala wylacznie czasu trwania animacji. */
+/* Reduced motion must override EVERY rule. A bare * selector lost to
+   .messages{scroll-behavior:smooth}; changing only animation duration also left
+   transitions and looping spinners, pulses and typing bubbles running. */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{
     animation-duration:.001ms!important;animation-iteration-count:1!important;
     transition-duration:.001ms!important;scroll-behavior:auto!important}
 }
 
-/* Tekst tylko dla czytnikow ekranu - etykiety pol, ktore wizualnie opisuje
-   placeholder albo kontekst. */
+/* Screen-reader-only text for fields visually labeled by a placeholder or context. */
 .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
   clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 
-/* ============ MOBILE ADAPTACYJNIE (nie skurczony desktop) ============
-   Wzorzec jak natywna apka: JEDEN ekran naraz. Domyslnie widzisz rozmowe na
-   pelnym ekranie; hamburger otwiera LISTE (kanaly/wiki + taby Rozmowy/
-   Uzytkownicy) tez na pelnym ekranie; wejscie w kanal wraca do rozmowy. */
+/* ============ ADAPTIVE MOBILE (not a scaled-down desktop) ============
+   One screen at a time: the conversation fills the screen; the hamburger opens
+   the channel/wiki list and Conversations/Accounts tabs. Selecting a channel returns to chat. */
 @media (max-width:760px){
-  /* Rail zostaje takze na telefonie - to jedyna nawigacja, ktora przezywa
-     zamkniecie szuflady; 2.9rem to mniej niz jeden margines wiadomosci. */
+  /* Keep the rail on phones: it is the only navigation that survives closing the drawer.
+     2.9rem is narrower than a message margin. */
   .shell, .shell.with-rail{grid-template-columns:2.9rem 1fr}
   .rail{padding:.5rem 0}
   .rail-btn{width:2.2rem;height:2.2rem}
   .sidebar{left:2.9rem}
-  /* Lista = pelnoekranowy panel wjezdzajacy z lewej. Zamknieta znika TAKZE
-     semantycznie (visibility + inert z JS): sam transform wypycha ja za ekran,
-     ale zostawia w kolejnosci Tab i w drzewie dostepnosci. */
+  /* The list is a full-screen panel sliding in from the left. When closed, visibility
+     and JS inert also remove it semantically; transform alone leaves it in Tab order
+     and the accessibility tree. */
   .sidebar{position:fixed;top:0;right:0;bottom:0;left:2.9rem;width:auto;z-index:15;
     transform:translateX(-102%);visibility:hidden;
     transition:transform .26s cubic-bezier(.2,.8,.3,1),visibility 0s .26s}
   .shell.drawer .sidebar{transform:none;visibility:visible;
     transition:transform .26s cubic-bezier(.2,.8,.3,1)}
-  /* Dotyk nie zna hoveru: pasek akcji odslania dlugie przytrzymanie (klasa
-     .touch-actions), a cele dotykowe rosna do 2.2rem. */
+  /* Touch has no hover: a long press reveals .touch-actions, with 2.2rem touch targets. */
   .msg .actions button{width:2.2rem;height:2.2rem}
   .shell.drawer .scrim{display:block;position:fixed;inset:0;background:rgba(10,12,20,.4);z-index:12;animation:fade .2s}
-  /* Wieksze cele dotykowe na liscie. */
+  /* Larger touch targets in the list. */
   .sb-head{padding:0 1rem}
   .conv{padding:.66rem .7rem;font-size:1rem}
   .conv .badge{min-width:1.4rem;height:1.4rem}
   .sb-group h3{font-size:.78rem;margin:.4rem .7rem}
-  /* Rozmowa na pelnym ekranie; hamburger = menu/lista. */
+  /* Full-screen conversation; the hamburger opens the menu/list. */
   .topbar .hamburger{display:grid}
   .topbar{padding:0 .8rem}
   .thread, #details-slot .thread{width:100vw}
   .u-wrap{padding:.8rem .9rem 2rem;max-width:100%}
-  /* Mniejsze marginesy boczne w czacie (byly za duze) + luzniejszy composer. */
+  /* Smaller chat side margins and a roomier composer. */
   .msg{padding-left:.7rem;padding-right:.7rem;gap:.5rem}
   .day{margin:.5rem .7rem}
   .composer{padding:0 .7rem .8rem}
   .messages{padding-bottom:5rem}
 }
 
-/* ================= NOWE FUNKCJE: wiki, szukaj, pytania, obecnosc ============ */
+/* ================= WIKI, SEARCH, QUESTIONS AND PRESENCE ============ */
 
-/* Bez animacji przejsc miedzy widokami/kanalami (feedback 2026-08-08:
-   "to nie sa dobre animacje, na razie zostawmy bez nich"). Klasa zostaje
-   w markupie jako zaczep, ale niczego nie odgrywa. */
+/* No transitions between views or channels (feedback 2026-08-08).
+   The class remains as a markup hook without playing an animation. */
 .viewfade{animation:none}
 .msg.flash{animation:flash 1.6s ease-out}
 @keyframes flash{0%{background:color-mix(in srgb,var(--accent) 22%,transparent)}100%{background:transparent}}
 
-/* puste stany w sidebarze */
+/* Sidebar empty states. */
 .sb-empty{padding:.4rem .6rem;color:var(--faint);font-size:.85rem}
 .badge.coral{background:var(--coral);color:#fff}
 .mhint{font-size:.8rem;color:var(--muted);margin:.2rem 0 .6rem}
 .fhint{font-size:.76rem;color:var(--faint);margin-top:.3rem;line-height:1.4}
-/* Pille "radio": wybor obok siebie zamiast dropdowna. */
+/* Radio pills: choices side by side instead of a dropdown. */
 .pillrow{display:flex;flex-wrap:wrap;gap:.4rem}
 .pill{padding:.4rem .8rem;border-radius:99px;border:1px solid var(--line);background:var(--surface-2);
   color:var(--muted);font-size:.85rem;font-weight:600;transition:background .12s,color .12s,border-color .12s}
@@ -553,9 +530,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .who-select{background:var(--surface-2);border-radius:10px;padding:.4rem;border:1.5px solid transparent;width:100%}
 .gd-body{overflow-y:auto;font-size:.92rem;line-height:1.55;color:var(--ink)}
 
-/* ---------- pasek obecnosci: pisze... / pracuje ---------- */
-/* Pasek "pisze"/"pracuje" siedzi w doku tuz NAD kapsula, wyrownany do jej
-   szerokosci; wlasny mask sprawia, ze nie znika pod gradientem doku. */
+/* ---------- presence bar: typing / working ---------- */
+/* The typing/working bar sits in the dock just above the capsule, matching its width.
+   Its own mask keeps it visible over the dock gradient. */
 .presence-bar{min-height:0;max-height:0;overflow:hidden;font-size:.82rem;color:var(--muted);
   display:flex;gap:1.1rem;align-items:center;transition:max-height .25s ease,padding .25s ease;
   max-width:44rem;width:100%;margin:0 auto;padding:0 1.7rem;position:relative;z-index:2}
@@ -572,7 +549,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .spin{width:1em;height:1em;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;
   display:inline-block;animation:spin .7s linear infinite}
 
-/* ---------- pasek dolaczania do kanalu (podglad) ---------- */
+/* ---------- join-channel bar (preview) ---------- */
 .joinbar{flex:0 0 auto;margin:0 auto 1.2rem;max-width:44rem;width:calc(100% - 2.2rem);
   background:var(--surface-2);border:1px solid var(--line);border-radius:16px;
   padding:.7rem 1rem;display:flex;align-items:center;gap:.8rem;justify-content:space-between;
@@ -582,7 +559,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   padding:.5rem 1.1rem;transition:filter .15s,transform .12s;min-width:5.5rem}
 .joinbtn:hover{filter:brightness(1.08)} .joinbtn:active{transform:scale(.95)}
 
-/* ---------- pytania otwarte ---------- */
+/* ---------- open questions ---------- */
 .msg.ask{border-left:3px solid var(--coral);background:color-mix(in srgb,var(--coral) 4%,transparent)}
 .msg.ask:hover{background:color-mix(in srgb,var(--coral) 7%,transparent)}
 .qbadge{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:800;
@@ -597,7 +574,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   border:1px solid var(--line);border-radius:10px;padding:.4rem .8rem;font-weight:650;font-size:.86rem;
   transition:border-color .15s,transform .1s,background .15s}
 .answerbtn:hover{border-color:var(--coral);color:var(--coral);transform:translateY(-1px)}
-/* ---------- panel szczegolow rozmowy ---------- */
+/* ---------- conversation details panel ---------- */
 .thread.details{display:flex;flex-direction:column}
 .dt-body{overflow-y:auto;flex:1;padding:.4rem .9rem 1rem}
 .dt-sec{margin-top:1rem}
@@ -614,13 +591,13 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   border-radius:6px;display:grid;place-items:center}
 .dm-kick:hover{color:var(--coral);background:var(--surface-2)}
 .dt-hint{color:var(--faint);font-size:.78rem;margin:.45rem 0 0;line-height:1.4}
-/* Tablica dzierzaw w sidebarze: kto trzyma zasob i ile mu zostalo. */
+/* Sidebar leases: who holds each resource and for how long. */
 .lease-row{display:flex;align-items:center;gap:.55rem;padding:.3rem .55rem;color:var(--muted);font-size:.85rem}
 .lease-row .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lease-row .lease-ttl{color:var(--faint);font-size:.74rem;font-variant-numeric:tabular-nums;flex:0 0 auto}
 .digest-body{max-height:55vh;overflow-y:auto;margin-bottom:.6rem}
 .digest-who{color:var(--muted);font-size:.88rem;margin:.2rem 0 .4rem}
-/* Doladowanie starszej historii nad pierwsza wiadomoscia. */
+/* Load older history above the first message. */
 .loadmore{display:block;margin:.6rem auto;padding:.4rem 1rem;border-radius:99px;
   background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-size:.82rem;font-weight:600}
 .loadmore:hover{border-color:var(--accent);color:var(--accent)}
@@ -640,7 +617,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .iconbtn.on{background:var(--accent-soft);color:var(--accent-ink)}
 .modal.wide{width:min(560px,100%)}
 .news-modal .news-body{max-height:60vh;overflow-y:auto;margin-bottom:.8rem;font-size:.92rem}
-/* Przycisk passkey pod glownym "Wejdz": stonowany, nie konkuruje z haslem. */
+/* The passkey button below Sign in is muted so it does not compete with the password. */
 .passkey-btn{margin-top:.6rem;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;
   background:var(--surface-2);color:var(--ink);box-shadow:none;border:1px solid var(--line)}
 .passkey-btn:hover{border-color:var(--accent);color:var(--accent);filter:none}
@@ -654,36 +631,35 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .qbody{font-size:.88rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
 .qcount .pre{color:var(--coral);font-weight:800}
 
-/* ---------- edycja inline + odpowiadanie ---------- */
+/* ---------- inline editing and replies ---------- */
 .inline-edit textarea{width:100%;background:var(--surface-2);border:1.5px solid var(--accent);
   border-radius:10px;padding:.5rem .7rem;resize:none;line-height:1.45;font-size:inherit}
 .inline-edit textarea:focus{outline:none}
 .inline-edit .hint{font-size:.72rem;color:var(--faint);margin-top:.2rem}
 
-/* ---------- status doreczenia (DM) ---------- */
+/* ---------- delivery status (DM) ---------- */
 .delivery{margin-top:.25rem;font-size:.72rem;color:var(--faint);animation:enter .3s both}
 .delivery .ok{color:var(--green)} .delivery .warn{color:var(--amber)} .delivery .off{color:var(--muted)}
 
-/* ============ POPRAWKI PO AUDYCIE UX 2026-08-09 ============ */
+/* ============ UX AUDIT FIXES 2026-08-09 ============ */
 
-/* Toast z nazwana czynnoscia ("Cofnij"). Komunikat, ktory tylko informuje
-   o rzeczy nieodwracalnej, jest gorszy niz brak komunikatu. */
+/* Toast with a named action (Undo). A message that merely announces an irreversible
+   action is worse than no message. */
 .toast .taction{flex:0 0 auto;color:var(--bg);font-weight:800;font-size:.85rem;
   text-decoration:underline;text-underline-offset:3px;opacity:.9}
 .toast .taction:hover{opacity:1}
 
-/* Przycisk potwierdzajacy czynnosc nieodwracalna - kolor niesie wage, tak samo
-   jak nazwa na przycisku. */
+/* Irreversible-action confirmation: color carries weight, as does the button label. */
 .btn.danger{background:var(--coral);color:#fff}
 
-/* Pusty stan z czynnoscia: samo "brak" nie mowi, co dalej. */
+/* An empty state needs an action: None alone does not say what to do next. */
 .empty .btn.slim{width:auto;margin-top:.9rem}
 .sb-empty .sb-cta{display:block;margin-top:.4rem;color:var(--accent);font-weight:700;
   font-size:.85rem;text-align:left;padding:0}
 .sb-empty .sb-cta:hover{text-decoration:underline}
 .sb-empty{line-height:1.45}
 
-/* Menu "więcej" przy wiadomosci: pelne nazwy i zdanie o skutku zamiast piktogramu. */
+/* The message More menu uses full labels and consequences instead of bare icons. */
 .msg-menu{position:fixed;z-index:34;min-width:16rem;max-width:22rem;background:var(--surface);
   border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:.3rem;
   display:flex;flex-direction:column;animation:mpop .14s ease-out both}
@@ -695,12 +671,11 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .msg-menu button.danger .mm-l{color:var(--coral)}
 .msg-menu button.danger:hover{background:var(--coral-soft)}
 
-/* Opcje zalacznika: zwiniete menu z pelnymi etykietami. Byly trzema
-   piktogramami, w tym nieodwracalnym "spal po odczycie" na jeden klik. */
+/* Attachment options: a collapsed menu with full labels replaces three icons,
+   including the irreversible one-click burn-after-reading action. */
 .pv-opts{margin-top:.25rem}
-/* Podglad pliku jest waski (nazwa w jednym wierszu), ale rozwiniete menu opcji
-   potrzebuje miejsca na pelne zdania - wiec kafelek uklada sie w KOLUMNIE
-   i rozszerza dopiero na czas otwarcia menu. */
+/* A file preview is narrow, but expanded options need room for full sentences.
+   The tile switches to a column and expands while the menu is open. */
 .preview.file{flex-direction:column;align-items:stretch;gap:.3rem}
 .preview.file .pv-main{width:100%}
 .preview:has(.pv-opts[open]){max-width:22rem;width:min(22rem,72vw)}
@@ -722,28 +697,26 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   padding:.3rem .4rem;font-size:.8rem;color:var(--ink)}
 .pv-why{color:var(--muted);font-size:.75rem;line-height:1.35;font-weight:400}
 
-/* Pasek "brak polaczenia" nad rozmowa (wczesniej drobny druk w stopce listy). */
+/* The offline bar sits above the conversation, replacing fine print in the sidebar footer. */
 .offbar{flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:.45rem 1rem;
   background:var(--coral-soft);color:var(--coral);font-size:.85rem;font-weight:650;
   border-bottom:1px solid color-mix(in srgb,var(--coral) 30%,transparent);z-index:2}
 .offdot{width:.5rem;height:.5rem;border-radius:50%;background:var(--coral);flex:0 0 auto;
   animation:qpulse 2s infinite}
 
-/* Twarz przy rozmowie prywatnej i przy osobie na liscie "Kto tu jest".
-   Kropka obecnosci siedzi NA awatarze, jak w kazdym komunikatorze. */
+/* Avatars for DMs and the Who is here list, with a presence dot on the avatar. */
 .conv-face{position:relative;flex:0 0 auto;display:grid;place-items:center;width:22px;height:22px}
 .conv-face .ppresence{position:absolute;right:-2px;bottom:-2px;width:.5rem;height:.5rem;
   border-radius:50%;background:var(--faint-line);border:2px solid var(--sidebar)}
 .conv-face .ppresence.on{background:var(--green)}
 .conv.active .conv-face .ppresence{border-color:var(--accent)}
-/* Wiersz osoby: nazwa, a za nia plakietka czlowiek/agent - to jest ta jedna
-   rzecz, ktora odroznia ten produkt od kazdego innego komunikatora. */
+/* Person row: name followed by a human/agent badge, the distinction central to this product. */
 .conv.person .kindtag{font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;
   padding:.05rem .3rem;border-radius:5px;background:var(--surface-2);color:var(--muted);flex:0 0 auto}
 .conv.person .kindtag.human{background:var(--accent-soft);color:var(--accent-ink)}
 .conv.active.person .kindtag{background:var(--on-accent);color:var(--accent)}
-/* Wyblakli (14+ dni ciszy) i archiwum (90+ dni): obecnosc, nie dlugosc listy.
-   Hover przywraca pelna czytelnosc, zeby dalo sie swiadomie kliknac. */
+/* Faded (14+ silent days) and archived (90+ days): based on activity, not list length.
+   Hover restores readability so the person can be deliberately selected. */
 .conv.person.faded{opacity:.45}
 .conv.person.faded:hover,.conv.person.faded:focus-visible{opacity:1}
 details.arch summary{cursor:pointer;list-style:none;font-size:.72rem;font-weight:800;
@@ -753,25 +726,25 @@ details.arch summary::before{content:"\25B8";display:inline-block;margin-right:.
   transition:transform .15s}
 details.arch[open] summary::before{transform:rotate(90deg)}
 
-/* Zwalnianie wlasnego zasobu wprost z listy. */
+/* Release your own resource directly from the list. */
 .lease-free{flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--accent);
   padding:.1rem .4rem;border-radius:6px}
 .lease-free:hover{background:var(--accent-soft)}
 
-/* Konflikt wiki: okno z decyzja, nie toast z instrukcja curl-owa. */
-.kw-opcje{display:flex;flex-direction:column;gap:.5rem;margin:.8rem 0 .2rem}
-.kw-opt{display:flex;flex-direction:column;gap:.2rem;align-items:flex-start;text-align:left;
+/* Wiki conflict: a decision dialog instead of a toast with curl instructions. */
+.wiki-conflict-options{display:flex;flex-direction:column;gap:.5rem;margin:.8rem 0 .2rem}
+.wiki-conflict-option{display:flex;flex-direction:column;gap:.2rem;align-items:flex-start;text-align:left;
   background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:.7rem .9rem;
   transition:border-color .15s,transform .1s}
-.kw-opt:hover{border-color:var(--accent);transform:translateY(-1px)}
-.kw-opt b{font-size:.92rem}
-.kw-opt span{font-size:.82rem;color:var(--muted);line-height:1.4}
+.wiki-conflict-option:hover{border-color:var(--accent);transform:translateY(-1px)}
+.wiki-conflict-option b{font-size:.92rem}
+.wiki-conflict-option span{font-size:.82rem;color:var(--muted);line-height:1.4}
 
-/* Znacznik autozapisu w edytorze wiki - cichy, ale obecny. */
-.we-zapis{font-size:.74rem;color:var(--faint);flex:0 0 auto;min-width:0;
+/* Wiki editor draft status: quiet but visible. */
+.we-draft-status{font-size:.74rem;color:var(--faint);flex:0 0 auto;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* ---------- obrazy inline + lightbox ---------- */
+/* ---------- inline images and lightbox ---------- */
 .msg-img-wrap{display:block;margin-top:.2rem;border-radius:14px;overflow:hidden;max-width:320px;
   border:1px solid var(--line);transition:transform .15s,box-shadow .15s;padding:0;line-height:0}
 .msg-img-wrap:hover{transform:scale(1.015);box-shadow:var(--shadow)}
@@ -782,7 +755,7 @@ details.arch[open] summary::before{transform:rotate(90deg)}
   animation:lbx .22s cubic-bezier(.2,.9,.3,1.1) both}
 @keyframes lbx{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:none}}
 
-/* ---------- markdown (wiadomosci + wiki) ---------- */
+/* ---------- markdown (messages and wiki) ---------- */
 .md,.msg .text{word-wrap:break-word;overflow-wrap:anywhere}
 .msg .text p{margin:.1rem 0}
 .md p{margin:.55rem 0}
@@ -804,19 +777,18 @@ details.arch[open] summary::before{transform:rotate(90deg)}
   display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--muted);
   opacity:0;transition:opacity .12s,color .15s,border-color .15s}
 .mdpre:hover .copybtn,.mdpre:focus-within .copybtn{opacity:1}
-/* Przycisk kopiowania daje sie sfokusowac, wiec przy fokusie MUSI byc widoczny -
-   inaczej uzytkownik klawiatury stoi na czyms, czego nie widzi. */
+/* The copy button is focusable, so it must be visible when focused.
+   Keyboard users must see the control they are on. */
 .copybtn:focus-visible{opacity:1}
 .copybtn:hover{color:var(--accent);border-color:var(--accent)}
 .copybtn.copied{color:var(--green);border-color:var(--green);opacity:1;animation:pop .25s}
 .mdempty{color:var(--faint);font-style:italic}
 
-/* ---------- autouzupelnianie @ ---------- */
+/* ---------- @ autocomplete ---------- */
 .mention-pop{position:fixed;z-index:32;background:var(--surface);border:1px solid var(--line);
   border-radius:12px;box-shadow:var(--shadow-lg);padding:.3rem;display:flex;flex-direction:column;
   min-width:14rem;animation:mpop .14s ease-out both;
-  /* Na waskim ekranie lista nie moze byc szersza niz to, co widac - inaczej
-     wystaje poza krawedz i wyglada na uciete albo nieobecne. */
+  /* On narrow screens the list must fit the viewport rather than appearing clipped or missing. */
   max-width:calc(100vw - 1rem);max-height:min(50vh,18rem);overflow-y:auto}
 @keyframes mpop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .mention-pop button{display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border-radius:8px;
@@ -824,7 +796,7 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .mention-pop button.sel,.mention-pop button:hover{background:var(--accent-soft)}
 .mention-pop .mh{font-weight:650;font-size:.9rem}
 
-/* ---------- paleta szukania (Cmd+K) ---------- */
+/* ---------- search palette (Cmd+K) ---------- */
 .palette-overlay{align-items:flex-start;padding-top:12vh;backdrop-filter:blur(4px)}
 .palette{width:min(600px,94vw);background:var(--surface);border:1px solid var(--line);border-radius:18px;
   box-shadow:var(--shadow-lg);overflow:hidden;animation:palin .18s cubic-bezier(.2,.9,.3,1.1) both}
@@ -907,11 +879,9 @@ details.arch[open] summary::before{transform:rotate(90deg)}
   .palette-overlay{padding-top:4vh}
 }
 
-/* ---------- centrum powiadomien ---------- */
-/* Dzwonek stoi NAD lista rozmow, bo odpowiada na inne pytanie niz ona: nie
-   "gdzie rozmawiam", tylko "co mnie wolalo". Plakietka znika (nie zeruje sie),
-   gdy nie ma nic nowego - licznik "0" uczy sie ignorowac tak samo jak alarm,
-   ktory nigdy nie gasnie. */
+/* ---------- notification center ---------- */
+/* The bell sits above conversations because it answers what called me, not where I talk.
+   Hide the badge when there is nothing new: a permanent zero teaches people to ignore it. */
 .sb-bell{display:flex;align-items:center;gap:.55rem;width:calc(100% - 1.1rem);margin:.15rem .55rem .35rem;
   padding:.5rem .6rem;border:0;border-radius:12px;background:transparent;color:var(--ink);
   font:inherit;font-weight:600;cursor:pointer;text-align:left}
@@ -926,8 +896,7 @@ details.arch[open] summary::before{transform:rotate(90deg)}
   padding:.7rem .85rem;border:1px solid transparent;border-radius:14px;background:var(--surface-2);
   color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .notif:hover{border-color:var(--line)}
-/* Nieodhaczone maja koralowa krawedz z lewej - jeden sygnal, nie kolorowe tlo,
-   ktore po dziesieciu wierszach staje sie scianą. */
+/* Unread items have a coral left border, a single signal instead of a wall of colored backgrounds. */
 .notif.fresh{box-shadow:inset 3px 0 0 var(--accent)}
 .notif .ni{flex:0 0 1.5rem;display:grid;place-items:center;color:var(--muted);font-weight:700}
 .notif .ni svg{width:1.1em;height:1.1em}
@@ -937,9 +906,8 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .notif .nx{color:var(--muted);font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .notif .nt{flex:0 0 auto;color:var(--muted);font-size:.78rem;white-space:nowrap}
 
-/* "Naprawione" jest stanem POSREDNIM i ma tak wygladac: bursztyn, nie zielen.
-   Zielony check nalezy do potwierdzenia przez zglaszajacego - gdyby oba stany
-   wygladaly tak samo, "ktos twierdzi, ze zrobil" czytaloby sie jak "sprawdzone". */
+/* Fixed is an INTERMEDIATE state: amber, not green. The green check belongs to
+   confirmation by the reporter; making them identical would confuse a claimed fix with a verified one. */
 .qbadge.fixed{background:color-mix(in srgb,var(--amber-soft) 15%,transparent);
   color:var(--amber);border:1px solid color-mix(in srgb,var(--amber-soft) 35%,transparent)}
 .msg .actions [data-fix].on{color:var(--amber)}
@@ -947,19 +915,17 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .sb-foot{padding:.35rem .9rem .6rem;font-size:.72rem;color:var(--muted);
   letter-spacing:.02em;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;gap:.15rem}
 .sb-foot .stale{color:var(--accent);font-weight:600}
-/* Stan strumienia zdarzen mieszkal tutaj, w stopce panelu bocznego, drobnym
-   drukiem obok numeru wersji UI. Przeniesiony do paska nad rozmowa (.offbar) -
-   "nie widzisz nowych wiadomosci" nie jest informacja tej samej wagi co numer
-   wersji interfejsu. */
+/* Event-stream status moved from fine print beside the UI version in the sidebar
+   footer to .offbar above the conversation. Missing new messages carries more weight
+   than the interface version. */
 
-/* ---------- kreska "nowe wiadomosci" ---------- */
-/* Ten sam ksztalt co separator dnia, ale w kolorze wolania: to jedyne miejsce,
-   ktore mowi "tu skonczyles czytac", i ma sie dac znalezc jednym spojrzeniem. */
+/* ---------- new-messages divider ---------- */
+/* The day-separator shape in an attention color marks where reading stopped, visible at a glance. */
 .newline{display:flex;align-items:center;gap:.8rem;margin:.8rem 1.2rem .3rem;color:var(--coral);
   font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
 .newline::after{content:"";height:1px;background:var(--coral);flex:1;opacity:.55}
 
-/* ---------- wiadomosc w locie / nieudana ---------- */
+/* ---------- in-flight / failed message ---------- */
 .msg.sending{opacity:.55}
 .msg.sending .time{font-style:italic}
 .msg.failed{background:color-mix(in srgb,var(--coral) 7%,transparent)}
@@ -970,24 +936,24 @@ details.arch[open] summary::before{transform:rotate(90deg)}
   font-size:.8rem;font-weight:650;color:var(--ink);background:var(--surface)}
 .failbar button:hover{border-color:var(--accent);color:var(--accent)}
 
-/* ---------- drzewo wiki: chevron obok wiersza, nie w srodku ---------- */
+/* ---------- wiki tree: chevron beside the row, not inside it ---------- */
 .conv-row{display:flex;align-items:center;gap:.1rem}
 .conv-row .conv{flex:1;min-width:0}
 .conv-row > .pre{color:var(--muted);flex:0 0 auto;width:1.6rem;text-align:center}
-/* Cel dotykowy 1.6rem (>=24 px) - chevron nie lezy juz wewnatrz innego celu. */
+/* 1.6rem touch target (>=24px): the chevron is no longer nested in another target. */
 .twist{width:1.6rem;height:1.6rem;flex:0 0 auto;display:grid;place-items:center;border-radius:7px;
   color:var(--muted);transition:transform .15s,background .15s;transform:rotate(90deg)}
 .twist.closed{transform:rotate(0deg)}
 .twist:hover{background:var(--surface-2);color:var(--ink)}
 
-/* ---------- strefa zrzutu plikow ---------- */
-.main.dropping::after{content:"Upuść, żeby załączyć";position:absolute;inset:.5rem;z-index:6;
+/* ---------- file drop zone ---------- */
+.main.dropping::after{content:attr(data-drop-label);position:absolute;inset:.5rem;z-index:6;
   border:2px dashed var(--accent);border-radius:18px;background:color-mix(in srgb,var(--accent) 10%,transparent);
   display:grid;place-items:center;font-weight:700;color:var(--accent-ink);pointer-events:none}
 
-/* Etykieta grupy pol, ktora nie opisuje pojedynczego <input> (radiogroup). */
+/* A field-group label describes a radiogroup, not an individual input. */
 .field .flabel{font-size:.78rem;font-weight:700;color:var(--muted);letter-spacing:.02em}
-/* Pill "nowe ponizej" z licznikiem - szerszy, bo niesie tekst, nie samo slowo. */
+/* The new-below pill is wider because it carries a count and text. */
 .jump-newest.hascount{padding-left:1.1rem;padding-right:1.1rem}
 .we-where{margin-right:-.2rem}
 .we-parent{background:var(--surface-2);border:1.5px solid transparent;border-radius:10px;

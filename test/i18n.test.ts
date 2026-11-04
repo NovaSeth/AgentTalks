@@ -49,7 +49,7 @@ function uzyteKlucze(): Map<string, string[]> {
   return gdzie;
 }
 
-test("kazde zdanie interfejsu ma tlumaczenie, a kazde tlumaczenie jest uzywane", async () => {
+test("every interface sentence has a translation and every translation is used", async () => {
   const uzyte = uzyteKlucze();
   // A guard against a silent failure of the sensor itself: when the expression stops matching
   // (a different function name, a different quote), the set will be empty and the test will
@@ -66,7 +66,7 @@ test("kazde zdanie interfejsu ma tlumaczenie, a kazde tlumaczenie jest uzywane",
   assert.deepEqual(martwe, [], `w slowniku, nieuzywane w kodzie:\n${martwe.map((k) => `  ${JSON.stringify(k)}`).join("\n")}`);
 });
 
-test("formy mnogie pokrywaja kategorie, o ktore pyta polski Intl.PluralRules", async () => {
+test("plural forms cover the categories requested by Polish Intl.PluralRules", async () => {
   const { PL } = await import("../src/http/ui/js/i18n-pl.js");
   const rules = new Intl.PluralRules("pl");
   // The numbers are chosen so that all three Polish categories occur: 1 -> one, 2..4 -> few,
@@ -90,7 +90,7 @@ test("formy mnogie pokrywaja kategorie, o ktore pyta polski Intl.PluralRules", a
   assert.ok(mnogich >= 5, `spodziewam sie kilku form mnogich, jest ${mnogich}`);
 });
 
-test("t() tlumaczy, wybiera forme i wraca do angielskiego przy braku wpisu", async () => {
+test("t() translates, selects the plural form and falls back to English for missing entries", async () => {
   const i18n = await import("../src/http/ui/js/i18n.js");
   i18n.setLang("en");
   assert.equal(i18n.t("Sign in"), "Sign in");
@@ -112,7 +112,7 @@ test("t() tlumaczy, wybiera forme i wraca do angielskiego przy braku wpisu", asy
   i18n.setLang("en");
 });
 
-test("zaden plik UI nie przykrywa importowanego t() wlasnym `t`", () => {
+test("no UI file shadows the imported t() with its own `t`", () => {
   // The patterns that actually occurred while translating the interface: `const t =` (a title
   // field, a bar), `(t)` and `(t,` (a parameter in map/forEach - a token, a tab).
   const PRZYKRYCIE = /\bconst\s+t\b|\blet\s+t\b|\bvar\s+t\b|\(\s*t\s*\)\s*=>|\(\s*t\s*,/;

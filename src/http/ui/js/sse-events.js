@@ -2,9 +2,9 @@
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
 import { api } from "./api.js";
-import { ensureActors, loadConversationsList, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions } from "./dane.js";
+import { ensureActors, loadConversationsList, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions } from "./data.js";
 import { announce, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
-import { actorHandle, findMsgById, mentionsMe, state, upsertMessage, widok } from "./stan.js";
+import { actorHandle, findMsgById, mentionsMe, state, upsertMessage, views } from "./state.js";
 
 // -------------------------------------------------------------- SSE (live)
 // EventSource resumes BY ITSELF only from a TCP-level break. An HTTP response other than 200
@@ -18,7 +18,7 @@ let sseRetry = 0;        // attempt number: 1s, 2s, 4s ... max 30 s
 
 let sseTimer = null;
 
-let sseWznowienie = false; // whether this connection is a return after a break
+let sseResume = false; // whether this connection is a return after a break
 
 function setOnline(online) {
   if (state.online === online) return;
@@ -26,14 +26,14 @@ function setOnline(online) {
   // The connection state is a bar ABOVE THE CONVERSATION, not fine print under the channel
   // list: "you are not seeing new messages" matters more than the interface version number,
   // with which it used to share one line in the footer.
-  widok.pasekOffline();
+  views.offlineBar();
 }
 
 function scheduleReconnect() {
   clearTimeout(sseTimer);
   const delay = Math.min(30000, 1000 * 2 ** sseRetry);
   sseRetry = Math.min(sseRetry + 1, 5);
-  sseWznowienie = true;
+  sseResume = true;
   sseTimer = setTimeout(() => { if (state.actor) connectSSE(); }, delay);
 }
 
@@ -48,7 +48,7 @@ export function disconnectSSE() {
   if (es) { es.close(); es = null; }
   sseRetry = 0;
   state.sseCursor = 0;
-  sseWznowienie = false;
+  sseResume = false;
 }
 
 export function connectSSE() {
@@ -61,11 +61,11 @@ export function connectSSE() {
   es.onopen = async () => {
     sseRetry = 0;
     setOnline(true);
-    if (!sseWznowienie) return;
-    sseWznowienie = false;
+    if (!sseResume) return;
+    sseResume = false;
     // After a break the unread counters and list contents can be arbitrarily stale - a replay
     // carries messages only, not state.
-    try { await loadConversationsList(); widok.sidebar(); updateTitleBadge(); }
+    try { await loadConversationsList(); views.sidebar(); updateTitleBadge(); }
     catch { /* best effort */ }
   };
   es.addEventListener("message", (e) => onMessageEvent(JSON.parse(e.data)));
@@ -81,16 +81,16 @@ export function connectSSE() {
     try {
       const ev = JSON.parse(e.data);
       if (state.view === "wiki" && !state.wiki.editing && ev.slug === state.wiki.slug) {
-        widok.otworzWiki(ev.slug);
+        views.openWiki(ev.slug);
       }
-    } catch { /* zdarzenie bez danych */ }
+    } catch { /* event without data */ }
   });
   es.addEventListener("conversation", async (e) => {
     // A channel change (edit/archive/membership): refresh the list; when it concerns the active
     // conversation, the view and the open details panel as well. Archiving the active one moves
     // you to the first available conversation.
     await loadConversationsList();
-    widok.sidebar();
+    views.sidebar();
     try {
       const ev = JSON.parse(e.data);
       if (ev.conversationId === state.activeId) {
@@ -98,12 +98,12 @@ export function connectSSE() {
           const next = state.conversations.find((c) => state.memberships[c.id]);
           state.activeId = null;
           state.detailsOpen = false;
-          if (next) { widok.otworzRozmowe(next.id); return; }
+          if (next) { views.openConversation(next.id); return; }
         }
-        if (state.detailsOpen) await widok.szczegolyDane();
-        widok.glowny();
+        if (state.detailsOpen) await views.detailsData();
+        views.main();
       }
-    } catch { /* zdarzenie bez danych */ }
+    } catch { /* event without data */ }
   });
   es.onerror = () => {
     // readyState CONNECTING (0) = the browser is resuming by itself, we do not interfere.
@@ -117,7 +117,7 @@ async function onMessageEvent(ev) {
   const convId = ev.conversationId, msg = ev.message;
   const isUpdate = ev.type === "message_updated";
   const known = state.conversations.some((c) => c.id === convId);
-  if (!known) { await loadConversationsList(); widok.sidebar(); }
+  if (!known) { await loadConversationsList(); views.sidebar(); }
   // An unknown author: we fetch the ACTOR DIRECTORY, not the messages. Reloading the list
   // replaced the array with the 30 newest and erased all the loaded history - and that for one
   // missing handle.
@@ -130,24 +130,24 @@ async function onMessageEvent(ev) {
     cachedActor.lastActiveAt = lastActiveAt;
     if (listedActor && lastActiveAt > (listedActor.lastActiveAt ?? 0)) {
       listedActor.lastActiveAt = lastActiveAt;
-      widok.sidebar();
+      views.sidebar();
     }
   }
   const wasMine = msg.actorId === state.actor.id;
-  const otwarta = state.view === "chat" && state.activeId === convId;
-  const atBottom = otwarta && isScrolledToBottom();
+  const conversationOpen = state.view === "chat" && state.activeId === convId;
+  const atBottom = conversationOpen && isScrolledToBottom();
   // A message for a conversation we have never opened does NOT create an array: an
   // empty-but-existing one then looked like "history already loaded", and after entering you
   // saw one message with nothing before it.
-  if (state.loaded[convId] || otwarta) upsertMessage(convId, msg);
+  if (state.loaded[convId] || conversationOpen) upsertMessage(convId, msg);
   if (msg.id > state.sseCursor) state.sseCursor = msg.id;
   if (msg.kind === "ask" || msg.kind === "answer") refreshQuestions(convId);
   // "Looking at a conversation" is not the same as "seeing the newest": with the history
   // scrolled up, messages were neither counted nor marked - the client showed 0 while the
   // server knew about thirty.
-  const viewing = otwarta && document.visibilityState === "visible";
-  const widzeNajnowsze = viewing && atBottom;
-  if (!isUpdate && !widzeNajnowsze && !wasMine) {
+  const viewing = conversationOpen && document.visibilityState === "visible";
+  const viewingLatest = viewing && atBottom;
+  if (!isUpdate && !viewingLatest && !wasMine) {
     state.unread[convId] = (state.unread[convId] || 0) + 1;
     const conv = state.conversations.find((c) => c.id === convId);
     const direct = !!conv && (conv.kind === "dm" || conv.kind === "group");
@@ -155,23 +155,23 @@ async function onMessageEvent(ev) {
       state.unreadBadge[convId] = (state.unreadBadge[convId] || 0) + 1;
       maybeNotify(conv, msg, direct);
     }
-    widok.wiersz(convId);
+    views.conversationRow(convId);
     updateTitleBadge();
   }
-  if (otwarta) {
-    widok.wiadomosc(msg);
+  if (conversationOpen) {
+    views.message(msg);
     if (!isUpdate) {
       if (atBottom || wasMine) { scrollToBottom(true); }
       else if (!wasMine) { state.newBelow += 1; }
       updateJumpPill();
-      if (widzeNajnowsze && !wasMine) markReadDebounced(convId, msg.id);
+      if (viewingLatest && !wasMine) markReadDebounced(convId, msg.id);
       if (!wasMine) announce(`@${actorHandle(msg.actorId)}: ${String(msg.body ?? "").slice(0, 160)}`);
     }
   }
   if (state.threadOpen && (msg.id === state.threadOpen || msg.threadId === state.threadOpen)) {
     const i = state.threadMsgs.findIndex((m) => m.id === msg.id);
     if (i >= 0) state.threadMsgs[i] = msg; else { state.threadMsgs.push(msg); state.threadMsgs.sort((a, b) => a.id - b.id); }
-    widok.watek();
+    views.thread();
   }
 }
 
@@ -191,8 +191,8 @@ function maybeNotify(conv, msg, direct) {
       tag: `conv-${msg.conversationId}`,
       icon: "/icons/icon-192.png",
     });
-    n.onclick = () => { window.focus(); n.close(); widok.otworzRozmowe(msg.conversationId, msg.id); };
-  } catch { /* niektore przegladarki wymagaja ServiceWorkera - trudno */ }
+    n.onclick = () => { window.focus(); n.close(); views.openConversation(msg.conversationId, msg.id); };
+  } catch { /* some browsers require a ServiceWorker; notifications are best effort */ }
 }
 
 function onReactionEvent(ev) {
@@ -201,7 +201,7 @@ function onReactionEvent(ev) {
   // conversation we do not even have open.
   if (ev.conversationId !== state.activeId && !state.threadOpen) return;
   loadReactionsForMessage(ev.conversationId, ev.messageId).then(() => {
-    if (state.view === "chat" && state.activeId === ev.conversationId) widok.wiadomosc(findMsgById(ev.messageId));
-    if (state.threadOpen) widok.watek();
+    if (state.view === "chat" && state.activeId === ev.conversationId) views.message(findMsgById(ev.messageId));
+    if (state.threadOpen) views.thread();
   });
 }

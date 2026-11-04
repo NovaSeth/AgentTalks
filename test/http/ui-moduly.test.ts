@@ -31,7 +31,7 @@ function pliki(): string[] {
   return readdirSync(UI_DIR).filter((f) => f.endsWith(".js")).sort();
 }
 
-test("kazdy modul UI z katalogu jest serwowany pod /js/", async () => {
+test("every UI module in the directory is served under /js/", async () => {
   const lista = pliki();
   assert.ok(lista.length >= 15, `czujnik widzi tylko ${lista.length} modulow - katalog sie przeniosl?`);
 
@@ -47,7 +47,7 @@ test("kazdy modul UI z katalogu jest serwowany pod /js/", async () => {
   } finally { await s.close(); }
 });
 
-test("kazdy import miedzy modulami UI wskazuje na plik, ktory serwer odda", async () => {
+test("every UI module import points to a file the server serves", async () => {
   // The other side of the same pair: even when a file exists and is on the list, an
   // import can point at a name the directory does not have - and the symptom is identical.
   const importy = new Set<string>();
