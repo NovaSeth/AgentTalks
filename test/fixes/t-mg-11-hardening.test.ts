@@ -118,7 +118,8 @@ test("digest counts exactly under the cap and stops counting at UNREAD_CAP per c
   assert.equal(d.last?.body, `b${UNREAD_CAP + 49}`, "last is still the newest unread message");
 });
 
-test("digestFor on 300k unread rows is fast (B-MG-94)", () => {
+// 200 conversations with `perConv` unread rows each; returns the best of `runs` digestFor timings.
+function digestCost(perConv: number, runs: number): { ms: number; count: number } {
   const ctx = testCtx();
   const me = mkActor(ctx, "me"), ala = mkActor(ctx, "ala");
   for (let i = 0; i < 200; i++) {
@@ -127,20 +128,39 @@ test("digestFor on 300k unread rows is fast (B-MG-94)", () => {
   }
   ctx.db.exec("BEGIN");
   ctx.db.prepare(
-    `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 1500)
+    `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${Math.trunc(perConv)})
      INSERT INTO messages(conversation_id, actor_id, ts, kind, body)
      SELECT c.id, ?, 1, 'text', 'x' FROM conversations c, n WHERE c.kind = 'public'`,
   ).run(ala.id);
   ctx.db.exec("COMMIT");
   const total = (ctx.db.prepare("SELECT COUNT(*) AS n FROM messages").get() as { n: number }).n;
-  assert.equal(total, 300_000);
-  digestFor(ctx, me.id); // warm the statement cache
-  const t0 = process.hrtime.bigint();
-  const d = digestFor(ctx, me.id)!;
-  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-  console.log(`digestFor over 300k unread rows: ${ms.toFixed(1)} ms`);
-  assert.equal(d.count, 200 * UNREAD_CAP);
-  assert.ok(ms < 50, `digestFor took ${ms.toFixed(1)} ms`);
+  assert.equal(total, 200 * perConv);
+  const count = digestFor(ctx, me.id)!.count; // also warms the statement cache
+  let best = Infinity;
+  for (let r = 0; r < runs; r++) {
+    const t0 = process.hrtime.bigint();
+    digestFor(ctx, me.id);
+    best = Math.min(best, Number(process.hrtime.bigint() - t0) / 1e6);
+  }
+  return { ms: best, count };
+}
+
+test("digestFor on 300k unread rows is fast (B-MG-94)", () => {
+  // D-MG-36: this used to assert `ms < 50`, an absolute wall-clock bound that failed under the
+  // parallel load of `npm test` while the code was fine. The regression it guards is "digestFor stops
+  // capping at UNREAD_CAP and scans every unread row", and then the cost grows with the history.
+  // So both sizes run in this process, back to back, each takes the best of several runs, and they
+  // are compared as a RATIO: machine load hits both and cancels out. Capped, 1500 rows per
+  // conversation costs about the same as 100 (both are at or above the cap; ratio ~1); uncapped
+  // it is ~15x.
+  assert.ok(UNREAD_CAP <= 100, "the small case must be at or above the cap");
+  const small = digestCost(100, 7);
+  const big = digestCost(1500, 7);
+  console.log(`digestFor best of 7: 20k rows ${small.ms.toFixed(2)} ms, 300k rows ${big.ms.toFixed(2)} ms`);
+  assert.equal(small.count, 200 * UNREAD_CAP);
+  assert.equal(big.count, 200 * UNREAD_CAP);
+  // D-MG-36: load-independent ratio instead of an absolute millisecond bound.
+  assert.ok(big.ms < small.ms * 5, `digestFor cost grew with history: ${small.ms.toFixed(2)} ms at 20k rows, ${big.ms.toFixed(2)} ms at 300k`);
 });
 
 // --- item 10 (B-MG-95): read-all touches only currently readable notifications -----------
