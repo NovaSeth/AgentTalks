@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { LEGACY } from "../../src/core/error-codes.ts";
 
 const skills = [
-  "integrations/claude-skill/SKILL.md",
+  "integrations/claude-code-plugin/skills/agenttalks/SKILL.md",
   "integrations/claude-code/skills/agenttalks/SKILL.md",
 ];
 

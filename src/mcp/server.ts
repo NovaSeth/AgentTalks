@@ -215,6 +215,7 @@ export const TOOLS: ToolDef[] = [
         conversation: { type: "string", description: CONV_DESC + " Optional." },
         sinceTs: { type: "number", description: "From (Unix seconds)." },
         untilTs: { type: "number", description: "Until (Unix seconds)." },
+        beforeId: { type: "number", description: "Only messages with an id below this (cursor)." },
         limit: { type: "number" },
       },
       ["q"],
@@ -1053,6 +1054,7 @@ async function callTool(
         conversationId: conv?.id,
         sinceTs: num(args.sinceTs),
         untilTs: num(args.untilTs),
+        beforeId: num(args.beforeId),
         limit: num(args.limit),
       });
       if (hits.length === 0) return text("No matches.");

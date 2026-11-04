@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { buildRouter } from "../../src/http/server.ts";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
-const SKILL = read("../../integrations/claude-skill/SKILL.md");
+const SKILL = read("../../integrations/claude-code-plugin/skills/agenttalks/SKILL.md");
 const COPY = read("../../integrations/claude-code/skills/agenttalks/SKILL.md");
 
 /** Every "METHOD /api/path" the skill names: curl blocks (-X POST ... "$ATALKS_URL/api/...")

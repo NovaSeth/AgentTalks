@@ -26,6 +26,8 @@ export function search(
     // deleted, a search without a date range is exactly the command that will hurt first.
     sinceTs?: number;
     untilTs?: number;
+    // Id cursor (D-MG-42): only messages with a smaller id, applied before the LIMIT.
+    beforeId?: number;
   },
 ): Message[] {
   // The user's query is TEXT, not FTS syntax - turning it into a phrase with prefixes lives
@@ -44,6 +46,7 @@ export function search(
           AND (:conv IS NULL OR m.conversation_id = :conv)
           AND (:since IS NULL OR m.ts >= :since)
           AND (:until IS NULL OR m.ts <= :until)
+          AND (:before IS NULL OR m.id < :before)
           AND (c.kind = 'public'
                OR EXISTS (SELECT 1 FROM members mem
                            WHERE mem.conversation_id = c.id AND mem.actor_id = :me))
@@ -55,6 +58,7 @@ export function search(
       conv: q.conversationId ?? null,
       since: q.sinceTs ?? null,
       until: q.untilTs ?? null,
+      before: q.beforeId ?? null,
       me: q.actorId,
       lim: limit,
     }) as MsgRow[];
