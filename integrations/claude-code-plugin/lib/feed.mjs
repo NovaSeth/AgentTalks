@@ -30,6 +30,13 @@
  * window hands over the previous delivered cursors (possibly a null event cursor and the old
  * mention cursor), and the next run reads those mentions from the mention list again.
  *
+ * The REPLAY FLOOR (`replayFloor`) travels with them: the event cursor if there is one, else
+ * the floor this run's stream started from. It is not delivered state and never drives the
+ * skip rule; it only says where the next run's stream must start when there is no delivered
+ * event cursor, so events this run received but never delivered (a DM behind a held
+ * mention) are replayed instead of being jumped over by a newer status watermark (codex
+ * T-MG-14 r1 F2). The next run opens from min(replayFloor, its own status watermark).
+ *
  * The queue is bounded: past `maxQueue` events the feed drops the stream, finishes what it
  * holds, and reconnects from the committed cursor, so the server replays what it dropped.
  *
@@ -75,6 +82,7 @@ function isDefinitive(err) {
  *   onCursor?: (lastEventId: number | null) => void,
  *   lastEventId?: number | null,
  *   mentionCursor?: number | null,
+ *   replayFloor?: number | null,
  *   log?: (line: string) => void,
  *   fetchImpl?: typeof fetch,
  *   sse?: { initialBackoffMs?: number, maxBackoffMs?: number, idleMs?: number },
@@ -442,6 +450,12 @@ export function createFeed(opts) {
         } catch (err) {
           if (!isDefinitive(err)) throw err;
         }
+        // An earlier run that delivered no event yet left where ITS stream started: never
+        // start past it, or what it received but never delivered is skipped (r1 F2).
+        const prior = opts.replayFloor;
+        if (Number.isInteger(prior) && /** @type {number} */ (prior) >= 0) {
+          floor = floor === null ? /** @type {number} */ (prior) : Math.min(floor, /** @type {number} */ (prior));
+        }
       }
       if (opts.mentionCursor !== undefined && opts.mentionCursor !== null) {
         // A resumed feed (0 included: no mention existed when the last run started):
@@ -482,6 +496,9 @@ export function createFeed(opts) {
     get lastEventId() { return committed; },
     /** The last mention id delivered, with every mention before it. */
     get mentionCursor() { return mentionCursor; },
+    /** Where a successor's stream must start when it has no delivered event cursor: the
+     *  delivered cursor, else this run's floor (not delivered state; never a skip bound). */
+    get replayFloor() { return committed ?? floor ?? opts.replayFloor ?? null; },
     stop() {
       stopped = true;
       stream?.close();

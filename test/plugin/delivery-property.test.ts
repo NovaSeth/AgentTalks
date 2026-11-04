@@ -59,7 +59,7 @@ async function scenario(seed: number, steps: number) {
   const trace: string[] = [];
   const record = (ids: number[]) => { for (const id of ids) delivered.set(id, (delivered.get(id) ?? 0) + 1); };
 
-  let cursors: { lastEventId: number | null; mentionCursor: number | null } = { lastEventId: null, mentionCursor: null };
+  let cursors: { lastEventId: number | null; mentionCursor: number | null; replayFloor: number | null } = { lastEventId: null, mentionCursor: null, replayFloor: null };
   let current: Proc | null = null;
   let generation = 0;
 
@@ -83,6 +83,7 @@ async function scenario(seed: number, steps: number) {
       onItem: onItem as any,
       lastEventId: cursors.lastEventId,
       mentionCursor: cursors.mentionCursor,
+      replayFloor: cursors.replayFloor,
       sse: { initialBackoffMs: 20, maxBackoffMs: 50 },
       retry: { initialMs: 20, maxMs: 60 },
     } as any);
@@ -103,7 +104,7 @@ async function scenario(seed: number, steps: number) {
   function sigterm() {
     if (!current) return;
     // What the channel's heartbeat / the monitor's state file would carry at this instant.
-    cursors = { lastEventId: current.feed.lastEventId, mentionCursor: current.feed.mentionCursor };
+    cursors = { lastEventId: current.feed.lastEventId, mentionCursor: current.feed.mentionCursor, replayFloor: current.feed.replayFloor };
     trace.push(`SIGTERM ${current.kind} @ ${JSON.stringify(cursors)}`);
     current.kill();
     current = null;
@@ -150,6 +151,8 @@ async function scenario(seed: number, steps: number) {
         // sometimes dies again right after the next one starts.
         if (rnd() < 0.6) post({ conversationId: 3, actorId: BOB, body: `@nestor quick ${i}`, threadId: null }, true, true);
         else post({ conversationId: 5, actorId: BOB, body: `@nestor out here ${i}`, threadId: null }, true, true, false);
+        // ... often with a DM right behind it, held behind the mention (codex T-MG-14 r1 F2).
+        if (rnd() < 0.6) post({ conversationId: 9, actorId: BOB, body: `dm behind ${i}`, threadId: null }, true, false);
         await new Promise((r) => setTimeout(r, Math.floor(rnd() * 15)));
         sigterm();
         await startProc(generation % 2 === 0 ? "monitor" : "channel");

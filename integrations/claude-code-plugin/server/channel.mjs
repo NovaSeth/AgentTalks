@@ -154,7 +154,7 @@ let everOpened = false;
 function beat(state) {
   if (!heartbeatPath || (state === "closed" && !everOpened)) return;
   if (state === "open") everOpened = true;
-  writeHeartbeat(heartbeatPath, state, { lastEventId: feed?.lastEventId, mentionCursor: feed?.mentionCursor });
+  writeHeartbeat(heartbeatPath, state, { lastEventId: feed?.lastEventId, mentionCursor: feed?.mentionCursor, replayFloor: feed?.replayFloor });
 }
 /** @param {"open" | "pause" | "down"} state */
 function heartbeat(state) {

@@ -133,3 +133,32 @@ for (const status of [true, false]) test(`restart while a member mention is stil
   assert.deepEqual(delivered, [51]);
   assert.equal(feed.mentionCursor, 51);
 });
+
+test("restart while a mention AND a later DM are undelivered: the next run replays from the previous run's floor, not from the newest status, so the DM is not skipped (codex T-MG-14 r1 F2)", async (t) => {
+  const fake = await fakeAt();
+  t.after(() => fake.close());
+  gapFake(fake);
+  fake.conversations = convs([{ id: 3, kind: "public", slug: "general", notify: "mentions" }, { id: 9, kind: "dm", notify: "all" }]);
+  fake.status = { status: 200, body: { ok: true, lastMessageId: 51 } };
+  const held: number[] = [];
+  const first = createFeed({
+    identity: { url: fake.url, token: "atk_test" },
+    onItem: (it: any) => { held.push(it.id); return new Promise(() => {}); },
+    lastEventId: null, mentionCursor: 10,
+    sse: { initialBackoffMs: 50, maxBackoffMs: 100 },
+    retry: { initialMs: 50, maxMs: 100 },
+  } as any);
+  await first.start();
+  await waitFor(() => fake.streams() === 1, 3000);
+  await waitFor(() => held.length === 1, 3000);
+  fake.emit({ id: 52, conversationId: 9, actorId: BOB, body: "are you there?", threadId: null });
+  await waitFor(() => held.length === 2, 3000);
+  const saved = { lastEventId: first.lastEventId, mentionCursor: first.mentionCursor, replayFloor: (first as any).replayFloor };
+  first.stop();
+  await waitFor(() => fake.streams() === 0, 3000);
+  fake.status = { status: 200, body: { ok: true, lastMessageId: 52 } };
+  const { delivered } = await run(t, fake, saved as any);
+  await waitFor(() => delivered.length >= 2, 3000).catch(() => {});
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepEqual(delivered, [51, 52], `saved=${JSON.stringify(saved)}`);
+});

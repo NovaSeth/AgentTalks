@@ -99,7 +99,7 @@ function processAlive(pid) {
 
 /**
  * @typedef {{ pid: number, at: number, state: "open" | "closed",
- *   lastEventId: number | null, mentionCursor: number | null }} Heartbeat
+ *   lastEventId: number | null, mentionCursor: number | null, replayFloor: number | null }} Heartbeat
  */
 
 /** @param {string} file @returns {Heartbeat | null} */
@@ -111,6 +111,7 @@ export function readHeartbeat(file) {
       pid: v.pid, at: v.at, state: v.state === "open" ? "open" : "closed",
       lastEventId: Number.isInteger(v.lastEventId) ? v.lastEventId : null,
       mentionCursor: Number.isInteger(v.mentionCursor) ? v.mentionCursor : null,
+      replayFloor: Number.isInteger(v.replayFloor) ? v.replayFloor : null,
     };
   } catch {
     return null;
@@ -128,7 +129,7 @@ export function channelAlive(file, opts = {}) {
 /** The channel server's side (0600, atomic). The handled cursors ride along, so a monitor
  *  that takes over resumes where the channel stopped instead of from its own old cursor.
  *  @param {string} file @param {"open" | "closed"} state
- *  @param {{ lastEventId?: number | null, mentionCursor?: number | null }} [cursors] */
+ *  @param {{ lastEventId?: number | null, mentionCursor?: number | null, replayFloor?: number | null }} [cursors] */
 export function writeHeartbeat(file, state, cursors = {}) {
   try {
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
@@ -136,6 +137,7 @@ export function writeHeartbeat(file, state, cursors = {}) {
     writeFileSync(tmp, JSON.stringify({
       pid: process.pid, at: Date.now(), state,
       lastEventId: cursors.lastEventId ?? null, mentionCursor: cursors.mentionCursor ?? null,
+      replayFloor: cursors.replayFloor ?? null,
     }) + "\n", { mode: 0o600 });
     renameSync(tmp, file);
   } catch { /* best effort: without a heartbeat the monitor delivers, which is the safe side */ }
