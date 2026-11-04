@@ -6,9 +6,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -176,4 +176,48 @@ test("S5: the served skill has no command that redirects into .agenttalks.json, 
 test("S5b: the installer page does not tell agents to write a project file by hand", () => {
   const html = readFileSync(fileURLToPath(new URL("../../src/http/ui/install.html", import.meta.url)), "utf8");
   assert.ok(!/(&gt;|>)\s*\.agenttalks\.json/.test(html));
+});
+
+test("S7: login.mjs never writes through a symlink (the project file, the temp name, .gitignore): refuses, the link target is untouched", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const s = setup();
+  const victim = join(s.home, "victim.txt");
+  writeFileSync(victim, "precious\n");
+  symlinkSync(victim, s.file);
+  const r = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.notEqual(r.code, 0);
+  assert.equal(readFileSync(victim, "utf8"), "precious\n");
+  assert.ok(!(r.stdout + r.stderr).includes(TOKEN));
+  assert.equal(existsSync(s.conf), false, "nothing trusted");
+
+  // A symlinked .gitignore is refused too, and the already-written token file is not trusted.
+  const s2 = setup();
+  mkdirSync(join(s2.project, ".git"));
+  const victim2 = join(s2.home, "victim2.txt");
+  writeFileSync(victim2, "keep\n");
+  symlinkSync(victim2, join(s2.project, ".gitignore"));
+  const r2 = await login(s2, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.notEqual(r2.code, 0);
+  assert.equal(readFileSync(victim2, "utf8"), "keep\n");
+  assert.equal(existsSync(s2.conf), false);
+  assert.equal(existsSync(s2.file), false, "no token file left behind");
+});
+
+test("S8: login.mjs refuses when .agenttalks.json is tracked by git (the token would be committed)", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const s = setup();
+  const git = (...a: string[]) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: s.project, stdio: "pipe" });
+  git("init", "-q");
+  const shipped = oldSkillFile("https://foreign.example");
+  writeFileSync(s.file, shipped);
+  git("add", ".agenttalks.json");
+  git("commit", "-qm", "ships a token file");
+  const r = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /tracked by git/);
+  assert.equal(readFileSync(s.file, "utf8"), shipped, "file untouched");
+  assert.equal(existsSync(s.conf), false);
+  assert.ok(!(r.stdout + r.stderr).includes(TOKEN));
 });
