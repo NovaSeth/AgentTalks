@@ -89,9 +89,9 @@ test("tool names: the API tools are the spec's 17, and the woken run's set is un
   assert.deepEqual([...WAKE_TOOL_NAMES], ["read_conversation", "read_thread", "reply", "mark_read"]);
   const readme = readFileSync(join(PLUGIN, "README.md"), "utf8");
   for (const n of [...API_TOOL_NAMES, "reply", "typing", "mark_read"]) assert.ok(readme.includes(`\`${n}\``), `README names ${n}`);
-  for (const p of [join(PLUGIN, ".claude-plugin", "plugin.json")]) assert.match(readFileSync(p, "utf8"), /"version": "0\.3\.0"/);
+  for (const p of [join(PLUGIN, ".claude-plugin", "plugin.json")]) assert.match(readFileSync(p, "utf8"), /"version": "0\.3\.1"/);
   for (const p of [join(PLUGIN, "server", "channel.mjs"), join(PLUGIN, "scripts", "wake-tools.mjs")]) {
-    assert.match(readFileSync(p, "utf8"), /const VERSION = "0\.3\.0";/);
+    assert.match(readFileSync(p, "utf8"), /const VERSION = "0\.3\.1";/);
   }
 });
 
