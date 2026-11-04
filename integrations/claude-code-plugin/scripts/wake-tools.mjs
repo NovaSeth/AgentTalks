@@ -39,7 +39,7 @@ import { PREAMBLE, header, quoteBody } from "../lib/frame.mjs";
 import { createStdioServer } from "../lib/mcp.mjs";
 import { deriveSessionId } from "../lib/sessions.mjs";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const MAX_REPLY_CHARS = 60_000;
 /** The server caps a message body at 64 KiB: a read returns it whole. */
 const MAX_MESSAGE_CHARS = 65_536;
