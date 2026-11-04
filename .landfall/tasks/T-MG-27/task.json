@@ -1,0 +1,22 @@
+{
+  "schema": 2,
+  "id": "T-MG-27",
+  "kind": "task",
+  "title": "Web UI: Wiki and claimed resources as their own left-nav item above Admin",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T14:20:37.169Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    }
+  ],
+  "base": null,
+  "branch": null
+}

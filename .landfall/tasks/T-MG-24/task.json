@@ -1,0 +1,200 @@
+{
+  "schema": 2,
+  "id": "T-MG-24",
+  "kind": "task",
+  "title": "Plugin: typing tool for agents and a presence heartbeat so a listening agent never shows offline",
+  "lane": null,
+  "owner": "MG",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: matches risk glob **/SKILL.md",
+      "at": "2026-11-04T14:01:17.651Z"
+    }
+  ],
+  "status": "done",
+  "round": 1,
+  "events": [
+    {
+      "at": "2026-11-04T14:01:17.323Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T14:01:17.651Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:e2c3125ea11b2450",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T14:01:23.008Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-24-plugin-typing",
+        "base": "92d2199239762262514b9573db9ad392e65e644a",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-24"
+      }
+    },
+    {
+      "at": "2026-11-04T14:02:30.697Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "92d2199239762262514b9573db9ad392e65e644a"
+      }
+    },
+    {
+      "at": "2026-11-04T14:13:55.374Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T14:13:55.652Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T14:13:55.652Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "missing-artifact",
+        "head": "ec44d2fb806bf56bbd953affbe6651c2515ed66e",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T14:20:41.452Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:external",
+        "base": "92d2199239762262514b9573db9ad392e65e644a"
+      }
+    },
+    {
+      "at": "2026-11-04T14:26:06.229Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T14:26:19.557Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "ec44d2fb806bf56bbd953affbe6651c2515ed66e"
+      }
+    },
+    {
+      "at": "2026-11-04T14:29:34.178Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T14:29:34.433Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "missing-artifact",
+        "head": "8e6b76e984cb26acd850bc08578215768cf37613",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T14:34:18.055Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:external",
+        "base": "ec44d2fb806bf56bbd953affbe6651c2515ed66e"
+      }
+    },
+    {
+      "at": "2026-11-04T14:39:18.994Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T14:39:31.275Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "8e6b76e984cb26acd850bc08578215768cf37613",
+        "class": "critical",
+        "attempt": 3
+      }
+    },
+    {
+      "at": "2026-11-04T14:57:08.989Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "f76411cee300feb39ce2706c36610d4961577569",
+        "class": "critical",
+        "attempt": 4
+      }
+    },
+    {
+      "at": "2026-11-04T14:57:53.796Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "f76411cee300feb39ce2706c36610d4961577569"
+      }
+    },
+    {
+      "at": "2026-11-04T14:58:00.604Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "bc425d07d6b32f7560c0878c0ace6651fe963406",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "c389dff5e1439bb3e367cfe0ce8c1b7d27e6b4f5"
+      }
+    }
+  ],
+  "base": "92d2199239762262514b9573db9ad392e65e644a",
+  "branch": "task/T-MG-24-plugin-typing",
+  "mergedAt": "2026-11-04T14:58:00.604Z"
+}

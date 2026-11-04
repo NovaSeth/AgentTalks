@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/server/channel.mjs",
+      "line": 247,
+      "rule": "REV-2",
+      "text": "Reconnects reset the heartbeat deadline: connections recycled within 240 seconds can keep delivering indefinitely without refreshing presence, while the monitor stays on standby. Reproduction using the actual presenceBeat/startHeartbeat in memory: twelve 40 ms connections with a 100 ms interval produced posts=0; an uninterrupted 140 ms connection produced posts=1. Preserve the heartbeat deadline across reconnects, retain the liveness guard, and add a regression test."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "test/plugin/typing-heartbeat.test.ts",
+      "line": 230,
+      "rule": "COD-2",
+      "text": "Acceptance 4 does not test continued delivery: its fake returns 404 for /api/me, so the monitor cannot start its feed. Reproduction: an in-memory mutation replacing await feed.start() with await Promise.resolve() still passed every acceptance-4 assertion; output was sessionPosts=4, deliveredBytes=0. Use a functioning feed with only /api/sessions returning 500, inject an eligible message, and assert delivery during repeated heartbeat failures."
+    }
+  ],
+  "run": "codex-T-MG-24-reviewer-1",
+  "sha256": "1169210f305cec92f2c32a612067ffdba5a1a758b42ba652d817edbe7cbe223e"
+}

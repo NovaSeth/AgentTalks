@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/trust.mjs",
+      "line": 46,
+      "rule": "COD-2",
+      "text": "F2 NOT ADDRESSED (acceptance 3): age alone evicts a live lock owner; atalk.ts:82 duplicates this. VM reproduction: pause A after reading the list, advance 31s, complete B, resume A => completed=2, paths=[existing,a], lostEntry=b, including mixed plugin/atalk writers. Disabling age-based eviction prevents the loss. Use ownership-safe locking that cannot evict live writers, and test overlapping updates."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "src/cli/atalk.ts",
+      "line": 99,
+      "rule": "REV-2",
+      "text": "The new lock failure leaves an unignored credential. VM reproduction: hold a fresh trust lock and run atalkMain(['login','--url',url,'--token','-','--local']) in a git directory => exit=1, credentialExists=true, gitignoreExists=false; an existing credential is overwritten too. The baseline succeeds and adds the ignore entry. Acquire the lock before modifying credentials, or restore prior state and ensure ignore protection before writing; test timeout failures."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/trust.mjs",
+      "line": 83,
+      "rule": "REV-6",
+      "text": "F3 NOT ADDRESSED fully: directory/FIFO/symlink reproductions now refuse with zero writes, but temporary-file cleanup is still missing. VM reproduction: inject EPERM at renameSync(tmp, trusted-projects.json) => exit=1, credentialExists=false, trustTemps=1. A failed login leaves trusted-projects.json.<pid>.<random>.tmp behind. Clean up the temporary file on write/rename failure and add a failure-injection regression test."
+    }
+  ],
+  "run": "codex-T-MG-21-reviewer-2",
+  "sha256": "2777922197941464e4e44daca1226ab32abf54cea64e9746acf9ac158c8cb8ef"
+}

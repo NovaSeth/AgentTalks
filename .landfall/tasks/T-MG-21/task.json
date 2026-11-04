@@ -1,0 +1,263 @@
+{
+  "schema": 2,
+  "id": "T-MG-21",
+  "kind": "task",
+  "title": "Plugin onboarding: trust command, actionable untrusted-file notice, skills stop writing .agenttalks.json by hand",
+  "lane": null,
+  "owner": "MG",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: matches risk glob **/SKILL.md",
+      "at": "2026-11-04T13:12:03.321Z"
+    }
+  ],
+  "status": "done",
+  "round": 3,
+  "events": [
+    {
+      "at": "2026-11-04T13:11:48.252Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T13:12:03.321Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:5445e7dd8e840133",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T13:14:38.109Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-21-plugin-login",
+        "base": "92d2199239762262514b9573db9ad392e65e644a",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-21"
+      }
+    },
+    {
+      "at": "2026-11-04T13:14:43.395Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "92d2199239762262514b9573db9ad392e65e644a"
+      }
+    },
+    {
+      "at": "2026-11-04T13:35:47.920Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T13:35:48.142Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "missing-artifact",
+        "head": "92d2199239762262514b9573db9ad392e65e644a",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T13:39:14.051Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T13:39:14.051Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "missing-artifact",
+        "head": null,
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T13:46:38.135Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:external",
+        "base": "92d2199239762262514b9573db9ad392e65e644a"
+      }
+    },
+    {
+      "at": "2026-11-04T13:54:33.705Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T13:55:57.112Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "4ee7ec38b2ecf6fe9f287f4c38553f13cc00d74d"
+      }
+    },
+    {
+      "at": "2026-11-04T14:07:06.222Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T14:07:16.456Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:external",
+        "base": "4ee7ec38b2ecf6fe9f287f4c38553f13cc00d74d"
+      }
+    },
+    {
+      "at": "2026-11-04T14:20:25.895Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T14:21:06.480Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "426bb1a9c5cf4df32ef85e1d2368dddd61332169"
+      }
+    },
+    {
+      "at": "2026-11-04T14:27:52.496Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T14:27:58.415Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:external",
+        "base": "426bb1a9c5cf4df32ef85e1d2368dddd61332169"
+      }
+    },
+    {
+      "at": "2026-11-04T14:34:17.396Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T14:34:39.082Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "6fc872c2680dd0ca0181ee65be310de452e77372"
+      }
+    },
+    {
+      "at": "2026-11-04T14:38:54.880Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 3
+      }
+    },
+    {
+      "at": "2026-11-04T14:38:55.797Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:external",
+        "base": "6fc872c2680dd0ca0181ee65be310de452e77372"
+      }
+    },
+    {
+      "at": "2026-11-04T14:43:51.563Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 4,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T14:43:51.868Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "005fba42cca07a7e403ff1dca953d89b09a3491d",
+        "class": "critical",
+        "attempt": 3
+      }
+    },
+    {
+      "at": "2026-11-04T14:50:03.089Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "005fba42cca07a7e403ff1dca953d89b09a3491d"
+      }
+    },
+    {
+      "at": "2026-11-04T14:50:04.706Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "c7eec052ff473e7780bb17ebac951f3095a40f49",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "9d7eda0b5004ad3774c04fad32aa1bae99f1a09b"
+      }
+    }
+  ],
+  "base": "92d2199239762262514b9573db9ad392e65e644a",
+  "branch": "task/T-MG-21-plugin-login",
+  "mergedAt": "2026-11-04T14:50:04.706Z"
+}

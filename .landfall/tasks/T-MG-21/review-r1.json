@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/trust.mjs",
+      "line": 31,
+      "rule": "OWA-8",
+      "text": "Trust hashes mutable disk contents instead of the verified login payload. VM reproduction: replace the project bytes after login's rename with another URL/token; output: exit=0, trustedReplacement=true, verifiedOnlyOriginal=true. A writer with checkout access can therefore authorize an unverified identity (focus 1/5). Bind trust to the exact bytes and path produced from the verified credentials; reject replacement rather than hashing it."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/trust.mjs",
+      "line": 38,
+      "rule": "OWA-6",
+      "text": "The trust-list read/modify/rename is unlocked, so atomic rename still loses concurrent updates (acceptance 3, focus 4). VM reproduction: pause writer A after reading the list, complete B, resume A; output: completed=2, paths=[existing,a], lostEntry=b. Serialize the whole update with a lock respected by both login.mjs and atalk, and test overlapping writers; coordinating atalk needs a shared-task scope change."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/scripts/login.mjs",
+      "line": 153,
+      "rule": "OWA-10",
+      "text": "Acceptance 7 preflight checks only symlinks, and never checks the trust-list target. VM tests: a directory .gitignore yields exit=1/EISDIR with credentialExists=true and trustExists=true; a FIFO credential target is replaced; a symlink trust list is silently replaced. Refuse every existing non-regular output with lstat before any write, including the trust list, and roll back/clean temporary files if later writes fail so a failed login cannot leave an unignored credential."
+    },
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/scripts/login.mjs",
+      "line": 55,
+      "rule": "OWA-4",
+      "text": "Remote HTTP is accepted and receives the bearer token without TLS (focus 5). VM reproduction with the unchanged login/API modules and a fetch spy: --url http://remote.example yields requestUrl=http://remote.example/api/me, bearerSent=true, exit=0. A network observer can steal the credential before verification. Require HTTPS for non-loopback servers before sending any request, and test that rejected URLs make zero requests."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/scripts/login.mjs",
+      "line": 45,
+      "rule": "SEC-5",
+      "text": "Unknown arguments echo secrets, violating G3 even though the supported literal-token form is redacted. Direct reproduction: node integrations/claude-code-plugin/scripts/login.mjs --token=atk_review_synthetic_0001 exits 1 and prints unknown argument \"--token=atk_review_synthetic_0001\" to stderr. Do not echo arbitrary argument values; reject token-bearing argument forms with a fixed diagnostic and add a regression assertion that the synthetic token is absent."
+    }
+  ],
+  "run": "codex-T-MG-21-reviewer-1",
+  "sha256": "2eef27bf1e10b2ba59556bb91e8a6dd230514fea36aa27b815ba9ce91842770c"
+}

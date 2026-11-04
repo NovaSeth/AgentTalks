@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/trust.mjs",
+      "line": 64,
+      "rule": "COD-2",
+      "text": "F2 NOT ADDRESSED (acceptance 3): two-worker VM reproduction on unchanged sources, plugin/atalk in either order: A checks dead owner, pauses before unlink; B acquires and reads list; resume A to commit, then B => exits=[0,0], paths=[existing,b], lost=a. A deletes B's live lock using a stale observation. Serialize recovery against acquisition and test overlapping writers. F6/F3 ADDRESSED: timeout and EPERM reruns preserve prior credentials and leave no temps."
+    }
+  ],
+  "run": "codex-T-MG-21-reviewer-3",
+  "sha256": "1c1a8d7f83c14e98543fe5a12855c385ca9e682225120dcc498ba23decfcac71"
+}

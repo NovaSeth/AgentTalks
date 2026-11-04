@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "test/plugin/fake-at.ts",
+      "line": 94,
+      "rule": "ORC-18",
+      "text": "The fix edits a shared file explicitly reserved for T-MG-21 by brief.md:10, which requires a local fake instead. Reproduction: git diff --numstat ec44d2f 8e6b76e -- test/plugin/fake-at.ts outputs '6 0 test/plugin/fake-at.ts'. Revert these shared-helper edits and put the required fake-server behavior in typing-heartbeat.test.ts while retaining both regression tests."
+    }
+  ],
+  "run": "codex-T-MG-24-reviewer-2",
+  "sha256": "669718edbd76b923e70466a364b2ba78228dcbcf77a1a76ffbebc3d6a0addedf"
+}

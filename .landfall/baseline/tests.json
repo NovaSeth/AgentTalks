@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "8e776cdc0d128d37f993680815fbc5efbfe12695",
-  "collectedAt": "2026-11-04T12:03:49.439Z",
+  "head": "f76411cee300feb39ce2706c36610d4961577569",
+  "collectedAt": "2026-11-04T14:57:08.989Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -710,6 +710,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"F1 the channel's beat survives stream reconnects: a stream recycled faster than the interval still beats\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"F1: a stale 401 from account A's request does not sign account B out\",1]",
       "file": "",
       "skipped": false
@@ -1120,12 +1125,27 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"R1-F1: a file swapped in between login's rename and the trust step -> exit 1, nothing trusted for the replacement\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"R1-F1: wiki_read budgets the QUOTED text; many short lines stay near the budget\",1]",
       "file": "",
       "skipped": false
     },
     {
       "id": "[\"\",\"R1-F2: C0 separators U+001C..U+001E never start an unquoted line in any tool\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1-F2: a fresh lock held by someone else -> login waits, then both the old and the new entry are present; a dead owner's lock is not cleared\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1-F2: atalk login --local waits for a held trust-list lock and keeps the other entries; a dead owner's lock is not cleared\",1]",
       "file": "",
       "skipped": false
     },
@@ -1140,7 +1160,17 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"R1-F3: non-regular outputs are refused before any write; a failing trust step leaves no new credential\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"R1-F4: a planted project file with an evil url does not receive the env token; login --local trusts it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1-F4: http to a remote host and credentials in the URL are refused before any request; loopback http works\",1]",
       "file": "",
       "skipped": false
     },
@@ -1160,7 +1190,47 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"R1-F5: login never echoes argument values\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"R1-F6: caller-supplied values are echoed on one line; typing sec is clamped in the echo\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R2-F2 [atalk login --local]: a lock is never evicted: not by age, not for a LIVE owner, not for a DEAD pid (round 3)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R2-F2 [plugin login.mjs]: a lock is never evicted: not by age, not for a LIVE owner, not for a DEAD pid (round 3)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R2-F3 [atalk login --local]: a failing trust-list rename leaves no *.tmp and rolls the credential back\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R2-F3 [plugin login.mjs]: a failing trust-list rename leaves no *.tmp and rolls the credential back\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R2-F6 [atalk login --local]: a lock timeout in a git directory -> exit 1, zero writes, an existing credential untouched\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R2-F6 [plugin login.mjs]: a lock timeout in a git directory -> exit 1, zero writes, an existing credential untouched\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R3-F2: two concurrent logins against a dead-owner lock both fail closed; after the human removes it both succeed\",1]",
       "file": "",
       "skipped": false
     },
@@ -1220,6 +1290,16 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"S1 typing tool without CLAUDE_CODE_SESSION_ID: an error result, nothing sent\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S1 typing tool: one POST to the derived session's signal endpoint; stop; range; no session id\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"S1-visibleRows 1: an open section lists every row\",1]",
       "file": "",
       "skipped": false
@@ -1240,7 +1320,22 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"S10: the tracked-file check fails closed: git exiting 128 (or anything but 1) inside a git tree -> refuse, nothing written; exit 1 = untracked -> proceeds; no .git upward -> git is not asked\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S10b: the git call passes safe.directory\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"S13 CSS block exists, styles the labelled stats and uses Primer tokens, not literal rem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S1: a project file hand-written like the old skill says -> the monitor stays offline and names login.mjs; login.mjs with the token on stdin -> the monitor delivers a mention\",1]",
       "file": "",
       "skipped": false
     },
@@ -1270,6 +1365,16 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"S2 monitor in run mode beats at the interval; standby monitor sends none\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S2: a token the server rejects (401) or a non-actor answer -> non-zero exit, no file written\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"S2: app.css S2 block carries the 1280 px column query and the join-bar stacking fix (G20)\",1]",
       "file": "",
       "skipped": false
@@ -1286,6 +1391,16 @@
     },
     {
       "id": "[\"\",\"S2: the join bar keeps its place in the dock and the panel slot is still present for a preview\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S3 no beat without a live Claude ancestor or without a session id\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S3: a literal token on argv is refused, nothing is written; AGENTTALKS_TOKEN works without --token\",1]",
       "file": "",
       "skipped": false
     },
@@ -1321,6 +1436,16 @@
     },
     {
       "id": "[\"\",\"S3: unreadFrom counts the others' messages from the marked one on\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S4 + G4 + G6: login twice leaves one trust entry for the path, others survive, modes are 0600/0700, AGENTTALKS_CONFIG_DIR is honoured, --dir picks the directory\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S4 the live skill: decide, typing, write, reply; stop when not answering\",1]",
       "file": "",
       "skipped": false
     },
@@ -1366,6 +1491,11 @@
     },
     {
       "id": "[\"\",\"S4: wrapSelection wraps, unwraps and handles block markers\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S5 the channel INSTRUCTIONS mention the typing tool\",1]",
       "file": "",
       "skipped": false
     },
@@ -1445,7 +1575,32 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"S5: the served skill has no command that redirects into .agenttalks.json, and names the three routes in order\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S5b: the installer page does not tell agents to write a project file by hand\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S7: login.mjs never writes through a symlink (the project file, the temp name, .gitignore): refuses, the link target is untouched\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S8: login.mjs refuses when .agenttalks.json is tracked by git (the token would be committed)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"S9: below 760 px the rail is a bottom tab bar with 44 px targets, labels and a safe area\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S9: login's git calls run no repository-configured program (core.fsmonitor in .git/config) and the repo's config is not consulted from the project cwd\",1]",
       "file": "",
       "skipped": false
     },
@@ -1466,6 +1621,11 @@
     },
     {
       "id": "[\"\",\"S9: the shell follows the visual viewport so the composer stays above the keyboard\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S9b: login.mjs spawns git only with the hardening flags, a neutral cwd and a minimal env\",1]",
       "file": "",
       "skipped": false
     },
@@ -2380,6 +2540,16 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"acceptance 4: a heartbeat answered with 500 logs one line and the monitor keeps running\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"acceptance 4: delivery continues while every heartbeat fails (an event after 2+ failed beats is printed once)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"account B signing in after A's lost session gets none of A's drafts or navigation\",1]",
       "file": "",
       "skipped": false
@@ -2651,6 +2821,11 @@
     },
     {
       "id": "[\"\",\"channel -> monitor handover: 51 pushed, 52 still held by the rate limit at SIGTERM; the heartbeat says 51 and the monitor delivers 52 exactly once (codex r3 F8)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"channel beats when it delivers: a session ended by the server is re-registered\",1]",
       "file": "",
       "skipped": false
     },
@@ -3171,6 +3346,11 @@
     },
     {
       "id": "[\"\",\"healthcheck returns 1 when the server does not respond\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"heartbeat module: beats while alive, stops when the ancestor dies, one log line per failure kind\",1]",
       "file": "",
       "skipped": false
     },
@@ -5051,5 +5231,5 @@
     }
   ],
   "failing": [],
-  "sha256": "9665294b4b1001a168e2d964b1972bec1784a23c80800e81dc3bb2781babadbf"
+  "sha256": "79024ba72bf1d792af2c4569a09b0e3545c96ac6b10d467408e72fb3951b4e64"
 }

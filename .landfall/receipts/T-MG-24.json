@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "task": "T-MG-24",
+  "class": "critical",
+  "tier": null,
+  "startedAt": "2026-11-04T14:01:22.367Z",
+  "endedAt": "2026-11-04T14:57:53.475Z",
+  "wallMs": 3391108,
+  "tokens": {
+    "input": 147873,
+    "output": 81863,
+    "cacheRead": 12341973,
+    "cacheWrite": 213255
+  },
+  "costMicroUsd": 3501498,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 70,
+        "output": 26432,
+        "cacheRead": 7309857,
+        "cacheWrite": 50837
+      },
+      "costMicroUsd": 2397589
+    },
+    {
+      "agentType": "landfall:external",
+      "model": "claude-haiku-5-5",
+      "tokens": {
+        "input": 32,
+        "output": 2628,
+        "cacheRead": 106122,
+        "cacheWrite": 18276
+      },
+      "costMicroUsd": 4663
+    },
+    {
+      "agentType": "landfall:implementer",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+        "input": 108,
+        "output": 36085,
+        "cacheRead": 3778218,
+        "cacheWrite": 144142
+      },
+      "costMicroUsd": 1099246
+    }
+  ],
+  "external": [
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-24-reviewer-1",
+      "model": null,
+      "tokens": {
+        "input": 90049,
+        "output": 8013,
+        "cacheRead": 752128,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 309821,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-24-reviewer-2",
+      "model": null,
+      "tokens": {
+        "input": 57614,
+        "output": 8705,
+        "cacheRead": 395648,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 278478,
+      "exit": 0
+    }
+  ],
+  "rounds": 1,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 32,
+      "output": 2628,
+      "cacheRead": 106122,
+      "cacheWrite": 18276
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": true
+}

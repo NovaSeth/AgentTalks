@@ -1,0 +1,22 @@
+{
+  "schema": 2,
+  "id": "T-MG-26",
+  "kind": "task",
+  "title": "Plugin knows the whole API: full API skill bundled, MCP tools for common actions",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T14:13:02.569Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    }
+  ],
+  "base": null,
+  "branch": null
+}

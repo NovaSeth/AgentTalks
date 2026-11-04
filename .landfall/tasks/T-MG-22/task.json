@@ -1,0 +1,22 @@
+{
+  "schema": 2,
+  "id": "T-MG-22",
+  "kind": "task",
+  "title": "Naming: atalk (CLI) vs atalks (domain) confuse people; propose a clearer CLI name with a compatibility alias",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T13:58:31.331Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    }
+  ],
+  "base": null,
+  "branch": null
+}

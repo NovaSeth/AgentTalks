@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "task": "T-MG-21",
+  "class": "critical",
+  "tier": null,
+  "startedAt": "2026-11-04T13:12:08.062Z",
+  "endedAt": "2026-11-04T14:50:02.691Z",
+  "wallMs": 5874629,
+  "tokens": {
+    "input": 303578,
+    "output": 240671,
+    "cacheRead": 40433035,
+    "cacheWrite": 565424
+  },
+  "costMicroUsd": 10872485,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 308,
+        "output": 71167,
+        "cacheRead": 24023448,
+        "cacheWrite": 145601
+      },
+      "costMicroUsd": 7394065
+    },
+    {
+      "agentType": "landfall:external",
+      "model": "claude-haiku-5-5",
+      "tokens": {
+        "input": 70,
+        "output": 6778,
+        "cacheRead": 258856,
+        "cacheWrite": 40945
+      },
+      "costMicroUsd": 11099
+    },
+    {
+      "agentType": "landfall:implementer",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+        "input": 324,
+        "output": 118172,
+        "cacheRead": 13377483,
+        "cacheWrite": 378878
+      },
+      "costMicroUsd": 3467321
+    }
+  ],
+  "external": [
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-21-reviewer-1",
+      "model": null,
+      "tokens": {
+        "input": 72585,
+        "output": 12778,
+        "cacheRead": 763008,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 440939,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-21-reviewer-2",
+      "model": null,
+      "tokens": {
+        "input": 77120,
+        "output": 13064,
+        "cacheRead": 943232,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 462248,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-21-reviewer-3",
+      "model": null,
+      "tokens": {
+        "input": 67299,
+        "output": 10381,
+        "cacheRead": 587648,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 337682,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-21-reviewer-4",
+      "model": null,
+      "tokens": {
+        "input": 85872,
+        "output": 8331,
+        "cacheRead": 479360,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 274488,
+      "exit": 0
+    }
+  ],
+  "rounds": 3,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 70,
+      "output": 6778,
+      "cacheRead": 258856,
+      "cacheWrite": 40945
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": true
+}
