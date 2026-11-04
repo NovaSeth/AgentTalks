@@ -34,7 +34,7 @@ async function bridge(t: any, nowSec: () => number, o: BridgeOpts = {}) {
   const file = join(home, "claude-sessions");
   const project = mkdtempSync(join(tmpdir(), "at-plugin-wproj-"));
   for (const r of o.records ?? [{ sessionId: SESSION, url: "https://at.example", updatedAt: 1 }]) {
-    recordSession(file, { cwd: project, handle: "nestor", ...r });
+    recordSession(file, { cwd: project, handle: "nestor", ...r, updatedAt: Date.now() - 1_000_000 + r.updatedAt });
   }
   const calls: Array<{ cmd: string; argv: string[]; cwd: string; env?: Record<string, string | undefined> }> = [];
   const server = createWakeBridge({

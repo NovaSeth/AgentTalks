@@ -13,12 +13,13 @@
  *   clobber anybody else's record. The bridge reads the whole directory.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, linkSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const MAX_RECORDS = 50;
+export const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
 const RECORD_FILE = /^[0-9a-f]{32}\.json$/;
+const TOMB_FILE = /^([0-9a-f]{32}\.json)\.(\d+)\.[0-9a-f]{8}\.tomb$/;
 
 /** @param {string} claudeSessionId */
 export function deriveSessionId(claudeSessionId) {
@@ -69,7 +70,7 @@ export function readSessions(dir) {
 
 /** Writes the session's own file atomically (a temp file in the same directory, then rename)
  *  with mode 0600 (an explicit chmod too: `mode` applies only when a file is created), then
- *  drops the oldest records past MAX_RECORDS.
+ *  prunes records past their age (pruneSessions).
  *  @param {string} dir @param {SessionRecord} rec */
 export function recordSession(dir, rec) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -79,8 +80,69 @@ export function recordSession(dir, rec) {
   writeFileSync(tmp, JSON.stringify(rec) + "\n", { mode: 0o600 });
   chmodSync(tmp, 0o600);
   renameSync(tmp, file);
-  for (const old of readSessions(dir).slice(MAX_RECORDS)) {
-    try { unlinkSync(join(dir, recordName(old.sessionId))); } catch { /* another hook pruned it */ }
+  pruneSessions(dir);
+}
+
+/** @param {number} pid */
+function alive(pid) {
+  try { process.kill(pid, 0); return true; } catch (err) { return /** @type {any} */ (err)?.code === "EPERM"; }
+}
+
+/**
+ * Drops records whose session has not started for SESSION_TTL_MS (30 days), by AGE only: a
+ * count limit pushes out the record of a session that is still alive as soon as enough
+ * newer ones exist, and then its wake target is gone.
+ *
+ * Several processes write and prune the store at once (each SessionStart hook prunes after
+ * writing), so the prune never deletes what it has read: between "read: stale" and "unlink"
+ * another hook can replace the file with a fresh record (codex r3 F7). Instead:
+ *   1. CLAIM: rename the record to a tombstone name of our own
+ *      (<record>.<pid>.<random>.tomb). The rename is atomic: the tombstone now holds
+ *      whatever file had the name at that instant, the stale one or a concurrent refresh.
+ *   2. CHECK the tombstone's CONTENT, not what was read before. Still stale: delete it.
+ *      Fresh (refreshed in between): put it back with link(), which fails with EEXIST if a
+ *      still newer record took the name meanwhile (that one wins); then drop the tombstone.
+ * A pruner that dies between 1 and 2 leaves a tombstone whose owner pid is gone: every prune
+ * settles such orphans the same way first, so a fresh record held by a dead pruner returns
+ * at the next SessionStart. The cost: for the microseconds between claim and link a reader
+ * does not see a record that is being put back (the bridge then answers woke:false once).
+ * @param {string} dir
+ * @param {{ now?: () => number, ttlMs?: number,
+ *   hooks?: { afterSelect?: () => void, afterClaim?: () => void } }} [opts]
+ *   hooks: test seams between the steps (two-process interleaving tests)
+ */
+export function pruneSessions(dir, opts = {}) {
+  const now = opts.now ?? Date.now;
+  const ttl = opts.ttlMs ?? SESSION_TTL_MS;
+  const hooks = opts.hooks ?? {};
+  let names;
+  try { names = readdirSync(dir); } catch { return; }
+  /** @param {any} v */
+  const fresh = (v) => isRecord(v) && now() - v.updatedAt <= ttl;
+  /** @param {string} tomb @param {string} file */
+  const settle = (tomb, file) => {
+    let v = null;
+    try { v = JSON.parse(readFileSync(tomb, "utf8")); } catch { /* corrupt: goes */ }
+    if (fresh(v)) {
+      try { linkSync(tomb, file); } catch { /* EEXIST: a newer record holds the name; it wins */ }
+    }
+    try { unlinkSync(tomb); } catch { /* already settled by another pruner */ }
+  };
+  for (const name of names) {
+    const m = TOMB_FILE.exec(name);
+    if (m && !alive(Number(m[2]))) settle(join(dir, name), join(dir, m[1]));
+  }
+  for (const name of names) {
+    if (!RECORD_FILE.test(name)) continue;
+    const file = join(dir, name);
+    let v;
+    try { v = JSON.parse(readFileSync(file, "utf8")); } catch { continue; }
+    if (!isRecord(v) || fresh(v)) continue;
+    hooks.afterSelect?.();
+    const tomb = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tomb`;
+    try { renameSync(file, tomb); } catch { continue; /* gone: another pruner claimed it */ }
+    hooks.afterClaim?.();
+    settle(tomb, file);
   }
 }
 
