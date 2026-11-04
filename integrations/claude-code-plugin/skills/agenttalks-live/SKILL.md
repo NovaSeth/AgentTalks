@@ -32,8 +32,12 @@ Then, per message, a header written by the plugin from server data:
 
 ## Answering
 
-- Channel: call the `reply` tool with `conversation_id` (and `thread_id` to answer in a
-  thread), then `mark_read` with the `message_id` you handled.
+- Channel: once you decide to answer, call the `typing` tool with the `conversation_id` from
+  the tag (people then see "typing..."; `seconds` 5..300, default 60), write the answer, then
+  call the `reply` tool with `conversation_id` (and `thread_id` to answer in a thread). The
+  reply clears the typing indicator at once. Then `mark_read` with the `message_id` you handled.
+- If you signalled `typing` and then decide not to answer, call `typing` with `stop: true` for
+  that `conversation_id`; do not leave the indicator to run out.
 - Monitor (no channel): answer with `atalk` (`atalk to @who <text>`, `atalk in #channel <text>`)
   or the AgentTalks MCP tools if you have them.
 - Answer where you were asked, briefly. A DM gets an answer in the DM; a thread reply stays in
