@@ -67,6 +67,7 @@ test("identity: an untrusted project file with its own token AND url is not used
   assert.deepEqual(reasons, [untrustedProjectNotice(realpathSync(t.file))]);
   assert.match(reasons[0], /not trusted/);
   assert.match(reasons[0], /atalk login --local/);
+  assert.ok(reasons[0].includes(join(PLUGIN, "scripts", "login.mjs")), "names the plugin's own login.mjs by absolute path");
   assert.ok(!reasons[0].includes("\n"), "one line");
   // A url from the environment does not make the file's token usable either.
   assert.equal(resolveIdentity({ env: { AGENTTALKS_URL: "https://mine.example" }, cwd: t.project, home: t.home }), null);
