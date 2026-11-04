@@ -19,6 +19,8 @@ import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
 import { ensureDirect } from "../../src/core/conversations.ts";
 import { createPusher } from "../../integrations/claude-code-plugin/lib/pusher.mjs";
+import { createStdioServer } from "../../integrations/claude-code-plugin/lib/mcp.mjs";
+import { PassThrough } from "node:stream";
 
 const ENTRY = fileURLToPath(new URL("../../integrations/claude-code-plugin/server/channel.mjs", import.meta.url));
 
@@ -128,6 +130,33 @@ test("channel server: MCP handshake, tools/list, a pushed DM arrives framed, rep
 
   assert.ok(!stderr.includes(tokenN), "the token never reaches the log");
   assert.ok(!JSON.stringify(rpc.inbox).includes(tokenN), "nor stdout");
+});
+
+test("mcp: tool names that exist on Object.prototype are unknown tools, not a crash (Claude F9)", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const out: any[] = [];
+  let buf = "";
+  output.setEncoding("utf8");
+  output.on("data", (c: string) => {
+    buf += c;
+    let i: number;
+    while ((i = buf.indexOf("\n")) >= 0) { out.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); }
+  });
+  createStdioServer({
+    input, output, info: { name: "t", version: "0" }, capabilities: { tools: {} },
+    tools: { reply: { description: "r", inputSchema: { type: "object" }, handler: async () => ({ text: "ok" }) } },
+  });
+  const names = ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"];
+  names.forEach((name, i) => input.write(JSON.stringify({ jsonrpc: "2.0", id: i + 1, method: "tools/call", params: { name } }) + "\n"));
+  input.write(JSON.stringify({ jsonrpc: "2.0", id: 99, method: "tools/call", params: { name: "reply" } }) + "\n");
+  await waitFor(() => out.length >= names.length + 1, 3000);
+  for (let i = 1; i <= names.length; i++) {
+    const r = out.find((m) => m.id === i);
+    assert.equal(r.error?.code, -32602, `${names[i - 1]}: ${JSON.stringify(r)}`);
+    assert.match(r.error.message, /unknown tool/);
+  }
+  assert.equal(out.find((m) => m.id === 99).result.content[0].text, "ok");
 });
 
 test("pusher: at most one push per interval; a burst coalesces into one push", () => {

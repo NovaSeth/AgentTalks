@@ -20,6 +20,8 @@ export type FakeAt = {
   me: { id: number; handle: string };
   /** GET /api/conversations: the answer (status 200 + conversations/memberships, or an error). */
   conversations: Route;
+  /** GET /api/me body override (default: the actor, no conversations, nothing unread). */
+  meBody?: unknown;
   /** GET /api/messages/:root/thread by root id; a missing root answers 404. */
   threads: Map<number, Route>;
   /** Every message ever emitted, in order: the replay source. */
@@ -74,7 +76,7 @@ export async function fakeAt(opts: { me?: { id: number; handle: string } } = {})
       return;
     }
     if (url.pathname === "/api/me") {
-      return sendJson(res, { status: 200, body: { actor: me, conversations: [], unread: [] } });
+      return sendJson(res, { status: 200, body: fake.meBody ?? { actor: me, conversations: [], unread: [] } });
     }
     if (url.pathname === "/api/conversations") {
       if (fake.conversations === "hang") hanging.add(res);

@@ -18,7 +18,7 @@ import { hostname } from "node:os";
 import { basename } from "node:path";
 import { resolveIdentity } from "../lib/identity.mjs";
 import { createApi } from "../lib/api.mjs";
-import { PREAMBLE, header, quoteBody } from "../lib/frame.mjs";
+import { PREAMBLE, header, quoteBody, safeLabel } from "../lib/frame.mjs";
 import { deriveSessionId, recordSession, sessionsDir } from "../lib/sessions.mjs";
 
 export const MAX_CONTEXT_CHARS = 1500;
@@ -54,10 +54,16 @@ export function buildContext(me, questions, url) {
     .filter((/** @type {any} */ r) => r.unread > 0)
     .sort((/** @type {any} */ a, /** @type {any} */ b) => b.badge - a.badge || b.unread - a.unread)
     .slice(0, 8)
-    .map((/** @type {any} */ r) => `#${labelOf(byId.get(r.conversationId))} ${r.unread}${r.badge ? ` (${r.badge} for you)` : ""}`);
+    // These lines are TRUSTED (unquoted): every server-supplied field goes through safeLabel
+    // or Number, so a crafted slug or handle cannot start a line of its own.
+    .map((/** @type {any} */ r) => {
+      const badge = Number(r.badge) || 0;
+      return `#${safeLabel(labelOf(byId.get(r.conversationId)))} ${Number(r.unread) || 0}${badge ? ` (${badge} for you)` : ""}`;
+    });
   const mine = questions.filter((q) => q?.message && q.message.actorId !== me.actor.id);
+  const where = String(url).replace(/[^\x21-\x7e]/g, "");
   const lines = [
-    `AgentTalks: you are @${me.actor.handle} on ${url}. Live events arrive as AgentTalks <channel> blocks or agenttalks monitor lines; answer with the reply tool or atalk.`,
+    `AgentTalks: you are @${safeLabel(me.actor.handle)} on ${where}. Live events arrive as AgentTalks <channel> blocks or agenttalks monitor lines; answer with the reply tool or atalk.`,
     unread.length ? `Unread: ${unread.join(", ")}.` : "Unread: nothing.",
     `Open questions you can answer: ${mine.length}.`,
   ];

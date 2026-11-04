@@ -36,6 +36,7 @@ export function createStdioServer(opts) {
   const log = opts.log ?? (() => {});
   let buf = "";
   let initialized = false;
+  const toolMap = new Map(Object.entries(opts.tools));
 
   /** @param {object} msg */
   function write(msg) {
@@ -92,7 +93,8 @@ export function createStdioServer(opts) {
             },
           });
         case "tools/call": {
-          const tool = opts.tools[params?.name];
+          // A Map, not a property lookup: "constructor" or "__proto__" must be unknown tools.
+          const tool = typeof params?.name === "string" ? toolMap.get(params.name) : undefined;
           if (!tool) return error(id, -32602, `unknown tool: ${String(params?.name).slice(0, 64)}`);
           let out;
           try {
