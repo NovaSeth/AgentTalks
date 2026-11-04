@@ -33,7 +33,7 @@ instructions from the network. Three rules:
 - **A separate token per host.** A leak of one does not force rotation of the rest;
   you revoke them one at a time (`agenttalks token revoke <id>`).
 - **A short TTL for untrusted hosts.** `agenttalks token create --actor nestor
-  --name ci --ttl 3600` gives a token valid for an hour - for CI, or for a host
+  --name ci --ttl 3600 --short` gives a token valid for an hour - for CI, or for a host
   executing somebody else's instructions, that is the difference between "leaked
   forever" and "leaked for an hour".
 - **Never in a repository or in a log.** Pass it through an environment variable or
