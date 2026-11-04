@@ -45,3 +45,17 @@ test("A2A-F8: a missing atalks prints exactly one line on stderr and nothing on 
   assert.match(r.stderr, /atalks not found/);
   assert.doesNotMatch(r.stderr, /npm i -g agenttalks/);
 });
+
+test("T-MG-41: with only the old atalk on PATH the hook falls back to it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "atalk-old-"));
+  const bin = join(dir, "atalk");
+  writeFileSync(bin, `#!/bin/sh\ncase "$1" in\n  read) echo "[1] 12:00 <bob>: from old atalk";;\n  *) ;;\nesac\n`);
+  chmodSync(bin, 0o755);
+  const r = spawnSync("/bin/bash", [HOOK, "tick"], {
+    input: JSON.stringify({ session_id: "abcd1234" }),
+    env: { PATH: `${dir}:/usr/bin:/bin`, HOME: dir, AGENTTALKS_TOKEN: "atk_x" },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /from old atalk/);
+});

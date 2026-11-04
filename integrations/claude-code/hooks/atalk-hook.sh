@@ -18,7 +18,10 @@
 set -uo pipefail
 
 MODE="${1:-}"
-if ! command -v atalks >/dev/null 2>&1; then
+# `atalks` is the CLI; the old `atalk` name still works as a fallback for an older install.
+if command -v atalks >/dev/null 2>&1; then CLI=atalks
+elif command -v atalk >/dev/null 2>&1; then CLI=atalk
+else
   # ONE line on stderr, so a missing install is not a silent failure; stdout stays empty.
   echo "atalk-hook: atalks not found in PATH (it comes from a checkout of the AgentTalks repo: npm i -g .); AgentTalks hook disabled" >&2
   exit 0
@@ -45,7 +48,7 @@ command -v python3 >/dev/null 2>&1 || exit 0
 # block the agent's work. `timeout` comes from coreutils; without it (e.g. macOS
 # without gtimeout), calls have no time limit; busy still runs in the background.
 if command -v timeout >/dev/null 2>&1; then AT_TIMEOUT="timeout 5"; else AT_TIMEOUT=""; fi
-at() { $AT_TIMEOUT atalks "$@"; }
+at() { $AT_TIMEOUT "$CLI" "$@"; }
 
 payload=$(cat 2>/dev/null || true)
 # Parse JSON with Python: a greedy sed `.*` took the LAST "session_id" on the line,
