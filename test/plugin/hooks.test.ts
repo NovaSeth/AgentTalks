@@ -10,6 +10,9 @@ import { mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createServer as createHttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { fakeAt } from "./fake-at.ts";
 import { bearer, startTestServer } from "../http-helpers.ts";
 import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
@@ -104,4 +107,37 @@ test("hooks stay silent and succeed without an identity or a reachable server", 
   assert.equal(down.code, 0);
   assert.equal(down.stdout, "");
   assert.ok(!down.stderr.includes("atk_dead"));
+});
+
+test("SessionStart against a server that never answers ends within its overall budget (Claude F6)", async (t) => {
+  // Accepts every connection and never answers: each request would wait for its own timeout.
+  const silent = createHttpServer(() => {});
+  await new Promise<void>((r) => silent.listen(0, "127.0.0.1", r));
+  t.after(() => new Promise<void>((r) => { silent.closeAllConnections(); silent.close(() => r()); }));
+  const { port } = silent.address() as AddressInfo;
+  const home = mkdtempSync(join(tmpdir(), "at-plugin-hook-"));
+  const started = Date.now();
+  const r = await runHook("start", { session_id: "4f1c2b8e-aaaa-bbbb-cccc-444455556666", cwd: home },
+    { HOME: home, AGENTTALKS_URL: `http://127.0.0.1:${port}`, AGENTTALKS_TOKEN: "atk_slow", AGENTTALKS_HOOK_BUDGET_MS: "1500" });
+  const ms = Date.now() - started;
+  assert.equal(r.code, 0);
+  assert.ok(ms < 3000, `the hook took ${ms} ms with a 1500 ms budget`);
+});
+
+test("SessionStart writes the wake record and the summary even when the presence POST fails (Claude F6)", async (t) => {
+  const fake = await fakeAt(); // answers /api/me, but 404 to POST /api/sessions
+  t.after(() => fake.close());
+  const home = mkdtempSync(join(tmpdir(), "at-plugin-hook-"));
+  const project = mkdtempSync(join(tmpdir(), "at-plugin-proj-"));
+  const r = await runHook("start", { session_id: "4f1c2b8e-dddd-eeee-ffff-444455556666", cwd: project },
+    { HOME: home, AGENTTALKS_URL: fake.url, AGENTTALKS_TOKEN: "atk_test" });
+  assert.equal(r.code, 0, r.stderr);
+  assert.ok(fake.requests.includes("POST /api/sessions"), fake.requests.join(","));
+  const store = join(home, ".config", "agenttalks", "claude-sessions");
+  const files = readdirSync(store);
+  assert.equal(files.length, 1);
+  const rec = JSON.parse(readFileSync(join(store, files[0]), "utf8"));
+  assert.equal(rec.handle, "nestor");
+  assert.equal(rec.cwd, project);
+  assert.match(JSON.parse(r.stdout).hookSpecificOutput.additionalContext, /@nestor/);
 });

@@ -22,6 +22,8 @@ import { PREAMBLE, header, quoteBody } from "../lib/frame.mjs";
 import { deriveSessionId, recordSession, sessionsDir } from "../lib/sessions.mjs";
 
 export const MAX_CONTEXT_CHARS = 1500;
+/** The whole SessionStart run, all requests included, ends within this (the hook timeout is 15 s). */
+export const HOOK_BUDGET_MS = 8000;
 const QUESTION_PREVIEW_CHARS = 160;
 
 /** @returns {Promise<any>} */
@@ -93,25 +95,31 @@ async function main() {
   }
   if (mode !== "start") return;
 
-  const api = createApi(identity, { timeoutMs: 4000 });
-  await api.post("/api/sessions", {
+  // All four requests at once, under ONE budget well below the hook's 15 s timeout: a slow
+  // or silent server delays the session start by at most the budget, not by the sum of four
+  // timeouts. Presence is independent of the rest: when it fails, the wake record and the
+  // summary still happen (they need only GET /api/me).
+  const budget = Number(process.env.AGENTTALKS_HOOK_BUDGET_MS) > 0 ? Number(process.env.AGENTTALKS_HOOK_BUDGET_MS) : HOOK_BUDGET_MS;
+  const api = createApi(identity, { timeoutMs: budget });
+  /** @type {Promise<string>} */
+  const outOfTime = new Promise((r) => { setTimeout(r, budget, "timeout").unref(); });
+  const presence = api.post("/api/sessions", {
     sessionId,
     label: process.env.AGENTTALKS_LABEL || basename(cwd),
     kind: "durable",
     cwd,
     host: hostname(),
-  });
-  const me = await api.get("/api/me");
-  let questions = [];
-  try { questions = (await api.get("/api/questions/open")).questions ?? []; } catch { /* optional */ }
-  // Author kinds for the question headers.
-  try {
-    const roster = new Map(((await api.get("/api/actors")).actors ?? []).map((/** @type {any} */ a) => [a.id, a]));
-    for (const q of questions) {
-      const a = roster.get(q?.message?.actorId);
-      if (a) { q.message.actorHandle = a.handle; q.message.actorKind = a.kind; }
-    }
-  } catch { /* headers fall back to "?" */ }
+  }).catch((err) => { process.stderr.write(`[agenttalks-hook] presence not registered: ${err instanceof Error ? err.message : "failed"}\n`); });
+  /** @type {any[] | null} */
+  let questions = null;
+  /** @type {Map<number, any> | null} */
+  let roster = null;
+  const extras = Promise.allSettled([
+    api.get("/api/questions/open").then((r) => { questions = r.questions ?? []; }),
+    api.get("/api/actors").then((r) => { roster = new Map((r.actors ?? []).map((/** @type {any} */ a) => [a.id, a])); }),
+  ]);
+  const me = await Promise.race([api.get("/api/me"), outOfTime]);
+  if (me === "timeout") throw new Error("the server did not answer GET /api/me within the hook budget");
 
   try {
     recordSession(sessionsDir(), {
@@ -120,8 +128,16 @@ async function main() {
   } catch (err) {
     process.stderr.write(`[agenttalks-hook] could not record the session: ${err instanceof Error ? err.message : err}\n`);
   }
+  // The optional parts get what is left of the budget; whatever has not arrived is left out.
+  await Promise.race([Promise.all([extras, presence]), outOfTime]);
+  const open = questions ?? [];
+  for (const q of open) {
+    // Author kinds for the question headers.
+    const a = /** @type {Map<number, any> | null} */ (roster)?.get(q?.message?.actorId);
+    if (a) { q.message.actorHandle = a.handle; q.message.actorKind = a.kind; }
+  }
   process.stdout.write(JSON.stringify({
-    hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: buildContext(me, questions, identity.url) },
+    hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: buildContext(me, open, identity.url) },
   }) + "\n");
 }
 

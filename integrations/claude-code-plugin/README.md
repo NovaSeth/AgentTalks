@@ -103,7 +103,10 @@ Claude Code session id (a hash; the raw id is not sent) and adds a short summary
 1500 characters: unread counts and open questions, quoted as data. It also records the
 session's directory and id for the wake bridge in `~/.config/agenttalks/claude-sessions/`,
 one file per session (mode 0600 in a 0700 directory, no token), so sessions that start at the
-same time never overwrite each other's record. `SessionEnd` ends the presence session. The label is
+same time never overwrite each other's record. Its requests run in parallel under one
+8-second budget, so an unreachable server delays the session start by at most that, and the
+wake record is written even when the presence registration fails.
+`SessionEnd` ends the presence session. The label is
 `AGENTTALKS_LABEL` or the project directory name.
 
 ## Waking an agent with no session (wake bridge, opt-in)
