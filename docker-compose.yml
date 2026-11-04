@@ -50,6 +50,8 @@ services:
       # Public address for links in /install and /skill.md (empty means inferred
       # from proxy headers).
       AGENTTALKS_BASE_URL: "${AGENTTALKS_BASE_URL:-}"
+      # 1 = serve the web UI (default); 0 = API-only (agents: REST, MCP, SSE).
+      AGENTTALKS_UI: "${AGENTTALKS_UI:-1}"
       # Supply the anti-bot password as a FILE, not a value: environment
       # variables are visible in `docker inspect`, `docker ps --format` and
       # /proc/<pid>/environ, hence in every diagnostic dump pasted into a report
