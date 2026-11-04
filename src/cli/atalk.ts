@@ -16,7 +16,7 @@
  * in the prototype: "read" delivers what is new, "log" browses without touching the
  * counters, "seen" clears a conversation's counters.
  */
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
@@ -26,6 +26,8 @@ import { assertNodeVersion } from "../version.ts";
 import { oneLine, quote, QUOTE_NOTE } from "../core/untrusted.ts";
 // The ONE trust-list lock + writer, shared with the plugin's login.mjs (so they cannot drift).
 import { trustDir, trustProjectFile, withTrustLock } from "../../integrations/claude-code-plugin/lib/trust.mjs";
+// The ONE guard for writing a project credential (git tree, tracked, file kinds, check-ignore), shared with login.mjs.
+import { credentialPreflight, ensureIgnored, gitTop } from "../../integrations/claude-code-plugin/lib/credguard.mjs";
 
 const CONFIG_DIR = join(homedir(), ".config", "agenttalks");
 const CONFIG_FILE = join(CONFIG_DIR, "atalk.json");
@@ -126,22 +128,21 @@ function writeFileAtomic(path: string, data: Buffer, mode: number): void {
 function saveClientConfig(plain: ClientConfig, local = false): string {
   const cfg = { ...plain, writtenBy: WRITTEN_BY };
   if (local) {
-    const path = join(process.cwd(), LOCAL_CONFIG_NAME);
+    const dir = realpathSync(process.cwd());
+    const path = join(dir, LOCAL_CONFIG_NAME);
     const content = Buffer.from(JSON.stringify(cfg, null, 2));
     let ignoredNow = false;
+    // Every refusal comes before the first write (the same preflight as the plugin's login.mjs):
+    // a link/FIFO/directory at the target, a file git already tracks, git that cannot answer.
+    const touchGi = gitTop(dir) !== null;
+    const refusal = credentialPreflight(dir, touchGi);
+    if (refusal) throw new Error(refusal);
     // Everything that writes runs under the trust-list lock, taken FIRST: a lock timeout leaves
     // zero writes and an existing credential untouched (the error propagates to atalkMain).
     withTrustLock(trustDir(process.env, homedir()), () => {
-      // The token must NOT reach a repository. If this is git, we append the ignore straight
-      // away - "it was supposed to be in .gitignore" is no consolation after a leak.
-      if (existsSync(join(process.cwd(), ".git"))) {
-        const gi = join(process.cwd(), ".gitignore");
-        const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
-        if (!current.split("\n").some((l) => l.trim() === LOCAL_CONFIG_NAME)) {
-          appendFileSync(gi, (current && !current.endsWith("\n") ? "\n" : "") + LOCAL_CONFIG_NAME + "\n");
-          ignoredNow = true;
-        }
-      }
+      // The token must NOT reach a repository (also from a subdirectory or a worktree): the
+      // ignore line goes in first and git CONFIRMS it (check-ignore) before the token exists.
+      ignoredNow = ensureIgnored(dir, touchGi);
       const previous = existsSync(path) ? readFileSync(path) : null;
       writeFileAtomic(path, content, 0o600);
       try {
