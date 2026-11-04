@@ -5,7 +5,7 @@ import { ACTOR_KEY, CSRF_KEY, api, newSessionGeneration, onUnauthorized, session
 import { cancelMarkRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { announce, closeAccountOverlays, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
-import { actorHandle, findMsgById, mentionsMe, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
+import { actorHandle, findMsgById, mentionsMe, mergeActors, mergeReactions, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
 import { showToast } from "./toasts.js";
 
 // ------------------------------------------------------------ session lost (S7)
@@ -115,6 +115,29 @@ function captureReplayFloor() {
   if (!state.sseCursor && replayFloor === undefined) replayFloor = newestLoadedId();
 }
 
+/** The messages of one conversation after `floor`, page by page (the route's limit is 500) until a
+ *  page is shorter than the limit. A page of another session generation is dropped by api(). */
+const CATCH_UP_PAGE = 200;
+async function loadGapAfter(convId, floor, gen) {
+  let after = floor;
+  for (;;) {
+    const data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${CATCH_UP_PAGE}`);
+    if (gen !== sessionGeneration()) return;
+    for (const m of data.messages) upsertMessage(convId, m);
+    mergeActors(data.actors);
+    mergeReactions(data.messages, data.reactions);
+    const top = data.messages.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), after);
+    if (data.messages.length < CATCH_UP_PAGE || top <= after) return;
+    after = top;
+  }
+}
+
+function newestIdOf(convId) {
+  let newest = 0;
+  for (const m of state.msgs[convId] || []) if (typeof m.id === "number" && m.id > newest) newest = m.id;
+  return newest;
+}
+
 /** F4: a floor of 0 is not sent as `after=0` (that replays every message of every conversation
  *  from the beginning); the loaded histories are fetched again instead, once the stream is open,
  *  so nothing posted during the break is missing from them. With a floor of 0 every one of them was
@@ -122,7 +145,11 @@ function captureReplayFloor() {
 async function catchUpLoadedHistories(gen) {
   const loaded = Object.keys(state.loaded).filter((id) => state.loaded[id]).map(Number);
   for (const convId of loaded) {
-    try { await loadMessages(convId); } catch { continue; }
+    // The newest 30 refresh what the list already holds (edits); the gap after the newest id the
+    // list had before the break is then paged in full (B-MG-116): a gap longer than 30 messages
+    // would otherwise lose its oldest ones.
+    const floor = newestIdOf(convId);
+    try { await loadMessages(convId); await loadGapAfter(convId, floor, gen); } catch { continue; }
     if (gen !== sessionGeneration()) return;
     if (state.view === "chat" && state.activeId === convId) views.messages?.();
   }
