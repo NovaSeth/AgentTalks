@@ -5,15 +5,20 @@
   "title": "Plugin: woken runs use only principal-checked tools and can read the conversation (B-MG-105, B-MG-106)",
   "lane": null,
   "owner": "MG",
-  "class": "standard",
+  "class": "critical",
   "classHistory": [
     {
       "class": "standard",
       "reason": "standard: 3 files > 2; 300 LOC > 30",
       "at": "2026-11-04T03:27:55.141Z"
+    },
+    {
+      "class": "critical",
+      "reason": "critical: 847 LOC > 400",
+      "at": "2026-11-04T03:51:21.133Z"
     }
   ],
-  "status": "new",
+  "status": "done",
   "round": 0,
   "events": [
     {
@@ -33,8 +38,87 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T03:27:55.664Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-15-plugin-woken-tools",
+        "base": "796c834463080ef0590ec00bd0439ad45b80a963",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-15"
+      }
+    },
+    {
+      "at": "2026-11-04T03:28:45.494Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:designer",
+        "base": "796c834463080ef0590ec00bd0439ad45b80a963",
+        "note": "B-MG-105, B-MG-106 from T-MG-14 review-r3"
+      }
+    },
+    {
+      "at": "2026-11-04T03:46:17.550Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T03:51:20.673Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T03:51:21.133Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T03:51:21.133Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "baseline-shrunk",
+        "head": "a2ef7dc4c7d20efd223165447539861b5f37da62",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T03:52:36.257Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "a2ef7dc4c7d20efd223165447539861b5f37da62",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T03:53:14.325Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "a2ef7dc4c7d20efd223165447539861b5f37da62"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "796c834463080ef0590ec00bd0439ad45b80a963",
+  "branch": "task/T-MG-15-plugin-woken-tools"
 }

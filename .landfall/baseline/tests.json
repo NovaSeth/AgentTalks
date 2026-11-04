@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "abac1050ee7a1cd97d23dede1fbe6c7f124e358f",
-  "collectedAt": "2026-11-04T03:25:52.403Z",
+  "head": "a2ef7dc4c7d20efd223165447539861b5f37da62",
+  "collectedAt": "2026-11-04T03:52:36.257Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -3010,7 +3010,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"wake bridge: a woken run may use ONLY the plugin channel's principal-checked tools; a remote AgentTalks MCP server (configured as another actor) is denied (codex T-MG-14 r2 F4)\",1]",
+      "id": "[\"\",\"wake bridge: a woken run may use ONLY the wake tools server's principal-checked tools; a remote AgentTalks MCP server (configured as another actor) and the plugin channel are denied (codex T-MG-14 r2 F4, T-MG-15)\",1]",
       "file": "",
       "skipped": false
     },
@@ -3030,7 +3030,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"wake bridge: every allowed tool belongs to the principal-checked plugin channel; a wider --allowed-tools is a startup error (r2 F4)\",1]",
+      "id": "[\"\",\"wake bridge: every allowed tool belongs to the principal-checked wake tools server; a wider --allowed-tools is a startup error (r2 F4, T-MG-15)\",1]",
       "file": "",
       "skipped": false
     },
@@ -3060,7 +3060,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"wake bridge: the default allowed tools are this plugin's own reply and mark_read, nothing else (D-MG-17, narrowed by codex T-MG-14 r2 F4)\",1]",
+      "id": "[\"\",\"wake bridge: the default allowed tools are the wake tools server's read_conversation, read_thread, reply and mark_read, nothing else (D-MG-17, narrowed by codex T-MG-14 r2 F4 and T-MG-15)\",1]",
       "file": "",
       "skipped": false
     },
@@ -3096,6 +3096,56 @@
     },
     {
       "id": "[\"\",\"wake rejects local and private addresses (SSRF)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (a): the generated config is removed also when the run cannot start (ENOENT) or the runner throws\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (a): the woken run starts in strict MCP mode with a generated config naming ONLY the principal-checked tools server; no token on disk; 0600 in a private directory; removed when the run exits\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (b): codex alias scenario - another AgentTalks MCP server under another name (other_at, B/bob, pre-approved) is neither loadable nor callable in the woken run (B-MG-105)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (c): codex DM 41 scenario - read_conversation and read_thread return the full text of message 41 (longer than 400 characters), quoted as data (B-MG-106)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - an unresolvable identity -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - another actor behind the resolved token -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - another actor id behind the same handle -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - another server URL -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - no expectation at all (not a woken run) -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools: the prompt names the read tools and asks for the full message before acting\",1]",
       "file": "",
       "skipped": false
     },
@@ -3211,5 +3261,5 @@
     }
   ],
   "failing": [],
-  "sha256": "5a701b0c28d90274c5ddf1cfbb6836a18c4b104d85d78d4d3f21f7f957d13547"
+  "sha256": "ea649a6eb4954c0f6e4aa33fa783f74021c22aabfa4c17dd0f0db73122836580"
 }

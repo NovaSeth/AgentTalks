@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/scripts/wake-tools.mjs",
+      "line": 118,
+      "rule": null,
+      "text": "Failed principal requests lack diagnostics. Reproduction: inject apiFor.get rejecting HTTP 401 into createWakeTools and invoke all four handlers; all return errors, but there are four /api/me requests and zero stderr lines. Emit one sanitized notice via refuse() while preserving denial and retries for transient failures."
+    }
+  ],
+  "run": "codex-T-MG-15-reviewer-1",
+  "sha256": "67fdf0f18c5bd4d82ec59c86a216c9cf8f987041dd312fc1419d7cc12e18eed7"
+}

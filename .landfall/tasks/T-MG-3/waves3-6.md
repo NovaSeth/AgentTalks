@@ -1,6 +1,13 @@
 # T-MG-3 waves 3-6 (parallel agents, disjoint files, one worktree, no git)
 Read first: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-3/slice-common.md, then YOUR slice in docs/superpowers/specs/2026-11-04-ui-slack-parity.md section 4 (in the worktree /Users/michal/Documents/Code/AgentTalks-wt/T-MG-3). Earlier waves are committed (S0 scaffolding, S0b Primer, S1, S2, S7, ...): build on them, use Primer tokens/classes and Octicons only. Edit ONLY your files, your app.css block /* === Sn === */ and your i18n-pl.js block. Need another file -> NEEDS_CONTEXT. Run no git.
 
+## Notes for every wave (orchestrator)
+- The server caches CSS (readOnce): restart your server after a CSS edit before checking live.
+- Live-check tools (read their headers): /private/tmp/claude-501/-Users-michal-Documents-Code-AgentTalks/9dfeb82b-2d22-46c9-bb1d-d218d405c517/scratchpad/ux/seed-serve.sh `<repo> <port>` (seeded instance; login michal / ux-review-2026; stop: `seed-serve.sh stop <port>`) and .../scratchpad/ux/shots.mjs `<scenario.json> <outDir>` (headless Chrome PNGs + console errors; example scenario .../scratchpad/ux/w1-scenario.json). Put your shots under .../scratchpad/ux/<slice>-shots/.
+- Error codes are English (src/core/error-codes.ts); test fixtures use English codes; no Polish words in code, comments or tests (test/language.test.ts), Polish only as values in i18n-pl.js.
+- Spacing and type in rules you touch: Primer tokens, not literal rem.
+- Follow-ups assigned to your slice: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-3/followups.md lines naming your slice (S8: W2-S1-A, W2-S1-C, W2-S2-A; S9: W2-S1-B; S12: W1-C). Do them within your files.
+
 ## Wave 3
 | Slice | Files | Port | Test |
 |---|---|---|---|
