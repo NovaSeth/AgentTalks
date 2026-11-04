@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-102",
+  "status": "open",
+  "task": "T-MG-12",
+  "round": 4,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F10",
+  "severity": "blocking",
+  "path": "integrations/claude-code-plugin/lib/feed.mjs",
+  "line": 419,
+  "rule": "OWA-10",
+  "text": "Acceptance 2/3: the status watermark acknowledges undelivered member mentions. In-memory createFeed reproduction: resume (null,10), status=51, mention 51; hold onItem's promise and stop/restart -> saved=(51,10), delivered=[], mentionCursor=51. The resumedFrom check permanently skips 51. Removing the eager cursor assignment in memory restores delivered=[51]. Separate the stream bootstrap watermark from delivered state and preserve pending mentions across restarts.",
+  "filedAt": "2026-11-04T02:12:20.801Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

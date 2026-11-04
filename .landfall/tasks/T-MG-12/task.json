@@ -13,8 +13,8 @@
       "at": "2026-11-04T00:07:16.270Z"
     }
   ],
-  "status": "fix-round",
-  "round": 1,
+  "status": "done",
+  "round": 2,
   "events": [
     {
       "at": "2026-11-04T00:04:46.046Z",
@@ -103,6 +103,117 @@
         "addressed": 0,
         "open": 14,
         "note": "dispatched to a fresh designer (PRI-4)"
+      }
+    },
+    {
+      "at": "2026-11-04T01:30:57.783Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T01:30:57.989Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 14,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T01:39:05.918Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T01:39:22.469Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 0,
+        "open": 4,
+        "note": "last round (REV-7); fresh designer"
+      }
+    },
+    {
+      "at": "2026-11-04T02:03:57.104Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T02:03:57.298Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 4,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T02:12:20.447Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 4,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T02:12:26.592Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:e2c3125ea11b2450",
+          "files-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T02:12:26.592Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "baseline-shrunk",
+        "head": "3583ecec4004dd47f8b773356104fe2952b83ba0",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T02:13:01.045Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "eed83bb6171c0b3bbe7307881f78abcb3ea9109b",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T02:13:30.862Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "eed83bb6171c0b3bbe7307881f78abcb3ea9109b"
       }
     }
   ],
