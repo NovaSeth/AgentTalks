@@ -23,15 +23,22 @@ Read first: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-3/slice
 ## Wave 5 (P1)
 | Slice | Files | Port | Test |
 |---|---|---|---|
-| S8 shortcuts, help sheet, all-unreads view, Activity copy + aria labels | src/http/ui/js/shortcuts.js, view-unreads.js (new, UI_MODULES), app.js key handler block, view-notifications.js copy/labels, search.js row labels | 18978 | test/ui-s8-shortcuts.test.ts |
-| S9 mobile model (bottom tabs, pushed conversation screen, keyboard-safe composer) | app.css S9 block, app.js tab bar block, view-chat.js topbar back button only | 18979 | (live only + a markup unit test) |
+| S8 shortcuts, help sheet, all-unreads view, Activity copy + aria labels; follow-ups W2-S1-A, W2-S1-C, W2-S2-A | src/http/ui/js/shortcuts.js, view-unreads.js (new, UI_MODULES), app.js key handler block + the DMs rail badge line (railBadges), view-notifications.js copy/labels, data.js the #rail-notif aria-label line only, view-chat.js closeThread only | 18978 | test/ui-s8-shortcuts.test.ts |
+| S9 mobile model (bottom tabs, pushed conversation screen, keyboard-safe composer); follow-up W2-S1-B | app.css S9 block AND the shell grid rule's rail column width (one value), app.js tab bar block, view-chat.js topbar back button only | 18979 | test/ui-s9-mobile.test.ts (markup unit test) + live at 390x844 |
 | S10 threads view + pinned panel | src/http/ui/js/view-threads.js (new, UI_MODULES), view-chat.js pinned panel hook (details region) | 18980 | test/ui-s10-threads.test.ts |
-| S11 search view with filters | src/http/ui/js/search.js (query grammar), src/http/ui/js/view-search.js (new, UI_MODULES) | 18981 | test/ui-s11-search.test.ts |
+| S11 search view with filters (also: search.js row labels/aria from S8's list, and follow-up W3-S3-A: #/search?q= applies q) | src/http/ui/js/search.js (query grammar + row labels), src/http/ui/js/view-search.js (new, UI_MODULES), app.js applyRoute search branch only | 18981 | test/ui-s11-search.test.ts |
 UI_MODULES in src/http/ui.ts: each slice that adds a module appends exactly one line; if two slices race on it, the orchestrator merges.
 
-## Wave 6 (P2)
+## Wave 6 (P2 + clean-up): five agents in parallel
+Follow-up IDs refer to /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-3/followups.md (read the lines you own; each is a concrete defect with its fix). Every follow-up you own gets a test (unit or source assertion) or a live shot as evidence in your report. Test file: test/ui-<slice>.test.ts (e.g. test/ui-c1-shell.test.ts).
+| Slice | Owns follow-ups | Files | Port |
+|---|---|---|---|
+| C1 navigation and shell clean-up | W5-S11-A, W5-S11-B, W5-S11-C, W5-S8-A, W5-S8-C, W5-S10-A, W5-S10-B, W5-S10-C, W5-S10-D, W4-S6-C, W2-S2-B | app.js, router.js, view-threads.js, view-unreads.js, view-search.js, shortcuts.js, data.js, view-chat.js ONLY renderMain/openConversation/sidePanel-listener regions (S12 owns message render + actions), view-sidebar.js ONLY a "Threads" row under the header, app.css C1 rules appended at the end of the S8 block | 18985 |
+| C2 state, components and CSS clean-up | W2-S7-A, W2-S7-B, W2-S7-C, W1-A, W1-B, W3-S4-A, W3-S4-C, W4-S6-B, W4-S6-D, W4-S5-A, W5-S8-B, W5-S9-A | state.js, counters.js, api.js, toasts.js, dom.js, emoji.js + new emoji-names-pl.js (UI_MODULES line), composer.js, commands.js, view-sidebar.js ONLY the badge number and the claim modal export, app.css base rules (outside the per-slice blocks) and the dead S1 caption rule, test/language-allowlist.txt | 18986 |
+W1-A scope guard for C2: tokenise spacing/font sizes in base rules mechanically (no visual change beyond rounding to the nearest Primer step); W1-B: apply Primer Counter/Label/tooltip look where the markup is produced in your files (dom.js helpers), elsewhere list what remains.
+
 | Slice | Files | Port |
 |---|---|---|
-| S12 message polish (hover actions order, quick reactions, auto-load older, reaction tooltips; mention highlight uses the danger/coral tint today - semantically wrong: use Primer attention (--bgColor-attention-muted + a left border --borderColor-attention-emphasis) for messages that mention me, nothing for @all unless spec says so) | view-chat.js message render + actions | 18982 |
+| S12 message polish, also owns W1-C and W4-S6-A (author name and avatar become buttons that open the profile) (hover actions order, quick reactions, auto-load older, reaction tooltips; mention highlight uses the danger/coral tint today - semantically wrong: use Primer attention (--bgColor-attention-muted + a left border --borderColor-attention-emphasis) for messages that mention me, nothing for @all unless spec says so) | view-chat.js message render + actions | 18982 |
 | S13 admin + login polish (labelled rows, passkey button only when enrolled; token for an existing account needs a server route - do NOT add it, list it) | view-admin.js, view-login.js | 18983 |
 | S14 wiki polish (button row, Activity wording, tree keyboard nav) | view-wiki.js | 18984 |

@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "findings": [
+    {
+      "id": "U1",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U1 ADDRESSED: live 1a713b8 (port 18992, r5/out): thread open gap 0, last message bottom 781.7 vs composer top 798.8 (1440 light+dark); thread close gap 0; details panel toggle gap 0; failed send (2-line message) gap 0, retry row bottom 777.7 < 798.8; 390px: gap 0, retry 633.7 < 690.8; scrolled-up list stays put when the thread opens (scrollTop 44, no yank). Matches the implementer's round-4 numbers."
+    },
+    {
+      "id": "U30",
+      "severity": "minor",
+      "path": "src/http/ui/js/app.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U30 ADDRESSED: channel created by an AGENT (nestor bearer token, curl POST /api/conversations) while the page was open appears under 'Channels you can join' within 1.8s (rows: agent-made, bugs, deploy); #/c/agent-made-2 deep link opens the preview with 'You are previewing #agent-made-2 - join to write' + Join; Join -> composer present, channel moved to Channels. Private 'nestor-secret' not leaked anywhere in the DOM and its link shows no-access; unknown slug still no-access."
+    },
+    {
+      "id": "U31",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": null,
+      "rule": "UX",
+      "text": "U31 ADDRESSED: thread composer shows bold/italic/code/link + '...' (5 tools); #th-send right 1415 <= card right 1424 <= 1440 (light, dark, PL). With '...' expanded all 9 tools wrap onto a row and send drops to a second row, still right 1415. 390px: send right 369 <= card 378."
+    },
+    {
+      "id": "U32",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": null,
+      "rule": "UX",
+      "text": "U32 ADDRESSED: help dialog body ends at 632, footnote starts at 636 with a 1px top border; body has padding-bottom 28px and a bottom fade (mask-image linear-gradient); the last visible line fades instead of colliding with 'Agents receive their own...'. Same on dark and 390 (r5/out/u32-help-*.png)."
+    },
+    {
+      "id": "U33",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U33 ADDRESSED: Open-questions cards are <button>s with no backticks ('...tagged agenttalks:v0.2.0', 'flushpackets=on') and a 'Go to the question >' affordance on each (light + dark)."
+    },
+    {
+      "id": "U34",
+      "severity": "minor",
+      "path": "src/http/ui/js/composer.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U34 ADDRESSED: '+' menu is an ActionList: labels 'Attach a file' / 'Ask a tracked question' / 'Claim a resource' each 21px high (one line), description below, Octicon leading; same at 390 and dark."
+    },
+    {
+      "id": "U35",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": null,
+      "rule": "UX",
+      "text": "U35 ADDRESSED: PL rail is 80px wide; 'Aktywność' label spans 3.7-75.3 (not truncated, 12px), Start/DM/Admin centred with side room; EN rail stays 64px (Home/DMs/Activity/Admin untruncated)."
+    },
+    {
+      "id": "U36",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 1533,
+      "rule": "UX",
+      "text": "U36 ADDRESSED: toasts are bottom-centred above the dock (stack 739-782 at 1440, composer top 798.8; 390: stack 605-686 above composer 690.8 and the tab bar 784); the header's members/pin/info buttons are free. Side effect reported as U40."
+    },
+    {
+      "id": "U40",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 1533,
+      "rule": "UX",
+      "text": "The relocated toast now sits on the last message: after a failed send the 'No connection...' toast covers the failed message's own 'Send again' / 'Move it back to the field' buttons for 4.2s (9s with an action) at 1440 and the whole retry row at 390 (r5/out/u1-failed-send-light/mobile.png); the welcome toast covers the newest highlighted message (u1-thread-open-light.png). Suggest: anchor the stack to the dock's bottom-right corner, or suppress the toast when the inline row a [full: .full.txt]"
+    },
+    {
+      "id": "U41",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-wiki.js",
+      "line": null,
+      "rule": "UX",
+      "text": "Wiki page header at 390: the breadcrumb title 'Runbook / Deploy checklist' is cut hard at the Edit button ('Deploy checklis') with no ellipsis, and the sub-line 'last changed by @nestor 5 m...' truncates (r5/out/f-wiki-mobile.png). Give the title min-width:0 + text-overflow:ellipsis like the channel title."
+    },
+    {
+      "id": "U42",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-search.js",
+      "line": null,
+      "rule": "UX",
+      "text": "Search results at 1440: the query box spans the full column but the result list is a centred ~44rem column starting at x=548, so a 220px empty gutter sits under the left of the box (r5/out/f-search-light/dark.png). Either constrain the box to the same column or left-align the list under it."
+    },
+    {
+      "id": "U43",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 373,
+      "rule": "UX",
+      "text": "Pre-existing, not a regression: the composer is a centred 44rem card while messages span the full column (at 1440 the card is 550-1218 under text that runs 397-1419; f-general-light.png). Slack keeps the composer the width of the message column; the narrower card reads as a different column. Consider max-width:none when the message column is wider than 44rem, or cap the message text at the same width."
+    }
+  ]
+}

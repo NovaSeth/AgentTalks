@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F7",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 285,
+      "rule": "SEC-8",
+      "text": "Migration deletes attributable unsent messages written after upgrade. Node reproduction at a193c2e: A upgrades; unreloaded B running 1a713b8 persists b2 with ownerId=2; A.clearLocalAccountData(1); B reloads: [], expected [b2]. The base revision preserves b2; an in-memory mutation that splits tagged entries on every sweep also preserves it. Migrate entries with valid ownerId even after the version flag; discard only unattributed entries."
+    },
+    {
+      "id": "F8",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 312,
+      "rule": "PRI-6",
+      "text": "Concurrent migration overwrites another account's newer unsent write. Node reproduction at a193c2e: seed legacy B:b1; pause A's migration after reading atalks_unsent_2_5; B completes migration and persists b2; resume A. B's persisted list changes from [b1,b2] to [b1], confirmed after reload. The cached firstRun and read-modify-write are not atomic. Serialize migration with normal writes or use per-message storage keys; cover this interleaving."
+    },
+    {
+      "id": "F9",
+      "severity": "blocking",
+      "path": "src/http/ui/js/actions.js",
+      "line": 122,
+      "rule": "REV-6",
+      "text": "U40 suppresses errors when no failed row is visible. Node reproduction using production sendMessage/upsertMessageNode: hold POST in channel 5, navigate to Wiki (activeId remains 5), reject with 503. Output: view=wiki, visibleFailedRows=0, toasts=0, failed=true. Adding a chat-view guard in memory produces one toast; the visible-chat control produces none. Suppress only when the failed row is actually visible, including checking the current view and viewport."
+    },
+    {
+      "id": "R1",
+      "severity": "minor",
+      "path": "test/ui-r5-sec.test.ts",
+      "line": null,
+      "rule": "REV-6",
+      "text": "F4 ADDRESSED: actual 42aed7c wiki autosave after upgrade gives B null. F5 original reproduction ADDRESSED: two upgraded tabs preserve B's [b1,b2] at every cleanup interleaving. F6 ADDRESSED: held #fresh followed by #general opens [5]; removing the guard in memory yields [5,7]. Reviewed a193c2e directly: ui-r5-sec passes 18/18. Sequential migration is idempotent; F7/F8 identify additional upgrade paths."
+    },
+    {
+      "id": "R2",
+      "severity": "minor",
+      "path": "test/ui-r5-ux.test.ts",
+      "line": null,
+      "rule": "REV-6",
+      "text": "Visual verification remains incomplete: ui-r5-ux passes 4/4 and ui-fx2-r2 passes 13/13 against a193c2e using DOM/CSS checks. The original U1, U30-U36 and U40-U43 viewport/screenshot reproductions were not repeated, so their visual status is unverified here. Repeat those checks in a browser at the reviewed commit."
+    }
+  ],
+  "run": "codex-T-MG-3-reviewer-4",
+  "sha256": "c6f8fdc6bef89604ecc092af90dfcd4992cc3ad2b50b9192630093c62fa7f62d"
+}

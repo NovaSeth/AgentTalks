@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "findings": [
+    {
+      "id": "U1",
+      "severity": "blocking",
+      "path": "src/http/ui/app.css",
+      "line": 227,
+      "rule": "UX",
+      "text": "03-general-busy-mobile, 05-thread-open-*, 20a-offline-*: the floating composer covers the last message (the agent's question to the human) and, in 20a, the failed message's 'Send again' row. Reproduced live: at max scroll the last .msg bottom = 793px, composer card top = 772px (21px hidden); hover-actions push it further. Fix: .messages padding-bottom = measured composer height + 16px (ResizeObserver or CSS var), or dock the composer in flow instead of overlaying."
+    },
+    {
+      "id": "U2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/composer.js",
+      "line": 112,
+      "rule": "UX",
+      "text": "Every desktop chat shot (03, 05, 06, 09a): the composer toolbar is text glyphs 'B I S <> </> [ ] ≡ >' instead of Octicons. It reads as a code fragment, '</>' and '[ ]' are not guessable, and it violates D-MG-18 (Octicons only) on the main screen. Tooltips exist (checked live). Fix: bold, italic, strikethrough, code, code-square, link, list-unordered, quote Octicons at 16px in 32px targets, Primer IconButton look."
+    },
+    {
+      "id": "U3",
+      "severity": "blocking",
+      "path": "src/http/ui/app.css",
+      "line": 450,
+      "rule": "UX",
+      "text": "09a-dm-light, 14-threads-*, 20c-404-wiki-light: empty states are stretched over the whole column (icon at top, title mid-screen, text and button hundreds of px apart). Cause: .empty is display:grid; place-items:center with flex:1, so each child gets its own full-height row. Fix: add align-content:center (or make it a flex column with gap 8px, justify-content:center); keep max-width 36rem for the text."
+    },
+    {
+      "id": "U4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": 370,
+      "rule": "UX",
+      "text": "All desktop shots: 'To catch up on' items truncate to 'What happened while ...' and 'Questions waiting for a...'; PL section 'KANAŁY, DO KTÓRYCH MOŻ...'. The two most important entry points for a human (missed items, open questions) lose their meaning at the 256px sidebar. Fix: shorter labels ('While you were away' / 'Open questions'; PL 'Poza Tobą' / 'Otwarte pytania', section 'Do dołączenia') and allow two-line wrap for section heads."
+    },
+    {
+      "id": "U5",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-notifications.js",
+      "line": null,
+      "rule": "UX",
+      "text": "12-activity-mobile-light, 21e-mobile-activity-tab-light: at 390px the Activity header loses its title ('Activity, 7 new' is gone) and 'Mark all as read' is cut off the right edge (button right edge beyond viewport). Broken layout on a primary mobile tab. Fix: keep the title, turn the two actions into icon buttons with tooltips (bell, check-all) or wrap them to a second row; never let the header overflow."
+    },
+    {
+      "id": "U6",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": null,
+      "rule": "UX",
+      "text": "03-general-busy-* and every later #general shot: the header shows a bare '0' pill (no icon, no avatars) where 02 and 10 show the avatar stack with '6', and the pinned '1' pill disappears. A lone '0' is meaningless and false. Not reproduced live (after DM -> #general the stack showed 6), so likely a stale-state race after reload/theme switch; add a people Octicon to the pill, never render 0 before members load, and re-fetch members on route change."
+    },
+    {
+      "id": "U7",
+      "severity": "minor",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": null,
+      "rule": "UX",
+      "text": "20a-offline-send-failure-*: the same message is shown twice, a red banner 'No connection to the server...' and a toast 'No connection to the server. Check your network...'; on mobile the toast covers the banner text. Keep the banner (persistent state), drop the toast, or make the toast the send-failure one ('Not sent - Send again') once U1 makes the retry row visible."
+    },
+    {
+      "id": "U8",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-threads.js",
+      "line": null,
+      "rule": "UX",
+      "text": "05-thread-open-* (all four): the thread panel shows only the root message although the channel says '2 replies'; live the replies appear after a beat. Nothing says loading, so a human sees an empty thread. Add a 'Loading replies...' skeleton and a 'No replies yet - be the first' state, and render replies from cache if present."
+    },
+    {
+      "id": "U9",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": 136,
+      "rule": "UX",
+      "text": "Every signed-in shot: 'UI 846f2706' raw build stamp sits at the sidebar foot where a first-time human sees it as noise/jargon. Move it to the help (?) popover or the user menu as 'Version', keep the mismatch warning only when it applies."
+    },
+    {
+      "id": "U10",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-notifications.js",
+      "line": 80,
+      "rule": "UX",
+      "text": "12-activity-*: previews show raw markdown ('Ship **v0.2.1** to staging'); 15a-search-results-* show backticks ('`agenttalks:v0.2.0`'). Strip markdown to plain text in previews (notifications, unreads, search, sidebar last-message) with a shared stripMd()."
+    },
+    {
+      "id": "U11",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-search.js",
+      "line": 83,
+      "rule": "UX",
+      "text": "15b-search-filters-*: 'in:#general from:@nestor' dead-ends on 'Add a word to search for'. In Slack filters alone list the matching messages; a human who typed the filters expects results. Fix: run filter-only searches (newest first, paged) or at least suggest the filtered conversation link in the empty state."
+    },
+    {
+      "id": "U12",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": null,
+      "rule": "UX",
+      "text": "10-new-dm-picker-dark vs -light: with nobody picked, 'Start' is correctly disabled (pale) in light but fully green/enabled in dark. Disabled button state is missing a dark-scheme token. Use Primer's button-primary-*-disabled tokens in both schemes."
+    },
+    {
+      "id": "U13",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 354,
+      "rule": "UX",
+      "text": "02-passkey-offer-light/dark: the composer stays bright and interactive above the modal backdrop (z-index:2 on .composer vs the overlay), so the dimming looks broken and the field is focusable behind a modal. Put modals/backdrop above all panes (z-index 100+) and inert the app while open."
+    },
+    {
+      "id": "U14",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 1028,
+      "rule": "UX",
+      "text": "20c-404-message-light: a deep link to a missing message left #general as a skeleton that never resolved; live (#/c/general/m/999999) the channel opens with no notice at all. Both leave the human guessing. Show a toast 'That message is gone or you cannot see it' and land on the channel, never on a skeleton."
+    },
+    {
+      "id": "U15",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 1222,
+      "rule": "UX",
+      "text": "07b-more-menu-*: the More menu has no Octicons, no separator before destructive actions, and jargon copy: 'Treat as a report - Only then do the \"I fixed it\" and \"I confirm it is gone\" buttons appear'. Add icons (pin, report, copy, link, unread), group own-message Edit/Delete below a divider in danger colour, and reword: 'Mark as a problem - adds Fixed / Confirmed buttons'."
+    },
+    {
+      "id": "U16",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": null,
+      "rule": "UX",
+      "text": "All desktop and mobile shots: 'Threads' exists twice, as a rail/tab item and as a sidebar row above 'To catch up on'. Duplicate navigation confuses what to click. Keep the rail item (Slack parity) and drop the sidebar row, or vice versa on mobile."
+    },
+    {
+      "id": "U17",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 494,
+      "rule": "UX",
+      "text": "03-general-busy-mobile, 06a/06e/07b-mobile: the header avatar stack squeezes 6 avatars so initials overlap ('M A N M M RE 6'); the findings table and the curl code block are clipped at the right with no scroll hint. At <=760px show 3 avatars + '+3', and give tables/pre overflow-x:auto with a fade edge."
+    },
+    {
+      "id": "U18",
+      "severity": "minor",
+      "path": "src/http/ui/js/composer.js",
+      "line": null,
+      "rule": "UX",
+      "text": "06e-composer-plus-*: 'Claim a resource' reuses the '+' icon of the trigger button, so the menu reads as 'plus inside plus'; 11-profile-*: the green 'Message' button icon is nearly invisible (wrong fg token). Use the lock/tag Octicon for claim and currentColor for the button icon."
+    },
+    {
+      "id": "U19",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": null,
+      "rule": "UX",
+      "text": "09b-group-dm-*: #/dm/anna,nestor (a group that does not exist yet) shows a lock and 'You do not have access', which is misleading - nothing forbids it. Slack opens a fresh group. Offer 'Start a conversation with @anna, @nestor' there, or create it on first message."
+    },
+    {
+      "id": "U20",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-wiki.js",
+      "line": null,
+      "rule": "UX",
+      "text": "16a-wiki-page-*: the trash icon (delete page) sits next to Edit as a bare icon with no label and the same muted colour as other icons; destructive actions must look distinct. Use a danger-coloured IconButton with tooltip 'Delete page' and a confirm dialog, or move it to the Info panel under Actions."
+    }
+  ]
+}

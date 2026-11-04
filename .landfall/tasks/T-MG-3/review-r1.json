@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-search.js",
+      "line": 63,
+      "rule": "SEC-8",
+      "text": "S11 account isolation: an old search response can expose A's private messages to B. Node/vm reproduction: hold A's search, call onSessionLost, sign in B, finish B's identical search, then release A's response -> actor:bob, privateAVisible:true. An in-memory actor guard changes this to false. Check session and request generations before merging actors or changing current; invalidate pending searches on logout/session loss."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 31,
+      "rule": "OWA-7",
+      "text": "S7/S13 session teardown leaves credential dialogs mounted outside #app. Node/vm reproduction using openModal/showSecretOnce followed by onSessionLost returned actor:null, screen:login, attachedOverlays:1, tokenStillVisible:true. The signed-out screen still exposes the newly issued bearer token. Close and clear account-bound overlays and their handlers during authentication teardown, including persistent secret dialogs."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 18,
+      "rule": "REV-2",
+      "text": "S4/S7 draft safety: a 401 during sending permanently loses the message. Node/vm reproduction with the committed state/api/actions/session-loss code: save a draft, clear the textarea as submit does, return 401 from sendMessage -> result:null, drafts:{}, pending:{}, saved:null. saveDraft deletes the saved text because the textarea is empty, then resetState drops the pending bubble. Preserve pending/failed text as owner-bound drafts before resetting."
+    }
+  ],
+  "run": "codex-T-MG-3-reviewer-1",
+  "sha256": "5ac70e4029a4f28248ef9bee61c5c3b39f220b631b2359fea8739670871f898a"
+}

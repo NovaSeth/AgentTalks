@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-109",
+  "status": "open",
+  "task": "T-MG-3",
+  "round": 7,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F8",
+  "severity": "blocking",
+  "path": "src/http/ui/js/state.js",
+  "line": 312,
+  "rule": "PRI-6",
+  "text": "Concurrent migration overwrites another account's newer unsent write. Node reproduction at a193c2e: seed legacy B:b1; pause A's migration after reading atalks_unsent_2_5; B completes migration and persists b2; resume A. B's persisted list changes from [b1,b2] to [b1], confirmed after reload. The cached firstRun and read-modify-write are not atomic. Serialize migration with normal writes or use per-message storage keys; cover this interleaving.",
+  "filedAt": "2026-11-04T09:18:46.254Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

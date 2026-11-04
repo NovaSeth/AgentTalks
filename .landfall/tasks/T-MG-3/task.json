@@ -13,8 +13,8 @@
       "at": "2026-11-04T02:50:40.826Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "done",
+  "round": 5,
   "events": [
     {
       "at": "2026-11-03T23:41:25.636Z",
@@ -77,6 +77,274 @@
         "executor": "claude:implementer",
         "base": "19920b832d29fb56f8882672d12901558c7005b1",
         "note": "wave 2 committed 3810b8d (656 pass); wave 3: S3, S4 in parallel, fable"
+      }
+    },
+    {
+      "at": "2026-11-04T04:06:39.788Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "19920b832d29fb56f8882672d12901558c7005b1",
+        "note": "wave 3 committed b80121c (684 pass); wave 4: S5, S6 in parallel, fable"
+      }
+    },
+    {
+      "at": "2026-11-04T04:39:26.624Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "19920b832d29fb56f8882672d12901558c7005b1",
+        "note": "wave 4 committed c0bf37f (709 pass); wave 5: S8, S9, S10, S11 in parallel, fable"
+      }
+    },
+    {
+      "at": "2026-11-04T05:12:52.535Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "19920b832d29fb56f8882672d12901558c7005b1",
+        "note": "wave 5 committed baaed73 (759 pass); wave 6: S12, S13, S14, C1, C2 in parallel, fable"
+      }
+    },
+    {
+      "at": "2026-11-04T05:40:45.712Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T05:47:39.546Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T05:56:50.754Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 4,
+        "note": "fix 1a: codex F1-F3 + W3-S4-B (designer); UX review findings follow"
+      }
+    },
+    {
+      "at": "2026-11-04T06:20:10.135Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:reviewer",
+        "base": "19920b832d29fb56f8882672d12901558c7005b1",
+        "note": "Amendment 2: UX/UI screenshot review round 1 (103 shots, fable)"
+      }
+    },
+    {
+      "at": "2026-11-04T06:30:56.711Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T06:31:14.778Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 0,
+        "open": 20,
+        "note": "UX review U1-U20 + W6 follow-ups: FX1/FX2/FX3 in parallel (fable)"
+      }
+    },
+    {
+      "at": "2026-11-04T07:52:26.877Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T07:52:41.639Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 3,
+        "addressed": 0,
+        "open": 3,
+        "note": "D-MG-26: codex r3 F1-F3 (designer)"
+      }
+    },
+    {
+      "at": "2026-11-04T08:06:32.262Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 4,
+        "verdict": "needs-fixes",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T08:07:51.386Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 4,
+        "addressed": 0,
+        "open": 10,
+        "note": "D-MG-26: UX r2 U1, U30-U36 + 2 round-3 leftovers (fable)"
+      }
+    },
+    {
+      "at": "2026-11-04T08:40:10.528Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 4,
+        "addressed": 10,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T08:51:39.200Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 5,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T08:52:06.057Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 6,
+        "verdict": "approved",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T08:52:25.065Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 5,
+        "addressed": 0,
+        "open": 7,
+        "note": "D-MG-27 last round: codex r5 F4-F6 (designer) + UX r6 U40-U43 (fable)"
+      }
+    },
+    {
+      "at": "2026-11-04T09:09:59.883Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 5,
+        "addressed": 7,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T09:10:46.826Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T09:10:47.082Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T09:10:47.341Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 3
+      }
+    },
+    {
+      "at": "2026-11-04T09:10:47.606Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 4
+      }
+    },
+    {
+      "at": "2026-11-04T09:10:47.870Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 5
+      }
+    },
+    {
+      "at": "2026-11-04T09:18:45.929Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 7,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T09:19:17.838Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "files-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T09:19:17.838Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "a193c2e763417e7e22dcb8bb5598424aea1173e8",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T09:19:56.297Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "a193c2e763417e7e22dcb8bb5598424aea1173e8"
       }
     }
   ],

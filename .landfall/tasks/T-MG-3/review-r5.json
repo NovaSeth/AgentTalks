@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 246,
+      "rule": "SEC-8",
+      "text": "Migration assigns ownerless legacy data to the next account. Node VM repro on 1a713b8: upgrade tab A, then run 42aed7c's saveWikiDraft in an unreloaded A tab; B calls claimLocalData(2). B.loadWikiDraft('home').body returns A_SYNTHETIC_WIKI_DRAFT. Removing fallback ownership in memory returns null. Quarantine unattributed legacy data instead of assigning it to whoever signs in next."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 289,
+      "rule": "PRI-6",
+      "text": "Sign-out can delete another account's newly persisted unsent message. Node VM repro: shared unsent list contains a1,b1; pause A.clearLocalAccountData(1) after getItem, let B persist b2, then resume A's setItem. Output: [b1], expected [b1,b2]. An in-memory actor-scoped prefix mutation preserves both. Use actor-scoped keys or transactional updates so A's cleanup cannot overwrite B's writes."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "src/http/ui/js/app.js",
+      "line": 355,
+      "rule": "REV-6",
+      "text": "The new asynchronous slug lookup can override a later navigation. Node VM ran actual applyRoute/conversationBySlug: hold the lookup for #fresh, navigate to known #general, then release fresh. Output: opened=[5,7], activeId=7, lastRequestedSlug=general. A route guard added in memory yields opened=[5], activeId=5. Recheck navigation identity and session generation after the lookup before opening a conversation or rendering no-access."
+    },
+    {
+      "id": "R1",
+      "severity": "minor",
+      "path": "test/ui-r3-fixes.test.ts",
+      "line": null,
+      "rule": "REV-6",
+      "text": "Round-3 reproductions: F1 ADDRESSED (B's thread remains [11]); F2 original reproduction ADDRESSED (B cannot load A's draft); F3 ADDRESSED (empty filtered page retains data-older=201). Ran ui-r3-fixes against 1a713b8: 16/16 passed; in-memory mutations broke the relevant assertions. F4/F5 above identify additional storage cases."
+    },
+    {
+      "id": "R2",
+      "severity": "minor",
+      "path": "test/ui-r4-ux.test.ts",
+      "line": null,
+      "rule": "REV-6",
+      "text": "Visual verification remains incomplete: ui-r4-ux passed 17/17 against 1a713b8 using DOM/ResizeObserver stubs, including same-account channel-copy targeting. The original U1/U31-U36 viewport and screenshot reproductions were not repeated. Recheck those layouts in a browser at the reviewed commit; stub tests do not establish pixel-level results."
+    }
+  ],
+  "run": "codex-T-MG-3-reviewer-3",
+  "sha256": "af9fb997d38ab906ebcedb068afc8c8bd389d33b62b700e2aebd318364e8b8f2"
+}

@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "findings": [
+    {
+      "id": "U1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 143,
+      "rule": "UX",
+      "text": "U1 NOT ADDRESSED in 2 of 3 states. Padding follows the dock (22-*, 03-mobile fine) but the list is not re-pinned to the bottom on layout change: 05-thread-open-*/05b: last message's 2nd line under the composer; 20a-*, 01b: 'Send again' row under it. Live 42aed7c: thread open -> gap 44px, last bottom 826 vs composer top 799; failed send -> gap 32, retry 810 vs 799; 390px: gap 112, retry 746 vs 691. Fix: if at bottom before, scrollToBottom() after panel open/close, dock resize, failed row render."
+    },
+    {
+      "id": "U2",
+      "severity": "minor",
+      "path": "src/http/ui/js/composer.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U2 ADDRESSED: 03-general-busy-light/dark, 05-thread-open-light, 09a-dm-light show bold, italic, strikethrough, code, code-square, link, list, quote Octicons in 32px targets."
+    },
+    {
+      "id": "U3",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": null,
+      "rule": "UX",
+      "text": "U3 ADDRESSED: 09a-dm-light, 14-threads-light/dark/pl, 20c-404-wiki-light, 04-empty-channel-dark: icon, title, text and button sit together with 8px rhythm, centred in the column."
+    },
+    {
+      "id": "U4",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U4 ADDRESSED: 03-general-busy-light/pl, 14d, 14e: 'While you were away' / 'Open questions', PL 'Poza Toba' / 'Otwarte pytania', section 'KANALY DO DOLACZENIA' fit the 256px sidebar without ellipsis."
+    },
+    {
+      "id": "U5",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-notifications.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U5 ADDRESSED: 12-activity-mobile-light, 21e-mobile-activity-tab-light: title 'Activity / 7 new' kept, the two actions are 44px icon buttons inside the viewport."
+    },
+    {
+      "id": "U6",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U6 ADDRESSED: every #general shot (03-*, 07a, 08) shows the people Octicon + 3 avatars + '+3' + '6' and the pinned '1' pill; no bare '0' anywhere in the set."
+    },
+    {
+      "id": "U7",
+      "severity": "minor",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U7 ADDRESSED: 20a-offline-send-failure-light/dark/mobile show only the persistent banner; 01b-offline-send-light (SSE alive, one fetch failed) shows only the toast. No duplicate."
+    },
+    {
+      "id": "U8",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-threads.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U8 ADDRESSED: 05-thread-open-* render both replies at once (from cache), 05b (pending /thread fetch) still shows the cached replies, 05c-thread-empty-light/dark shows 'No replies yet - be the first.'"
+    },
+    {
+      "id": "U9",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U9 ADDRESSED: the sidebar foot is gone (03-general-busy-light); 'Interface version 16b7625e' sits in the help (?) dialog (18b-help-dialog-light/dark/mobile)."
+    },
+    {
+      "id": "U10",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U10 ADDRESSED for Activity (12-*: 'Ship v0.2.1 to staging' plain), Unreads (13-*) and search (15a-*: no backticks). Left over, see U33: the 'Open questions' modal (14e-catchup-open-questions-light/dark) still prints raw backticks '`agenttalks:v0.2.0`' and '`flushpackets=on`'."
+    },
+    {
+      "id": "U11",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-search.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U11 ADDRESSED: 15c-search-filter-only-light/dark list the 2 messages of @nestor in #general, newest first, with the count '2 results' (paging is tracked separately per the dispatch)."
+    },
+    {
+      "id": "U12",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": null,
+      "rule": "UX",
+      "text": "U12 ADDRESSED: 10-new-dm-picker-dark: 'Start' is pale/disabled with nobody picked, matching 10-new-dm-picker-light."
+    },
+    {
+      "id": "U13",
+      "severity": "minor",
+      "path": "src/http/ui/js/dom.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U13 ADDRESSED: 02-passkey-offer-light/dark, 10-*, 18-shortcuts-help-light, 18b: the composer is dimmed under the backdrop like the rest of the app."
+    },
+    {
+      "id": "U14",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U14 ADDRESSED: 20d-deeplink-missing-message-light/dark: #general renders in full with the toast 'That message is gone or you cannot see it.'; no skeleton (20c-404-message-light likewise)."
+    },
+    {
+      "id": "U15",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U15 ADDRESSED: 07b-more-menu-light/dark/mobile: pin, flame, copy, link, inbox Octicons; 'Mark as a problem - Adds the Fixed and Confirmed buttons, so whoever fixes it and whoever reported it can close it.' (own-message Edit/Delete group not visible on this agent message; not re-checked)."
+    },
+    {
+      "id": "U16",
+      "severity": "minor",
+      "path": "src/http/ui/js/app.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U16 ADDRESSED per the orchestrator's decision: the rail has Home/DMs/Activity/Admin only (03-*, 21a, 21g); Threads lives once, as the sidebar row (14b-sidebar-threads-row-light, 21h)."
+    },
+    {
+      "id": "U17",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 1351,
+      "rule": "UX",
+      "text": "U17 ADDRESSED: 03-general-busy-mobile, 06a/06e/07b-mobile show 3 avatars + '+3' + '6' without overlap; .mdtable and .mdpre pre have overflow-x:auto at <=760px (app.css:1351,1358) so the clipped table/pre scroll sideways. The suggested fade edge was not added; scrollbars are hidden on the phone so the cut edge is the only hint (cosmetic)."
+    },
+    {
+      "id": "U18",
+      "severity": "minor",
+      "path": "src/http/ui/js/composer.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U18 ADDRESSED: 06e-composer-plus-light/dark/mobile: 'Claim a resource' has the tag Octicon; 11-profile-light/dark/mobile: the green 'Message' button shows its comment icon in white."
+    },
+    {
+      "id": "U19",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": null,
+      "rule": "UX",
+      "text": "U19 ADDRESSED: 09b-group-dm-light/dark/mobile/pl and 09c-group-opens-light: #/dm/anna,nestor opens as a fresh group ('Quiet so far') with the composer ready; it is listed under Direct conversations."
+    },
+    {
+      "id": "U20",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-wiki.js",
+      "line": 362,
+      "rule": "UX",
+      "text": "U20 ADDRESSED: 16a-wiki-page-light/dark/pl, 16d-wiki-mobile: the trash is a danger-coloured icon button; live it has title/aria-label 'Delete page' (view-wiki.js:362) and a danger confirmModal before deleting (view-wiki.js:377)."
+    },
+    {
+      "id": "U30",
+      "severity": "blocking",
+      "path": "src/http/ui/js/app.js",
+      "line": 404,
+      "rule": "UX",
+      "text": "r2-live/out/newchannel-deeplink.png, 04-empty-channel-light: a public channel created while the page is open (agent/API) is unknown to the UI: absent from 'Channels you can join', and #/c/<slug> lands on 'You do not have access to #ux-fresh'; a reload opens it. Live 42aed7c: POST /api/conversations -> 201, 2.3s, hash #/c/ux-fresh -> no-access. A human following an agent's link is misled. Fix: fetch an unknown slug before rendering no-access; broadcast 'conversation' SSE for new public channels."
+    },
+    {
+      "id": "U31",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 441,
+      "rule": "UX",
+      "text": "05-thread-open-light/dark/pl, 05b, 05c: the thread panel's composer toolbar overflows its card: the send button is clipped at the viewport edge (live: #th-send left 1421, right 1449 in a 1440px viewport; card right edge 1424). Nine 32px tools + emoji + send do not fit 380px. Fix: in the panel composer hide the quote/list group behind the '+' (or shrink tools to 28px) and let .tools wrap, never overflow."
+    },
+    {
+      "id": "U32",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 575,
+      "rule": "UX",
+      "text": "18b-help-dialog-light/dark: the scrolling body (.gd-body, overflow-y:auto) is cut mid-line and the half-visible line 'it down there so it does not have to be settled twice' collides with the footnote 'Agents receive their own...'; nothing shows that more text exists. Fix: padding-bottom + a bottom fade (mask-image) on .gd-body, or a 1px divider above the footnote, and keep the footnote outside the scroll area."
+    },
+    {
+      "id": "U33",
+      "severity": "minor",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": null,
+      "rule": "UX",
+      "text": "14e-catchup-open-questions-light/dark: the open-question cards print raw markdown ('`agenttalks:v0.2.0`', '`flushpackets=on`') while every other preview now uses stripMd (U10). Also nothing on the card says what clicking does (it has a focus ring but no 'Open' affordance). Fix: stripMd the question text; add a chevron or 'Go to the question' on the card."
+    },
+    {
+      "id": "U34",
+      "severity": "minor",
+      "path": "src/http/ui/js/composer.js",
+      "line": null,
+      "rule": "UX",
+      "text": "06e-composer-plus-light/dark/mobile: the '+' menu puts label and description side by side in two columns, so every label wraps ('Attach a / file', 'Ask a tracked / question', 'Claim a / resource') and reads as a broken table. Fix: Primer ActionList layout - label on one line, description below it in muted small text, icon leading."
+    },
+    {
+      "id": "U35",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": null,
+      "rule": "UX",
+      "text": "03-general-busy-pl, 05-thread-open-pl, 12-activity-pl, 13-unreads-pl: the rail label 'Aktywność' spans the full 64px rail with no side padding, touching both edges (the other labels have ~8px). Fix: rail labels at 11px with max-width and ellipsis, or shorten the PL label ('Aktywn.' is not good; 'Alerty' or 'Powiadom.' no) - best: allow the rail to be 72px in PL or use the font-size-small token."
+    },
+    {
+      "id": "U36",
+      "severity": "minor",
+      "path": "src/http/ui/js/toasts.js",
+      "line": null,
+      "rule": "UX",
+      "text": "20d-deeplink-missing-message-light/dark, 20c-404-wiki-light, u1-thread-open.png (welcome toast): toasts drop over the channel header's right side and cover the members pill, pin and info buttons for their lifetime. Fix: offset toasts below the 56px header (top: 64px) or anchor them bottom-centre above the composer as Slack does."
+    }
+  ]
+}

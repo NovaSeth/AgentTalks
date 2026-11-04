@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 1863,
+      "rule": "SEC-8",
+      "text": "The second send reuses stillHere computed before its await, leaking replies across accounts. Repro: a Node VM ran the actual submit callback, held the second send, switched A/conv5/thread9 to B/conv6/thread11, then resolved it as stale (null); B's threadMsgs contained A's reply. Capture sessionGeneration and recheck it plus the active conversation/thread after every await. An in-memory guard reduced foreign messages from 1 to 0."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 338,
+      "rule": "SEC-8",
+      "text": "Draft ownership remains unsafe across tabs: saveDraft overwrites the shared owner marker, while loadDraft reads unscoped conversation keys without checking ownership. Repro: two Node VM instances sharing localStorage; A claims account 1, B claims 2, A saves ALICE_SYNTHETIC_DRAFT, then B.loadDraft(5) returns ALICE_SYNTHETIC_DRAFT. Namespace drafts by actor and validate ownership on every read/write; add a two-tab regression."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-search.js",
+      "line": 220,
+      "rule": "REV-6",
+      "text": "U11 NOT ADDRESSED for matches beyond the first page: when the newest 200 messages fail from:/date filters, this return hides pagination despite olderBefore being set. Repro: Node VM invoked resultsHtml with empty groups, listing=true and olderBefore=201; output said 'Nothing in #general matches these filters' and paginationVisible=false. Keep Show older available on empty filtered pages, or fetch onward until a match or the end."
+    }
+  ],
+  "run": "codex-T-MG-3-reviewer-2",
+  "sha256": "bd9fd0b089121c463446fd365932106f5fc888c039df89e2d5ae939ffbf410d9"
+}
