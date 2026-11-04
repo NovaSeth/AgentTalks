@@ -96,6 +96,7 @@ export function disconnectSSE() {
   state.sseCursor = 0;
   sseResume = false;
   replayFloor = undefined;
+  gapFloors = {};
 }
 
 /** The newest message id among the conversations whose history was fetched (REST): undefined
@@ -111,8 +112,16 @@ function newestLoadedId() {
   return newest;
 }
 
+// T-MG-18 fix round 1 (codex F1): the catch-up floor of each loaded conversation = its newest id
+// when the stream broke. Recorded once with replayFloor, kept until that conversation's catch-up
+// has succeeded in full; live events and refreshes in between never raise it.
+let gapFloors = {};
+
 function captureReplayFloor() {
-  if (!state.sseCursor && replayFloor === undefined) replayFloor = newestLoadedId();
+  if (state.sseCursor || replayFloor !== undefined) return;
+  replayFloor = newestLoadedId();
+  gapFloors = {};
+  for (const id of Object.keys(state.loaded)) if (state.loaded[id]) gapFloors[id] = newestIdOf(Number(id));
 }
 
 /** The messages of one conversation after `floor`, page by page (the route's limit is 500) until a
@@ -148,9 +157,10 @@ async function catchUpLoadedHistories(gen) {
     // The newest 30 refresh what the list already holds (edits); the gap after the newest id the
     // list had before the break is then paged in full (B-MG-116): a gap longer than 30 messages
     // would otherwise lose its oldest ones.
-    const floor = newestIdOf(convId);
+    const floor = gapFloors[convId] ?? newestIdOf(convId);
     try { await loadMessages(convId); await loadGapAfter(convId, floor, gen); } catch { continue; }
     if (gen !== sessionGeneration()) return;
+    delete gapFloors[convId];
     if (state.view === "chat" && state.activeId === convId) views.messages?.();
   }
 }
