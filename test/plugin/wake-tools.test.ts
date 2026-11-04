@@ -477,3 +477,42 @@ test("wake tools (T-MG-45 F2): a 60 000-char message is reachable whole through 
   assert.equal((await s.call("read_conversation", { conversation_id: 3, body_offset: 5 })).isError, true, "body_offset needs around");
   assert.equal((await s.call("read_thread", { message_id: 100, body_offset: 70_000 })).isError, true, "offset past the end");
 });
+
+// --- T-MG-45 fix round 2: newline-free bodies, so only the TOTAL budget can keep a result small ---
+
+const FLAT: Msg[] = Array.from({ length: 50 }, (_, i) => ({
+  id: 100 + i, conversationId: 3, actorId: 9, actorHandle: "michal",
+  body: "x".repeat(60_000), threadId: i === 0 ? null : 100, deletedAt: null,
+}));
+
+async function walkFlat(t: any, tool: string, first: Record<string, unknown>, cursor: RegExp, next: (n: number) => Record<string, unknown>) {
+  const api = await fakeApi(t, { [NESTOR_TOKEN]: { id: 7, handle: "nestor" } }, FLAT);
+  const s = toolsServer(t, { identity: { url: api.url, token: NESTOR_TOKEN }, expect: nestorExpect(api.url) });
+  await s.start();
+  const seen = new Set<number>();
+  let args = first;
+  let calls = 0;
+  for (; calls < 200; calls++) {
+    const r = await s.call(tool, args);
+    assert.notEqual(r.isError, true, JSON.stringify(r).slice(0, 300));
+    const text: string = r.content[0].text;
+    assert.ok(text.length <= BUDGET, `${tool}: result of ${text.length} characters exceeds ${BUDGET}`);
+    for (const id of idsIn(text)) seen.add(id);
+    const cur = cursor.exec(text);
+    if (!cur) break;
+    args = next(Number(cur[1]));
+  }
+  assert.deepEqual([...seen].sort((a, b) => a - b), FLAT.map((m) => m.id), `${tool}: every message reached`);
+}
+
+test("wake tools (T-MG-45 r2): newline-free 60 000-char bodies - read_conversation (latest, backwards) stays within the total budget", async (t) => {
+  await walkFlat(t, "read_conversation", { conversation_id: 3, limit: 50 }, /again with before=(\d+)\]/, (n) => ({ conversation_id: 3, limit: 50, before: n }));
+});
+
+test("wake tools (T-MG-45 r2): newline-free bodies - read_conversation (after, forwards) stays within the total budget", async (t) => {
+  await walkFlat(t, "read_conversation", { conversation_id: 3, after: 99, limit: 50 }, /again with after=(\d+)\]/, (n) => ({ conversation_id: 3, limit: 50, after: n }));
+});
+
+test("wake tools (T-MG-45 r2): newline-free bodies - read_thread stays within the total budget", async (t) => {
+  await walkFlat(t, "read_thread", { message_id: 100 }, /again with after=(\d+)\]/, (n) => ({ message_id: 100, after: n }));
+});
