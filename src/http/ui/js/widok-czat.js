@@ -85,7 +85,13 @@ export async function openConversation(id, focusMessageId) {
 
 export async function openThread(rootId) {
   state.threadOpen = rootId;
-  renderMain();
+  // Opening the panel must not replace the main composer while a send is completing.
+  if (!document.getElementById("thread-slot")) {
+    const host = document.createElement("div");
+    host.id = "thread-slot";
+    document.getElementById("main")?.appendChild(host);
+  }
+  renderThread();
   try {
     const data = await api("GET", `/api/messages/${rootId}/thread`);
     state.threadMsgs = data.messages;
@@ -1456,7 +1462,9 @@ export function renderThread() {
     const msg = await sendMessage(v, { threadId: state.threadOpen });
     // A failed send returns the text to the field - exactly as in the main composer.
     if (!msg) { ta.value = v; autosize(); ta.focus(); return; }
-    state.threadMsgs.push(msg);
+    const index = state.threadMsgs.findIndex((entry) => entry.id === msg.id);
+    if (index >= 0) state.threadMsgs[index] = msg;
+    else { state.threadMsgs.push(msg); state.threadMsgs.sort((a, b) => a.id - b.id); }
     renderThread();
     upsertMessageNode(findMsgById(state.threadOpen));   // the thread bar on the main list
     document.getElementById("th-msgs").scrollTop = 999999;

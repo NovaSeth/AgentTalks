@@ -6,7 +6,7 @@ import { api } from "./api.js";
 import { loadConversationsList, mySessionId, refreshQuestions } from "./dane.js";
 import { iconCheck } from "./ikony.js";
 import { t } from "./i18n.js";
-import { clearDraft, findMsgById, state, upsertMessage, widok } from "./stan.js";
+import { clearDraft, findMsgById, saveDraft, state, upsertMessage, widok } from "./stan.js";
 import { showError, showToast } from "./toasty.js";
 
 // Optimistic send. The bubble appears IMMEDIATELY (greyed out), because the
@@ -19,6 +19,10 @@ function pendingList(convId) { return state.pending[convId] || (state.pending[co
 
 export async function sendMessage(text, opts = {}) {
   const convId = opts.conversationId ?? state.activeId;
+  const composer = !opts.threadId && !opts.clientMsgId && state.activeId === convId
+    ? document.getElementById("composer-input") : null;
+  const composerText = composer?.value;
+  const draft = state.drafts[convId];
   const clientMsgId = opts.clientMsgId ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const list = pendingList(convId);
   let rec = list.find((p) => p.clientMsgId === clientMsgId);
@@ -54,10 +58,22 @@ export async function sendMessage(text, opts = {}) {
     // main list as a thread reply, and the thread was closed - so the only copy
     // of what the user wrote stopped existing on screen.
     if (!opts.threadId) {
-      clearDraft(convId);
-      state.replyTo = null;
+      // The user may already be writing the next message, or may have switched conversations.
+      // Keep the live element and only clear a draft that still contains the sent text.
+      if (composer && state.activeId === convId && document.getElementById("composer-input") === composer) {
+        if (composer.value === composerText && composerText.trim() === text) {
+          composer.value = "";
+          composer.dispatchEvent(new Event("input"));
+        }
+        if (!composer.value.trim() && state.replyTo === rec.threadId) {
+          state.replyTo = null;
+          document.querySelector("#composer .replying")?.remove();
+        }
+        saveDraft();
+      } else if (!opts.clientMsgId && state.drafts[convId] === draft && draft?.text.trim() === text) {
+        clearDraft(convId);
+      }
       if (state.activeId === convId) {
-        widok.composer();
         if (rec.threadId) {
           widok.wiadomosc(findMsgById(rec.threadId));   // the "N replies" bar under the root
           widok.otworzWatek(rec.threadId);              // and the thread itself, so the sent message is visible
