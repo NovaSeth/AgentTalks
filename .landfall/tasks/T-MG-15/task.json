@@ -117,8 +117,21 @@
       "data": {
         "head": "a2ef7dc4c7d20efd223165447539861b5f37da62"
       }
+    },
+    {
+      "at": "2026-11-04T03:53:35.004Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "92cf9244b574ad465aeaf4f02d77116c5e94f3a2",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "d22e507c68d0551b4288591ac4fd38f4452e284d"
+      }
     }
   ],
   "base": "796c834463080ef0590ec00bd0439ad45b80a963",
-  "branch": "task/T-MG-15-plugin-woken-tools"
+  "branch": "task/T-MG-15-plugin-woken-tools",
+  "mergedAt": "2026-11-04T03:53:35.004Z"
 }
