@@ -61,20 +61,17 @@ export const API_TOOL_NAMES = /** @type {const} */ ([
 
 class InputError extends Error {}
 
-/** What GET /api/search returns at most (the server's own cap). */
-const SEARCH_FETCH = 200;
-
-/** The search cursor: opaque to the caller, (ts, id) of the last message shown.
- *  @param {{ ts?: unknown, id?: unknown }} m */
-function encodeSearchCursor(m) {
-  return Buffer.from(`s1:${Number(m.ts) || 0}:${Number(m.id) || 0}`).toString("base64url");
+/** The search cursor: opaque to the caller, the id bound (D-MG-42) sent as `beforeId`.
+ *  @param {number} id */
+function encodeSearchCursor(id) {
+  return Buffer.from(`s2:${id}`).toString("base64url");
 }
-/** @param {unknown} v @returns {{ ts: number, id: number }} */
+/** @param {unknown} v @returns {number} */
 function decodeSearchCursor(v) {
   const m = typeof v === "string" && v.length <= 100 && /^[A-Za-z0-9_-]+$/.test(v)
-    ? /^s1:(\d{1,15}):(\d{1,15})$/.exec(Buffer.from(v, "base64url").toString("utf8")) : null;
+    ? /^s2:([1-9]\d{0,14})$/.exec(Buffer.from(v, "base64url").toString("utf8")) : null;
   if (!m) throw new InputError("cursor must be the token from a previous search result");
-  return { ts: Number(m[1]), id: Number(m[2]) };
+  return Number(m[1]);
 }
 
 /** @param {string} text */
@@ -420,18 +417,15 @@ export function createApiTools(o) {
         const conv = optId(args, "conversation_id");
         const limit = optRange(args, "limit", 1, MAX_LIMIT, DEFAULT_LIMIT);
         const at = given(args, "cursor") ? decodeSearchCursor(args.cursor) : null;
-        // The server returns its newest SEARCH_FETCH matches (ascending) up to an optional
-        // time bound. The cursor is (ts, id) of the last message shown: bound the time at its
-        // second and drop what is not older by id. Newer arrivals never enter a later page.
-        const qs = new URLSearchParams({ q, limit: String(SEARCH_FETCH), ...(conv ? { conversationId: String(conv) } : {}), ...(at ? { untilTs: String(at.ts) } : {}) });
+        // The server applies `beforeId` before its cap, newest first, so the smallest id shown
+        // is a cursor that reaches every match once; newer arrivals never enter a later page.
+        const qs = new URLSearchParams({ q, limit: String(limit), ...(conv ? { conversationId: String(conv) } : {}), ...(at ? { beforeId: String(at) } : {}) });
         const r = await api.get(`/api/search?${qs}`);
-        const fetched = r?.messages ?? [];
-        const older = [...fetched].sort((x, y) => y.id - x.id).filter((m) => !at || Number(m.id) < at.id);
-        const page = older.slice(0, limit);
+        const page = [...(r?.messages ?? [])].sort((x, y) => y.id - x.id);
         return budgeted(`search: ${page.length} messages, newest first`,
           page.map((/** @type {any} */ m) => frameItem(m, r?.actors ?? {})),
-          (picked) => `[showing ${picked.length}; older matches may exist: call search again with cursor=${encodeSearchCursor(page[picked[picked.length - 1]])}]`,
-          { more: older.length > page.length || (fetched.length >= SEARCH_FETCH && page.length === limit) });
+          (picked) => `[showing ${picked.length}; older matches may exist: call search again with cursor=${encodeSearchCursor(Number(page[picked[picked.length - 1]].id))}]`,
+          { more: page.length >= limit });
       }),
 
     mentions: tool("mentions",

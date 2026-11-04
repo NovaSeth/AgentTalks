@@ -300,3 +300,52 @@ test("search: following the cursor reaches every match exactly once, newest firs
   assert.ok(pages < 6, `terminates (${pages} pages)`);
   assert.equal((await e.call("search", { q: "needle", cursor: "garbage!" })).isError, true);
 });
+
+/** Walk `search` by its cursor to the end; every page's ids, in order. */
+async function walkSearch(e: Awaited<ReturnType<typeof setup>>, limit: number, between?: (page: number) => void) {
+  const idsOf = (text: string) => [...text.matchAll(/^\[(\d+)\] #\d+/gm)].map((m) => Number(m[1]));
+  const seen: number[] = [];
+  let cursor: string | undefined;
+  let pages = 0;
+  for (; pages < 40; pages++) {
+    const r = await e.call("search", { q: "needle", limit, ...(cursor ? { cursor } : {}) });
+    assert.equal(r.isError, undefined, r.text);
+    seen.push(...idsOf(r.text));
+    between?.(pages);
+    cursor = /cursor=(\S+?)\]/.exec(r.text)?.[1];
+    if (!cursor) break;
+  }
+  return { seen, pages };
+}
+
+test("search: 201 matches in one second are all reached once (codex r3 F6)", async (t) => {
+  const e = await setup();
+  t.after(e.close);
+  e.s.ctx.now = () => 1_700_000_000;
+  const ids: number[] = [];
+  for (let i = 0; i < 201; i++) ids.push(postMessage(e.s.ctx, { conversationId: e.general.id, actorId: e.bob.id, body: `needle ${i}` }).id);
+  const { seen } = await walkSearch(e, 50);
+  assert.deepEqual(seen, [...ids].reverse());
+});
+
+test("search: 20 matches then 190 in the next second, limit 30, none lost (codex r3 F7)", async (t) => {
+  const e = await setup();
+  t.after(e.close);
+  const ids: number[] = [];
+  e.s.ctx.now = () => 1_700_000_000;
+  for (let i = 0; i < 20; i++) ids.push(postMessage(e.s.ctx, { conversationId: e.general.id, actorId: e.bob.id, body: `needle a${i}` }).id);
+  e.s.ctx.now = () => 1_700_000_001;
+  for (let i = 0; i < 190; i++) ids.push(postMessage(e.s.ctx, { conversationId: e.general.id, actorId: e.bob.id, body: `needle b${i}` }).id);
+  const { seen } = await walkSearch(e, 30);
+  assert.deepEqual(seen, [...ids].reverse());
+});
+
+test("search: matches arriving between pages add no duplicate and do not loop", async (t) => {
+  const e = await setup();
+  t.after(e.close);
+  const ids: number[] = [];
+  for (let i = 0; i < 12; i++) ids.push(postMessage(e.s.ctx, { conversationId: e.general.id, actorId: e.bob.id, body: `needle ${i}` }).id);
+  const { seen, pages } = await walkSearch(e, 5, () => { postMessage(e.s.ctx, { conversationId: e.general.id, actorId: e.bob.id, body: "needle late" }); });
+  assert.deepEqual(seen, [...ids].reverse());
+  assert.equal(pages, 2);
+});
