@@ -9,6 +9,7 @@ import { locale, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
 import { state, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
+import { buildRoute, syncRoute } from "./router.js";
 
 // --------------------------------------------------- the wiki editor's draft
 // The chat has long kept a message draft that survives F5 and a deployment; the wiki editor
@@ -74,6 +75,7 @@ export async function openWikiPage(slug) {
   state.view = "wiki";
   state.drawerOpen = false;
   state.wiki.slug = slug;
+  syncRoute(buildRoute({ view: "wiki", slug }));   // S3: F5 and Back restore the page
   state.wiki.revision = null;
   state.wiki.editing = false;
   state.wiki.draft = null;

@@ -43,6 +43,14 @@ function mdInline(s, myHandle) {
     const mine = myHandle && h.toLowerCase() === myHandle.toLowerCase();
     return `${pre}<span class="${mine ? "me-mention" : "mention"}" data-actor="${escapeHtml(h)}">@${h}</span>`;
   });
+  // #slug of a conversation I can see is a link to it (S4, U3). A heading "# title" has a space
+  // after the hash, "#1" is not a slug of mine and "a#b" sits inside a word: all stay text.
+  out = out.replace(/(^|[\s(>])#([a-z0-9][a-z0-9_-]{0,79})\b/gi, (m, pre, slug) => {
+    const known = state.conversations.some((c) => c.slug && c.slug.toLowerCase() === slug.toLowerCase());
+    if (!known) return m;
+    const sl = escapeHtml(slug.toLowerCase());
+    return `${pre}<a href="#/c/${sl}" class="chanlink" data-channel="${sl}">#${slug}</a>`;
+  });
   const restore = (text) => text.replace(/\x00I(\d+)\x00/g, (m, index) => restore(fragments[+index]));
   return restore(out);
 }

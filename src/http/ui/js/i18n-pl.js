@@ -774,7 +774,33 @@ export const PL = {
   // === S2 ===
   "Side panel": "Panel boczny",
   // === S3 ===
+  "Copy link": "Kopiuj link",
+  "A link that opens this message, inside its thread when it has one.": "Link, który otwiera tę wiadomość - w jej wątku, jeśli go ma.",
+  "Mark unread": "Oznacz jako nieprzeczytane",
+  "The conversation goes bold again from this message on.": "Rozmowa znów jest wytłuszczona od tej wiadomości.",
+  "Link copied to the clipboard.": "Link skopiowany do schowka.",
+  "Marked unread from here.": "Oznaczono jako nieprzeczytane od tego miejsca.",
+  "You do not have access to {where}": "Nie masz dostępu do {where}",
+  "The link points at a conversation you cannot read, or one that does not exist.": "Link prowadzi do rozmowy, której nie możesz czytać, albo takiej, która nie istnieje.",
+  "Back to #{slug}": "Wróć do #{slug}",
   // === S4 ===
+  "Bold": "Pogrubienie",
+  "Italic": "Kursywa",
+  "Strikethrough": "Przekreślenie",
+  "Code": "Kod",
+  "Code block": "Blok kodu",
+  "Link": "Link",
+  "Bulleted list": "Lista punktowana",
+  "Quote": "Cytat",
+  "Formatting": "Formatowanie",
+  "Insert an emoji": "Wstaw emoji",
+  "Emoji": "Emoji",
+  "Search emoji": "Szukaj emoji",
+  "No emoji matches - paste one, it works too.": "Żadne emoji nie pasuje - wklej dowolne, też zadziała.",
+  "your channel": "twój kanał",
+  "you can join": "możesz dołączyć",
+  "Also send to #{channel}": "Wyślij też na #{channel}",
+  "Also send to the conversation": "Wyślij też do rozmowy",
   // === S5 ===
   // === S6 ===
   // === S7 ===

@@ -30,7 +30,8 @@ export async function sendMessage(text, opts = {}) {
     rec = {
       id: `tmp-${++tmpSeq}`, clientMsgId, conversationId: convId, actorId: state.actor.id,
       body: text, ts: Math.floor(Date.now() / 1000), kind: "text",
-      threadId: opts.threadId ?? state.replyTo ?? null, pending: true, failed: false,
+      // An explicit threadId (even null: "also send to the channel") wins over the reply mode.
+      threadId: "threadId" in opts ? opts.threadId ?? null : state.replyTo ?? null, pending: true, failed: false,
     };
     list.push(rec);
   }

@@ -13,10 +13,12 @@ import {
   ensureActors, loadConversationsList, loadWikiList, markReadDebounced, refreshDigestAndLeases,
   refreshNotifications, refreshPresence, registerPresenceSession, startDigestTimer,
 } from "./data.js";
-import { $app, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
+import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
-import { iconBell, iconChat, iconSend, iconUsers } from "./icons.js";
-import { lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
+import { iconBell, iconChat, iconLock, iconSend, iconUsers } from "./icons.js";
+import { dmOthers, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
+import { startDirect } from "./actions.js";
+import { buildRoute, consumeOwnPush, parseRoute, syncRoute } from "./router.js";
 import { showToast } from "./toasts.js";
 import { openSearchPalette } from "./search.js";
 import { openUsersView, renderUsersMain, resetUsersError } from "./view-admin.js";
@@ -68,11 +70,11 @@ function renderShell() {
       <main class="main" id="main"></main>
     </div>`;
   document.getElementById("scrim").addEventListener("click", () => { state.drawerOpen = false; toggleDrawerClass(); });
-  document.getElementById("rail-notif").addEventListener("click", openNotificationsView);
+  document.getElementById("rail-notif").addEventListener("click", () => { syncRoute("#/activity"); openNotificationsView(); });
   document.getElementById("rail-chats").addEventListener("click", () => goPlace("home"));
-  document.getElementById("rail-dms").addEventListener("click", () => goPlace("dms"));
+  document.getElementById("rail-dms").addEventListener("click", () => { syncRoute("#/dms"); goPlace("dms"); });
   const ru = document.getElementById("rail-users");
-  if (ru) ru.addEventListener("click", openUsersView);
+  if (ru) ru.addEventListener("click", () => { syncRoute("#/admin"); openUsersView(); });
   if (withSidebar) renderSidebar();
   renderMain();
 }
@@ -227,15 +229,95 @@ async function afterLogin() {
   render();
   updateTitleBadge();
   const loginCount = countLogin();
-  // The last viewed conversation, not the first unread one: auto-opening an unread
+  // S3: the address bar wins - a permalink, F5 or a bookmark opens exactly that place. With an
+  // empty hash, the last viewed conversation, not the first unread one: auto-opening an unread
   // conversation marked it as read before the user saw the counter.
-  const lastId = Number(localStorage.getItem("atalks_last_conv"));
-  const last = state.conversations.find((c) => c.id === lastId && state.memberships[c.id]);
-  const first = last || state.conversations.find((c) => state.memberships[c.id]) || state.conversations[0];
-  if (first) await openConversation(first.id);
+  const route = parseRoute(location.hash);
+  if (route.view !== "home") {
+    await applyRoute(route);
+  } else {
+    const lastId = Number(localStorage.getItem("atalks_last_conv"));
+    const last = state.conversations.find((c) => c.id === lastId && state.memberships[c.id]);
+    const first = last || state.conversations.find((c) => state.memberships[c.id]) || state.conversations[0];
+    if (first) await openConversation(first.id);
+  }
   // Only now - the user already sees the product rather than windows about the product.
   queueWelcome(loginCount);
 }
+
+// ------------------------------------------------------------------- routes (S3)
+/** Open what a parsed route points at. Every branch ends on a screen: a place the user can read,
+ *  or the in-column "no access" message with a way back - never a dead screen. */
+async function applyRoute(route) {
+  state.route = route;
+  switch (route.view) {
+    case "chat": {
+      const c = state.conversations.find((x) => x.slug === route.slug)
+        || state.conversations.find((x) => !x.slug && String(x.id) === route.slug);
+      if (!c) { renderNoAccess(route); return; }
+      await openConversation(c.id, route.messageId);
+      if (route.threadId && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
+      return;
+    }
+    case "dm": {
+      const want = [...route.handles].sort().join(",");
+      const c = state.conversations.find((x) => (x.kind === "dm" || x.kind === "group")
+        && dmOthers(x).map((o) => o.handle).sort().join(",") === want);
+      if (c) {
+        await openConversation(c.id, route.messageId);
+        if (route.threadId && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
+        return;
+      }
+      // A link to a person I have not written to yet starts the conversation (one handle only:
+      // a group is created from the "+" next to Direct messages, with the people picker).
+      if (route.handles.length === 1) { await startDirect(route.handles[0]); return; }
+      renderNoAccess(route);
+      return;
+    }
+    case "wiki": await openWikiPage(route.slug); return;
+    case "activity": await openNotificationsView(); return;
+    case "dms": goPlace("dms"); return;
+    case "admin":
+      if (state.actor?.isAdmin && state.actor?.kind === "human") await openUsersView();
+      else renderNoAccess(route);
+      return;
+    case "search": openSearchPalette(); return;
+    default: return;
+  }
+}
+
+/** The in-column message for a route I cannot read (a private channel, a wrong slug, a
+ *  stranger's DM): the sidebar stays, so the next click is one of its rows. */
+function renderNoAccess(route) {
+  state.view = "chat";
+  state.activeId = null;
+  state.threadOpen = null;
+  state.detailsOpen = false;
+  renderShell();
+  const main = document.getElementById("main");
+  if (!main) return;
+  const home = state.conversations.find((c) => c.slug === "general" && state.memberships[c.id])
+    || state.conversations.find((c) => state.memberships[c.id] && c.slug);
+  const where = route.view === "dm" ? `@${route.handles.join(", @")}` : `#${route.slug}`;
+  main.innerHTML = `
+    <div class="main-col no-access" id="main-col" role="status">
+      ${emptyStateHtml(iconLock(), t("You do not have access to {where}", { where }),
+        t("The link points at a conversation you cannot read, or one that does not exist."))}
+      ${home ? `<p class="no-access-back"><a class="btn slim" id="no-access-back" href="${buildRoute({ view: "chat", slug: home.slug })}">${escapeHtml(t("Back to #{slug}", { slug: home.slug }))}</a></p>` : ""}
+    </div>`;
+  document.getElementById("no-access-back")?.focus();
+}
+
+// Back and Forward (and a link clicked in a message) change the hash; our own pushes echo here
+// too and are skipped, so opening a conversation does not open it twice.
+window.addEventListener("hashchange", () => {
+  const hash = location.hash;
+  if (consumeOwnPush(hash)) return;
+  if (!state.actor) return;
+  const route = parseRoute(hash);
+  if (route.view === "home") return;
+  applyRoute(route);
+});
 
 (async function boot() {
   const restored = await tryRestoreSession();

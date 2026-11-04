@@ -6,12 +6,14 @@ import { api, csrf } from "./api.js";
 import { dividerAfter } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
 import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, scrollBehavior } from "./dom.js";
-import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconPlus, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./icons.js";
+import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconThread, iconWrench } from "./icons.js";
 import { renderBody } from "./markdown.js";
+import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
 import { t } from "./i18n.js";
 import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, isReport, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, trimConversationCache, pushRecent, saveDraft, state, upsertMessage, visibleMessages, views, reports } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
+import { conversationRoute, permalink, syncRoute, unreadFrom } from "./router.js";
 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
@@ -28,6 +30,10 @@ export async function openConversation(id, focusMessageId) {
   state.activeId = id;
   try { localStorage.setItem("atalks_last_conv", String(id)); } catch { /* private browsing */ }
   pushRecent(id);
+  // S3: the address bar follows the view, so F5 restores it and Back walks the conversations
+  // you opened in reverse. A jump to one message carries `/m/<id>`.
+  const routeConv = state.conversations.find((c) => c.id === id);
+  if (routeConv) syncRoute(conversationRoute(routeConv, dmOthers(routeConv), { messageId: focusMessageId }));
   trimConversationCache();
   state.drawerOpen = false;
   state.threadOpen = null;
@@ -76,6 +82,10 @@ export async function openConversation(id, focusMessageId) {
       el.scrollIntoView({ block: "center", behavior: scrollBehavior(false) });
       el.classList.add("flash");
       setTimeout(() => el.classList.remove("flash"), 1600);
+      // A deep link lands the KEYBOARD on the message too (inside the thread panel when it opened
+      // one): a screen reader announces it, Tab continues from it, Escape closes the panel.
+      if (el.getAttribute?.("tabindex") == null) el.setAttribute?.("tabindex", "-1");
+      el.focus?.({ preventScroll: true });
     }
   } else {
     // Entering positions itself on the unread LINE when there is one - "catching up on the
@@ -961,6 +971,10 @@ function openMessageMenu(messageId, anchor) {
         description: t("Only then do the “I fixed it” and “I confirm it is gone” buttons appear.") }]
       : []),
     { action: "copy", label: t("Copy the text"), description: "" },
+    { action: "copylink", label: t("Copy link"), description: t("A link that opens this message, inside its thread when it has one.") },
+    ...(state.memberships[m.conversationId] && !m.deletedAt
+      ? [{ action: "unread", label: t("Mark unread"), description: t("The conversation goes bold again from this message on.") }]
+      : []),
     ...(mine ? [{ action: "delete", label: t("Delete the message"), description: t("Irreversible for everybody."), danger: true }] : []),
   ];
   const pop = document.createElement("div");
@@ -1002,6 +1016,14 @@ function openMessageMenu(messageId, anchor) {
       catch { showToast(t("Could not copy."), { alert: true }); }
       return;
     }
+    if (action === "copylink") {
+      const c = state.conversations.find((x) => x.id === m.conversationId);
+      const hash = c ? conversationRoute(c, dmOthers(c), { messageId }) : `#/c/${m.conversationId}/m/${messageId}`;
+      try { await navigator.clipboard.writeText(permalink(hash, location.origin)); showToast(t("Link copied to the clipboard.")); }
+      catch { showToast(t("Could not copy."), { alert: true }); }
+      return;
+    }
+    if (action === "unread") { markUnreadFrom(messageId); return; }
     if (action === "delete") {
       if (await confirmModal({
         title: t("Delete this message?"),
@@ -1014,6 +1036,27 @@ function openMessageMenu(messageId, anchor) {
   document.addEventListener("keydown", onKey, true);
   closeMsgMenu = close;
   pop.querySelector("button")?.focus();
+}
+
+/** "Mark unread" from a message on: the row goes bold with a count, the "New messages" divider
+ *  moves above the message, and the read marker on the server is asked to follow. The local
+ *  state is painted first - a counter that waits for the network reads as a broken click. */
+function markUnreadFrom(messageId) {
+  const m = findMsgById(messageId);
+  if (!m) return;
+  const convId = m.conversationId;
+  const marker = messageId - 1;
+  state.readMark[convId] = marker;
+  if (state.memberships[convId]) state.memberships[convId].lastReadMessageId = marker;
+  state.unread[convId] = unreadFrom(state.msgs[convId], messageId, state.actor.id);
+  const c = state.conversations.find((x) => x.id === convId);
+  state.unreadBadge[convId] = (c && (c.kind === "dm" || c.kind === "group"))
+    ? state.unread[convId]
+    : (state.msgs[convId] || []).filter((x) => x.id >= messageId && x.actorId !== state.actor.id && !x.deletedAt && mentionsMe(x.body)).length;
+  views.conversationRow(convId);
+  if (state.activeId === convId) renderMessages();
+  api("POST", `/api/conversations/${convId}/unread`, { messageId }).catch(() => { /* best effort */ });
+  showToast(t("Marked unread from here."));
 }
 
 // ------------------------------------------------------- inline editing
@@ -1208,22 +1251,18 @@ export function renderComposer() {
   el.innerHTML = `
     ${replyMsg ? `<div class="replying">${t("Replying in the thread of <b>@{handle}</b>", { handle: escapeHtml(actorHandle(replyMsg.actorId)) })}
       <button id="cancel-reply" aria-label="${t("Cancel replying in the thread")}" title="${t("Cancel")}"><span aria-hidden="true">&times;</span></button></div>` : ""}
-    <div class="card" id="composer-card">
-      <div class="previews" id="composer-previews"></div>
-      <div class="row">
-        <button class="attach" id="composer-attach" type="button" aria-label="${t("Attach files")}" title="${t("Attach files")}">${iconPlus()}</button>
-        <input type="file" id="composer-file" multiple style="display:none" aria-label="${t("Choose files to send")}">
-        <label class="sr-only" for="composer-input">${t("Your message")}</label>
-        <textarea id="composer-input" rows="1" placeholder="${t("Your message...")}"></textarea>
-        <button class="send" id="composer-send" disabled aria-label="${t("Send the message")}" title="${t("Send (Enter)")}">${iconSend()}</button>
-      </div>
-    </div>`;
+    ${composerCardHtml({ prefix: "composer", label: t("Your message"), placeholder: t("Your message..."), files: true })}`;
   const ta = document.getElementById("composer-input");
   const send = document.getElementById("composer-send");
   const cancel = document.getElementById("cancel-reply");
   const attachBtn = document.getElementById("composer-attach");
   const fileInput = document.getElementById("composer-file");
+  const card = document.getElementById("composer-card");
   if (cancel) cancel.addEventListener("click", () => { state.replyTo = null; renderComposer(); focusComposer(); });
+  // The shared parts (composer.js): formatting bar, emoji picker, one autocomplete for @ and #.
+  const formatKey = bindFormatting(ta, card);
+  const ac = mountAutocomplete(ta);
+  document.getElementById("composer-emoji")?.addEventListener("click", (e) => openEmojiPicker(e.currentTarget, (ch) => insertAtCaret(ta, ch)));
   const autosize = () => {
     ta.style.height = "auto";
     const maxH = window.innerHeight * 0.4;
@@ -1236,9 +1275,10 @@ export function renderComposer() {
   // The draft returns to the field with the conversation (and survives F5 - the text is in localStorage).
   const draft = state.drafts[state.activeId];
   if (draft?.text) ta.value = draft.text;
-  ta.addEventListener("input", () => { autosize(); signalTyping(); mentionAutocomplete(ta); scheduleDraftSave(); });
+  ta.addEventListener("input", () => { autosize(); signalTyping(); ac.refresh(); scheduleDraftSave(); });
   ta.addEventListener("keydown", (e) => {
-    if (mentionKeydown(e, ta)) return;
+    if (ac.keydown(e)) return;
+    if (formatKey(e)) return;
     // The chat convention of ArrowUp on an EMPTY field: edit your own last message. Without it a typo can be
     // fixed only by hitting a 1.8rem icon that is visible only on hover.
     if (e.key === "ArrowUp" && !ta.value.trim() && !state.pendingFiles.length) {
@@ -1267,7 +1307,12 @@ export function renderComposer() {
   async function submit() {
     const v = ta.value.trim();
     if (!v && !state.pendingFiles.length) return;
-    closeMentionPopover();
+    ac.close();
+    // The draft is written NOW, with the text about to be sent, and cleared only once the server
+    // confirms (actions.js does that on success). A failed send therefore survives F5: the fail
+    // bar holds the bubble, localStorage holds the words (M14).
+    clearTimeout(draftTimer);
+    saveDraft();
     const files = state.pendingFiles; state.pendingFiles = [];
     ta.value = ""; renderPreviews(); autosize();
     // A file that failed to send RETURNS to the previews - otherwise it would disappear together
@@ -1278,7 +1323,10 @@ export function renderComposer() {
       if (ok) { if (p.url) URL.revokeObjectURL(p.url); } else failedFiles.push(p);
     }
     if (failedFiles.length) { state.pendingFiles = [...failedFiles, ...state.pendingFiles]; renderPreviews(); updateSendButton(); }
-    if (v) await sendMessage(v);
+    if (v) {
+      const sent = await sendMessage(v);
+      if (!sent) return;   // keep the draft: the text is still the user's only copy besides the fail bar
+    }
     saveDraft();
   }
   renderPreviews();
@@ -1401,100 +1449,14 @@ async function uploadAttachment(p) {
 
 function focusComposer() { const ta = document.getElementById("composer-input"); if (ta) ta.focus(); }
 
-// ---------------------------------------------- @mention autocomplete
-let mentionPop = null, mentionItems = [], mentionIndex = 0, mentionStart = -1;
-
-function closeMentionPopover() {
-  if (mentionPop) { mentionPop.remove(); mentionPop = null; mentionItems = []; }
-}
-
-async function mentionAutocomplete(ta) {
-  const upto = ta.value.slice(0, ta.selectionStart ?? ta.value.length);
-  const m = upto.match(/(^|[\s(])@([a-z0-9._-]{0,24})$/i);
-  if (!m) { closeMentionPopover(); return; }
-  mentionStart = upto.length - m[2].length - 1;
-  // One rule for refreshing the directory (a TTL) instead of three different ones - otherwise an
-  // agent that joined a minute ago did not exist for the suggestions.
-  await ensureActors();
-  const q = m[2].toLowerCase();
-  // @all at the top of the list when it matches - one announcement wakes the whole channel.
-  const allItem = { handle: "all", displayName: t("everybody on the channel"), kind: "all" };
-  const showAll = (!q || "all".startsWith(q) || "wszyscy".startsWith(q));
-  mentionItems = [
-    ...(showAll ? [allItem] : []),
-    ...state.actorsList
-      .filter((a) => a.handle !== state.actor.handle)
-      .filter((a) => !q || a.handle.toLowerCase().includes(q) || (a.displayName || "").toLowerCase().includes(q)),
-  ].slice(0, 6);
-  if (!mentionItems.length) { closeMentionPopover(); return; }
-  mentionIndex = 0;
-  if (!mentionPop) {
-    mentionPop = document.createElement("div");
-    mentionPop.className = "mention-pop";
-    document.body.appendChild(mentionPop);
-  }
-  const rect = ta.getBoundingClientRect();
-  mentionPop.innerHTML = mentionItems.map((a, i) => `
-    <button data-mi="${i}" class="${i === mentionIndex ? "sel" : ""}">
-      ${a.kind === "all" ? `<span class="mention-all-ic">@</span>` : avatarHtml(a.handle, 22)}
-      <span class="mh">@${escapeHtml(a.handle)}</span>
-      <span class="kindtag ${a.kind === "all" ? "" : a.kind}">${a.kind === "all" ? t("the whole channel") : a.kind === "human" ? t("human") : t("agent")}</span>
-    </button>`).join("");
-
-  // Setting the POSITION, clamped to the visible area.
-  //
-  // On a phone the keyboard takes the bottom of the screen, and `position:fixed` is measured
-  // against the whole window rather than what is visible - so a list computed as "above the
-  // field" could land under the keyboard or past the edge. The symptom for the user: they type
-  // @ and THERE ARE NO SUGGESTIONS (@michal's report). visualViewport gives the genuinely
-  // visible rectangle; when the browser does not have it, the window remains.
-  const vv = window.visualViewport;
-  const viewport = { top: vv?.offsetTop ?? 0, left: vv?.offsetLeft ?? 0,
-                   width: vv?.width ?? window.innerWidth, height: vv?.height ?? window.innerHeight };
-  const margin = 8;
-  const w = mentionPop.offsetWidth, h = mentionPop.offsetHeight;
-  let left = Math.min(rect.left + margin, viewport.left + viewport.width - w - margin);
-  left = Math.max(viewport.left + margin, left);
-  // By default ABOVE the field (where the writer is looking). When there is no room above -
-  // below it. When there is nowhere - at the top edge of the visible area, because a list off
-  // screen is the same thing as no list.
-  let top = rect.top - h - 6;
-  if (top < viewport.top + margin) {
-    top = rect.bottom + 6 + h <= viewport.top + viewport.height ? rect.bottom + 6 : viewport.top + margin;
-  }
-  mentionPop.style.left = `${Math.round(left)}px`;
-  mentionPop.style.top = `${Math.round(top)}px`;
-
-  // pointerdown, not mousedown: on touch the mouse is EMULATED and the event arrives later - and
-  // by then the field has lost focus and the list is gone, so a tap selected... nothing.
-  // pointerdown handles mouse, touch and stylus.
-  mentionPop.querySelectorAll("[data-mi]").forEach((b) =>
-    b.addEventListener("pointerdown", (e) => { e.preventDefault(); pickMention(ta, Number(b.dataset.mi)); }));
-}
-
-function pickMention(ta, idx) {
-  const a = mentionItems[idx];
-  if (!a) return;
-  const after = ta.value.slice(ta.selectionStart ?? ta.value.length);
-  ta.value = ta.value.slice(0, mentionStart) + "@" + a.handle + " " + after;
-  const pos = mentionStart + a.handle.length + 2;
-  ta.setSelectionRange(pos, pos);
-  closeMentionPopover();
-  ta.dispatchEvent(new Event("input"));
-  ta.focus();
-}
-
-function mentionKeydown(e, ta) {
-  if (!mentionPop) return false;
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-    e.preventDefault();
-    mentionIndex = (mentionIndex + (e.key === "ArrowDown" ? 1 : mentionItems.length - 1)) % mentionItems.length;
-    mentionPop.querySelectorAll("[data-mi]").forEach((b, i) => b.classList.toggle("sel", i === mentionIndex));
-    return true;
-  }
-  if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickMention(ta, mentionIndex); return true; }
-  if (e.key === "Escape") { closeMentionPopover(); return true; }
-  return false;
+// ---------------------------------------------- @ and # autocomplete (engine in composer.js)
+/** The directory is refreshed on one TTL rule (ensureActors) - an agent that joined a minute ago
+ *  must exist for the suggestions. The Polish alias of @all stays accepted (D-MG-16). */
+function mountAutocomplete(ta) {
+  return createAutocomplete(ta, {
+    actors: async () => { await ensureActors(); return state.actorsList; },
+    allAliases: ["wszyscy"],
+  });
 }
 
 // ------------------------------------------------------------- thread (drawer)
@@ -1503,6 +1465,9 @@ export function renderThread() {
   if (!host) return;
   const root = findMsgById(state.threadOpen);
   const replies = state.threadMsgs.filter((m) => m.id !== state.threadOpen);
+  // The panel is redrawn when the replies arrive and on every echo; what the user already typed
+  // into the box, and the "also send" tick, must survive that redraw.
+  const keep = { text: document.getElementById("th-input")?.value ?? "", also: !!document.getElementById("th-also")?.checked };
   host.innerHTML = `
     <div class="thread" role="region" aria-label="${t("Thread")}">
       <div class="th-head">${iconThread()} ${t("Thread")}
@@ -1515,23 +1480,37 @@ export function renderThread() {
     </div>`;
   document.getElementById("th-close").addEventListener("click", closeThread);
   bindMessageEvents(document.getElementById("th-msgs"));
+  // The SAME composer as the main dock (composer.js): formatting, emoji, @ and # lists. Files stay
+  // a main-dock feature: the upload route has no thread target yet.
+  const conv = state.conversations.find((c) => c.id === state.activeId);
+  const alsoLabel = conv?.slug ? t("Also send to #{channel}", { channel: escapeHtml(conv.slug) }) : t("Also send to the conversation");
   const tc = document.getElementById("th-composer");
-  tc.innerHTML = `<div class="card"><div class="row">
-    <label class="sr-only" for="th-input">${t("Reply in the thread")}</label>
-    <textarea id="th-input" rows="1" placeholder="${t("Reply in the thread...")}"></textarea>
-    <button class="send" id="th-send" disabled aria-label="${t("Send the reply")}">${iconSend()}</button></div></div>`;
+  tc.innerHTML = composerCardHtml({
+    prefix: "th", label: t("Reply in the thread"), placeholder: t("Reply in the thread..."), sendLabel: t("Send the reply"),
+    footer: `<label class="th-also"><input id="th-also" type="checkbox"${keep.also ? " checked" : ""}> <span>${alsoLabel}</span></label>`,
+  });
   const ta = document.getElementById("th-input"), send = document.getElementById("th-send");
+  if (keep.text) ta.value = keep.text;
   const autosize = () => {
     ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
     ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
     send.disabled = !ta.value.trim();
     send.classList.toggle("ready", !!ta.value.trim());
   };
-  ta.addEventListener("input", () => { autosize(); signalTyping(); });
-  ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
+  const formatKey = bindFormatting(ta, tc);
+  const ac = mountAutocomplete(ta);
+  document.getElementById("th-emoji")?.addEventListener("click", (e) => openEmojiPicker(e.currentTarget, (ch) => insertAtCaret(ta, ch)));
+  ta.addEventListener("input", () => { autosize(); signalTyping(); ac.refresh(); });
+  ta.addEventListener("keydown", (e) => {
+    if (ac.keydown(e)) return;
+    if (formatKey(e)) return;
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
   send.addEventListener("click", submit);
   async function submit() {
     const v = ta.value.trim(); if (!v) return;
+    ac.close();
+    const also = !!document.getElementById("th-also")?.checked;
     ta.value = ""; autosize();
     // Capture the target before awaiting: the user may switch threads or close the panel.
     const convId = state.activeId, rootId = state.threadOpen;
@@ -1542,6 +1521,8 @@ export function renderThread() {
       if (stillHere && document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
       return;
     }
+    // "Also send to the channel": a second POST without threadId, a copy in the main list.
+    if (also) await sendMessage(v, { conversationId: convId, threadId: null });
     // sendMessage already stored the reply for its root; never insert it into another thread.
     if (!stillHere) return;
     const index = state.threadMsgs.findIndex((entry) => entry.id === msg.id);
@@ -1553,6 +1534,7 @@ export function renderThread() {
     const list = document.getElementById("th-msgs");
     if (list) list.scrollTop = 999999;
   }
+  if (keep.text) autosize();
   document.getElementById("th-msgs").scrollTop = 999999;
 }
 

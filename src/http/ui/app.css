@@ -1047,7 +1047,65 @@ details.arch[open] summary::before{transform:rotate(90deg)}
    needs its own stacking position to stay in front of the blur gradient. */
 .joinbar{position:relative;z-index:3;background:var(--surface-2)}
 /* === S3 === */
+/* The "no access" column: the empty-state block plus one way back, centred like the empty state. */
+.no-access{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-height:0}
+.no-access .empty{flex:0 0 auto}
+.no-access-back{margin:0 0 var(--base-size-32)}
+/* A deep link leaves the keyboard on the message: a visible ring, not an outline on the whole row. */
+.msg[tabindex="-1"]:focus-visible{outline:2px solid var(--focus-outlineColor, var(--accent));outline-offset:-2px;border-radius:var(--borderRadius-medium, 6px)}
 /* === S4 === */
+/* Composer parity: the textarea sits on top of the card, the tool row underneath holds the
+   attach button, the formatting bar, the emoji button and send - one layout for the main dock
+   and the thread panel. The capsule radius gives way to a card radius: two rows do not fit a pill. */
+.composer .card{border-radius:var(--borderRadius-large);padding:var(--base-size-4) var(--base-size-8) var(--base-size-4) var(--base-size-12)}
+.composer .card:has(.previews:not(:empty)){border-radius:var(--borderRadius-large)}
+.composer .card textarea{width:100%;padding:var(--base-size-8) var(--base-size-4) var(--base-size-4)}
+.composer .cfoot{display:flex;align-items:center;gap:var(--base-size-4);min-height:var(--control-small-size)}
+.composer .cfoot .attach,.composer .cfoot .send{width:var(--control-small-size);height:var(--control-small-size)}
+.composer .cfoot .attach svg{width:var(--base-size-16);height:var(--base-size-16)}
+.composer .cfoot .send svg{width:var(--base-size-16);height:var(--base-size-16)}
+.composer .cspacer{flex:1}
+.fmtbar{display:flex;align-items:center;gap:var(--base-size-2);padding-left:var(--base-size-4);
+  border-left:var(--border) solid var(--line-2);margin-left:var(--base-size-4)}
+.fmtbar .fmt{width:var(--control-xsmall-size);height:var(--control-xsmall-size);
+  display:grid;place-items:center;border-radius:var(--borderRadius-medium);color:var(--muted);
+  font-size:var(--text-body-size-small);font-family:inherit;line-height:1;transition:background .12s,color .12s}
+.fmtbar .fmt b,.fmtbar .fmt i,.fmtbar .fmt s,.fmtbar .fmt span,.fmtbar .fmt code{font-size:inherit;background:none;padding:0}
+.fmtbar .fmt code{font-family:var(--mono);font-size:var(--text-caption-size)}
+.fmtbar .fmt:hover,.fmtbar .fmt:focus-visible{background:var(--control-transparent-bgColor-hover);color:var(--ink)}
+.composer .cfoot .emoji{width:var(--control-small-size);height:var(--control-small-size);border-radius:var(--borderRadius-full)}
+.composer .cfoot .emoji svg{width:var(--base-size-16);height:var(--base-size-16)}
+.composer .cfoot .emoji:hover{background:var(--control-transparent-bgColor-hover);color:var(--ink)}
+/* The autocomplete gets a role and a # variant; its look is the existing .mention-pop. */
+.mention-pop .mention-all-ic{font-weight:var(--base-text-weight-semibold)}
+.mention-pop .kindtag:not(.human):not(.agent){color:var(--faint)}
+/* "Also send to #channel" under the thread box: a quiet checkbox line, never a second button. */
+.th-also{display:flex;align-items:center;gap:var(--base-size-8);padding:var(--base-size-4) var(--base-size-8) var(--base-size-4) var(--base-size-4);
+  font-size:var(--text-body-size-small);color:var(--muted);cursor:pointer;user-select:none}
+.th-also input{accent-color:var(--accent);margin:0;width:var(--base-size-16);height:var(--base-size-16)}
+.th-also:hover{color:var(--ink)}
+/* Emoji picker: a floating card above the button, search on top, a scrolling grid below.
+   Buttons are square so the grid stays aligned whatever the glyph width. */
+.emoji-picker{position:fixed;z-index:32;width:min(320px,calc(100vw - var(--base-size-16)));
+  background:var(--surface);border:var(--border) solid var(--line);border-radius:var(--borderRadius-large);
+  box-shadow:var(--shadow-floating-medium);padding:var(--base-size-8);display:flex;flex-direction:column;gap:var(--base-size-8)}
+.emoji-picker .ep-search{width:100%;height:var(--control-small-size);padding:0 var(--base-size-8);
+  border:var(--border) solid var(--control-borderColor-rest);border-radius:var(--borderRadius-medium);
+  background:var(--control-bgColor-rest);color:var(--ink);font-size:var(--text-body-size-medium)}
+.emoji-picker .ep-search:focus{outline:2px solid var(--focus-outlineColor);outline-offset:-1px;border-color:var(--control-borderColor-selected)}
+.emoji-picker .ep-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:var(--base-size-2);
+  max-height:256px;overflow-y:auto;scrollbar-width:thin}
+.emoji-picker .ep-grid button{aspect-ratio:1;display:grid;place-items:center;border-radius:var(--borderRadius-medium);
+  font-size:var(--text-title-size-medium);line-height:1;transition:background .1s,transform .1s}
+.emoji-picker .ep-grid button:hover,.emoji-picker .ep-grid button:focus-visible{background:var(--control-transparent-bgColor-hover);transform:scale(1.12)}
+.emoji-picker .ep-empty{grid-column:1 / -1;color:var(--muted);font-size:var(--text-body-size-small);padding:var(--base-size-8);margin:0}
+/* #channel links in messages: the same colour as a mention, underlined on hover only. */
+.chanlink{color:var(--fgColor-accent);text-decoration:none;font-weight:var(--base-text-weight-medium)}
+.chanlink:hover{text-decoration:underline}
+@media (max-width:760px){
+  /* The bar is the first thing to go on a narrow screen: the box, emoji and send stay. */
+  .fmtbar{display:none}
+}
 /* === S5 === */
 /* === S6 === */
 /* === S7 === */
