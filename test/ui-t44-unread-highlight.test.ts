@@ -175,7 +175,7 @@ const msg = (conv: number, id: number, actorId = OTHER) =>
 
 /** Conversations 5 and 6: ten messages each, mine and theirs alternating (even ids are theirs);
  *  the server's read mark for me in 5 is `lastRead`, 6 is read to the end. Nothing is open yet. */
-function setup(lastRead: number, { unread = 0 }: { unread?: number } = {}) {
+function setup(lastRead: number, { unread = 0, reset = true }: { unread?: number; reset?: boolean } = {}) {
   els.clear();
   els.set("main", hostify(el({ id: "main" })));
   g.document.visibilityState = "visible";
@@ -195,7 +195,7 @@ function setup(lastRead: number, { unread = 0 }: { unread?: number } = {}) {
     loaded: { 5: true, 6: true }, online: true, unread: { 5: unread },
   });
   store.rebuildMentionRe();
-  chat.resetUnreadHighlights();
+  if (reset) chat.resetUnreadHighlights();   // the test-only reset; the account-change test goes without it
 }
 
 const list = () => els.get("messages")!;
@@ -409,6 +409,20 @@ test("T-MG-44 r2 F1: a message read here does not regain its tint after going to
   } finally { data.cancelMarkRead(); mock.timers.reset(); }   // a mocked read timer must not outlive its mock
 });
 
+// ------------------------------------------------------------------ 4b: the server watermark (F7, r3)
+test("T-MG-44 r3 F7: later renders never tint a message at or below the server's read watermark", async () => {
+  setup(520);                                       // the server says read up to 520; the cached list ends at 510
+  const l = await open();
+  assert.deepEqual(highlighted(l), []);
+  data.cancelMarkRead();
+  for (const id of [512, 514]) state.msgs[5].push(msg(5, id));   // landed behind the cache (replay / catch-up)
+  chat.renderMessages();
+  assert.deepEqual(highlighted(list()), [], "512 and 514 are below the confirmed 520: already read");
+  state.msgs[5].push(msg(5, 522));                 // above the watermark: missed
+  chat.renderMessages();
+  assert.deepEqual(highlighted(list()), [522]);
+});
+
 // ------------------------------------------------------------------ 6: account change (F5, r2)
 test("T-MG-44 r2 F5: highlight state and timers do not cross an account change (session generation)", async () => {
   mock.timers.enable({ apis: ["setTimeout"] });
@@ -419,12 +433,13 @@ test("T-MG-44 r2 F5: highlight state and timers do not cross an account change (
     assert.deepEqual(fading(), [506, 508, 510]);
     mock.timers.tick(100);
     data.cancelMarkRead();
-    apiMod.newSessionGeneration();                  // sign-out / another account: what the teardown does
-    store.resetState();
-    setup(504);                                     // B signs in and opens the same conversation
+    apiMod.newSessionGeneration();                  // the production sign-out / account change (sse-events.js)
+    // B signs in and opens the same conversation. NO resetUnreadHighlights(): the cleanup under
+    // test is the production one (the map notices the new generation on first touch).
+    setup(504, { reset: false });
     const l = await open();
     assert.deepEqual(highlighted(l), [506, 508, 510], "B sees their own unread, untouched by A's state");
-    mock.timers.tick(400);                          // A's fade-end timer fires now
+    mock.timers.tick(3500);                         // well past A's 3000 ms fade-end timer
     assert.deepEqual(highlighted(l), [506, 508, 510], "A's timer did not strip B's tint");
     assert.deepEqual(fading(l), []);
   } finally { data.cancelMarkRead(); mock.timers.reset(); }   // a mocked read timer must not outlive its mock
