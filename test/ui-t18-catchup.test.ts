@@ -48,6 +48,8 @@ const requests: string[] = [];
 const MAX_LIMIT = 500;
 let failAfterOnce = false;
 let onRequest: ((path: string) => void) | null = null;
+/** When set, a request whose path matches is answered from the table as it is NOW, but only after the gate opens. */
+let hold: { match: RegExp; gate: Promise<void> } | null = null;
 g.fetch = async (path: string) => {
   requests.push(String(path));
   onRequest?.(String(path));
@@ -65,6 +67,7 @@ g.fetch = async (path: string) => {
       ? server5.filter((x) => x.id > Number(after)).slice(0, limit)
       : server5.slice(-limit);
   }
+  if (hold && hold.match.test(String(path))) await hold.gate;
   return { ok: true, status: 200, json: async () => ({ messages, reactions: {}, actors: [] }) };
 };
 
@@ -87,6 +90,7 @@ beforeEach(() => {
   FakeEventSource.all = [];
   requests.length = 0;
   onRequest = null;
+  hold = null;
   failAfterOnce = false;
   Object.assign(state, {
     actor: { id: 1, handle: "michal", kind: "human" }, view: "chat", activeId: 5,
@@ -206,4 +210,49 @@ test("F3 (codex): a retained floor is retried although an SSE event advanced the
   last().open();
   await settle();
   assert.deepEqual(ids(5), range(31));
+});
+
+// ---- fix round 3 (codex review-r3 F4): a delayed catch-up never overwrites a newer live revision
+const edited = (id: number, body: string) => ({ ...msg(id), body, editedAt: 99 });
+const updated = (m: Any) => last().listeners.message_updated[0]({ data: JSON.stringify({ type: "message_updated", conversationId: m.conversationId, message: m }) });
+const bodyOf = (id: number) => state.msgs[5].find((m: Any) => m.id === id)?.body;
+
+async function heldResume(t: Any, match: RegExp) {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  server5 = [msg(1), msg(2)];
+  state.msgs[5] = [msg(1)];
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  sse.connectSSE(); last().open();
+  live(msg(1));
+  last().drop(2);
+  t.mock.timers.tick(1000);
+  hold = { match, gate };
+  last().open();
+  await settle();
+  state.conversations = [{ id: 5, slug: "general", kind: "public" }];   // the fake list route answers with none
+  return release;
+}
+
+test("F4 (codex): a delayed after= page does not replace a message edited live meanwhile", async (t) => {
+  const release = await heldResume(t, /after=1/);
+  assert.ok(requests.some((p) => p.includes("after=1")), requests.join(", "));
+  updated(edited(2, "edited live"));
+  await settle();
+  assert.equal(bodyOf(2), "edited live");
+  release();
+  await settle();
+  assert.equal(bodyOf(2), "edited live");
+  assert.deepEqual(ids(5), [1, 2]);
+});
+
+test("F4: a delayed newest-30 refresh does not replace a message edited live meanwhile", async (t) => {
+  const release = await heldResume(t, /messages\?limit=30$/);
+  live(msg(2));
+  updated(edited(2, "edited live"));
+  await settle();
+  release();
+  await settle();
+  assert.equal(bodyOf(2), "edited live");
+  assert.deepEqual(ids(5), [1, 2]);
 });
