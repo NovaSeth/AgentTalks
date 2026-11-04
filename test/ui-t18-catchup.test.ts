@@ -45,6 +45,7 @@ g.EventSource = FakeEventSource;
 let server5: Any[] = [];
 const requests: string[] = [];
 const MAX_LIMIT = 500;
+let failAfterOnce = false;
 let onRequest: ((path: string) => void) | null = null;
 g.fetch = async (path: string) => {
   requests.push(String(path));
@@ -52,6 +53,10 @@ g.fetch = async (path: string) => {
   const url = new URL(String(path), "https://test.local");
   const m = /^\/api\/conversations\/(\d+)\/messages$/.exec(url.pathname);
   let messages: Any[] = [];
+  if (failAfterOnce && m && m[1] === "5" && url.searchParams.has("after")) {
+    failAfterOnce = false;
+    return { ok: false, status: 500, json: async () => ({ error: "boom" }) };
+  }
   if (m && m[1] === "5") {
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 50), 1), MAX_LIMIT);
     const after = url.searchParams.get("after");
@@ -81,6 +86,7 @@ beforeEach(() => {
   FakeEventSource.all = [];
   requests.length = 0;
   onRequest = null;
+  failAfterOnce = false;
   Object.assign(state, {
     actor: { id: 1, handle: "michal", kind: "human" }, view: "chat", activeId: 5,
     conversations: [{ id: 5, slug: "general", kind: "public" }],
@@ -122,4 +128,47 @@ test("B-MG-116: an answer that arrives under another session generation is not m
   await resume(t);
   await settle();
   assert.deepEqual(ids(5), []);
+});
+
+// ---- fix round 1 (codex review-r1 F1): the floor is the newest id held when the stream broke
+const twoLoaded = () => Object.assign(state, {
+  conversations: [{ id: 4, slug: "a", kind: "public" }, { id: 5, slug: "general", kind: "public" }],
+  memberships: { 4: {}, 5: {} }, msgs: { 4: [], 5: [] }, loaded: { 4: true, 5: true },
+});
+const live = (m: Any) => last().listeners.message[0]({ data: JSON.stringify({ type: "message", conversationId: m.conversationId, message: m }) });
+
+test("F1 (codex 1): an SSE message delivered while another conversation catches up does not move the floor", async (t) => {
+  twoLoaded();
+  server5 = range(31).map((i) => msg(i));
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  sse.connectSSE(); last().open(); last().drop(2);
+  t.mock.timers.tick(1000);
+  let delivered = false;
+  onRequest = (p) => { if (!delivered && p.includes("/conversations/4/")) { delivered = true; live(msg(31)); } };
+  last().open();
+  await settle();
+  assert.deepEqual(ids(5), range(31));
+});
+
+test("F1 (codex 2): a refresh of the history during the gap does not move the floor", async (t) => {
+  server5 = range(31).map((i) => msg(i));
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  sse.connectSSE(); last().open(); last().drop(2);
+  for (let i = 2; i <= 31; i++) store.upsertMessage(5, msg(i));   // a refresh while the stream is down
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  assert.deepEqual(ids(5), range(31));
+});
+
+test("F1 (codex 3): a failed page followed by a reconnect keeps the floor", async (t) => {
+  server5 = range(31).map((i) => msg(i));
+  failAfterOnce = true;
+  await resume(t);
+  await settle();
+  last().drop(2);
+  t.mock.timers.tick(2000);
+  last().open();
+  await settle();
+  assert.deepEqual(ids(5), range(31));
 });
