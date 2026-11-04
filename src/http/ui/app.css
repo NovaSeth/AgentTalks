@@ -230,9 +230,12 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .wikilink.missing{color:var(--coral);border-bottom-color:color-mix(in srgb,var(--coral) 55%,transparent)}
 /* Bottom padding equals the MEASURED dock height plus a gap (U1, W6-S12-B): dom.js watchDockHeight
    writes --dock-h on .main, so a five-line draft or a file preview never covers the last message
-   or its "Send again" row; the fixed value is the fallback before the first measure. */
+   or its "Send again" row; the fixed value is the fallback before the first measure.
+   No scroll-behavior here (T-MG-29): it animated every plain scrollTop assignment, so a redraw of
+   the column rode from the top to the bottom. Smooth scrolling is requested per call
+   (scrollTo({behavior:"smooth"}) in dom.js scrollToBottom) where it is meant. */
 .messages{flex:1;overflow-y:auto;padding:var(--base-size-16) 0 calc(var(--dock-h,var(--base-size-80)) + var(--base-size-16));
-  min-height:0;scroll-behavior:smooth}
+  min-height:0}
 .day{display:flex;align-items:center;gap:var(--base-size-12);margin:var(--base-size-16) var(--base-size-20) var(--base-size-6);color:var(--faint);
   font-size:var(--text-body-size-small);font-weight:700}
 .day::before,.day::after{content:"";height:1px;background:var(--line);flex:1}
@@ -499,9 +502,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 @keyframes slidein{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 @keyframes shimmer{to{background-position:-200% 0}}
 @keyframes shake{10%,90%{transform:translateX(-1px)}30%,70%{transform:translateX(3px)}50%{transform:translateX(-4px)}}
-/* Reduced motion must override EVERY rule. A bare * selector lost to
-   .messages{scroll-behavior:smooth}; changing only animation duration also left
-   transitions and looping spinners, pulses and typing bubbles running. */
+/* Reduced motion must override EVERY rule. A bare * selector once lost to a
+   smooth scroll-behavior on .messages (gone since T-MG-29); changing only animation duration also
+   left transitions and looping spinners, pulses and typing bubbles running. */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{
     animation-duration:.001ms!important;animation-iteration-count:1!important;
