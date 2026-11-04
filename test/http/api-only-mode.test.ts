@@ -6,7 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initData, loadConfig } from "../../src/config.ts";
 import { parseArgs } from "../../src/cli/main.ts";
-import { bearer, startTestServer } from "../http-helpers.ts";
+import { bearer, openSse, startTestServer } from "../http-helpers.ts";
+import { mcpJson } from "../fixes/t-mg-10-helpers.ts";
+import { createActor } from "../../src/core/actors.ts";
+import { mintToken } from "../../src/core/tokens.ts";
+import { createChannel, join as joinConversation } from "../../src/core/conversations.ts";
 
 function withEnv<T>(value: string | undefined, fn: () => T): T {
   const old = process.env.AGENTTALKS_UI;
@@ -66,10 +70,37 @@ test("UI off: the web UI paths answer 404 ui_disabled; API, MCP and onboarding k
     assert.equal((await fetch(`${t.url}/skill.md`)).status, 200);
     assert.equal((await fetch(`${t.url}/skill.version`)).status, 200);
     assert.equal((await fetch(`${t.url}/install`)).status, 200);
-    // /mcp is reachable: without a token it is a 401 from the handler, not a 404.
+    // Authentication still denies: an invalid MCP token and an anonymous event stream.
     const mcp = await fetch(`${t.url}/mcp`, { method: "POST", headers: bearer("nope"), body: "{}" });
-    assert.notEqual(mcp.status, 404);
+    assert.equal(mcp.status, 401);
     assert.equal((await fetch(`${t.url}/api/events`)).status, 401);
+  } finally { await t.close(); }
+});
+
+test("UI off: with a valid agent token MCP lists tools and SSE delivers a posted message", async () => {
+  const t = await startTestServer({ ui: false });
+  try {
+    const ala = createActor(t.ctx, { kind: "agent", handle: "ala" });
+    const bob = createActor(t.ctx, { kind: "agent", handle: "bob" });
+    const general = createChannel(t.ctx, { slug: "general", kind: "public", createdBy: ala.id });
+    joinConversation(t.ctx, general.id, bob.id);
+    const tokenA = mintToken(t.ctx, ala.id, "t").token;
+    const tokenB = mintToken(t.ctx, bob.id, "t").token;
+
+    const list = await mcpJson(t.url, tokenA, { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} });
+    assert.ok(Array.isArray(list.result?.tools) && list.result.tools.length > 0, "MCP tools/list returns tools");
+    assert.ok(list.result.tools.some((x: { name: string }) => x.name === "talk_read"));
+
+    const es = await openSse(`${t.url}/api/events`, tokenB);
+    try {
+      const post = await fetch(`${t.url}/api/conversations/${general.id}/messages`, {
+        method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "api-only hello" }),
+      });
+      assert.ok(post.ok, "REST works");
+      const ev = await es.next(3000) as { type: string; message?: { body: string } };
+      assert.equal(ev.type, "message");
+      assert.equal(ev.message?.body, "api-only hello");
+    } finally { es.close(); }
   } finally { await t.close(); }
 });
 
