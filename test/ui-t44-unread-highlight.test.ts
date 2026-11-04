@@ -216,6 +216,53 @@ test("T-MG-44: coming back to the tab tints what landed meanwhile even when it w
   assert.deepEqual(highlighted(list), [511, 512]);
 });
 
+// ------------------------------------------------------------------ 2c: another view open (fix round 1)
+/** `#main` as a browser treats innerHTML: every write creates fresh elements for the ids in the
+ *  markup; `#messages` is the row-parsing list above, the rest plain stubs (as in ui-t29). */
+function hostify(host: El): El {
+  const owned = new Set<string>();
+  let html = "";
+  Object.defineProperty(host, "innerHTML", {
+    get: () => html,
+    set(v: string) {
+      html = String(v);
+      for (const id of owned) els.delete(id);
+      owned.clear();
+      for (const tag of html.matchAll(/<[a-z]+\b[^>]*\bid="([^"]+)"[^>]*>/g)) {
+        const id = tag[1];
+        const fresh = id === "messages" ? messageList() : hostify(el());
+        fresh.id = id;
+        for (const d of tag[0].matchAll(/\bdata-([a-z-]+)="([^"]*)"/g)) {
+          fresh.dataset[d[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = d[2];
+        }
+        els.set(id, fresh); owned.add(id);
+      }
+    },
+  });
+  return host;
+}
+
+test("T-MG-44 r1: messages that arrive while another view (wiki) covers the active conversation are tinted on return", async () => {
+  setup(510);
+  els.set("main", hostify(el({ id: "main" })));
+  store.registerViews({ render: chat.renderMain });
+  state.activeId = null; state.view = "home";
+  await chat.openConversation(5);                   // #/c/general, read to the end
+  let list = els.get("messages")!;
+  assert.ok(list.rows.length, "the list was drawn through openConversation");
+  assert.deepEqual(highlighted(list), []);
+  state.view = "wiki";                              // #/wiki/...: the chat column is gone, activeId stays 5
+  // Three live messages by SSE: the conversation is not open, so only the state takes them (no
+  // upsertMessageNode call, as sse-events.js does); one of them is mine.
+  state.msgs[5].push(msg(5, 511), msg(5, 512, ME), msg(5, 513));
+  await chat.openConversation(5);                   // #/c/general again: the same id, from another view
+  list = els.get("messages")!;
+  assert.deepEqual(highlighted(list), [511, 513], "the two by others; not my own; nothing read earlier");
+  chat.renderMessages();
+  assert.deepEqual(highlighted(list), [511, 513], "a re-render keeps them");
+  store.registerViews({ render: () => {} });
+});
+
 // ------------------------------------------------------------------ 3 + 4: the fade after the read mark
 test("T-MG-44: the read mark swaps the tint for the fade class, which leaves after the transition and never returns", () => {
   mock.timers.enable({ apis: ["setTimeout"] });
