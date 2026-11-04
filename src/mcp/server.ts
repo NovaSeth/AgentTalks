@@ -47,7 +47,7 @@ import { react } from "../core/reactions.ts";
 import { search } from "../core/search.ts";
 import { markRead, unreadFor } from "../core/unread.ts";
 import { digestFor } from "../core/digest.ts";
-import { mentionsOf } from "../core/mentions.ts";
+import { mentionsOf, unresolvedMentions } from "../core/mentions.ts";
 import { acquire, listLeases, release } from "../core/leases.ts";
 import { getFileInfo } from "../core/files.ts";
 import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
@@ -103,7 +103,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "talk_send",
-    description: "Wyslij wiadomosc. Przy rozmowie prywatnej odpowiedz mowi, czy adresaci zyja.",
+    description:
+      "Wyslij wiadomosc. Przy rozmowie prywatnej odpowiedz mowi, czy adresaci zyja. " +
+      "Adres '@a' albo '@a,@b' creates the conversation on the fly and may wake the addressee " +
+      "(a real model run on their side): write to a person only when it is worth that. " +
+      "A mention of a handle that does not exist is reported back in the result.",
     inputSchema: S(
       {
         to: { type: "string", description: CONV_DESC },
@@ -399,11 +403,14 @@ function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation 
     // of a private channel by name. assertCanRead with an impossible id gives one error.
     return assertCanRead(ctx, conv ? conv.id : -1, actor.id);
   }
+  if (!raw.startsWith("@")) {
+    throw badRequest("zly_adres", "address must be #channel, @handle or @a,@b (or a numeric conversation id)");
+  }
   // '@a' or '@a,@b' -> a direct conversation (dm/group), created on the fly.
   const handles = raw.split(/[\s,]+/).filter(Boolean);
   const ids = handles.map((h) => {
     const a = getActorByHandle(ctx, h);
-    if (!a) throw notFound("aktor", `nie ma aktora ${h}`);
+    if (!a) throw notFound("aktor", `nie ma aktora @${h.replace(/^@+/, "")}`);
     return a.id;
   });
   return ensureDirect(ctx, [actor.id, ...ids]);
@@ -880,7 +887,11 @@ async function callTool(
           })
           .join("\n");
       }
-      return text(`wyslane [${message.id}] do ${convName(ctx, conv.id)}${deliveryNote}`);
+      const nieznane = unresolvedMentions(ctx, message.body);
+      const mentionNote = nieznane.length
+        ? `\nMentions that did not resolve (no such actor, nobody was notified): ${nieznane.map((h) => "@" + h).join(", ")}`
+        : "";
+      return text(`wyslane [${message.id}] do ${convName(ctx, conv.id)}${deliveryNote}${mentionNote}`);
     }
 
     case "talk_read": {
