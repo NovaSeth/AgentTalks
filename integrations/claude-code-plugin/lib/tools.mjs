@@ -61,6 +61,22 @@ export const API_TOOL_NAMES = /** @type {const} */ ([
 
 class InputError extends Error {}
 
+/** What GET /api/search returns at most (the server's own cap). */
+const SEARCH_FETCH = 200;
+
+/** The search cursor: opaque to the caller, (ts, id) of the last message shown.
+ *  @param {{ ts?: unknown, id?: unknown }} m */
+function encodeSearchCursor(m) {
+  return Buffer.from(`s1:${Number(m.ts) || 0}:${Number(m.id) || 0}`).toString("base64url");
+}
+/** @param {unknown} v @returns {{ ts: number, id: number }} */
+function decodeSearchCursor(v) {
+  const m = typeof v === "string" && v.length <= 100 && /^[A-Za-z0-9_-]+$/.test(v)
+    ? /^s1:(\d{1,15}):(\d{1,15})$/.exec(Buffer.from(v, "base64url").toString("utf8")) : null;
+  if (!m) throw new InputError("cursor must be the token from a previous search result");
+  return { ts: Number(m[1]), id: Number(m[2]) };
+}
+
 /** @param {string} text */
 const fail = (text) => ({ text, isError: true });
 
@@ -396,22 +412,26 @@ export function createApiTools(o) {
       }),
 
     search: tool("search",
-      `Full-text search of the message history you may read, quoted as data. ${budgetNote}`,
-      { q: str("The search phrase"), conversation_id: int("Optional: only this conversation"), limit: limitProp, skip: skipProp },
+      `Full-text search of the message history you may read, newest first, quoted as data. cursor: the opaque token from the previous result's cursor line. ${budgetNote}`,
+      { q: str("The search phrase"), conversation_id: int("Optional: only this conversation"), limit: limitProp, cursor: str("Optional: the cursor token of the previous result") },
       ["q"],
       async (args, api) => {
         const q = needText(args, "q", MAX_QUERY_CHARS);
         const conv = optId(args, "conversation_id");
         const limit = optRange(args, "limit", 1, MAX_LIMIT, DEFAULT_LIMIT);
-        const skip = optRange(args, "skip", 0, MAX_SKIP, 0);
-        const qs = new URLSearchParams({ q, limit: String(skip + limit), ...(conv ? { conversationId: String(conv) } : {}) });
+        const at = given(args, "cursor") ? decodeSearchCursor(args.cursor) : null;
+        // The server returns its newest SEARCH_FETCH matches (ascending) up to an optional
+        // time bound. The cursor is (ts, id) of the last message shown: bound the time at its
+        // second and drop what is not older by id. Newer arrivals never enter a later page.
+        const qs = new URLSearchParams({ q, limit: String(SEARCH_FETCH), ...(conv ? { conversationId: String(conv) } : {}), ...(at ? { untilTs: String(at.ts) } : {}) });
         const r = await api.get(`/api/search?${qs}`);
         const fetched = r?.messages ?? [];
-        const messages = fetched.slice(skip);
-        return budgeted(`search: ${messages.length} messages${skip ? `, from ${skip}` : ""}`,
-          messages.map((/** @type {any} */ m) => frameItem(m, r?.actors ?? {})),
-          (picked) => skip + picked.length <= MAX_SKIP ? `[showing ${picked.length}; more may match: call search again with skip=${skip + picked.length}]` : `[showing ${picked.length}; more may match: narrow the query]`,
-          { more: fetched.length >= skip + limit && skip + limit < MAX_SKIP + MAX_LIMIT });
+        const older = [...fetched].sort((x, y) => y.id - x.id).filter((m) => !at || Number(m.id) < at.id);
+        const page = older.slice(0, limit);
+        return budgeted(`search: ${page.length} messages, newest first`,
+          page.map((/** @type {any} */ m) => frameItem(m, r?.actors ?? {})),
+          (picked) => `[showing ${picked.length}; older matches may exist: call search again with cursor=${encodeSearchCursor(page[picked[picked.length - 1]])}]`,
+          { more: older.length > page.length || (fetched.length >= SEARCH_FETCH && page.length === limit) });
       }),
 
     mentions: tool("mentions",

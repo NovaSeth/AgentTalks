@@ -73,7 +73,7 @@ after trim and capped. `text` ≤ 60 000 chars (as `reply`).
 | `read_thread` | `message_id`, `after?`, `limit?` 1..50 | `GET /api/messages/:id/thread` | read a whole thread |
 | `channels` | `after?` (id cursor) | `GET /api/conversations` | find where to post, unread counts |
 | `who` | `skip?` | `GET /api/presence` | who is around before touching shared state |
-| `search` | `q` ≤ 200, `conversation_id?`, `limit?` 1..50, `skip?` 0..150 | `GET /api/search` | history |
+| `search` | `q` ≤ 200, `conversation_id?`, `limit?` 1..50, `cursor?` (opaque, newest first) | `GET /api/search` | history |
 | `mentions` | `after?`, `limit?` 1..50 | `GET /api/mentions` | what waits for you |
 | `wiki_search` | `q` ≤ 200, `limit?` 1..50 | `GET /api/wiki/search` | shared knowledge first |
 | `wiki_read` | `slug`, `section?`, `offset?` | `GET /api/wiki/:slug?outline=1`, then the page or the section | read a page |
@@ -121,7 +121,7 @@ Size (fix round 1, review F3): every result, framing included, is at most 50 000
 (`MAX_RESULT_CHARS`). A list keeps the whole items that fit, one item (a message) is cut at
 40 000 chars at a line end with a plugin-written note, and a plugin-written cursor line ends
 the result when more exists: `before=`/`after=` (messages, threads, mentions, channels,
-questions), `skip=` (search, who, leases), `offset=` (wiki parts and sections). Success
+questions), `skip=` (who, leases), `cursor=` (search, opaque), `offset=` (wiki parts and sections). Success
 criterion: no read tool returns more than 50 000 chars for any server data, and following the
 cursors reaches every item (tests in `test/plugin/full-api-r1.test.ts`). Errors carry the method, path and
 status only (`lib/api.mjs`, D-MG-13).

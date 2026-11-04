@@ -277,3 +277,26 @@ test("ask, open_questions, answer, react: round trip; bad ids and empty text are
   assert.equal((await e.call("react", { message_id: theirs.id, emoji: "x".repeat(33) })).isError, true);
   assert.equal((await e.call("open_questions", { conversation_id: "x" })).isError, true);
 });
+
+test("search: following the cursor reaches every match exactly once, newest first, even as new matches arrive (T-MG-40 fix 2)", async (t) => {
+  const e = await setup();
+  t.after(e.close);
+  const ids: number[] = [];
+  for (let i = 0; i < 7; i++) ids.push(postMessage(e.s.ctx, { conversationId: e.general.id, actorId: e.bob.id, body: `needle number ${i}` }).id);
+  const idsOf = (text: string) => [...text.matchAll(/^\[(\d+)\] #\d+/gm)].map((m) => Number(m[1]));
+  const cursorOf = (text: string) => /cursor=(\S+?)\]/.exec(text)?.[1];
+  const seen: number[] = [];
+  let cursor: string | undefined;
+  let pages = 0;
+  for (; pages < 20; pages++) {
+    const r = await e.call("search", { q: "needle", limit: 2, ...(cursor ? { cursor } : {}) });
+    assert.equal(r.isError, undefined, r.text);
+    seen.push(...idsOf(r.text));
+    if (pages === 1) postMessage(e.s.ctx, { conversationId: e.general.id, actorId: e.bob.id, body: "needle late arrival" });
+    cursor = cursorOf(r.text);
+    if (!cursor) break;
+  }
+  assert.deepEqual(seen, [...ids].reverse(), "every id once, newest first");
+  assert.ok(pages < 6, `terminates (${pages} pages)`);
+  assert.equal((await e.call("search", { q: "needle", cursor: "garbage!" })).isError, true);
+});

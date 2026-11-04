@@ -216,7 +216,7 @@ test("F3: search, mentions, open_questions, channels, who and leases stay within
     acquire(e.s.ctx, { resource: `r${i}/${"p".repeat(100)}`, actorId: e.bob.id, ttlSec: 600, note: "n".repeat(500) });
   }
   const cases: Array<[string, Record<string, unknown>, RegExp]> = [
-    ["search", { q: "needle", limit: 6 }, /skip=\d+/],
+    ["search", { q: "needle", limit: 6 }, /cursor=[\w-]+/],
     ["mentions", { limit: 6 }, /after=\d+/],
     ["open_questions", {}, /after=\d+/],
     ["channels", {}, /after=\d+/],
@@ -230,11 +230,11 @@ test("F3: search, mentions, open_questions, channels, who and leases stay within
     const m = cursor.exec(r.text);
     assert.ok(m, `${name} hands back a cursor`);
     const [k, v] = m![0].split("=");
-    const next = await e.call(name, { ...args, [k]: Number(v) });
+    const next = await e.call(name, { ...args, [k]: k === "cursor" ? v : Number(v) });
     assert.equal(next.isError, undefined, `${name} next: ${next.text.slice(0, 200)}`);
     assert.ok(next.text.length <= BUDGET);
     assert.notEqual(next.text, r.text, `${name}: the cursor moves`);
   }
-  assert.equal((await e.call("search", { q: "needle", skip: -1 })).isError, true);
+  assert.equal((await e.call("search", { q: "needle", cursor: "bad!" })).isError, true);
   assert.equal((await e.call("who", { skip: "x" })).isError, true);
 });
