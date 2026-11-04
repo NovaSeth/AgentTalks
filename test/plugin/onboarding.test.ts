@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -284,4 +284,122 @@ test("S10: the tracked-file check fails closed: git exiting 128 (or anything but
 
 test("S10b: the git call passes safe.directory", () => {
   assert.ok(readFileSync(LOGIN, "utf8").includes("safe.directory="));
+});
+
+// ---- Fix round 1 (T-MG-21 review findings F1-F5) ----
+
+const lockBody = (at: number) => JSON.stringify({ pid: 999999, at });
+
+test("R1-F1: a file swapped in between login's rename and the trust step -> exit 1, nothing trusted for the replacement", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const s = setup();
+  const swap = join(s.home, "swap.mjs");
+  writeFileSync(swap, 'import { writeFileSync } from "node:fs"; writeFileSync(process.argv[2], \'{"url":"http://evil.example","token":"x"}\\n\');\n');
+  const r = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n", { AGENTTALKS_LOGIN_TEST_AFTER_RENAME: swap });
+  assert.equal(r.code, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /changed while saving; nothing trusted/);
+  const sha = createHash("sha256").update(readFileSync(s.file)).digest("hex");
+  const list = existsSync(s.trustFile) ? JSON.parse(readFileSync(s.trustFile, "utf8")).projects : [];
+  assert.equal(list.some((e: { sha256: string }) => e.sha256 === sha), false);
+  assert.equal(list.length, 0);
+});
+
+test("R1-F2: a fresh lock held by someone else -> login waits, then both the old and the new entry are present; a stale lock is cleared", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const s = setup();
+  mkdirSync(s.conf, { recursive: true });
+  const other = { path: "/somewhere/else/.agenttalks.json", sha256: "ab".repeat(32) };
+  writeFileSync(s.trustFile, JSON.stringify({ projects: [other] }));
+  const lock = s.trustFile + ".lock";
+  writeFileSync(lock, lockBody(Date.now()));
+  const p = login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(JSON.parse(readFileSync(s.trustFile, "utf8")).projects.length, 1, "not trusted while the lock is held");
+  unlinkSync(lock);
+  const r = await p;
+  assert.equal(r.code, 0, r.stderr);
+  const list = JSON.parse(readFileSync(s.trustFile, "utf8")).projects;
+  assert.equal(list.length, 2);
+  assert.deepEqual(list[0], other);
+  assert.equal(existsSync(lock), false, "lock released");
+
+  const s2 = setup();
+  mkdirSync(s2.conf, { recursive: true });
+  writeFileSync(s2.trustFile + ".lock", lockBody(Date.now() - 60_000));
+  const r2 = await login(s2, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.equal(r2.code, 0, r2.stderr);
+});
+
+test("R1-F3: non-regular outputs are refused before any write; a failing trust step leaves no new credential", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const a = setup();
+  mkdirSync(join(a.project, ".gitignore"));
+  const ra = await login(a, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.equal(ra.code, 1);
+  assert.equal(existsSync(a.file), false);
+  assert.equal(existsSync(a.trustFile), false);
+
+  const b = setup();
+  execFileSync("mkfifo", [b.file]);
+  const rb = await login(b, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.equal(rb.code, 1);
+  assert.ok(lstatSync(b.file).isFIFO());
+  assert.equal(existsSync(b.trustFile), false);
+
+  const c = setup();
+  mkdirSync(c.conf, { recursive: true });
+  const victim = join(c.home, "victim.json");
+  writeFileSync(victim, "KEEP");
+  symlinkSync(victim, c.trustFile);
+  const rc = await login(c, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.equal(rc.code, 1);
+  assert.equal(readFileSync(victim, "utf8"), "KEEP");
+  assert.equal(existsSync(c.file), false);
+
+  const d = setup();
+  mkdirSync(d.conf, { recursive: true });
+  writeFileSync(d.trustFile + ".lock", lockBody(Date.now()));
+  const rd = await login(d, ["--url", fake.url, "--token", "-"], TOKEN + "\n", { AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS: "200" });
+  assert.equal(rd.code, 1);
+  assert.match(rd.stderr, /locked by another login/);
+  assert.equal(existsSync(d.file), false, "no credential left behind");
+
+  const e = setup();
+  mkdirSync(e.conf, { recursive: true });
+  writeFileSync(e.trustFile + ".lock", lockBody(Date.now()));
+  writeFileSync(e.file, oldSkillFile(fake.url));
+  const before = readFileSync(e.file, "utf8");
+  const re = await login(e, ["--url", fake.url, "--token", "-"], TOKEN + "\n", { AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS: "200" });
+  assert.equal(re.code, 1);
+  assert.equal(readFileSync(e.file, "utf8"), before, "previous credential restored");
+});
+
+test("R1-F4: http to a remote host and credentials in the URL are refused before any request; loopback http works", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const s = setup();
+  const r = await login(s, ["--url", "http://remote.example", "--token", "-"], TOKEN + "\n");
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /https/);
+  const r2 = await login(s, ["--url", "https://u:p@x.example", "--token", "-"], TOKEN + "\n");
+  assert.equal(r2.code, 1);
+  assert.match(r2.stderr, /credentials in the URL/);
+  for (const o of [r, r2]) assert.ok(!(o.stdout + o.stderr).includes(TOKEN));
+  assert.equal(existsSync(s.file), false);
+  assert.equal(existsSync(s.trustFile), false);
+  const ok = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.equal(ok.code, 0, ok.stderr);
+});
+
+test("R1-F5: login never echoes argument values", async () => {
+  const s = setup();
+  const r = await login(s, ["--token=atk_synthetic_fix_0001"]); // SYNTH: a synthetic test value
+  const r2 = await login(s, ["atk_synthetic_fix_0002"]); // SYNTH: a synthetic test value
+  for (const o of [r, r2]) {
+    assert.equal(o.code, 1);
+    assert.ok(!(o.stdout + o.stderr).includes("atk_synthetic_fix_000"), o.stderr);
+  }
 });
