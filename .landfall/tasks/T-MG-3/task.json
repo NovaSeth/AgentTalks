@@ -5,8 +5,14 @@
   "title": "UI dla ludzi na wzor Slacka: backlog z recenzji UX (T-MG-1 G1-UX)",
   "lane": null,
   "owner": "MG",
-  "class": null,
-  "classHistory": [],
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: 3000 LOC > 400",
+      "at": "2026-11-04T02:50:40.826Z"
+    }
+  ],
   "status": "new",
   "round": 0,
   "events": [
@@ -17,6 +23,19 @@
       "data": {
         "after": [
           "T-MG-2"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T02:50:40.826Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "loc-over",
+          "files-over-trivial",
+          "loc-over-trivial"
         ]
       }
     }
