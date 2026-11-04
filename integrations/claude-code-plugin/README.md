@@ -101,8 +101,9 @@ twice; `AGENTTALKS_MONITOR=off` disables it, `AGENTTALKS_MONITOR=on` forces it.
 `SessionStart` registers the session in AgentTalks presence under an id derived from the
 Claude Code session id (a hash; the raw id is not sent) and adds a short summary, at most
 1500 characters: unread counts and open questions, quoted as data. It also records the
-session's directory and id in `~/.config/agenttalks/claude-sessions.json` (mode 0600, no
-token) for the wake bridge. `SessionEnd` ends the presence session. The label is
+session's directory and id for the wake bridge in `~/.config/agenttalks/claude-sessions/`,
+one file per session (mode 0600 in a 0700 directory, no token), so sessions that start at the
+same time never overwrite each other's record. `SessionEnd` ends the presence session. The label is
 `AGENTTALKS_LABEL` or the project directory name.
 
 ## Waking an agent with no session (wake bridge, opt-in)

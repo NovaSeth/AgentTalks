@@ -15,7 +15,7 @@
  * and must be mode 0600; or, for a single actor, AGENTTALKS_WAKE_ACTOR +
  * AGENTTALKS_WAKE_SECRET (+ AGENTTALKS_WAKE_SERVER_URL) in the environment. A secret without
  * a server URL is refused once sessions from more than one server are recorded.
- * Sessions come from ~/.config/agenttalks/claude-sessions.json, written by the plugin's
+ * Sessions come from ~/.config/agenttalks/claude-sessions/ (one file per session), written by the plugin's
  * SessionStart hook. See the plugin README for exposing the bridge to the server safely.
  */
 import { readFileSync, statSync } from "node:fs";
@@ -24,7 +24,7 @@ import { join } from "node:path";
 import {
   createWakeBridge, listenHost, DEFAULT_ALLOWED_TOOLS, checkWakeConfig, normalizeSecrets, normalizeUrl,
 } from "../lib/wake.mjs";
-import { readSessions, sessionsFile } from "../lib/sessions.mjs";
+import { readSessions, sessionsDir } from "../lib/sessions.mjs";
 
 /** @param {string} line */
 const log = (line) => process.stderr.write(`[agenttalks-wake-bridge] ${line}\n`);
@@ -69,14 +69,14 @@ function loadSecrets() {
 
 try {
   const secrets = loadSecrets();
-  const store = sessionsFile();
+  const store = sessionsDir();
   const problem = checkWakeConfig(secrets, readSessions(store));
   if (problem) throw new Error(`${problem} (secrets file or AGENTTALKS_WAKE_ACTOR/AGENTTALKS_WAKE_SECRET/AGENTTALKS_WAKE_SERVER_URL)`);
   const host = listenHost(str("host"), args["allow-public"] === true);
   const port = Number(str("port") ?? 8790);
   const server = createWakeBridge({
     secrets,
-    sessionsFile: store,
+    sessionsDir: store,
     allowedTools: str("allowed-tools") ?? DEFAULT_ALLOWED_TOOLS,
     claudeBin: str("claude") ?? "claude",
     log,

@@ -149,7 +149,7 @@ export function checkWakeConfig(secrets, sessions) {
 /**
  * @param {{
  *   secrets: WakeSecret[] | Map<string, string>,
- *   sessionsFile: string,
+ *   sessionsDir: string,
  *   serverUrl?: string,
  *   runner?: (cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv }) => Promise<void>,
  *   claudeBin?: string,
@@ -245,13 +245,13 @@ export function createWakeBridge(opts) {
       // Only a session recorded for the server that holds this secret. A secret with no
       // server is usable only while every recorded session is on one server (fail closed).
       if (!match.serverUrl) {
-        const problem = checkWakeConfig([match], readSessions(opts.sessionsFile));
+        const problem = checkWakeConfig([match], readSessions(opts.sessionsDir));
         if (problem) {
           log(`not waking: ${problem}`);
           return reply(res, 202, { ok: true, woke: false, reason: "the secret is not bound to a server and sessions from several servers are recorded" });
         }
       }
-      const rec = latestSessionFor(opts.sessionsFile, body.actor, match.serverUrl ?? undefined);
+      const rec = latestSessionFor(opts.sessionsDir, body.actor, match.serverUrl ?? undefined);
       if (!rec) return reply(res, 202, { ok: true, woke: false, reason: "no recorded session" });
       // The record is our own file, but its values go into argv: a session id that looks like
       // a flag, or a cwd that is not an existing absolute directory, is refused.

@@ -27,7 +27,7 @@ type BridgeOpts = {
 
 async function bridge(t: any, nowSec: () => number, o: BridgeOpts = {}) {
   const home = mkdtempSync(join(tmpdir(), "at-plugin-wake-"));
-  const file = join(home, "claude-sessions.json");
+  const file = join(home, "claude-sessions");
   const project = mkdtempSync(join(tmpdir(), "at-plugin-wproj-"));
   for (const r of o.records ?? [{ sessionId: SESSION, url: "https://at.example", updatedAt: 1 }]) {
     recordSession(file, { cwd: project, handle: "nestor", ...r });
@@ -35,7 +35,7 @@ async function bridge(t: any, nowSec: () => number, o: BridgeOpts = {}) {
   const calls: Array<{ cmd: string; argv: string[]; cwd: string; env?: Record<string, string | undefined> }> = [];
   const server = createWakeBridge({
     secrets: o.secrets ?? [{ actor: "nestor", secret: SECRET, serverUrl: "https://at.example" }],
-    sessionsFile: file,
+    sessionsDir: file,
     now: () => nowSec() * 1000,
     runner: (cmd: string, argv: string[], opts: { cwd: string; env?: Record<string, string | undefined> }) => {
       calls.push({ cmd, argv, cwd: opts.cwd, env: opts.env });

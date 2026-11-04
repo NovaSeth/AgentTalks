@@ -7,7 +7,7 @@
  *          Claude Code session id, prints a short summary as additionalContext (unread counts
  *          and open questions, at most 1500 characters, other actors' text quoted as data),
  *          and records { cwd, sessionId } for the wake bridge in
- *          ~/.config/agenttalks/claude-sessions.json (0600, no token).
+ *          ~/.config/agenttalks/claude-sessions/ (one 0600 file per session, no token).
  *   end:   ends the presence session (DELETE /api/sessions/:id). SessionEnd hooks share a
  *          1.5 s budget, so this call has a short timeout.
  *
@@ -19,7 +19,7 @@ import { basename } from "node:path";
 import { resolveIdentity } from "../lib/identity.mjs";
 import { createApi } from "../lib/api.mjs";
 import { PREAMBLE, header, quoteBody } from "../lib/frame.mjs";
-import { deriveSessionId, recordSession, sessionsFile } from "../lib/sessions.mjs";
+import { deriveSessionId, recordSession, sessionsDir } from "../lib/sessions.mjs";
 
 export const MAX_CONTEXT_CHARS = 1500;
 const QUESTION_PREVIEW_CHARS = 160;
@@ -114,7 +114,7 @@ async function main() {
   } catch { /* headers fall back to "?" */ }
 
   try {
-    recordSession(sessionsFile(), {
+    recordSession(sessionsDir(), {
       sessionId: claudeSession, cwd, handle: me.actor.handle, url: identity.url, updatedAt: Date.now(),
     });
   } catch (err) {

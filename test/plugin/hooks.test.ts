@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,11 +75,14 @@ test("SessionStart registers presence, adds a quoted summary, records the sessio
   assert.equal(row.ended_at, null);
   assert.ok(!s.ctx.db.prepare("SELECT 1 FROM sessions WHERE id = ?").get(claudeSession), "the raw id is not published");
 
-  const file = join(home, ".config", "agenttalks", "claude-sessions.json");
+  const store = join(home, ".config", "agenttalks", "claude-sessions");
+  const files = readdirSync(store);
+  assert.equal(files.length, 1, files.join(","));
+  const file = join(store, files[0]);
   assert.equal(statSync(file).mode & 0o777, 0o600);
   const raw = readFileSync(file, "utf8");
   assert.ok(!raw.includes(tokenN), "no token in the record");
-  const rec = JSON.parse(raw).sessions[0];
+  const rec = JSON.parse(raw);
   assert.equal(rec.sessionId, claudeSession);
   assert.equal(rec.cwd, project);
   assert.equal(rec.handle, "nestor");
