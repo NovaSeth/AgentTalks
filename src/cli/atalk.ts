@@ -33,6 +33,15 @@ const LOCAL_CONFIG_NAME = ".agenttalks.json";
 
 type ClientConfig = { url: string; token: string };
 
+/** Marker written by `atalk login`/`enroll`: a project file without it was put there by
+ *  somebody else (a cloned repo, a script) and may redirect the token to another server. */
+const WRITTEN_BY = "atalk";
+
+/** First NON-EMPTY value: an exported-but-empty variable must not shadow the others. */
+function firstSet(...values: Array<string | undefined>): string | undefined {
+  return values.find((v) => typeof v === "string" && v.trim() !== "");
+}
+
 function findLocalConfig(): string | null {
   let dir = process.cwd();
   for (let i = 0; i < 50; i++) {
@@ -70,7 +79,8 @@ function readSecretFlag(args: Args, name: string): string | undefined {
  *  applies only when CREATING the file - on overwriting an existing one (say 0644 after
  *  it was created by hand earlier) the permissions would not change, and a long-lived
  *  token sits in that file. Hence the explicit chmod after the write; the directory 0700. */
-function saveClientConfig(cfg: ClientConfig, local = false): string {
+function saveClientConfig(plain: ClientConfig, local = false): string {
+  const cfg = { ...plain, writtenBy: WRITTEN_BY };
   if (local) {
     const path = join(process.cwd(), LOCAL_CONFIG_NAME);
     writeFileSync(path, JSON.stringify(cfg, null, 2), { mode: 0o600 });
@@ -97,11 +107,14 @@ function loadClientConfig(args: Args): ClientConfig {
   // Order: flag > environment > project file (cwd upwards) > global file.
   // The project file beats the global one so that "this directory = this agent" also works
   // when the user has a general identity as well.
-  let stored: Partial<ClientConfig> = {};
-  for (const path of [findLocalConfig(), CONFIG_FILE]) {
+  let stored: Partial<ClientConfig> & { writtenBy?: string } = {};
+  let storedPath: string | null = null;
+  const localPath = findLocalConfig();
+  for (const path of [localPath, CONFIG_FILE]) {
     if (!path || !existsSync(path)) continue;
     try {
-      stored = JSON.parse(readFileSync(path, "utf8")) as Partial<ClientConfig>;
+      stored = JSON.parse(readFileSync(path, "utf8")) as typeof stored;
+      storedPath = path;
       break;
     } catch {
       // a corrupted configuration file must not block the remaining sources
@@ -114,10 +127,28 @@ function loadClientConfig(args: Args): ClientConfig {
   // a different name for the same thing. The skill is copied onto disks, so copies keep
   // teaching those names even after the source is fixed; the canonical form stays
   // AGENTTALKS_*, consistent with the server configuration.
-  const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? process.env.ATALKS_URL
-    ?? stored.url ?? "http://127.0.0.1:8787";
-  const token = flagStr(args, "token") ?? process.env.AGENTTALKS_TOKEN
-    ?? process.env.ATALKS_TOKEN ?? stored.token ?? "";
+  const url = firstSet(flagStr(args, "url"), process.env.AGENTTALKS_URL, process.env.ATALKS_URL,
+    stored.url) ?? "http://127.0.0.1:8787";
+  const token = firstSet(flagStr(args, "token"), process.env.AGENTTALKS_TOKEN,
+    process.env.ATALKS_TOKEN, stored.token) ?? "";
+  // A project file we did not write can point the token at any server: say so (B-MG-20b).
+  const fromProjectFile = storedPath !== null && storedPath === localPath
+    && (url === stored.url || token === stored.token);
+  if (fromProjectFile && stored.writtenBy !== WRITTEN_BY) {
+    process.stderr.write(
+      `warning: ${storedPath} was not written by atalk login - check that url (${stored.url}) is a server you trust before the token is sent there\n`,
+    );
+  }
+  // A bearer token over plain http to a remote host is readable on the way (B-MG-20a).
+  try {
+    const u = new URL(url);
+    const loopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(u.hostname);
+    if (token && u.protocol === "http:" && !loopback) {
+      process.stderr.write(
+        `warning: the token goes over plain http to ${u.host}; anybody on the network path can read it. Use https.\n`,
+      );
+    }
+  } catch { /* invalid url: the request itself fails with a clear error */ }
   if (!token) {
     throw new Error(
       "brak tokenu. Ustaw AGENTTALKS_TOKEN (albo ATALKS_TOKEN), podaj --token, albo zapisz raz: " +
