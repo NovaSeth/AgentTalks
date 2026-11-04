@@ -73,7 +73,7 @@ export function mintToken(
   name: string,
   ttlSec?: number | null,
 ): { token: string; info: TokenInfo } {
-  if (!getActor(ctx, actorId)) throw notFound("aktor", `nie ma aktora ${actorId}`);
+  if (!getActor(ctx, actorId)) throw notFound("actor_not_found", `actor ${actorId} was not found; check the actor ID`);
   const token = PREFIX + randomBytes(32).toString("base64url");
   const now = ctx.now();
   // A short-lived token for an untrusted host (CI, a VPS executing instructions from public
@@ -82,7 +82,7 @@ export function mintToken(
   const expiresAt = ttlSec && ttlSec > 0 ? now + Math.trunc(ttlSec) : null;
   ctx.db
     .prepare("INSERT INTO tokens(actor_id, hash, name, created_at, expires_at) VALUES(?,?,?,?,?)")
-    .run(actorId, hashOf(token), name || "bez nazwy", now, expiresAt);
+    .run(actorId, hashOf(token), name || "unnamed", now, expiresAt);
   const row = ctx.db
     .prepare("SELECT * FROM tokens WHERE hash = ?")
     .get(hashOf(token)) as TokenRow;
@@ -100,7 +100,7 @@ export function mintToken(
 export function tokenTrouble(
   ctx: Ctx,
   token: string,
-): { reason: "wygasl" | "odwolany" | "aktor_wylaczony"; handle: string | null } | null {
+): { reason: "expired" | "revoked" | "actor_disabled"; handle: string | null } | null {
   const raw = String(token ?? "").trim();
   if (!raw.startsWith(PREFIX)) return null;
   const row = ctx.db.prepare("SELECT * FROM tokens WHERE hash = ?").get(hashOf(raw)) as
@@ -108,9 +108,9 @@ export function tokenTrouble(
     | undefined;
   if (!row) return null;
   const handle = getActor(ctx, row.actor_id)?.handle ?? null;
-  if (row.revoked_at !== null) return { reason: "odwolany", handle };
-  if (row.expires_at !== null && row.expires_at <= ctx.now()) return { reason: "wygasl", handle };
-  if (getActor(ctx, row.actor_id)?.disabledAt) return { reason: "aktor_wylaczony", handle };
+  if (row.revoked_at !== null) return { reason: "revoked", handle };
+  if (row.expires_at !== null && row.expires_at <= ctx.now()) return { reason: "expired", handle };
+  if (getActor(ctx, row.actor_id)?.disabledAt) return { reason: "actor_disabled", handle };
   return null;
 }
 

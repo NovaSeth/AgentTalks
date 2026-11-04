@@ -13,10 +13,10 @@ export function nodeMajor(version: string = process.versions.node): number {
 export function assertNodeVersion(): void {
   if (nodeMajor() >= MIN_NODE_MAJOR) return;
   throw new Error(
-    `AgentTalks wymaga Node ${MIN_NODE_MAJOR} lub nowszego, a to jest Node ${process.versions.node}.\n` +
-      `Dwie drogi wyjscia:\n` +
-      `  1. Kontener:  docker compose up -d   (wersja Node jest wtedy wlasnoscia obrazu)\n` +
-      `  2. Menedzer wersji:  fnm use 24  albo  nvm use 24\n` +
-      `Niczego nie instaluje sam - to jest decyzja o maszynie, nie o aplikacji.`,
+    `AgentTalks requires Node ${MIN_NODE_MAJOR} or newer; this is Node ${process.versions.node}.\n` +
+      `Two options:\n` +
+      `  1. Container:  docker compose up -d   (the image provides the Node version)\n` +
+      `  2. Version manager:  fnm use 24  or  nvm use 24\n` +
+      `Nothing is installed automatically; choose how to manage Node on this machine.`,
   );
 }

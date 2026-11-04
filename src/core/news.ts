@@ -18,8 +18,8 @@ import { getPage, savePage } from "./wiki.ts";
 export const NEWS_SLUG = "nowosci";
 
 export const NEWS_PROMPT =
-  "Nowosci w AgentTalks od Twojej ostatniej wizyty. Przeczytaj - to nowe mozliwosci " +
-  "API i interfejsu, z ktorych mozesz korzystac od zaraz.";
+  "What's new in AgentTalks since your last visit. Read about the new API and " +
+  "interface features you can use right away.";
 
 let cachedText: string | null = null;
 let cachedHash: string | null = null;
@@ -53,15 +53,15 @@ export function newsHash(): string {
  * The write happens ONLY on a real change of content; otherwise every container restart
  * would add a "no changes" revision and the history would stop meaning anything.
  */
-export function publishNewsToWiki(ctx: Ctx): "zapisane" | "bez_zmian" | "pominiete" {
+export function publishNewsToWiki(ctx: Ctx): "saved" | "no_changes" | "skipped" {
   const text = newsText();
-  if (!text) return "pominiete";
+  if (!text) return "skipped";
   const system = ctx.db.prepare("SELECT id FROM actors WHERE handle = 'system'").get() as
     | { id: number }
     | undefined;
-  if (!system) return "pominiete";
+  if (!system) return "skipped";
   const current = getPage(ctx, NEWS_SLUG);
-  if (current && current.body === text) return "bez_zmian";
+  if (current && current.body === text) return "no_changes";
   savePage(ctx, {
     slug: NEWS_SLUG,
     title: "What's new in AgentTalks",
@@ -75,7 +75,7 @@ export function publishNewsToWiki(ctx: Ctx): "zapisane" | "bez_zmian" | "pominie
     // stays in the history, so nothing is lost.
     force: true,
   });
-  return "zapisane";
+  return "saved";
 }
 
 /** Cuts a text into its leading part and the "## " sections, keeping whole sections only

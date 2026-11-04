@@ -3,8 +3,8 @@
  *
  * This is the third distinct question about the same layer, and the previous two do
  * not answer it:
- *   - `test/ui-moduly.test.ts`     - do the modules PARSE (a syntax error),
- *   - `test/http/ui-moduly.test.ts` - does the server SERVE them (a 404, the blank
+ *   - `test/ui-modules.test.ts`     - do the modules PARSE (a syntax error),
+ *   - `test/http/ui-modules.test.ts` - does the server SERVE them (a 404, the blank
  *                                     page that reached production),
  *   - this one                      - does the entry point EXECUTE.
  *
@@ -29,7 +29,7 @@ const UI = fileURLToPath(new URL("../src/http/ui/js/", import.meta.url));
 
 /** A minimal browser. Every method returns something of the right shape and does
  *  nothing - we are asking "does it throw", not "what did it draw". */
-function podstawPrzegladarke(): void {
+function stubBrowser(): void {
   const el = (): Record<string, unknown> => ({
     innerHTML: "", textContent: "", value: "", style: {}, dataset: {}, tabIndex: 0, hidden: false, inert: false,
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
@@ -63,28 +63,28 @@ function podstawPrzegladarke(): void {
   g.fetch = async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => "" });
 }
 
-test("kazdy modul UI wykonuje sie przy ladowaniu, nie tylko parsuje", async () => {
-  podstawPrzegladarke();
-  const moduly = readdirSync(UI).filter((f) => f.endsWith(".js") && f !== "app.js").sort();
-  assert.ok(moduly.length >= 15, `czujnik widzi tylko ${moduly.length} modulow - katalog sie przeniosl?`);
+test("every UI module executes at load time, not just parses", async () => {
+  stubBrowser();
+  const modules = readdirSync(UI).filter((f) => f.endsWith(".js") && f !== "app.js").sort();
+  assert.ok(modules.length >= 15, `the check sees only ${modules.length} modules; did the directory move?`);
 
-  const bledy: string[] = [];
-  for (const f of moduly) {
-    try { await import(UI + f); } catch (e) { bledy.push(`  ${f}: ${(e as Error).message}`); }
+  const errors: string[] = [];
+  for (const f of modules) {
+    try { await import(UI + f); } catch (e) { errors.push(`  ${f}: ${(e as Error).message}`); }
   }
-  assert.deepEqual(bledy, [], `moduly, ktore rzucaja przy ladowaniu:\n${bledy.join("\n")}`);
+  assert.deepEqual(errors, [], `modules that throw during loading:\n${errors.join("\n")}`);
 });
 
-test("punkt wejscia (app.js) startuje bez wyjatku, takze gdy serwer nie odpowiada", async () => {
+test("the entry point (app.js) starts without throwing even when the server is unavailable", async () => {
   // app.js is separate because it is the only one that BOOTS: it registers the views
   // and immediately tries to restore a session. That is exactly the path @zelda's
   // build could not see - and it is what a human's browser runs first.
-  podstawPrzegladarke();
-  let blad: string | null = null;
+  stubBrowser();
+  let error: string | null = null;
   try {
     await import(UI + "app.js");
     // The boot is asynchronous; give the microtasks and the failing fetch a turn.
     await new Promise((r) => setTimeout(r, 50));
-  } catch (e) { blad = (e as Error).message; }
-  assert.equal(blad, null, `punkt wejscia rzucil przy starcie: ${blad}`);
+  } catch (e) { error = (e as Error).message; }
+  assert.equal(error, null, `the entry point threw during startup: ${error}`);
 });

@@ -10,8 +10,8 @@ Inputs read: `scratchpad/reviews/ux.json` + `ux.json.repro.md` (F1–F4, M1–M1
 
 | | A. Evolve the vanilla modules in place | B. Rebuild the shell on a framework (Preact/Lit) | C. Fix findings only, no model change |
 |---|---|---|---|
-| Pros | No bundler, keeps the `widok` registry (`state.js:59-85`), tests and `UI_MODULES` whitelist (`ui.ts:64-69`); each slice is a bounded diff | Declarative panels, routing and state would be cleaner | Cheapest, ships this week |
-| Cons | `view-chat.js` is 1586 lines and every slice touches it; discipline needed on file scopes | Adds a dependency and a build step the server was designed without (`ui.ts:60-63`); re-translates 685 lines of `i18n-pl.js`; weeks before parity | Does not deliver the owner's requirement ("w pelni odwzorowywalo Slacka") |
+| Pros | No bundler, keeps the `views` registry (`state.js:59-85`), tests and `UI_MODULES` whitelist (`ui.ts:64-69`); each slice is a bounded diff | Declarative panels, routing and state would be cleaner | Cheapest, ships this week |
+| Cons | `view-chat.js` is 1586 lines and every slice touches it; discipline needed on file scopes | Adds a dependency and a build step the server was designed without (`ui.ts:60-63`); re-translates 685 lines of `i18n-pl.js`; weeks before parity | Does not deliver the owner's requirement ("w pelni odwzorowywalo Slacka", meaning "fully mirror Slack") |
 | Cost if wrong | Slices collide in `view-chat.js`; mitigated by extracting `composer.js`, `router.js`, `shortcuts.js`, `view-people.js` first (slice S0) | A half-migrated UI with two rendering models | Humans keep getting lost; redo later |
 
 Decision D1: option A. Reason: the shell already has Slack's skeleton (rail, sidebar, topbar, dock, thread slot) and the API covers ~90 % of the parity items; what is missing is layout, routing, discoverability and keyboard, not architecture. Success criterion: after P0 the 12-flow walkthrough of `ux.json.repro.md` produces zero "broken" verdicts and a tester who knows Slack completes the 8 P0 tasks in section 4 without reading help.
@@ -52,8 +52,8 @@ Layout at desktop width, left to right. Slack counterpart in parentheses.
 | G1 | Thread opens in a right column, main column shrinks | `.thread{position:absolute}` overlays and clips text, hides (i) (`app.css:427`, M1) | Grid column `>=1280px`, overlay below (S2) |
 | G2 | Sidebar sections collapse, collapsed still shows unread | `h3` headers, no toggle; only wiki tree collapses (`view-sidebar.js:166, 205`, M12) | Collapsible sections with persisted state (S1) |
 | G3 | Every view has a URL; Back works; permalinks | No routing; last conversation from `localStorage atalks_last_conv` (`app.js:203-207`, M12) | `router.js`, hash routes, "Copy link" (S3) |
-| G4 | Clicking a mention/search hit lands ON the message, inside its thread if needed | `openConversation(id, msgId)` scrolls only `#messages` (`view-chat.js:49-70`); `widoczneWiadomosci` drops `threadId` rows (`state.js:291-295`, F4) | Open thread + flash in thread (S3; verify whether T-MG-8 covered it, U1) |
-| G5 | Caret stays in the box after Enter | `widok.composer()` re-render without refocus (`actions.js:56-60`, F2) | Verify fixed by T-MG-8; acceptance in S4 |
+| G4 | Clicking a mention/search hit lands ON the message, inside its thread if needed | `openConversation(id, msgId)` scrolls only `#messages` (`view-chat.js:49-70`); `visibleMessages` drops `threadId` rows (`state.js:291-295`, F4) | Open thread + flash in thread (S3; verify whether T-MG-8 covered it, U1) |
+| G5 | Caret stays in the box after Enter | `views.composer()` re-render without refocus (`actions.js:56-60`, F2) | Verify fixed by T-MG-8; acceptance in S4 |
 | G6 | `Up` edits last message, Enter saves, Esc cancels | Editor never closes (`view-chat.js:575, 480-505`, F3) | Verify fixed by T-MG-8; acceptance in S4 |
 | G7 | Thread reply shown once | `state.threadMsgs.push(msg)` after SSE echo (`view-chat.js:1456-1459`, F1) | Verify fixed by T-MG-8 |
 | G8 | Formatting bar, emoji picker, `#channel` links and autocomplete | Only `@` autocomplete (`view-chat.js:1331-1419`); 16 fixed emoji (`view-chat.js:17`); `#bugs` stays plain text (`markdown.js:30`, M8) | `composer.js` with toolbar, emoji search, `#` autocomplete; `markdown.js` channel links (S4) |
@@ -64,7 +64,7 @@ Layout at desktop width, left to right. Slack counterpart in parentheses.
 | G13 | Unread: one number in the title = sum of badges | Digest jumps 12->5->12; bell, title and sidebar disagree (`dom.js:49-55`, M5) | `counters.js` single derivation (S7) |
 | G14 | "New messages" line on first visit | Divider needs `mark > 0` (`view-chat.js:541`, M13) | Divider at `last - unread` when mark is 0 (S7) |
 | G15 | Joining marks the channel read | `joinChannel` never calls read (`actions.js:208-216`, M3) | `markReadDebounced` after join (S7) |
-| G16 | Session expiry returns to sign-in, keeps drafts | Dead UI, raw server text in the fail bar (`api.js:26`, `view-chat.js:704`, M4) | On 401: `saveDraft()`, `renderLogin()`; map error through `opiszBlad` (S7; verify T-MG-8 "wylogowanie") |
+| G16 | Session expiry returns to sign-in, keeps drafts | Dead UI, raw server text in the fail bar (`api.js:26`, `view-chat.js:704`, M4) | On 401: `saveDraft()`, `renderLogin()`; map error through `describeError` (S7; verify T-MG-8 "logout") |
 | G17 | Unsent text is kept | `submit()` clears field and draft before the server confirms (`view-chat.js:1192-1202`, M14) | Clear draft only on success (S4) |
 | G18 | More menu: Copy link, Mark unread | Pin, Treat as report, Copy text, Delete (`view-chat.js:883-891`, M16) | Add Copy link, Mark unread via `POST /conversations/:id/read {messageId: id-1}` (`conversations.ts:187`) (S3) |
 | G19 | Report workflow is one click | Check appears only after More -> Treat as report (`view-chat.js:713-719`, `state.js:277-281`, M6) | Auto-treat in channels matching `/bug|issue|incident/` and messages with `fixedAt`; "Mark fixed"/"Confirm fixed" in hover + More (S5) |
@@ -107,15 +107,15 @@ A8. Agents vs humans everywhere a name appears: the `kindtag` chip (`view-chat.j
 
 ## 4. Vertical slices
 
-Estimates are implementer effort (S ≈ 0.5 day, M ≈ 1 day, L ≈ 2 days) including tests. "UI tests" means node tests in the style of `test/ui-sidebar-presence.test.ts` (document stub + `import` of the module + pure exported functions); every slice keeps `test/ui-moduly.test.ts` and `test/ui-start.test.ts` green. "Live" is the browser checklist the reviewer runs (Chrome, 1728 px; S9 also 390 px).
+Estimates are implementer effort (S ≈ 0.5 day, M ≈ 1 day, L ≈ 2 days) including tests. "UI tests" means node tests in the style of `test/ui-sidebar-presence.test.ts` (document stub + `import` of the module + pure exported functions); every slice keeps `test/ui-modules.test.ts` and `test/ui-start.test.ts` green. "Live" is the browser checklist the reviewer runs (Chrome, 1728 px; S9 also 390 px).
 
-### P0 — a Slack user is never lost
+### P0 - a Slack user is never lost
 
 **S0 Scaffolding (shared task, first; M).** Creates the files later slices own so they do not collide in shared files.
 - Behaviour: none visible. Adds empty-but-registered modules `router.js`, `shortcuts.js`, `composer.js` (exports `renderComposer` re-exported from `view-chat.js` for now), `view-people.js`, `counters.js`; adds `state` fields `route`, `sidePanel`, `sbCollapsed`; adds CSS section markers `/* === S1 === */` … `/* === S10 === */` at the end of `app.css`; adds `i18n-pl.js` blocks per slice; adds the new names to `UI_MODULES` (`ui.ts:64-69`).
 - Acceptance: `npm test` green; `GET /js/router.js` returns 200; the asset stamp changes.
-- Files: `src/http/ui.ts`, `src/http/ui/js/{router,shortcuts,composer,view-people,counters}.js` (new), `state.js`, `app.css`, `i18n-pl.js`, `test/http/ui-moduly.test.ts` (whitelist count).
-- Tests: `test/ui-moduly.test.ts` (count `>= 20`), `test/ui-start.test.ts`.
+- Files: `src/http/ui.ts`, `src/http/ui/js/{router,shortcuts,composer,view-people,counters}.js` (new), `state.js`, `app.css`, `i18n-pl.js`, `test/http/ui-modules.test.ts` (whitelist count).
+- Tests: `test/ui-modules.test.ts` (count `>= 20`), `test/ui-start.test.ts`.
 
 **S1 Collapsible sidebar + rail places (M).**
 - Behaviour: every `.sb-group h3` is a button with a caret; click toggles; collapsed sections show only unread rows (and the active one); state persisted per browser. Rail: Home, DMs (sidebar filtered to Direct messages + People), Activity (renamed), Admin.
@@ -133,34 +133,34 @@ Estimates are implementer effort (S ≈ 0.5 day, M ≈ 1 day, L ≈ 2 days) incl
 - Behaviour: routes from section 1; `router.js` parses `location.hash`, `app.js` boot opens the route instead of `atalks_last_conv` (falls back to it when the hash is empty); `hashchange` drives `openConversation`/`openWikiPage`/views; `pushRecent` + `history` give Back/Forward. A `m/<id>` route scrolls and flashes; if the message has `threadId` it opens the thread and flashes inside it (F4). More menu gets "Copy link" and "Mark unread". No-access route renders an in-column message with "Back to #general".
 - Acceptance: (1) `#/c/general/m/25` (thread reply) -> thread open, reply flashed, `document.activeElement` inside the panel; (2) bell row and `Cmd+K` hit for a thread reply behave the same; (3) F5 on `#/wiki/runbook` restores the page; (4) Back after opening 3 conversations walks them in reverse; (5) anna opens `#/c/design-review` -> "You do not have access…" with a link, sidebar intact; (6) "Copy link" puts `https://host/#/c/bugs/m/10` on the clipboard; (7) "Mark unread" on msg 12 makes the row bold with badge 1 and the divider sits above 12.
 - Files: `router.js` (new), `app.js:180-215`, `view-chat.js:20-84` (openConversation + thread flash), `view-chat.js:875-891` (menu), `view-notifications.js:150-161`, `search.js:59, 137`, `view-wiki.js` (push route on open), `app.css` S3 block.
-- Tests: `router.js` exports `parseRoute(hash)` / `buildRoute(obj)` — 10 table-driven cases incl. slug with hyphen, dm with two handles, bad input -> `{view:"home"}`; live: 1–7.
+- Tests: `router.js` exports `parseRoute(hash)` / `buildRoute(obj)` - 10 table-driven cases incl. slug with hyphen, dm with two handles, bad input -> `{view:"home"}`; live: 1–7.
 - Unknown U1: T-MG-8 may have fixed F4; detection: run repro A/B from `ux.json.repro.md`; if green, drop the thread-flash part and keep the rest.
 
 **S4 Composer parity (L).**
 - Behaviour: `composer.js` owns one composer used by the main dock and the thread panel (`threadId` option, "Also send to #channel" checkbox for threads). Formatting bar (bold, italic, strikethrough, code, code block, link, bullet, quote) inserting markdown around the selection; emoji button opens a searchable picker (static list of ~300 Unicode emoji with English+Polish names in `emoji.js`, recently used first); `#` autocomplete over my channels + joinable ones; `@` autocomplete gains a sequence guard and ignores Shift+Enter (M10); `markdown.js` renders `#slug` of a known conversation as a link to `#/c/slug`. Draft is cleared only after the server confirms; a failed send leaves the text in the box and the draft in `localStorage` (M14). Focus stays after send (F2, verify).
 - Acceptance: (1) type, Enter, type again -> second text lands in the box; (2) thread reply with the checkbox -> message in thread AND a copy in channel (server: second POST without `threadId`); (3) `#bu` -> popover with #bugs, Enter inserts `#bugs `, rendered as a link that opens #bugs; (4) emoji search "rocket" -> 🚀 inserted at the caret; (5) select a word, press B -> `**word**`; (6) kill the server, send -> fail bar, F5 -> text is back in the box; (7) `ArrowUp` edits last own message, Enter saves, Esc restores the bubble with "(edited)"; (8) Shift+Enter in the `@` popover inserts a newline.
 - Files: `composer.js`, `emoji.js` (new), `view-chat.js:1113-1320, 1421-1466` (delegate), `markdown.js:30`, `actions.js:56-69`, `app.css` S4 block.
-- Tests: `markdown.js` channel-link regex (heading `# title` is NOT a link; `#bugs,` is; unknown `#zzz` is plain); `composer.js` exports `wrapSelection(text, start, end, marker)` and `completeToken(text, caret, kind)` — 8 cases; `emoji.js` `searchEmoji("rak")` returns 🚀 for pl; live: 1–8.
+- Tests: `markdown.js` channel-link regex (heading `# title` is NOT a link; `#bugs,` is; unknown `#zzz` is plain); `composer.js` exports `wrapSelection(text, start, end, marker)` and `completeToken(text, caret, kind)` - 8 cases; `emoji.js` `searchEmoji("rak")` returns 🚀 for pl; live: 1–8.
 
 **S5 Commands, `+` menu, one-click reports (M).**
 - Behaviour: section 3 A1, A3, A5. `/` at the start of the box opens the command popover; `+` menu offers Attach file, Ask a tracked question (modal with the agent picker and the question), Claim a resource (existing modal). Reports: auto-treat rule, "Mark fixed"/"Confirm fixed" in hover and More, header pill "N open" with filter.
 - Acceptance: (1) `/ask @nestor when is the window?` -> a message with the "Open question" badge, Catch up shows 1; (2) nestor answers via API -> badge "Answered", count 0, no reload; (3) `/claim deploy:prod for 1h releasing 2.4` -> row in Claimed resources with countdown; `/claim` again as anna -> inline "Held by @michal…" card, nothing posted; (4) `/who deploy:prod` -> ephemeral card; (5) in #bugs, hover a report from @milosz as michal -> "Mark fixed" without any prior step; as author "Confirm fixed" appears once fixed; (6) "3 open" pill filters to unresolved reports; (7) `/nonsense` -> confirm toast, sends as text only after confirming; (8) "How we talk here" paragraph about the question-mark button is rewritten and the modal body scrolls (M7).
-- Files: `composer.js` (command parsing), `commands.js` (new: registry + handlers), `view-chat.js:685-787` (actions, header pill), `state.js:277-281` (`czyZgloszenie` + channel rule), `view-sidebar.js:423-437`, `actions.js` (ask), `app.css` S5 block.
-- Tests: `commands.js` exports `parseCommand(text)` — 12 cases (`/claim x for 2h note`, `/claim x`, `/ask @a b`, unknown, `/` alone, text with `/` inside); `state.js` `isReport(msg, conv)` 5 cases; live: 1–8.
+- Files: `composer.js` (command parsing), `commands.js` (new: registry + handlers), `view-chat.js:685-787` (actions, header pill), `state.js:277-281` (`isReport` + channel rule), `view-sidebar.js:423-437`, `actions.js` (ask), `app.css` S5 block.
+- Tests: `commands.js` exports `parseCommand(text)` - 12 cases (`/claim x for 2h note`, `/claim x`, `/ask @a b`, unknown, `/` alone, text with `/` inside); `state.js` `isReport(msg, conv)` 5 cases; live: 1–8.
 
 **S6 People: profiles, header, DM picker (M).**
 - Behaviour: click on any `@handle` or avatar opens the Profile in the side panel (kind, online/last seen, doing, Message button, wake line when known); channel header shows stacked faces + member count (opens Details -> Members), pins pill, DM header shows the other side's presence and doing; "New message" uses `view-people.js` picker (search, chips, avatars, kind tag); `@system` filtered out of pickers, members and Who is here (already partly, `view-sidebar.js:161`).
 - Acceptance: (1) click `@milosz` in a message -> profile with "working: measuring SSE latency" while busy; (2) "Message" opens `#/dm/milosz`; (3) header of #general shows 6 faces and "6", click -> Members; (4) New message: type "nes", Enter adds a chip, Start -> DM; two chips -> group; (5) `@system` absent from picker and member list; (6) `Esc` closes the profile and returns focus to the clicked name.
 - Files: `view-people.js`, `view-chat.js:140-148, 215-370` (header/details), `view-chat.js:1506-1586` (modal), `view-sidebar.js:160-200`, `app.css` S6 block.
-- Tests: `view-people.js` exports `filterPeople(list, query, {excludeSystem:true})` — 5 cases; live: 1–6.
+- Tests: `view-people.js` exports `filterPeople(list, query, {excludeSystem:true})` - 5 cases; live: 1–6.
 
 **S7 Counters and unread truth (M).**
-- Behaviour: `counters.js` derives everything from `state.unread`, `state.unreadBadge`, `state.notifications`, `state.digest`: title badge = Σ `unreadBadge` + unread wiki notifications; rail Activity badge = `notifUnread`; the digest count is anchored to one `sinceId` per conversation and only moves forward. "New messages" divider also when `readMark` is 0 (`last - unread`). Join marks read. Session loss: 401 from `api()` or the stream -> `saveDraft()`, `renderLogin()` with a toast "Your session ended, your draft is kept"; fail-bar text goes through `opiszBlad`.
+- Behaviour: `counters.js` derives everything from `state.unread`, `state.unreadBadge`, `state.notifications`, `state.digest`: title badge = Σ `unreadBadge` + unread wiki notifications; rail Activity badge = `notifUnread`; the digest count is anchored to one `sinceId` per conversation and only moves forward. "New messages" divider also when `readMark` is 0 (`last - unread`). Join marks read. Session loss: 401 from `api()` or the stream -> `saveDraft()`, `renderLogin()` with a toast "Your session ended, your draft is kept"; fail-bar text goes through `describeError`.
 - Acceptance: (1) with no new messages the digest count is stable over 5 minutes of polling; (2) title `(n)` equals the sum of coral badges (+ wiki); (3) first visit to a channel with 5 unread shows the divider above the 5th-from-last; (4) Join #bugs -> row un-bolds within 1 s; (5) delete the session cookie, type a draft, send -> login screen, log in -> draft present; (6) the fail bar never shows raw Polish server text.
 - Files: `counters.js`, `dom.js:49-55`, `data.js:100-115, 209-224`, `actions.js:208-216`, `api.js:26`, `view-chat.js:541`, `sse-events.js` (401 path).
-- Tests: `counters.js` pure functions `titleCount(state)`, `dividerAfter(list, mark, unread, me)` — 8 cases incl. mark 0; live: 1–6.
+- Tests: `counters.js` pure functions `titleCount(state)`, `dividerAfter(list, mark, unread, me)` - 8 cases incl. mark 0; live: 1–6.
 
-### P1 — feels like Slack daily
+### P1 - feels like Slack daily
 
 **S8 Keyboard shortcuts, help sheet, Activity copy (M).** `shortcuts.js` map from section 1; `Cmd+/` sheet lists them; `Alt+Up/Down`, `Alt+Shift+Up/Down`, `Cmd+Shift+A` (All unreads view = main column listing unread messages grouped by conversation, client-side from `state.unread` + loaded messages, loads the missing ones lazily), `Cmd+.`; Activity wording and `aria-label` on row buttons (M15), Tab from the composer reaches the send button. Acceptance: each shortcut has one checkable line; `Cmd+/` lists all; screen reader names on 100 % of row buttons (`read_page`). Files: `shortcuts.js`, `app.js:236-259`, `view-notifications.js:114-121`, `search.js:94`, `view-unreads.js` (new). Tests: `shortcuts.js` `matchShortcut(event, platform)` 10 cases incl. mac/win; live 8 lines.
 
@@ -170,7 +170,7 @@ Estimates are implementer effort (S ≈ 0.5 day, M ≈ 1 day, L ≈ 2 days) incl
 
 **S11 Search view with filters (M).** Palette query grammar `in:#x from:@y before:YYYY-MM-DD after:` mapped to `GET /api/search` params (`messages.ts:94-106`), `from:` filtered client-side; results view in the main column with highlighted terms, grouped by conversation; `Cmd+F` inside a channel pre-fills `in:#current`. Acceptance: 5 grammar cases, highlight present, Enter on a result jumps and flashes. Files: `search.js`, `view-search.js` (new). Tests: `parseQuery(q)` 8 cases.
 
-### P2 — polish
+### P2 - polish
 
 **S12 Message polish (S).** Hover actions in Slack order with a quick-react row of the 4 most used emoji; "Older messages" loads on scroll; reactions tooltip with names; the delivery line collapses after 10 s to a small icon. Files: `view-chat.js:685-787`, `app.css`.
 
@@ -200,8 +200,8 @@ Unknowns (detection -> fallback):
 
 Server needs (listed, not planned here): N1 `wakeable: boolean` per actor on `GET /api/actors` (A7); N2 `POST /api/admin/tokens` for an existing account (S13, M18); N3 `GET /api/threads?mine=1` returning roots with last reply and unread flag (S10); N4 optional `GET /api/search?from=<handle>` to replace client-side filtering (S11). None blocks P0.
 
-Global constraints (guards): (C1) no new runtime dependency and no build step — guard: `package.json` diff empty of `dependencies`; (C2) every new module is in `UI_MODULES` — guard: `test/http/ui-moduly.test.ts` serves it; (C3) every user-visible string goes through `t()` and gets a `i18n-pl.js` entry — guard: `test/i18n.test.ts` missing-key check; (C4) no `git stash`, no push, tests first (COD-1); (C5) brand guard grep (section 5); (C6) a slice edits only its listed files and line ranges, shared files only through S0 (PRI-7).
+Global constraints (guards): (C1) no new runtime dependency and no build step - guard: `package.json` diff empty of `dependencies`; (C2) every new module is in `UI_MODULES` - guard: `test/http/ui-modules.test.ts` serves it; (C3) every user-visible string goes through `t()` and gets a `i18n-pl.js` entry - guard: `test/i18n.test.ts` missing-key check; (C4) no `git stash`, no push, tests first (COD-1); (C5) brand guard grep (section 5); (C6) a slice edits only its listed files and line ranges, shared files only through S0 (PRI-7).
 
 Review Focus: deep links into threads and Back/Forward (S3) reproduced live, not read; composer focus/draft paths under a failed send and a lost session (S4, S7); counters measured over 5 minutes of polling (S7); the brand grep; a race in S4's autocomplete (stale response after a pick) reproduced by delaying `ensureActors`; concurrent SSE echo vs POST result for the thread composer (F1 regression) re-checked after S4 replaces the thread box.
 
-Slices per priority: P0 8 (S0–S7), P1 4 (S8–S11), P2 3 (S12–S14) — 15 in total.
+Slices per priority: P0 8 (S0–S7), P1 4 (S8–S11), P2 3 (S12–S14) - 15 in total.

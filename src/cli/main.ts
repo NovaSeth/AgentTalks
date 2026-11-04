@@ -32,55 +32,55 @@ import { createServer, VERSION } from "../http/server.ts";
 import { AppError } from "../core/errors.ts";
 import { assertNodeVersion } from "../version.ts";
 
-const USAGE = `agenttalks ${VERSION} - serwer komunikacji miedzy agentami AI a ludzmi
+const USAGE = `agenttalks ${VERSION} - communication server for AI agents and humans
 
-  agenttalks init [--data <kat>]
-      Zaklada katalog danych, baze, kanal #general i aktora systemowego.
-      Idempotentne: ponowne wywolanie nie nadpisuje sekretu ani danych.
+  agenttalks init [--data <dir>]
+      Creates the data directory, database, #general channel and system actor.
+      Idempotent: running it again does not overwrite the secret or data.
 
-  agenttalks serve [--data <kat>] [--host <adres>] [--port <n>]
-      Uruchamia serwer. Domyslnie 127.0.0.1:8787.
+  agenttalks serve [--data <dir>] [--host <address>] [--port <n>]
+      Starts the server. Default: 127.0.0.1:8787.
 
-  agenttalks actor create <handle> --kind human|agent [--name <nazwa>]
-                                   [--password <haslo>] [--admin]
-  agenttalks actor rename <handle> <nowa-nazwa> [--name <nazwa wyswietlana>]
-      Zmienia nazwe ISTNIEJACEGO aktora, zachowujac tozsamosc: numer, tokeny,
-      czlonkostwa, historie i autorstwo zostaja. Bez tego "chce sie nazywac
-      inaczej" konczy sie drugim kontem tej samej osoby.
+  agenttalks actor create <handle> --kind human|agent [--name <name>]
+                                   [--password <password>] [--admin]
+  agenttalks actor rename <handle> <new-handle> [--name <display-name>]
+      Renames an EXISTING actor while preserving identity: id, tokens,
+      memberships, history and authorship stay. Without this, a name change
+      would create a second account for the same person.
   agenttalks actor list
 
-  agenttalks token create --actor <handle> [--name <opis>] [--ttl <sekundy>] [--short]
-      Bez --ttl token nie wygasa. Minimum dla agenta to 3 miesiace; krocej
-      tylko swiadomie (--short), bo wygasly token = nowy aktor na kanale.
+  agenttalks token create --actor <handle> [--name <description>] [--ttl <seconds>] [--short]
+      Without --ttl the token never expires. The minimum for an agent is 3 months;
+      shorter lifetimes require --short, since an expired token can lead to a new actor.
   agenttalks token list --actor <handle>
   agenttalks token revoke <id>
 
-  agenttalks invite create [--ttl <sek>] [--uses <n>] [--admin] [--note <opis>]
-      Wydaje kod-zaproszenie. Nowy agent zaklada nim aktora i token jednym
-      poleceniem: atalk enroll --invite <kod> --handle <nazwa>. To Ty decydujesz,
-      kto moze dolaczyc (masz kod), a agent nie tworzy tozsamosci bez zaproszenia.
+  agenttalks invite create [--ttl <seconds>] [--uses <n>] [--admin] [--note <description>]
+      Issues an invite code. A new agent creates an actor and token with one
+      command: atalk enroll --invite <code> --handle <name>. You decide who can
+      join by sharing the code; an agent cannot create an identity without an invite.
   agenttalks invite list
   agenttalks invite revoke <id>
 
-  agenttalks import-talk <katalog ~/.talk> [--data <kat>]
-      Wciaga historie prototypu: kanaly, DM-y, pytania, reakcje, znaczniki odczytu.
+  agenttalks import-talk <~/.talk-directory> [--data <dir>]
+      Imports prototype history: channels, DMs, questions, reactions, read markers.
 
-  agenttalks clone <katalog-docelowy> [--data <kat>]
-      Spojna kopia instancji (VACUUM INTO) do pomiarow i testow na boku.
-      Feedback z #nextIteration: "caly ten feedback jest z liczb, a nie z wrazen,
-      wylacznie dlatego, ze moglem zrobic kopie i zmierzyc, nie dotykajac produkcji".
+  agenttalks clone <destination-directory> [--data <dir>]
+      Consistent instance copy (VACUUM INTO) for separate measurements and tests.
+      Feedback from #nextIteration: "all this feedback comes from numbers rather than
+      impressions, only because I could copy and measure without touching production".
 
-  agenttalks backup <katalog-docelowy> [--data <kat>]
-      Kopia zapasowa: spojny zrzut bazy (VACUUM INTO, bezpieczny przy zywym
-      serwerze) + kopia katalogu plikow. Kazde wywolanie tworzy podkatalog
-      ze stemplem czasu - nadaje sie prosto do crona.
+  agenttalks backup <destination-directory> [--data <dir>]
+      Backup: consistent database snapshot (VACUUM INTO, safe with a running
+      server) + a copy of the files directory. Each run creates a timestamped
+      subdirectory, ready for use from cron.
 
-  agenttalks install-service [--data <kat>] [--port <n>] [--write]
-      Unit systemd dla instalacji bez kontenera. Domyslnie WYPISUJE unit
-      i instrukcje; --write zapisuje ~/.config/systemd/user/agenttalks.service.
+  agenttalks install-service [--data <dir>] [--port <n>] [--write]
+      A systemd unit for an installation without a container. By default, PRINTS the
+      unit and instructions; --write saves ~/.config/systemd/user/agenttalks.service.
 
-  agenttalks healthcheck [--url <adres>]
-      Zwraca 0, gdy serwer odpowiada. Uzywane przez HEALTHCHECK w obrazie Docker.
+  agenttalks healthcheck [--url <url>]
+      Returns 0 when the server responds. Used by HEALTHCHECK in the Docker image.
 `;
 
 type Args = { positional: string[]; flags: Record<string, string | boolean> };
@@ -101,7 +101,7 @@ type Args = { positional: string[]; flags: Record<string, string | boolean> };
  * the value), so forcing silently did not happen and the first word of the body
  * disappeared. Two bugs at once, and neither visible in any message.
  */
-const FLAGI_LOGICZNE = new Set([
+const BOOLEAN_FLAGS = new Set([
   "force", "stdin", "local", "stop", "private", "sensitive", "burn", "admin", "short",
 ]);
 
@@ -126,7 +126,7 @@ export function parseArgs(argv: readonly string[], knownFlags?: Set<string>): Ar
       continue;
     }
     const next = argv[i + 1];
-    if (FLAGI_LOGICZNE.has(name) || next === undefined || next.startsWith("--")) {
+    if (BOOLEAN_FLAGS.has(name) || next === undefined || next.startsWith("--")) {
       flags[name] = true;
     } else {
       flags[name] = next;
@@ -143,7 +143,7 @@ function openCtx(args: Args): { ctx: Ctx; config: Config } {
   const config = loadConfig(flagStr(args, "data") ?? defaultDataDir());
   if (!config.secret) {
     throw new Error(
-      `Nie ma instancji w ${config.dataDir}. Zaloz ja: agenttalks init --data ${config.dataDir}`,
+      `No instance in ${config.dataDir}. Create one: agenttalks init --data ${config.dataDir}`,
     );
   }
   return { ctx: createCtx(openDb(config.dbPath)), config };
@@ -182,12 +182,12 @@ export async function main(argv: readonly string[]): Promise<number> {
       case "healthcheck":
         return await cmdHealthcheck(args);
       default:
-        process.stderr.write(`nieznana komenda: ${command}\n\n${USAGE}`);
+        process.stderr.write(`unknown command: ${command}\n\n${USAGE}`);
         return 1;
     }
   } catch (err) {
     const msg = err instanceof AppError || err instanceof Error ? err.message : String(err);
-    process.stderr.write(`blad: ${msg}\n`);
+    process.stderr.write(`error: ${msg}\n`);
     return 1;
   }
 }
@@ -206,11 +206,11 @@ function cmdInit(args: Args): number {
                             createdBy: system.id });
 
   process.stdout.write(
-    `Instancja gotowa w ${config.dataDir}\n` +
-      `  baza:   ${config.dbPath}\n` +
-      `  pliki:  ${config.filesDir}\n` +
-      `  kanal:  #${general.slug}\n\n` +
-      `Nastepny krok - konto dla siebie i token dla agenta:\n` +
+    `Instance ready in ${config.dataDir}\n` +
+      `  database: ${config.dbPath}\n` +
+      `  files:    ${config.filesDir}\n` +
+      `  channel:  #${general.slug}\n\n` +
+      `Next step - create your account and a token for an agent:\n` +
       `  agenttalks actor create michal --kind human --password '...' --admin\n` +
       `  agenttalks actor create nestor --kind agent\n` +
       `  agenttalks token create --actor nestor --name vps\n`,
@@ -232,7 +232,7 @@ async function cmdServe(args: Args): Promise<number> {
     try {
       sweepExpired(ctx);
     } catch (err) {
-      console.error("[files] sprzatanie wygaslych nie wyszlo:", err);
+      console.error("[files] failed to clean up expired files; check storage access:", err);
     }
   }, 60_000);
   sweep.unref();
@@ -242,17 +242,17 @@ async function cmdServe(args: Args): Promise<number> {
   try {
     publishNewsToWiki(ctx);
   } catch (err) {
-    console.error("[news] nie udalo sie opublikowac NEWS.md na wiki:", err);
+    console.error("[news] failed to publish NEWS.md to the wiki; check the file and database:", err);
   }
 
   const server = createServer(ctx, config);
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
-  process.stdout.write(`AgentTalks ${VERSION} nasluchuje na http://${host}:${port}\n`);
+  process.stdout.write(`AgentTalks ${VERSION} listening on http://${host}:${port}\n`);
 
   // Shut down on a signal, so the container does not have to wait for SIGKILL.
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     process.on(sig, () => {
-      process.stdout.write(`\n${sig}: zamykam\n`);
+      process.stdout.write(`\n${sig}: shutting down\n`);
       server.closeAllConnections?.();
       server.close(() => process.exit(0));
     });
@@ -261,20 +261,20 @@ async function cmdServe(args: Args): Promise<number> {
 }
 
 function cmdActorRename(rest: string[], args: Args): number {
-  const [stary, nowy] = rest;
-  if (!stary || !nowy) {
-    process.stderr.write("uzycie: agenttalks actor rename <handle> <nowa-nazwa> [--name <nazwa>]\n");
+  const [oldHandle, newHandle] = rest;
+  if (!oldHandle || !newHandle) {
+    process.stderr.write("usage: agenttalks actor rename <handle> <new-handle> [--name <name>]\n");
     return 1;
   }
   const { ctx } = openCtx(args);
-  const a = getActorByHandle(ctx, stary);
+  const a = getActorByHandle(ctx, oldHandle);
   if (!a) {
-    process.stderr.write(`nie ma aktora @${stary}\n`);
+    process.stderr.write(`actor @${oldHandle} does not exist; check agenttalks actor list\n`);
     return 1;
   }
-  const po = renameActor(ctx, a.id, nowy, flagStr(args, "name"));
+  const renamed = renameActor(ctx, a.id, newHandle, flagStr(args, "name"));
   process.stdout.write(
-    `@${stary} -> @${po.handle} (id ${po.id} bez zmian, wiec tokeny i historia dzialaja dalej)\n`,
+    `@${oldHandle} -> @${renamed.handle} (id ${renamed.id} unchanged, so tokens and history still work)\n`,
   );
   return 0;
 }
@@ -293,12 +293,12 @@ function cmdActor(rest: string[], args: Args): number {
     return 0;
   }
   if (sub !== "create" || !handle) {
-    process.stderr.write("uzycie: agenttalks actor create <handle> --kind human|agent\n");
+    process.stderr.write("usage: agenttalks actor create <handle> --kind human|agent\n");
     return 1;
   }
   const kind = (flagStr(args, "kind") ?? "agent") as ActorKind;
   if (kind !== "human" && kind !== "agent") {
-    process.stderr.write("--kind musi byc 'human' albo 'agent'\n");
+    process.stderr.write("--kind must be 'human' or 'agent'\n");
     return 1;
   }
   // Password validation BEFORE any write, and the whole thing in one transaction: an error
@@ -322,9 +322,9 @@ function cmdActor(rest: string[], args: Args): number {
     return created;
   });
   if (!password && kind === "human") {
-    process.stdout.write("uwaga: konto czlowieka bez hasla nie zaloguje sie do UI\n");
+    process.stdout.write("warning: a human account without a password cannot log in to the UI\n");
   }
-  process.stdout.write(`utworzony aktor @${actor.handle} (${actor.kind})\n`);
+  process.stdout.write(`created actor @${actor.handle} (${actor.kind})\n`);
   return 0;
 }
 
@@ -335,12 +335,12 @@ function cmdToken(rest: string[], args: Args): number {
   if (sub === "create") {
     const handle = flagStr(args, "actor");
     if (!handle) {
-      process.stderr.write("uzycie: agenttalks token create --actor <handle> [--name <opis>]\n");
+      process.stderr.write("usage: agenttalks token create --actor <handle> [--name <description>]\n");
       return 1;
     }
     const actor = getActorByHandle(ctx, handle);
     if (!actor) {
-      process.stderr.write(`nie ma aktora @${handle}\n`);
+      process.stderr.write(`actor @${handle} does not exist; check agenttalks actor list\n`);
       return 1;
     }
     const ttl = flagStr(args, "ttl");
@@ -350,38 +350,38 @@ function cmdToken(rest: string[], args: Args): number {
     // MIN_AGENT_TTL_SEC has to be said out loud (--short).
     if (ttl && Number(ttl) > 0 && Number(ttl) < MIN_AGENT_TTL_SEC && args.flags.short !== true) {
       process.stderr.write(
-        `--ttl ${ttl} s to mniej niz ${MIN_AGENT_TTL_SEC} s (3 miesiace), a tyle wynosi minimum ` +
-          `dla tokenu agenta.\nKrotki token ma sens dla CI i niezaufanego hosta - wtedy dodaj --short. ` +
-          `Bez --ttl token nie wygasa.\n`,
+        `--ttl ${ttl} s is less than ${MIN_AGENT_TTL_SEC} s (3 months), the minimum ` +
+          `for an agent token.\nFor CI or an untrusted host, use --short to allow a shorter lifetime. ` +
+          `Without --ttl the token never expires.\n`,
       );
       return 1;
     }
     const { token, info } = mintToken(
-      ctx, actor.id, flagStr(args, "name") ?? "bez nazwy",
+      ctx, actor.id, flagStr(args, "name") ?? "unnamed",
       ttl ? Number(ttl) : null,
     );
     // Visible once. Only the sha256 is in the database, so nobody (the admin included) can
     // read it later.
     process.stdout.write(`${token}\n`);
     const expiryNote = info.expiresAt
-      ? ` (wygasa za ${ttl} s)`
-      : " (bez wygasniecia - dla CI/niezaufanych hostow rozwaz --ttl <sek>)";
-    process.stderr.write(`^ zapisz teraz: ta wartosc nie da sie odtworzyc${expiryNote}\n`);
+      ? ` (expires in ${ttl} s)`
+      : " (no expiry - for CI/untrusted hosts, consider --ttl <seconds>)";
+    process.stderr.write(`^ save it now: this value cannot be recovered${expiryNote}\n`);
     return 0;
   }
   if (sub === "list") {
     const actor = getActorByHandle(ctx, flagStr(args, "actor") ?? "");
     if (!actor) {
-      process.stderr.write("uzycie: agenttalks token list --actor <handle>\n");
+      process.stderr.write("usage: agenttalks token list --actor <handle>\n");
       return 1;
     }
     const now = Math.floor(Date.now() / 1000);
     for (const t of listTokens(ctx, actor.id)) {
-      const stan = t.revokedAt ? "ODWOLANY"
-        : (t.expiresAt !== null && t.expiresAt <= now) ? "WYGASL"
-        : "aktywny";
-      const exp = t.expiresAt ? `  wygasa ${new Date(t.expiresAt * 1000).toISOString().slice(0, 16)}` : "";
-      process.stdout.write(`  ${String(t.id).padStart(4)}  ${stan.padEnd(9)} ${t.name}${exp}\n`);
+      const state = t.revokedAt ? "REVOKED"
+        : (t.expiresAt !== null && t.expiresAt <= now) ? "EXPIRED"
+        : "active";
+      const exp = t.expiresAt ? `  expires ${new Date(t.expiresAt * 1000).toISOString().slice(0, 16)}` : "";
+      process.stdout.write(`  ${String(t.id).padStart(4)}  ${state.padEnd(9)} ${t.name}${exp}\n`);
     }
     return 0;
   }
@@ -392,17 +392,17 @@ function cmdToken(rest: string[], args: Args): number {
     if (!exists) {
       // "Revoked" for a token that does not exist is a false sense of security at exactly the
       // moment somebody is rotating a leaked token.
-      process.stderr.write(`nie ma tokenu o id ${id} (sprawdz: token list --actor <handle>)\n`);
+      process.stderr.write(`token id ${id} does not exist (check: agenttalks token list --actor <handle>)\n`);
       return 1;
     }
     if (!revokeToken(ctx, tokenId)) {
-      process.stderr.write(`token ${id} byl juz odwolany - nic nie zmieniono\n`);
+      process.stderr.write(`token ${id} was already revoked - nothing changed; check agenttalks token list --actor <handle>\n`);
       return 1;
     }
-    process.stdout.write(`token ${id} odwolany\n`);
+    process.stdout.write(`token ${id} revoked\n`);
     return 0;
   }
-  process.stderr.write("uzycie: agenttalks token create|list|revoke\n");
+  process.stderr.write("usage: agenttalks token create|list|revoke\n");
   return 1;
 }
 
@@ -420,22 +420,22 @@ function cmdInvite(rest: string[], args: Args): number {
     securityLog("invite_minted", { inviteId: info.id, by: "cli" });
     process.stdout.write(`${code}\n`);
     const lim = [
-      info.usesLeft === null ? "bez limitu uzyc" : `${info.usesLeft} uzyc`,
-      info.expiresAt ? `wygasa ${new Date(info.expiresAt * 1000).toISOString().slice(0, 16)}` : "bez terminu",
-      info.makeAdmin ? "nadaje ADMINA" : null,
+      info.usesLeft === null ? "unlimited uses" : `${info.usesLeft} uses`,
+      info.expiresAt ? `expires ${new Date(info.expiresAt * 1000).toISOString().slice(0, 16)}` : "no expiry",
+      info.makeAdmin ? "grants ADMIN" : null,
     ].filter(Boolean).join(", ");
-    process.stderr.write(`^ przekaz ten kod agentowi. ${lim}. Uzycie:\n` +
-      `  atalk enroll --url <adres> --invite ${code} --handle <nazwa>\n`);
+    process.stderr.write(`^ give this code to the agent. ${lim}. Usage:\n` +
+      `  atalk enroll --url <url> --invite ${code} --handle <name>\n`);
     return 0;
   }
   if (sub === "list") {
     const now = Math.floor(Date.now() / 1000);
     for (const i of listInvites(ctx)) {
-      const stan = i.revokedAt ? "ODWOLANE"
-        : (i.expiresAt !== null && i.expiresAt <= now) ? "WYGASLE"
-        : (i.usesLeft !== null && i.usesLeft <= 0) ? "ZUZYTE" : "aktywne";
+      const state = i.revokedAt ? "REVOKED"
+        : (i.expiresAt !== null && i.expiresAt <= now) ? "EXPIRED"
+        : (i.usesLeft !== null && i.usesLeft <= 0) ? "USED UP" : "active";
       const uses = i.usesLeft === null ? "inf" : String(i.usesLeft);
-      process.stdout.write(`  ${String(i.id).padStart(4)}  ${stan.padEnd(9)} uzyc:${uses}` +
+      process.stdout.write(`  ${String(i.id).padStart(4)}  ${state.padEnd(9)} uses:${uses}` +
         `${i.makeAdmin ? " admin" : ""}${i.note ? `  ${i.note}` : ""}\n`);
     }
     return 0;
@@ -444,39 +444,39 @@ function cmdInvite(rest: string[], args: Args): number {
     // Confirm success only when an existing code really was revoked - otherwise a typo in an
     // id yields a false "revoked" while the leaked code keeps working.
     if (!revokeInvite(ctx, Number(id))) {
-      process.stderr.write(`nie ma aktywnego zaproszenia o id ${id}\n`);
+      process.stderr.write(`no active invite with id ${id}; check agenttalks invite list\n`);
       return 1;
     }
-    process.stdout.write(`zaproszenie ${id} odwolane\n`);
+    process.stdout.write(`invite ${id} revoked\n`);
     return 0;
   }
-  process.stderr.write("uzycie: agenttalks invite create|list|revoke\n");
+  process.stderr.write("usage: agenttalks invite create|list|revoke\n");
   return 1;
 }
 
 function cmdImport(rest: string[], args: Args): number {
   const [talkHome] = rest;
   if (!talkHome) {
-    process.stderr.write("uzycie: agenttalks import-talk <katalog ~/.talk>\n");
+    process.stderr.write("usage: agenttalks import-talk <~/.talk-directory>\n");
     return 1;
   }
   const { ctx } = openCtx(args);
   const r = importTalkHome(ctx, talkHome);
   process.stdout.write(
-    `Import z ${talkHome}:\n` +
-      `  aktorzy       ${r.actors}\n` +
-      `  konwersacje   ${r.conversations}\n` +
-      `  wiadomosci    ${r.messages}\n` +
-      `  reakcje       ${r.reactions}\n` +
-      `  pytania       ${r.questions}\n` +
-      `  znaczniki     ${r.reads}\n` +
-      `  pominiete     ${r.skipped}\n`,
+    `Import from ${talkHome}:\n` +
+      `  actors        ${r.actors}\n` +
+      `  conversations ${r.conversations}\n` +
+      `  messages      ${r.messages}\n` +
+      `  reactions     ${r.reactions}\n` +
+      `  questions     ${r.questions}\n` +
+      `  read markers  ${r.reads}\n` +
+      `  skipped       ${r.skipped}\n`,
   );
   // Skipped records are PRINTED, not merely counted. A silently skipped message was a
   // concrete flaw of the prototype and the importer is not to reproduce it.
   for (const p of r.problems.slice(0, 20)) process.stdout.write(`    - ${p}\n`);
   if (r.problems.length > 20) {
-    process.stdout.write(`    ... i ${r.problems.length - 20} wiecej\n`);
+    process.stdout.write(`    ... and ${r.problems.length - 20} more\n`);
   }
   return 0;
 }
@@ -484,7 +484,7 @@ function cmdImport(rest: string[], args: Args): number {
 function cmdClone(rest: string[], args: Args): number {
   const [dest] = rest;
   if (!dest) {
-    process.stderr.write("uzycie: agenttalks clone <katalog-docelowy>\n");
+    process.stderr.write("usage: agenttalks clone <destination-directory>\n");
     return 1;
   }
   const { ctx, config } = openCtx(args);
@@ -500,11 +500,11 @@ function cmdClone(rest: string[], args: Args): number {
   }
   ctx.db.prepare("VACUUM INTO ?").run(destConfig.dbPath);
   process.stdout.write(
-    `sklonowane do ${dest}\n` +
-      `  uruchom:   agenttalks serve --data ${dest} --port 8788\n` +
-      `  po tescie: rm -rf ${dest}\n` +
-      `Uwaga: katalog plikow (${config.filesDir}) NIE jest kopiowany - metadane\n` +
-      `plikow wskazuja na oryginalne sciezki; do pomiarow wiadomosci to bez znaczenia.\n`,
+    `cloned to ${dest}\n` +
+      `  run:        agenttalks serve --data ${dest} --port 8788\n` +
+      `  after testing: rm -rf ${dest}\n` +
+      `Note: the files directory (${config.filesDir}) is NOT copied - file metadata\n` +
+      `points to the original paths; this does not affect message measurements.\n`,
   );
   return 0;
 }
@@ -512,7 +512,7 @@ function cmdClone(rest: string[], args: Args): number {
 function cmdBackup(rest: string[], args: Args): number {
   const [destRoot] = rest;
   if (!destRoot) {
-    process.stderr.write("uzycie: agenttalks backup <katalog-docelowy>\n");
+    process.stderr.write("usage: agenttalks backup <destination-directory>\n");
     return 1;
   }
   const { ctx, config } = openCtx(args);
@@ -524,15 +524,15 @@ function cmdBackup(rest: string[], args: Args): number {
   // take the database from the middle of a transaction. It requires a non-existent target.
   if (existsSync(dbCopy)) rmSync(dbCopy);
   ctx.db.prepare("VACUUM INTO ?").run(dbCopy);
-  let filesNote = "  plikow: katalog pusty albo nieobecny\n";
+  let filesNote = "  files: directory empty or missing\n";
   if (existsSync(config.filesDir)) {
     cpSync(config.filesDir, joinPath(dest, "files"), { recursive: true });
-    filesNote = `  pliki:  ${joinPath(dest, "files")}\n`;
+    filesNote = `  files:    ${joinPath(dest, "files")}\n`;
   }
   process.stdout.write(
-    `kopia zapasowa gotowa: ${dest}\n  baza:   ${dbCopy}\n${filesNote}` +
-      `Odtworzenie: zatrzymaj serwer, podmien ${config.dbPath} (usun tez -wal/-shm)\n` +
-      `i katalog plikow, uruchom ponownie. Migracje doprowadza baze do biezacej wersji.\n`,
+    `backup ready: ${dest}\n  database: ${dbCopy}\n${filesNote}` +
+      `Restore: stop the server, replace ${config.dbPath} (also remove -wal/-shm)\n` +
+      `and the files directory, then restart. Migrations will update the database version.\n`,
   );
   return 0;
 }
@@ -542,7 +542,7 @@ function cmdInstallService(args: Args): number {
   const port = flagStr(args, "port") ?? "8787";
   const binPath = resolvePath(fileURLToPath(new URL("../../bin/agenttalks.js", import.meta.url)));
   const unit = `[Unit]
-Description=AgentTalks - serwer komunikacji agentow AI i ludzi
+Description=AgentTalks - communication server for AI agents and humans
 After=network.target
 
 [Service]
@@ -560,17 +560,17 @@ WantedBy=default.target
     const unitPath = joinPath(unitDir, "agenttalks.service");
     writeFileSync(unitPath, unit);
     process.stdout.write(
-      `zapisane: ${unitPath}\nWlacz:\n  systemctl --user daemon-reload\n` +
+      `saved: ${unitPath}\nEnable:\n  systemctl --user daemon-reload\n` +
         `  systemctl --user enable --now agenttalks\n` +
-        `Zeby unit user-level dzialal bez zalogowania: sudo loginctl enable-linger $USER\n`,
+        `To run the user unit without being logged in: sudo loginctl enable-linger $USER\n`,
     );
     return 0;
   }
   process.stdout.write(
-    `${unit}\n# Zapis do ~/.config/systemd/user: agenttalks install-service --write\n` +
-      `# Instalacja systemowa: zapisz powyzsze do /etc/systemd/system/agenttalks.service\n` +
-      `# (User=..., WantedBy=multi-user.target), potem: sudo systemctl enable --now agenttalks\n` +
-      `# Docker pozostaje glowna droga wdrozenia - patrz docs/docker.md.\n`,
+    `${unit}\n# Save to ~/.config/systemd/user: agenttalks install-service --write\n` +
+      `# System installation: save the above to /etc/systemd/system/agenttalks.service\n` +
+      `# (User=..., WantedBy=multi-user.target), then: sudo systemctl enable --now agenttalks\n` +
+      `# Docker remains the primary deployment method - see docs/docker.md.\n`,
   );
   return 0;
 }
@@ -582,7 +582,7 @@ async function cmdHealthcheck(args: Args): Promise<number> {
   if (!port) {
     try {
       port = String(loadConfig(flagStr(args, "data") ?? defaultDataDir()).port);
-    } catch { /* brak instancji - zostaje domyslny */ }
+    } catch { /* no instance - keep the default */ }
   }
   const url = flagStr(args, "url") ?? `http://127.0.0.1:${port ?? 8787}/api/health`;
   try {

@@ -51,9 +51,9 @@ test("Docker: the base image is pinned by digest and only /data is owned by the 
 });
 
 test("deploy: the site password becomes valid JSON even with quotes and backslashes (B-MG-22)", () => {
-  const script = read("deploy/uruchom-produkcje.sh");
+  const script = read("deploy/deploy-production.sh");
   const fn = script.match(/^password_json\(\)\s*\{[\s\S]*?^\}/m)?.[0];
-  assert.ok(fn, "deploy/uruchom-produkcje.sh defines no password_json() function");
+  assert.ok(fn, "deploy/deploy-production.sh defines no password_json() function");
   const dir = mkdtempSync(join(tmpdir(), "at-t-mg-9-"));
   const file = join(dir, "site-password");
   const tricky = 'pa"ss\\word with spaces'; // SYNTH test value
@@ -63,9 +63,9 @@ test("deploy: the site password becomes valid JSON even with quotes and backslas
 });
 
 test("deploy: without python3 the helper fails loudly instead of sending an empty body (T-MG-9 review F1)", () => {
-  const script = read("deploy/uruchom-produkcje.sh");
+  const script = read("deploy/deploy-production.sh");
   const fn = script.match(/^password_json\(\)\s*\{[\s\S]*?^\}/m)?.[0];
-  assert.ok(fn, "deploy/uruchom-produkcje.sh defines no password_json() function");
+  assert.ok(fn, "deploy/deploy-production.sh defines no password_json() function");
   let failed = false;
   let stderr = "";
   try {

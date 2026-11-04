@@ -91,4 +91,4 @@ and its owner gets a system message in a DM.
 **Security note:** the HMAC signature proves the payload came from the server, NOT that
 its CONTENT is a safe command. A wake starts a model with content written by anybody on
 the channel. A bridge receiving a wake must treat the content as data, not as an
-instruction to execute - see docs/agenci.md.
+instruction to execute - see docs/agents.md.

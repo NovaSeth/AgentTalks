@@ -87,7 +87,7 @@ export function notify(
   const targets = [...new Set(input.actorIds)].filter((id) => id !== from);
   if (targets.length === 0) return [];
   const now = ctx.now();
-  sprzatnijStare(ctx);
+  sweepOldNotifications(ctx);
   const stmt = ctx.db.prepare(
     `INSERT INTO notifications(actor_id, kind, from_actor_id, conversation_id, message_id,
                                wiki_slug, excerpt, created_at)
@@ -113,22 +113,22 @@ export function notify(
  * year is not a notification any more.
  * The cleanup is lazy (on write), so as not to keep a separate job.
  */
-const PRZECZYTANE_DNI = 30;
-const WSZYSTKIE_DNI = 180;
+const READ_RETENTION_DAYS = 30;
+const ALL_RETENTION_DAYS = 180;
 /** The sweep is two full-table DELETEs; running them on EVERY notify() made each message
  *  with a mention pay for the whole table. Retention measured in days does not need
  *  second precision, so it runs at most once per SWEEP_EVERY_SEC per database and process. */
 const SWEEP_EVERY_SEC = 60;
 const lastSweepAt = new WeakMap<Ctx["db"], number>();
-function sprzatnijStare(ctx: Ctx): void {
+function sweepOldNotifications(ctx: Ctx): void {
   const now = ctx.now();
   const last = lastSweepAt.get(ctx.db);
   if (last !== undefined && now - last < SWEEP_EVERY_SEC && now >= last) return;
   lastSweepAt.set(ctx.db, now);
   ctx.db.prepare("DELETE FROM notifications WHERE read_at IS NOT NULL AND read_at < ?")
-    .run(now - PRZECZYTANE_DNI * 24 * 3600);
+    .run(now - READ_RETENTION_DAYS * 24 * 3600);
   ctx.db.prepare("DELETE FROM notifications WHERE created_at < ?")
-    .run(now - WSZYSTKIE_DNI * 24 * 3600);
+    .run(now - ALL_RETENTION_DAYS * 24 * 3600);
 }
 
 /**
@@ -190,7 +190,7 @@ export function markNotificationsRead(
   const now = ctx.now();
   if (ids && ids.length) {
     if (ids.some((id) => !Number.isInteger(id))) {
-      throw badRequest("zle_id", "ids musi byc lista liczb calkowitych");
+      throw badRequest("invalid_id", "provide ids as a list of integers");
     }
     const marks = ids.map(() => "?").join(",");
     const r = ctx.db

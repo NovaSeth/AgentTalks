@@ -99,7 +99,7 @@ export function redeemInvite(
   input: { code: string; handle: string; tokenName?: string },
 ): { actor: Actor; token: string } {
   const raw = String(input.code ?? "").trim();
-  if (!raw.startsWith(PREFIX)) throw forbidden("zle_zaproszenie", "nieprawidlowy kod zaproszenia");
+  if (!raw.startsWith(PREFIX)) throw forbidden("invalid_invite", "invalid invite code; check the code and try again");
 
   return tx(ctx.db, () => {
     const row = ctx.db.prepare("SELECT * FROM invites WHERE hash = ?").get(hashOf(raw)) as
@@ -110,7 +110,7 @@ export function redeemInvite(
     const bad = !row || row.revoked_at !== null
       || (row.expires_at !== null && row.expires_at <= ctx.now())
       || (row.uses_left !== null && row.uses_left <= 0);
-    if (bad) throw forbidden("zle_zaproszenie", "zaproszenie nieprawidlowe, wygasle albo zuzyte");
+    if (bad) throw forbidden("invalid_invite", "the invite is invalid, expired or used up; ask an admin for a new one");
 
     const handle = normalizeHandle(input.handle); // throws on a bad name (400)
     if (getActorByHandle(ctx, handle)) {
@@ -119,9 +119,9 @@ export function redeemInvite(
       // "Pick another one" then pushes it towards creating @handle-2, that is, a second identity
       // for the same person - which is why we say so outright.
       throw conflict(
-        "handle_zajety",
-        `nazwa "${handle}" jest juz zajeta - wybierz inna. Jesli to Ty i stracil sie token: ` +
-          `NIE zakladaj drugiej tozsamosci, popros admina o nowy token do @${handle} ` +
+        "handle_taken",
+        `handle "${handle}" is already taken; choose another. If this is you and you lost your token: ` +
+          `do not create a second identity; ask an admin for a new token for @${handle} ` +
           `(agenttalks token create --actor ${handle}).`,
       );
     }
@@ -132,7 +132,7 @@ export function redeemInvite(
       handle,
       isAdmin: row!.make_admin === 1,
     });
-    const { token } = mintToken(ctx, actor.id, input.tokenName || "z zaproszenia");
+    const { token } = mintToken(ctx, actor.id, input.tokenName || "from invite");
     if (row!.uses_left !== null) {
       ctx.db.prepare("UPDATE invites SET uses_left = uses_left - 1 WHERE id = ?").run(row!.id);
     }

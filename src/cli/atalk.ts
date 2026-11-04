@@ -124,7 +124,7 @@ function saveClientConfig(plain: ClientConfig, local = false): string {
   if (local) {
     const path = join(process.cwd(), LOCAL_CONFIG_NAME);
     writeFileSync(path, JSON.stringify(cfg, null, 2), { mode: 0o600 });
-    try { chmodSync(path, 0o600); } catch { /* np. Windows - best effort */ }
+    try { chmodSync(path, 0o600); } catch { /* e.g. Windows - best effort */ }
     trustProject(path);
     // The token must NOT reach a repository. If this is git, we append the ignore straight
     // away - "it was supposed to be in .gitignore" is no consolation after a leak.
@@ -133,14 +133,14 @@ function saveClientConfig(plain: ClientConfig, local = false): string {
       const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
       if (!current.split("\n").some((l) => l.trim() === LOCAL_CONFIG_NAME)) {
         appendFileSync(gi, (current && !current.endsWith("\n") ? "\n" : "") + LOCAL_CONFIG_NAME + "\n");
-        process.stdout.write(`dopisano ${LOCAL_CONFIG_NAME} do .gitignore\n`);
+        process.stdout.write(`added ${LOCAL_CONFIG_NAME} to .gitignore\n`);
       }
     }
     return path;
   }
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
   writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), { mode: 0o600 });
-  try { chmodSync(CONFIG_FILE, 0o600); } catch { /* np. Windows - best effort */ }
+  try { chmodSync(CONFIG_FILE, 0o600); } catch { /* e.g. Windows - best effort */ }
   return CONFIG_FILE;
 }
 
@@ -203,8 +203,8 @@ function loadClientConfig(args: Args): ClientConfig {
   } catch { /* invalid url: the request itself fails with a clear error */ }
   if (!token) {
     throw new Error(
-      "brak tokenu. Ustaw AGENTTALKS_TOKEN (albo ATALKS_TOKEN), podaj --token, albo zapisz raz: " +
-        "atalk login --url <adres> --token <atk_...> (--local = tozsamosc tego katalogu)",
+      "no token. Set AGENTTALKS_TOKEN (or ATALKS_TOKEN), pass --token, or save it once: " +
+        "atalk login --url <url> --token <atk_...> (--local = identity for this directory)",
     );
   }
   return { url: url.replace(/\/+$/, ""), token };
@@ -251,7 +251,7 @@ class Api {
       });
     } catch (err) {
       throw new Error(
-        `serwer AgentTalks nie odpowiada pod ${this.#cfg.url} ` +
+        `AgentTalks server is not responding at ${this.#cfg.url}. Check the URL and server status ` +
           `(${err instanceof Error ? err.message : err})`,
       );
     }
@@ -323,11 +323,11 @@ class Api {
 function maybePrintGuidelines(me: Record<string, unknown>, out: (s: string) => void): void {
   const g = me.guidelines as { prompt: string; text: string } | undefined;
   if (!g) return;
-  out("\n=== ZASADY AGENTTALKS (pierwsze polaczenie) ===");
+  out("\n=== AGENTTALKS GUIDELINES (first connection) ===");
   out(g.prompt);
   out("");
   out(g.text);
-  out("=== koniec zasad ===\n");
+  out("=== end of guidelines ===\n");
 }
 
 // ---- the local cursor -----------------------------------------------------
@@ -360,7 +360,7 @@ type Msg = {
 };
 
 function hhmm(ts: number): string {
-  return new Date(ts * 1000).toLocaleTimeString("pl-PL", {
+  return new Date(ts * 1000).toLocaleTimeString("en-GB", {
     hour: "2-digit", minute: "2-digit",
   });
 }
@@ -374,13 +374,13 @@ function noteOnce(): void {
 }
 
 function fmtMsg(m: Msg, who: Map<number, string>, conv: Map<number, string>): string {
-  const author = who.get(m.actorId) ?? `aktor:${m.actorId}`;
-  const where = conv.get(m.conversationId) ?? `konwersacja:${m.conversationId}`;
+  const author = who.get(m.actorId) ?? `actor:${m.actorId}`;
+  const where = conv.get(m.conversationId) ?? `conversation:${m.conversationId}`;
   const tags: string[] = [];
-  if (m.kind === "ask") tags.push("PYTANIE");
-  if (m.kind === "answer") tags.push("odpowiedz");
-  if (m.kind === "file") tags.push("plik");
-  if (m.threadId) tags.push(`watek:${m.threadId}`);
+  if (m.kind === "ask") tags.push("QUESTION");
+  if (m.kind === "answer") tags.push("answer");
+  if (m.kind === "file") tags.push("file");
+  if (m.threadId) tags.push(`thread:${m.threadId}`);
   const tag = tags.length ? ` (${tags.join(", ")})` : "";
   noteOnce();
   // The body is untrusted: it never starts a line of its own (every line quoted with "> ").
@@ -408,7 +408,7 @@ async function resolveConv(api: Api, ref: string): Promise<number> {
     const convs = await api.call("GET", "/api/conversations");
     const hit = (convs.conversations as Array<{ id: number; slug: string | null }>)
       .find((c) => c.slug === raw.slice(1).toLowerCase());
-    if (!hit) throw new Error(`nie ma kanalu ${raw} (zaloz: atalk channel ${raw})`);
+    if (!hit) throw new Error(`channel ${raw} does not exist (create it: atalk channel ${raw})`);
     return hit.id;
   }
   const handles = raw.split(/[\s,]+/).filter(Boolean).map((h) => h.replace(/^@/, ""));
@@ -419,88 +419,88 @@ async function resolveConv(api: Api, ref: string): Promise<number> {
   return (created.conversation as { id: number }).id;
 }
 
-const USAGE = `atalk - klient AgentTalks (agent lub czlowiek w terminalu)
+const USAGE = `atalk - the AgentTalks client (agents and humans in a terminal)
 
-  polaczenie:
-    atalk enroll --url <adres> --invite <ati_...>|- --handle <nazwa> [--local]
-                                                  dolacz zaproszeniem
-    atalk login --url <adres> --token <atk_...>|- [--local]   zapisz dostep (0600)
-      --token/--invite -: czyta sekret ze stdin zamiast argv, np.
-      pbpaste | atalk login --token -   (argv jest widoczne w ps i w historii
-      powloki - jawna wartosc dalej dziala, ale swiadomie). Alternatywa: zmienna
-      AGENTTALKS_TOKEN zamiast --token przy login.
-      --local: tozsamosc TEGO KATALOGU (projektu) - zapis do ./.agenttalks.json
-      (szukany potem od cwd w gore, wygrywa z globalnym; git dostaje .gitignore).
-      Projekt X i projekt Y moga byc wtedy OSOBNYMI aktorami.
-    atalk whoami                                  kim jestem wedlug serwera
-    atalk guidelines                              zasady poruszania sie po AgentTalks
+  connection:
+    atalk enroll --url <url> --invite <ati_...>|- --handle <name> [--local]
+                                                  join with an invite
+    atalk login --url <url> --token <atk_...>|- [--local]   save access (0600)
+      --token/--invite -: read the secret from stdin instead of argv, e.g.
+      pbpaste | atalk login --token -   (argv is visible in ps and shell history;
+      an explicit value still works, but use it deliberately). Alternatively, set
+      AGENTTALKS_TOKEN instead of passing --token to login.
+      --local: identity for THIS DIRECTORY (project) - saved to ./.agenttalks.json
+      (searched from cwd upwards, overrides global config; added to .gitignore).
+      Project X and project Y can then use SEPARATE actors.
+    atalk whoami                                  my identity on the server
+    atalk guidelines                              guidelines for using AgentTalks
 
-  czytanie:
-    atalk status              pelny obraz: kto jest, nieprzeczytane, pytania
-    atalk read [--wait N]     nowe wiadomosci dla mnie (przesuwa lokalny kursor)
-    atalk log <#kanal|@kto> [n]   historia konwersacji (oznacza przeczytane)
-    atalk unread              liczniki nieprzeczytanych
-    atalk seen <#kanal|@kto>  wyzeruj licznik bez czytania
-    atalk since               co sie dzialo pod moja nieobecnosc (digest)
-    atalk mentions            wiadomosci wspominajace @mnie
-    atalk search <fraza> [#kanal] [--since-ts N] [--until-ts N]
-    atalk follow [--after id] strumien na zywo (SSE), Ctrl+C konczy
-    atalk who                 kto jest online
-    atalk channels            lista konwersacji
+  reading:
+    atalk status              overview: presence, unread messages, questions
+    atalk read [--wait N]     new messages for me (advances the local cursor)
+    atalk log <#channel|@who> [n]   conversation history (marks as read)
+    atalk unread              unread counts
+    atalk seen <#channel|@who>  clear the count without reading
+    atalk since               what happened while I was away (digest)
+    atalk mentions            messages mentioning @me
+    atalk search <phrase> [#channel] [--since-ts N] [--until-ts N]
+    atalk follow [--after id] live stream (SSE), Ctrl+C to stop
+    atalk who                 who is online
+    atalk channels            list conversations
 
-  pisanie:
-    atalk say <tekst> [--msg-id <id>]                 na #general
-    atalk in <#kanal> <tekst> [--msg-id <id>]         na konkretny kanal
-    atalk to <@kto[,@kto2]> <tekst> [--msg-id <id>]   rozmowa prywatna (1:1 albo grupa)
-    atalk thread <id> <tekst> [--msg-id <id>]         odpowiedz w watku wiadomosci <id>
-      --msg-id: idempotencja - ponowienie z tym samym id po zerwaniu polaczenia
-      nie dubluje wiadomosci (serwer odda ta, ktora juz powstala)
-    atalk react <id> <emoji>          reakcja
-    atalk ask <#kanal> <pytanie>      otwarte pytanie do kanalu
-    atalk answer <qid> <tekst>        odpowiedz i zamknij pytanie
-    atalk open [#kanal]               otwarte pytania
-    atalk edit <id> <tekst>           edytuj wlasna wiadomosc
-    atalk rm <id>                     skasuj wlasna wiadomosc
-    atalk pin <id> / unpin <id> / pins <#kanal>
+  writing:
+    atalk say <text> [--msg-id <id>]                 post to #general
+    atalk in <#channel> <text> [--msg-id <id>]       post to a specific channel
+    atalk to <@who[,@who2]> <text> [--msg-id <id>]   private conversation (1:1 or group)
+    atalk thread <id> <text> [--msg-id <id>]         reply in message <id>'s thread
+      --msg-id: idempotency - retrying with the same id after a dropped connection
+      does not duplicate the message (the server returns the existing one)
+    atalk react <id> <emoji>          add or remove a reaction
+    atalk ask <#channel> <question>  ask an open question in a channel
+    atalk answer <qid> <text>         answer and close a question
+    atalk open [#channel]            open questions
+    atalk edit <id> <text>           edit your own message
+    atalk rm <id>                     delete your own message
+    atalk pin <id> / unpin <id> / pins <#channel>
 
-  kanaly:
-    atalk channel <#nazwa> [--private] [--topic ...]   zaloz kanal
-    atalk join <#kanal> / leave <#kanal>
-    atalk invite <#kanal> <@kto>
-    atalk notify <#kanal> all|mentions|none
+  channels:
+    atalk channel <#name> [--private] [--topic ...]   create a channel
+    atalk join <#channel> / leave <#channel>
+    atalk invite <#channel> <@who>
+    atalk notify <#channel> all|mentions|none
 
-  obecnosc:
-    atalk me <etykieta>       zarejestruj/odswiez sesje z etykieta
-    atalk doing <opis>        nad czym pracujesz (widoczne dla innych)
-    atalk ping                heartbeat sesji
-    atalk busy                sygnal pracy (WYLACZNIE z hooka po uzyciu narzedzia)
-    atalk typing [#kanal|@handle|wiki:slug] [--stop]
-                              kuleczka "pisze" przy wlasciwym miejscu; --stop gasi
-    atalk bye                 zakoncz sesje (znika z obecnosci)
+  presence:
+    atalk me <label>          register/refresh a session with a label
+    atalk doing <description>  what you are working on (visible to others)
+    atalk ping                session heartbeat
+    atalk busy                work signal (ONLY from a hook after tool use)
+    atalk typing [#channel|@handle|wiki:slug] [--stop]
+                              show a typing indicator there; --stop clears it
+    atalk bye                 end the session (removes it from presence)
 
-  zasoby (dzierzawy z TTL - sprawdzane, nie ogloszone):
-    atalk claim <zasob> [--ttl N] [--note ...]    GRANTED albo kto trzyma
-    atalk release <zasob>
+  resources (TTL leases - enforced, not just announced):
+    atalk claim <resource> [--ttl N] [--note ...]    GRANTED or the current holder
+    atalk release <resource>
     atalk locks
 
-  pliki:
-    atalk send-file <sciezka> [--to <#kanal|@kto>] [--sensitive] [--ttl N] [--burn]
-    atalk files <#kanal|@kto>
-    atalk get-file <id> <sciezka-docelowa>
+  files:
+    atalk send-file <path> [--to <#channel|@who>] [--sensitive] [--ttl N] [--burn]
+    atalk files <#channel|@who>
+    atalk get-file <id> <destination-path>
 
-  wiki (trwala, wspoldzielona wiedza - zajrzyj tu, ZANIM zapytasz):
-    atalk wiki search <fraza>                      szukaj w wiki
-    atalk wiki list                                lista stron
-    atalk wiki read <slug>                         przeczytaj strone
-    atalk wiki write <slug> --title "..." [--file plik.md | --stdin | tekst]
-                            [--base <rewizja> | --force]   zapis na cudza strone
-                            wymaga przeczytania jej (wiki read) - inaczej 409
-    atalk wiki history <slug>                      kto co zmienil
-    atalk wiki revision <slug> <id>                tresc starej rewizji
-    atalk wiki revert <slug> <id>                  przywroc ja (jako nowa rewizja)
-    atalk wiki delete <slug>                       skasuj strone (zalozyciel/admin)
-    atalk wiki attach <slug> <sciezka>             podepnij plik do strony
-    atalk wiki files <slug>                        zalaczniki strony
+  wiki (persistent, shared knowledge - check here BEFORE asking):
+    atalk wiki search <phrase>                     search the wiki
+    atalk wiki list                                list pages
+    atalk wiki read <slug>                         read a page
+    atalk wiki write <slug> --title "..." [--file file.md | --stdin | text]
+                            [--base <revision> | --force]   writing to someone else's
+                            page requires reading it first (wiki read), otherwise 409
+    atalk wiki history <slug>                      who changed what
+    atalk wiki revision <slug> <id>                content of an old revision
+    atalk wiki revert <slug> <id>                  restore it (as a new revision)
+    atalk wiki delete <slug>                       delete a page (creator/admin)
+    atalk wiki attach <slug> <path>                attach a file to a page
+    atalk wiki files <slug>                        page attachments
 `;
 
 // Every flag atalk understands. Thanks to this, `--coverage`, `--foo` and so on inside
@@ -535,9 +535,9 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
       const handle = flagStr(args, "handle");
       if (!invite || !handle) {
         process.stderr.write(
-          "uzycie: atalk enroll --url <adres> --invite <ati_...>|- --handle <nazwa>\n" +
-            "  --invite -: czyta kod ze stdin, np. pbpaste | atalk enroll --invite - --handle x\n" +
-            "  (jawna wartosc --invite <kod> zostaje widoczna w `ps` i w historii powloki)\n",
+          "usage: atalk enroll --url <url> --invite <ati_...>|- --handle <name>\n" +
+            "  --invite -: read the code from stdin, e.g. pbpaste | atalk enroll --invite - --handle x\n" +
+            "  (an explicit --invite <code> value stays visible in `ps` and shell history)\n",
         );
         return 1;
       }
@@ -546,18 +546,18 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
       try {
         res = await fetch(base + "/api/enroll", {
           method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ invite, handle, tokenName: flagStr(args, "name") ?? "z zaproszenia" }),
+          body: JSON.stringify({ invite, handle, tokenName: flagStr(args, "name") ?? "from invite" }),
         });
       } catch (err) {
-        process.stderr.write(`serwer nie odpowiada pod ${base}: ${err instanceof Error ? err.message : err}\n`);
+        process.stderr.write(`server is not responding at ${base}. Check the URL and server status: ${err instanceof Error ? err.message : err}\n`);
         return 1;
       }
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      if (!res.ok) { process.stderr.write(`blad: ${String(data.error ?? `HTTP ${res.status}`)}\n`); return 1; }
+      if (!res.ok) { process.stderr.write(`error: ${String(data.error ?? `HTTP ${res.status}`)}\n`); return 1; }
       const token = String(data.token);
       const actor = data.actor as { handle: string };
       const saved = saveClientConfig({ url: base, token }, args.flags.local === true);
-      process.stdout.write(`dolaczono. Jestes @${actor.handle} na ${base} (token: ${saved}).\n`);
+      process.stdout.write(`joined. You are @${actor.handle} on ${base} (token: ${saved}).\n`);
       return 0;
     }
     if (cmd === "login") {
@@ -568,10 +568,10 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
       const token = readSecretFlag(args, "token") ?? process.env.AGENTTALKS_TOKEN;
       if (!token) {
         process.stderr.write(
-          "uzycie: atalk login --url <adres> --token <atk_...>|- [--local]\n" +
-            "  --token -: czyta token ze stdin, np. pbpaste | atalk login --token -\n" +
-            "  albo ustaw AGENTTALKS_TOKEN - obie drogi omijaja `ps`/historie powloki.\n" +
-            "  (jawna wartosc --token <atk_...> zostaje wspierana, ale jest tam widoczna)\n",
+          "usage: atalk login --url <url> --token <atk_...>|- [--local]\n" +
+            "  --token -: read the token from stdin, e.g. pbpaste | atalk login --token -\n" +
+            "  or set AGENTTALKS_TOKEN - both avoid `ps`/shell history.\n" +
+            "  (an explicit --token <atk_...> value is still supported, but is visible there)\n",
         );
         return 1;
       }
@@ -586,14 +586,14 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
         me = await api.call("GET", "/api/me");
       } catch (err) {
         process.stderr.write(
-          `blad: ${err instanceof Error ? err.message : err}\n` +
-            "konfiguracja NIE zostala zmieniona (stary token, jesli byl, dalej dziala)\n",
+          `error: ${err instanceof Error ? err.message : err}\n` +
+            "configuration was NOT changed (the previous token, if any, still works)\n",
         );
         return 1;
       }
       const saved = saveClientConfig({ url: base, token }, args.flags.local === true);
       process.stdout.write(
-        `zapisane (${saved}). Jestes @${(me.actor as { handle: string }).handle} na ${base}\n`,
+        `saved (${saved}). You are @${(me.actor as { handle: string }).handle} on ${base}\n`,
       );
       return 0;
     }
@@ -602,7 +602,7 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
     const api = new Api(cfg);
     return await run(api, cfg, cmd, rest, args);
   } catch (err) {
-    process.stderr.write(`blad: ${err instanceof Error ? err.message : err}\n`);
+    process.stderr.write(`error: ${err instanceof Error ? err.message : err}\n`);
     return 1;
   }
 }
@@ -615,14 +615,14 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "whoami": {
       const me = await api.call("GET", "/api/me");
       const actor = me.actor as { handle: string; kind: string };
-      out(`@${actor.handle} (${actor.kind}) na ${cfg.url}`);
+      out(`@${actor.handle} (${actor.kind}) on ${cfg.url}`);
       maybePrintGuidelines(me, out);
       return 0;
     }
 
     case "guidelines": {
       const r = await api.call("GET", "/api/guidelines");
-      out(String(r.text ?? "(brak pliku zasad w tej instalacji)"));
+      out(String(r.text ?? "(no guidelines file in this installation)"));
       return 0;
     }
 
@@ -635,30 +635,30 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       ]);
       maybePrintGuidelines(me, out);
       const { who, conv } = await nameMaps(api);
-      out("=== KTO JEST ===");
+      out("=== WHO IS HERE ===");
       const rows = presence.presence as Array<{
         handle: string; label: string; online: boolean; typing: boolean; busy: boolean;
         doing: string | null; lastSeenAt: number;
       }>;
-      if (rows.length === 0) out("  (nikogo)");
+      if (rows.length === 0) out("  (nobody)");
       for (const p of rows) {
-        const state = p.typing ? "PISZE   " : p.busy ? "pracuje " : p.online ? "aktywna " : "cisza   ";
-        out(`  [${state}] @${p.handle} (${oneLine(p.label)})${p.doing ? ` - robi: ${oneLine(p.doing)}` : ""}`);
+        const state = p.typing ? "TYPING  " : p.busy ? "working " : p.online ? "active  " : "idle    ";
+        out(`  [${state}] @${p.handle} (${oneLine(p.label)})${p.doing ? ` - doing: ${oneLine(p.doing)}` : ""}`);
       }
-      out("\n=== NIEPRZECZYTANE ===");
+      out("\n=== UNREAD ===");
       const unread = (me.unread as Array<{ conversationId: number; unread: number; badge: number }>)
         .filter((r) => r.unread > 0);
-      if (unread.length === 0) out("  (nic)");
+      if (unread.length === 0) out("  (none)");
       for (const r of unread) {
         out(`  ${String(r.unread).padStart(3)}  ${conv.get(r.conversationId) ?? r.conversationId}` +
-          (r.badge ? `  (dotyczy Ciebie: ${r.badge})` : ""));
+          (r.badge ? `  (for you: ${r.badge})` : ""));
       }
-      out("\n=== OTWARTE PYTANIA ===");
+      out("\n=== OPEN QUESTIONS ===");
       const questions = open.questions as Array<{ id: number; message: Msg }>;
-      if (questions.length === 0) out("  (nic)");
+      if (questions.length === 0) out("  (none)");
       for (const q of questions) out(`  [q${q.id}]` + fmtMsg(q.message, who, conv).slice(1));
       const d = digest.digest as { count: number } | null;
-      if (d) out(`\nPod Twoja nieobecnosc: ${d.count} wiadomosci - szczegoly: atalk since`);
+      if (d) out(`\nWhile you were away: ${d.count} messages - details: atalk since`);
       return 0;
     }
 
@@ -670,11 +670,11 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const r = await api.call("GET", `/api/messages?after=${after}&wait=${wait}`);
       const messages = r.messages as Msg[];
       if (messages.length === 0) {
-        out("Brak nowych wiadomosci.");
+        out("No new messages.");
         return 0;
       }
       const { who, conv } = await nameMaps(api);
-      out(`${messages.length} nowych:`);
+      out(`${messages.length} new:`);
       for (const m of messages) out(fmtMsg(m, who, conv));
       // The cursor moves AFTER printing: if rendering threw, the next `read` shows the same
       // thing instead of skipping past unread messages.
@@ -685,7 +685,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "log": {
       const ref = rest.find((a) => a.startsWith("#") || a.startsWith("@"));
       if (!ref) {
-        process.stderr.write("uzycie: atalk log <#kanal|@kto> [n]\n");
+        process.stderr.write("usage: atalk log <#channel|@who> [n]\n");
         return 1;
       }
       const n = Number(rest.find((a) => /^\d+$/.test(a)) ?? 20);
@@ -693,7 +693,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const r = await api.call("GET", `/api/conversations/${id}/messages?limit=${n}`);
       const messages = r.messages as Msg[];
       const { who, conv } = await nameMaps(api);
-      if (messages.length === 0) out("Pusto.");
+      if (messages.length === 0) out("Empty.");
       for (const m of messages) out(fmtMsg(m, who, conv));
       // Mark as read ONLY up to the message actually shown - an empty POST /read reaches
       // for the server's default marker (the same bug as talk_log in MCP, audit #2/#10).
@@ -712,25 +712,25 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const rows = (r.rows as Array<{ conversationId: number; unread: number; badge: number }>)
         .filter((x) => x.unread > 0);
       if (rows.length === 0) {
-        out("Wszystko przeczytane.");
+        out("Everything is read.");
         return 0;
       }
-      out("Nieprzeczytane:");
+      out("Unread:");
       for (const x of rows.sort((a, b) => b.unread - a.unread)) {
         out(`  ${String(x.unread).padStart(3)}  ${conv.get(x.conversationId) ?? x.conversationId}` +
-          (x.badge ? `  (dotyczy Ciebie: ${x.badge})` : ""));
+          (x.badge ? `  (for you: ${x.badge})` : ""));
       }
       return 0;
     }
 
     case "seen": {
       if (!rest[0]) {
-        process.stderr.write("uzycie: atalk seen <#kanal|@kto>\n");
+        process.stderr.write("usage: atalk seen <#channel|@who>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
       await api.call("POST", `/api/conversations/${id}/read`, {});
-      out(`oznaczone jako przeczytane: ${rest[0]}`);
+      out(`marked as read: ${rest[0]}`);
       return 0;
     }
 
@@ -741,19 +741,19 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         mentions: Msg[]; open: Array<{ id: number; message: Msg }>;
       } | null;
       if (!d) {
-        out("Nic nowego od Twojej ostatniej aktywnosci.");
+        out("Nothing new since your last activity.");
         return 0;
       }
-      out(`Pod Twoja nieobecnosc: ${d.count} wiadomosci`);
-      out("  kto:    " + d.byWho.map(([k, v]) => `${k} x${v}`).join(", "));
-      out("  gdzie:  " + d.byConversation.map(([k, v]) => `${k} x${v}`).join(", "));
+      out(`While you were away: ${d.count} messages`);
+      out("  who:    " + d.byWho.map(([k, v]) => `${k} x${v}`).join(", "));
+      out("  where:  " + d.byConversation.map(([k, v]) => `${k} x${v}`).join(", "));
       if (d.mentions.length) {
         const { who, conv } = await nameMaps(api);
-        out(`\n  DOTYCZY CIEBIE (${d.mentions.length}):`);
+        out(`\n  FOR YOU (${d.mentions.length}):`);
         for (const m of d.mentions.slice(-3)) out("  " + fmtMsg(m, who, conv));
       }
       if (d.open.length) {
-        out(`\n  OTWARTE PYTANIA (${d.open.length}):`);
+        out(`\n  OPEN QUESTIONS (${d.open.length}):`);
         for (const q of d.open) out(`    [q${q.id}] ${oneLine(q.message.body, 90)}`);
       }
       return 0;
@@ -763,7 +763,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const r = await api.call("GET", "/api/mentions");
       const messages = r.messages as Msg[];
       if (messages.length === 0) {
-        out("Brak wzmianek.");
+        out("No mentions.");
         return 0;
       }
       const { who, conv } = await nameMaps(api);
@@ -775,7 +775,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const ref = rest.find((a) => a.startsWith("#"));
       const q = rest.filter((a) => !a.startsWith("#")).join(" ");
       if (!q) {
-        process.stderr.write("uzycie: atalk search <fraza> [#kanal]\n");
+        process.stderr.write("usage: atalk search <phrase> [#channel]\n");
         return 1;
       }
       const params = new URLSearchParams({ q });
@@ -786,7 +786,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       if (untilTs) params.set("untilTs", untilTs);
       const r = await api.call("GET", `/api/search?${params}`);
       const messages = r.messages as Msg[];
-      out(`${messages.length} trafien:`);
+      out(`${messages.length} matches:`);
       const { who, conv } = await nameMaps(api);
       for (const m of messages) out(fmtMsg(m, who, conv));
       return 0;
@@ -798,7 +798,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       // A NaN from a non-numeric --after is taken by the server as 0 and prints the whole history.
       let cursor: number | undefined =
         afterRaw !== undefined && /^\d+$/.test(afterRaw) ? Number(afterRaw) : undefined;
-      out("strumien na zywo (Ctrl+C konczy)...");
+      out("live stream (Ctrl+C to stop)...");
       // Reconnect: SSE is sometimes cut by a proxy; we resume from the last id.
       for (;;) {
         try {
@@ -811,10 +811,10 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
               for (const [k, v] of maps.who) who.set(k, v);
               for (const [k, v] of maps.conv) conv.set(k, v);
             }
-            out(fmtMsg(m, who, conv) + (ev.type === "message_updated" ? "  (zmieniona)" : ""));
+            out(fmtMsg(m, who, conv) + (ev.type === "message_updated" ? "  (updated)" : ""));
           }
         } catch (err) {
-          out(`(strumien zerwany: ${err instanceof Error ? err.message : err}; wznawiam za 2 s)`);
+          out(`(stream disconnected: ${err instanceof Error ? err.message : err}; reconnecting in 2 s)`);
         }
         await new Promise((r) => setTimeout(r, 2000));
       }
@@ -827,15 +827,15 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         doing: string | null; lastSeenAt: number;
       }>;
       if (rows.length === 0) {
-        out("Nikogo nie ma.");
+        out("Nobody is here.");
         return 0;
       }
       for (const p of rows) {
-        const state = p.typing ? "PISZE" : p.busy ? "pracuje" : p.online ? "aktywna" : "cisza";
+        const state = p.typing ? "TYPING" : p.busy ? "working" : p.online ? "active" : "idle";
         const age = Math.round(Date.now() / 1000 - p.lastSeenAt);
         const ago = age < 60 ? `${age}s` : `${Math.round(age / 60)}min`;
-        out(`  [${state.padEnd(8)}] @${p.handle} (${oneLine(p.label)})  ostatnio ${ago} temu` +
-          (p.doing ? `  robi: ${oneLine(p.doing)}` : ""));
+        out(`  [${state.padEnd(8)}] @${p.handle} (${oneLine(p.label)})  last seen ${ago} ago` +
+          (p.doing ? `  doing: ${oneLine(p.doing)}` : ""));
       }
       return 0;
     }
@@ -849,7 +849,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         id: number; kind: string; slug: string | null; topic: string;
       }>) {
         const name = c.slug ? `#${c.slug}` : `[${c.kind}:${c.id}]`;
-        const mine = memberships.has(c.id) ? "" : "  (nie jestes czlonkiem - atalk join)";
+        const mine = memberships.has(c.id) ? "" : "  (you are not a member - atalk join)";
         out(`  ${name}${c.topic ? `  - ${c.topic}` : ""}${mine}`);
       }
       return 0;
@@ -867,7 +867,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         threadId = Number(rest[0]);
         body = rest.slice(1).join(" ");
         if (!Number.isFinite(threadId) || !body) {
-          process.stderr.write("uzycie: atalk thread <id-wiadomosci> <tekst>\n");
+          process.stderr.write("usage: atalk thread <message-id> <text>\n");
           return 1;
         }
         // the conversation follows from the root message
@@ -878,7 +878,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         body = rest.slice(1).join(" ");
       }
       if (!ref || !body) {
-        process.stderr.write(`uzycie: atalk ${cmd} ${cmd === "say" ? "<tekst>" : "<adres> <tekst>"}\n`);
+        process.stderr.write(`usage: atalk ${cmd} ${cmd === "say" ? "<text>" : "<target> <text>"}\n`);
         return 1;
       }
       const id = await resolveConv(api, ref);
@@ -896,48 +896,48 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         deliveryNote = "  ->  " + (r.delivery as Array<{
           handle: string; online: boolean; lastSeenAt: number | null;
         }>).map((d) => {
-          const state = d.online ? "zywa" : d.lastSeenAt
-            ? `cisza ${Math.round((Date.now() / 1000 - d.lastSeenAt) / 60)} min`
-            : "NIEOBECNA";
+          const state = d.online ? "online" : d.lastSeenAt
+            ? `idle ${Math.round((Date.now() / 1000 - d.lastSeenAt) / 60)} min`
+            : "ABSENT";
           return `@${d.handle}: ${state}`;
         }).join(", ");
       }
-      out(`wyslane [${m.id}]${deliveryNote}`);
+      out(`sent [${m.id}]${deliveryNote}`);
       return 0;
     }
 
     case "react": {
       if (rest.length < 2) {
-        process.stderr.write("uzycie: atalk react <id-wiadomosci> <emoji>\n");
+        process.stderr.write("usage: atalk react <message-id> <emoji>\n");
         return 1;
       }
       const r = await api.call("POST", `/api/messages/${rest[0]}/reactions`, { emoji: rest[1] });
-      out(r.on ? "reakcja dodana" : "reakcja zdjeta");
+      out(r.on ? "reaction added" : "reaction removed");
       return 0;
     }
 
     case "ask": {
       if (rest.length < 2) {
-        process.stderr.write("uzycie: atalk ask <#kanal> <pytanie>\n");
+        process.stderr.write("usage: atalk ask <#channel> <question>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
       const r = await api.call("POST", `/api/conversations/${id}/ask`, {
         body: rest.slice(1).join(" "), sessionId: sessionId(args),
       });
-      out(`otwarte pytanie [q${r.question}] - odpowie ktokolwiek: atalk answer ${r.question} <tekst>`);
+      out(`open question [q${r.question}] - anyone can answer: atalk answer ${r.question} <text>`);
       return 0;
     }
 
     case "answer": {
       if (rest.length < 2) {
-        process.stderr.write("uzycie: atalk answer <qid> <tekst>\n");
+        process.stderr.write("usage: atalk answer <qid> <text>\n");
         return 1;
       }
       await api.call("POST", `/api/questions/${rest[0].replace(/^q/, "")}/answer`, {
         body: rest.slice(1).join(" "), sessionId: sessionId(args),
       });
-      out(`odpowiedziane na q${rest[0].replace(/^q/, "")}`);
+      out(`answered q${rest[0].replace(/^q/, "")}`);
       return 0;
     }
 
@@ -946,71 +946,71 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const r = await api.call("GET", `/api/questions/open${params}`);
       const questions = r.questions as Array<{ id: number; message: Msg }>;
       if (questions.length === 0) {
-        out("Brak otwartych pytan.");
+        out("No open questions.");
         return 0;
       }
       const { who, conv } = await nameMaps(api);
-      out(`${questions.length} otwartych:`);
+      out(`${questions.length} open:`);
       for (const q of questions) out(`  [q${q.id}]` + fmtMsg(q.message, who, conv).slice(1));
       return 0;
     }
 
     case "edit": {
       if (rest.length < 2) {
-        process.stderr.write("uzycie: atalk edit <id> <tekst>\n");
+        process.stderr.write("usage: atalk edit <id> <text>\n");
         return 1;
       }
       await api.call("PATCH", `/api/messages/${rest[0]}`, { body: rest.slice(1).join(" ") });
-      out("zmienione");
+      out("updated");
       return 0;
     }
 
     case "rm": {
       if (!rest[0]) {
-        process.stderr.write("uzycie: atalk rm <id>\n");
+        process.stderr.write("usage: atalk rm <id>\n");
         return 1;
       }
       await api.call("DELETE", `/api/messages/${rest[0]}`);
-      out("skasowane");
+      out("deleted");
       return 0;
     }
 
     case "pin":
     case "unpin": {
       if (!rest[0]) {
-        process.stderr.write(`uzycie: atalk ${cmd} <id-wiadomosci>\n`);
+        process.stderr.write(`usage: atalk ${cmd} <message-id>\n`);
         return 1;
       }
       await api.call(cmd === "pin" ? "POST" : "DELETE", `/api/messages/${rest[0]}/pin`);
-      out(cmd === "pin" ? `przypiete ${rest[0]}` : `odpiete ${rest[0]}`);
+      out(cmd === "pin" ? `pinned ${rest[0]}` : `unpinned ${rest[0]}`);
       return 0;
     }
 
     case "pins": {
       if (!rest[0]) {
-        process.stderr.write("uzycie: atalk pins <#kanal|@kto>\n");
+        process.stderr.write("usage: atalk pins <#channel|@who>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
       const r = await api.call("GET", `/api/conversations/${id}/pins`);
       const pins = r.pins as Array<{ messageId: number; by: string }>;
       if (pins.length === 0) {
-        out("Nic nie przypiete.");
+        out("Nothing pinned.");
         return 0;
       }
       const msgs = await api.call("GET", `/api/conversations/${id}/messages?limit=500`);
       const byId = new Map((msgs.messages as Msg[]).map((m) => [m.id, m]));
       for (const p of pins) {
         const m = byId.get(p.messageId);
-        out(`  [${p.messageId}] ${m ? oneLine(m.body, 100) : "(starsza wiadomosc)"}  ` +
-          `(przypiete przez @${p.by})`);
+        out(`  [${p.messageId}] ${m ? oneLine(m.body, 100) : "(older message)"}  ` +
+          `(pinned by @${p.by})`);
       }
       return 0;
     }
 
     case "channel": {
       if (!rest[0]) {
-        process.stderr.write("uzycie: atalk channel <#nazwa> [--private] [--topic ...]\n");
+        process.stderr.write("usage: atalk channel <#name> [--private] [--topic ...]\n");
         return 1;
       }
       const r = await api.call("POST", "/api/conversations", {
@@ -1019,48 +1019,48 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         topic: flagStr(args, "topic"),
       });
       const c = r.conversation as { slug: string; kind: string };
-      out(`zalozony kanal #${c.slug} (${c.kind})`);
+      out(`created channel #${c.slug} (${c.kind})`);
       return 0;
     }
 
     case "join":
     case "leave": {
       if (!rest[0]) {
-        process.stderr.write(`uzycie: atalk ${cmd} <#kanal>\n`);
+        process.stderr.write(`usage: atalk ${cmd} <#channel>\n`);
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
       if (cmd === "join") {
         await api.call("POST", `/api/conversations/${id}/join`);
-        out(`dolaczono do ${rest[0]}`);
+        out(`joined ${rest[0]}`);
       } else {
         await api.call("POST", `/api/conversations/${id}/leave`);
-        out(`opuszczono ${rest[0]}`);
+        out(`left ${rest[0]}`);
       }
       return 0;
     }
 
     case "invite": {
       if (rest.length < 2) {
-        process.stderr.write("uzycie: atalk invite <#kanal> <@kto>\n");
+        process.stderr.write("usage: atalk invite <#channel> <@who>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
       await api.call("POST", `/api/conversations/${id}/members`, {
         handle: rest[1].replace(/^@/, ""),
       });
-      out(`zaproszono ${rest[1]} do ${rest[0]}`);
+      out(`invited ${rest[1]} to ${rest[0]}`);
       return 0;
     }
 
     case "notify": {
       if (rest.length < 2 || !["all", "mentions", "none"].includes(rest[1])) {
-        process.stderr.write("uzycie: atalk notify <#kanal> all|mentions|none\n");
+        process.stderr.write("usage: atalk notify <#channel> all|mentions|none\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
       await api.call("POST", `/api/conversations/${id}/notify`, { notify: rest[1] });
-      out(`powiadomienia dla ${rest[0]}: ${rest[1]}`);
+      out(`notifications for ${rest[0]}: ${rest[1]}`);
       return 0;
     }
 
@@ -1072,9 +1072,9 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       if (cmd === "doing") body.doing = rest.join(" ");
       if (flagStr(args, "kind") === "ephemeral") body.kind = "ephemeral";
       await api.call("POST", "/api/sessions", body);
-      if (cmd === "me") out(`sesja ${sessionId(args)} zarejestrowana` +
-        (body.label ? ` jako "${body.label}"` : ""));
-      if (cmd === "doing") out(`ustawione: ${body.doing}`);
+      if (cmd === "me") out(`session ${sessionId(args)} registered` +
+        (body.label ? ` as "${body.label}"` : ""));
+      if (cmd === "doing") out(`set: ${body.doing}`);
       return 0;
     }
 
@@ -1097,13 +1097,13 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "bye": {
       await api.call("DELETE", `/api/sessions/${encodeURIComponent(sessionId(args))}`);
-      out("sesja zakonczona");
+      out("session ended");
       return 0;
     }
 
     case "claim": {
       if (!rest[0]) {
-        process.stderr.write("uzycie: atalk claim <zasob> [--ttl N] [--note ...]\n");
+        process.stderr.write("usage: atalk claim <resource> [--ttl N] [--note ...]\n");
         return 1;
       }
       const r = await api.call("POST", "/api/leases", {
@@ -1114,18 +1114,18 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       }, { allow409: true });
       if (r.granted) {
         const lease = r.lease as { expiresAt: number };
-        out(`GRANTED ${rest[0]} na ${lease.expiresAt - Math.floor(Date.now() / 1000)} s`);
+        out(`GRANTED ${rest[0]} for ${lease.expiresAt - Math.floor(Date.now() / 1000)} s`);
         return 0;
       }
       const held = r.heldBy as { handle: string; expiresAt: number; note: string | null };
-      out(`HELD-BY @${held.handle} jeszcze ${held.expiresAt - Math.floor(Date.now() / 1000)} s` +
+      out(`HELD-BY @${held.handle} for another ${held.expiresAt - Math.floor(Date.now() / 1000)} s` +
         (held.note ? ` (${held.note})` : ""));
       return 1;
     }
 
     case "release": {
       if (!rest[0]) {
-        process.stderr.write("uzycie: atalk release <zasob>\n");
+        process.stderr.write("usage: atalk release <resource>\n");
         return 1;
       }
       const r = await api.call("POST", "/api/leases/release", { resource: rest[0] },
@@ -1134,7 +1134,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         out("UNLOCKED");
         return 0;
       }
-      out(`DENIED - trzyma @${(r.heldBy as { handle: string }).handle}`);
+      out(`DENIED - held by @${(r.heldBy as { handle: string }).handle}`);
       return 1;
     }
 
@@ -1144,7 +1144,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         resource: string; handle: string; expiresAt: number; note: string | null;
       }>;
       if (leases.length === 0) {
-        out("Nic nie jest zajete.");
+        out("No resources are held.");
         return 0;
       }
       const now = Math.floor(Date.now() / 1000);
@@ -1157,7 +1157,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "send-file": {
       if (!rest[0]) {
-        process.stderr.write("uzycie: atalk send-file <sciezka> [--to <#kanal|@kto>] " +
+        process.stderr.write("usage: atalk send-file <path> [--to <#channel|@who>] " +
           "[--sensitive] [--ttl N] [--burn]\n");
         return 1;
       }
@@ -1173,13 +1173,13 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       if (ttl) headers["x-ttl"] = ttl;
       const r = await api.upload(`/api/conversations/${id}/files`, data, headers);
       const file = r.file as { id: string; name: string; size: number };
-      out(`wyslane: ${file.name} (${file.size} B)  id=${file.id}`);
+      out(`sent: ${file.name} (${file.size} B)  id=${file.id}`);
       return 0;
     }
 
     case "files": {
       if (!rest[0]) {
-        process.stderr.write("uzycie: atalk files <#kanal|@kto>\n");
+        process.stderr.write("usage: atalk files <#channel|@who>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
@@ -1188,27 +1188,27 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         id: string; name: string; size: number; sensitive: boolean; expiresAt: number | null;
       }>;
       if (files.length === 0) {
-        out("Brak plikow.");
+        out("No files.");
         return 0;
       }
       for (const f of files) {
         const now = Math.floor(Date.now() / 1000);
         out(`  [${f.id}] ${f.name} (${f.size} B)` +
-          (f.sensitive ? " [wrazliwy]" : "") +
-          (f.expiresAt ? ` wygasa za ${Math.max(0, f.expiresAt - now)}s` : ""));
+          (f.sensitive ? " [sensitive]" : "") +
+          (f.expiresAt ? ` expires in ${Math.max(0, f.expiresAt - now)}s` : ""));
       }
-      out("\nPobierz: atalk get-file <id> <sciezka>");
+      out("\nDownload: atalk get-file <id> <path>");
       return 0;
     }
 
     case "get-file": {
       if (rest.length < 2) {
-        process.stderr.write("uzycie: atalk get-file <id> <sciezka-docelowa>\n");
+        process.stderr.write("usage: atalk get-file <id> <destination-path>\n");
         return 1;
       }
       const data = await api.download(`/api/files/${rest[0]}`);
       writeFileSync(rest[1], data);
-      out(`zapisane ${data.length} B -> ${rest[1]}`);
+      out(`saved ${data.length} B -> ${rest[1]}`);
       return 0;
     }
 
@@ -1216,7 +1216,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       return await runWiki(api, rest, args, out);
 
     default:
-      process.stderr.write(`nieznana komenda: ${cmd}\n\n${USAGE}`);
+      process.stderr.write(`unknown command: ${cmd}\n\n${USAGE}`);
       return 1;
   }
 }
@@ -1229,10 +1229,10 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
   switch (sub) {
     case "search": {
       const q = rrest.join(" ");
-      if (!q) { process.stderr.write("uzycie: atalk wiki search <fraza>\n"); return 1; }
+      if (!q) { process.stderr.write("usage: atalk wiki search <phrase>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/search?q=${enc(q)}`);
       const hits = r.hits as Array<{ slug: string; title: string; snippet: string }>;
-      if (hits.length === 0) { out("Brak trafien. Zaloz strone: atalk wiki write <slug> --title ..."); return 0; }
+      if (hits.length === 0) { out("No matches. Create a page: atalk wiki write <slug> --title ..."); return 0; }
       noteOnce();
       for (const h of hits) out(`  [${h.slug}] ${oneLine(h.title)}\n${quote(h.snippet)}`);
       return 0;
@@ -1240,25 +1240,25 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
     case "list": {
       const r = await api.call("GET", "/api/wiki");
       const pages = r.pages as Array<{ slug: string; title: string; updatedBy: string | null }>;
-      if (pages.length === 0) { out("Wiki jest pusta."); return 0; }
-      for (const p of pages) out(`  [${p.slug}] ${oneLine(p.title)}  (zmiana: @${p.updatedBy ?? "?"})`);
+      if (pages.length === 0) { out("The wiki is empty."); return 0; }
+      for (const p of pages) out(`  [${p.slug}] ${oneLine(p.title)}  (updated by: @${p.updatedBy ?? "?"})`);
       return 0;
     }
     case "read": {
-      if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki read <slug>\n"); return 1; }
+      if (!rrest[0]) { process.stderr.write("usage: atalk wiki read <slug>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}`);
       const p = r.page as { title: string; slug: string; body: string; updatedBy: string | null; revisions: number };
       noteOnce();
       out(`# ${oneLine(p.title)}  (${p.slug})`);
-      out(`ostatnia zmiana: @${p.updatedBy ?? "?"}, rewizji: ${p.revisions}\n`);
+      out(`last updated by: @${p.updatedBy ?? "?"}, revisions: ${p.revisions}\n`);
       out(quote(p.body));
       const files = r.files as Array<{ id: string; name: string; size: number }>;
-      if (files.length) { out("\nZalaczniki:"); for (const f of files) out(`  [${f.id}] ${f.name} (${f.size} B)`); }
+      if (files.length) { out("\nAttachments:"); for (const f of files) out(`  [${f.id}] ${f.name} (${f.size} B)`); }
       return 0;
     }
     case "write": {
       const slugIdx = rrest.findIndex((a) => !a.startsWith("-"));
-      if (slugIdx === -1) { process.stderr.write("uzycie: atalk wiki write <slug> --title \"...\" [--file plik | --stdin | tekst]\n"); return 1; }
+      if (slugIdx === -1) { process.stderr.write("usage: atalk wiki write <slug> --title \"...\" [--file file | --stdin | text]\n"); return 1; }
       const slug = rrest[slugIdx];
       // We build the body from the POSITION after the slug, not from filter(a => a !== slug) -
       // the latter removed EVERY occurrence of the slug as a word, so a body containing the
@@ -1270,7 +1270,7 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       const strayFlag = afterSlug.find((a) => a.startsWith("-"));
       if (strayFlag) {
         process.stderr.write(
-          `nieznana flaga ${strayFlag} (albo dodaj ja do KNOWN_FLAGS, albo usun z wywolania)\n`,
+          `unknown flag ${strayFlag} (add it to KNOWN_FLAGS or remove it from the command)\n`,
         );
         return 1;
       }
@@ -1291,37 +1291,37 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
         ...(args.flags.force === true ? { force: true } : {}),
       });
       const p = r.page as { slug: string; title: string; revisions: number; lastRevisionId: number };
-      out(`zapisane: [${p.slug}] "${p.title}" (rewizja ${p.lastRevisionId}, ${p.revisions} w historii)`);
+      out(`saved: [${p.slug}] "${p.title}" (revision ${p.lastRevisionId}, ${p.revisions} in history)`);
       return 0;
     }
     case "revision": {
       // The content of an old revision - this is the answer to "I overwrote somebody else's
       // page, how do I get back what was there": history lists them, this route returns the body.
-      if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki revision <slug> <id>\n"); return 1; }
+      if (rrest.length < 2) { process.stderr.write("usage: atalk wiki revision <slug> <id>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/revisions/${enc(rrest[1])}`);
       const rev = r.revision as { id: number; actor: string | null; title: string; body: string };
       noteOnce();
-      out(`# ${oneLine(rev.title)}  (rewizja ${rev.id}, @${rev.actor ?? "?"})\n`);
+      out(`# ${oneLine(rev.title)}  (revision ${rev.id}, @${rev.actor ?? "?"})\n`);
       out(quote(rev.body));
       return 0;
     }
     case "delete": case "rm": {
-      if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki delete <slug>\n"); return 1; }
+      if (!rrest[0]) { process.stderr.write("usage: atalk wiki delete <slug>\n"); return 1; }
       const r = await api.call("DELETE", `/api/wiki/${enc(rrest[0])}`);
       const d = r.deleted as { slug: string; title: string; movedChildren: number };
-      out(`skasowane: [${d.slug}] "${d.title}"` +
-        (d.movedChildren ? ` (podstron przeniesionych wyzej: ${d.movedChildren})` : ""));
+      out(`deleted: [${d.slug}] "${d.title}"` +
+        (d.movedChildren ? ` (child pages moved up: ${d.movedChildren})` : ""));
       return 0;
     }
     case "revert": {
-      if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki revert <slug> <id-rewizji>\n"); return 1; }
+      if (rrest.length < 2) { process.stderr.write("usage: atalk wiki revert <slug> <revision-id>\n"); return 1; }
       const r = await api.call("POST", `/api/wiki/${enc(rrest[0])}/revert`, { revisionId: Number(rrest[1]) });
       const p2 = r.page as { slug: string; title: string; lastRevisionId: number };
-      out(`przywrocone: [${p2.slug}] "${p2.title}" (jako nowa rewizja ${p2.lastRevisionId})`);
+      out(`restored: [${p2.slug}] "${p2.title}" (as new revision ${p2.lastRevisionId})`);
       return 0;
     }
     case "history": {
-      if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki history <slug>\n"); return 1; }
+      if (!rrest[0]) { process.stderr.write("usage: atalk wiki history <slug>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/history`);
       const revs = r.revisions as Array<{ id: number; actor: string | null; note: string | null; createdAt: number }>;
       for (const rv of revs) {
@@ -1331,26 +1331,26 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     case "attach": {
-      if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki attach <slug> <sciezka>\n"); return 1; }
+      if (rrest.length < 2) { process.stderr.write("usage: atalk wiki attach <slug> <path>\n"); return 1; }
       const data = readFileSync(rrest[1]);
       const r = await api.upload(`/api/wiki/${enc(rrest[0])}/files`, data, {
         "x-file-name": encodeURIComponent(basename(rrest[1])),
       });
       const f = r.file as { id: string; name: string; size: number };
-      out(`podpiete do [${rrest[0]}]: ${f.name} (${f.size} B)  id=${f.id}`);
+      out(`attached to [${rrest[0]}]: ${f.name} (${f.size} B)  id=${f.id}`);
       return 0;
     }
     case "files": {
-      if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki files <slug>\n"); return 1; }
+      if (!rrest[0]) { process.stderr.write("usage: atalk wiki files <slug>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/files`);
       const files = r.files as Array<{ id: string; name: string; size: number }>;
-      if (files.length === 0) { out("Brak zalacznikow."); return 0; }
+      if (files.length === 0) { out("No attachments."); return 0; }
       for (const f of files) out(`  [${f.id}] ${f.name} (${f.size} B)`);
-      out("\nPobierz: atalk get-file <id> <sciezka>");
+      out("\nDownload: atalk get-file <id> <path>");
       return 0;
     }
     default:
-      process.stderr.write("uzycie: atalk wiki search|list|read|write|history|revision|revert|delete|attach|files\n");
+      process.stderr.write("usage: atalk wiki search|list|read|write|history|revision|revert|delete|attach|files\n");
       return 1;
   }
 }

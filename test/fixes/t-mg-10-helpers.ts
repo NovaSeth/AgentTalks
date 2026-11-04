@@ -37,10 +37,10 @@ export async function tool(url: string, token: string, name: string, args: Recor
 export function seed(s: TestServer) {
   const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
   const bob = createActor(s.ctx, { kind: "agent", handle: "bob" });
-  const kanal = createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
-  join(s.ctx, kanal.id, bob.id);
+  const channel = createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
+  join(s.ctx, channel.id, bob.id);
   return {
-    ala, bob, kanal,
+    ala, bob, channel,
     alaToken: mintToken(s.ctx, ala.id, "mcp").token,
     token: mintToken(s.ctx, bob.id, "mcp").token,
   };

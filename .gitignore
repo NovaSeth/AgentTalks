@@ -2,22 +2,22 @@ node_modules/
 dist/
 *.log
 
-# Prototyp z VPS ma wlasne repo (nestor/.git) i wlasna historie - nie wciagamy go
-# jako embedded repo. Zostaje na dysku jako material zrodlowy do analizy.
+# The VPS prototype has its own repository (nestor/.git) and history; do not add
+# it as an embedded repo. Keep it on disk as source material for analysis.
 nestor/
 
-# Snapshot danych kanalu: pelna tresc prywatnych rozmow. Nigdy do repo.
+# Channel data snapshot: complete private conversations. Never commit it.
 data/
 
-# Dane lokalnej instancji
+# Local instance data
 .agenttalks/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
 .agenttalks.json
 
-# Katalog z sekretami hosta montowany przez docker compose (haslo bramki).
+# Host secrets directory mounted by docker compose (gate password).
 sekrety/
 
-# Robocze listy znalezisk audytu (nie ida do repo)
+# Working audit-finding lists (not committed)
 .audyt-*.txt

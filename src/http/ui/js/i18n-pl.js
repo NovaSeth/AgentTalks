@@ -11,6 +11,20 @@
  * `n === 1 ? a : b` here would be wrong for "2 wiadomości" versus "5 wiadomości".
  */
 export const PL = {
+  "pasted-{stamp}.{extension}": "wklejone-{stamp}.{extension}",
+  "Close notification": "Zamknij powiadomienie",
+  "Copy": "Kopiuj",
+  "Wiki page": "strona wiki",
+  "This page does not exist yet - click to create it": "strona jeszcze nie istnieje - klik zaklada",
+  "Drop to attach": "Upuść, żeby załączyć",
+  "This space is private. Enter the access password to see the sign-in screen.":
+    "To miejsce jest prywatne. Podaj hasło dostępu, aby zobaczyć ekran logowania.",
+  "Access password": "Hasło dostępu",
+  "Continue": "Dalej",
+  "Checking...": "Sprawdzanie...",
+  "Wrong password. Try again.": "Nieprawidłowe hasło. Spróbuj ponownie.",
+  "Too many attempts - wait a moment and try again.": "Za dużo prób - poczekaj chwilę i spróbuj ponownie.",
+  "The server is not responding. Try again shortly.": "Serwer nie odpowiada. Spróbuj ponownie za chwilę.",
   // --- login and identity ---
   "Sign in to join the conversation": "Zaloguj się, żeby wejść do rozmowy",
   "Name": "Nazwa",
@@ -592,6 +606,65 @@ export const PL = {
   "Close anyway": "Zamknij mimo to",
 
   // --- server errors, translated by code (see api.js) ---
+  "Your access token has expired. Ask an admin for a replacement.":
+    "Twój token dostępu wygasł. Poproś admina o nowy.",
+  "Your access token has been revoked. Ask an admin for a replacement.":
+    "Twój token dostępu został odwołany. Poproś admina o nowy.",
+  "Too many live connections are open. Close unused AgentTalks tabs and try again.":
+    "Otwartych jest zbyt wiele połączeń na żywo. Zamknij nieużywane karty AgentTalks i spróbuj ponownie.",
+  "Check your username and password, then try signing in again.":
+    "Sprawdź nazwę użytkownika i hasło, a następnie spróbuj zalogować się ponownie.",
+  "Passkeys are not configured on this server. Sign in with your password and ask an admin to configure the server URL.":
+    "Klucze dostępu nie są skonfigurowane na tym serwerze. Zaloguj się hasłem i poproś admina o ustawienie adresu URL serwera.",
+  "The passkey data could not be read. Try again or sign in with your password.":
+    "Nie udało się odczytać danych klucza dostępu. Spróbuj ponownie lub zaloguj się hasłem.",
+  "The passkey could not be used. Try again or sign in with your password.":
+    "Nie udało się użyć klucza dostępu. Spróbuj ponownie lub zaloguj się hasłem.",
+  "The passkey request has expired or is invalid. Start the passkey operation again.":
+    "Żądanie dotyczące klucza dostępu wygasło lub jest nieprawidłowe. Rozpocznij operację ponownie.",
+  "This address does not match your passkey. Open the server's configured URL and try again.":
+    "Ten adres nie pasuje do klucza dostępu. Otwórz adres URL ustawiony dla serwera i spróbuj ponownie.",
+  "Verify your identity with your fingerprint, face or device PIN, then try again.":
+    "Potwierdź tożsamość odciskiem palca, twarzą lub kodem PIN urządzenia i spróbuj ponownie.",
+  "This passkey was rejected. Sign in with your password and register a new passkey.":
+    "Ten klucz dostępu został odrzucony. Zaloguj się hasłem i zarejestruj nowy klucz.",
+  "The passkey signature could not be verified. Try again or sign in with your password.":
+    "Nie udało się zweryfikować podpisu klucza dostępu. Spróbuj ponownie lub zaloguj się hasłem.",
+  "This avatar is missing. Upload the image again.": "Brakuje tego awatara. Prześlij obraz ponownie.",
+  "That wiki section no longer exists. Open the full page and choose another section.":
+    "Ta sekcja wiki już nie istnieje. Otwórz całą stronę i wybierz inną sekcję.",
+  "Direct conversations cannot be renamed. Change the topic instead.":
+    "Nie można zmienić nazwy rozmowy prywatnej. Zamiast tego zmień temat.",
+  "There are no changes to save. Edit something before saving.":
+    "Nie ma zmian do zapisania. Zmień coś przed zapisaniem.",
+  "This request is too large. Send less content or a smaller file.":
+    "To żądanie jest za duże. Wyślij mniej treści lub mniejszy plik.",
+  "This file is too large. Choose a smaller file.": "Ten plik jest za duży. Wybierz mniejszy plik.",
+  "This avatar is too large. Resize it to a thumbnail and upload it again.":
+    "Ten awatar jest za duży. Zmniejsz go do rozmiaru miniatury i prześlij ponownie.",
+  "This avatar file is empty. Choose an image with content.":
+    "Plik awatara jest pusty. Wybierz obraz z zawartością.",
+  "This image format is not supported. Choose a PNG, JPEG, WebP or GIF.":
+    "Ten format obrazu nie jest obsługiwany. Wybierz PNG, JPEG, WebP lub GIF.",
+  "The filename could not be read. Rename the file and upload it again.":
+    "Nie udało się odczytać nazwy pliku. Zmień nazwę i prześlij plik ponownie.",
+  "The upload format was not accepted. Select the file again and retry.":
+    "Format przesyłania nie został zaakceptowany. Wybierz plik jeszcze raz i ponów próbę.",
+  "Select an account before continuing.": "Wybierz konto, aby kontynuować.",
+  "Select a page version before restoring it.": "Wybierz wersję strony, którą chcesz przywrócić.",
+  "Your activity session is missing. Refresh the page and sign in again.":
+    "Brakuje sesji aktywności. Odśwież stronę i zaloguj się ponownie.",
+  "This item could not be identified. Refresh the page and select it again.":
+    "Nie udało się rozpoznać tego elementu. Odśwież stronę i wybierz go ponownie.",
+  "The request could not be read. Refresh the page and try again.":
+    "Nie udało się odczytać żądania. Odśwież stronę i spróbuj ponownie.",
+  "Your activity status could not be updated. Refresh the page and try again.":
+    "Nie udało się zaktualizować stanu aktywności. Odśwież stronę i spróbuj ponownie.",
+  "Enter a webhook URL before saving.": "Podaj adres URL webhooka przed zapisaniem.",
+  "The webhook address is invalid. Enter an allowed HTTP or HTTPS URL.":
+    "Adres webhooka jest nieprawidłowy. Podaj dozwolony adres URL HTTP lub HTTPS.",
+  "The token would expire too soon. Choose a longer validity period.":
+    "Token wygasłby zbyt szybko. Wybierz dłuższy okres ważności.",
   "Your session in this tab has expired. Refresh the page and sign in again.":
     "Sesja wygasła w tej karcie. Odśwież stronę i zaloguj się jeszcze raz.",
   "Your session no longer works. Sign in again.": "Twoja sesja już nie działa. Zaloguj się jeszcze raz.",

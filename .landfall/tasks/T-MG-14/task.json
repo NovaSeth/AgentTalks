@@ -13,8 +13,8 @@
       "at": "2026-11-04T02:14:31.594Z"
     }
   ],
-  "status": "new",
-  "round": 0,
+  "status": "fix-round",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-04T02:14:24.683Z",
@@ -34,8 +34,55 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T02:14:32.094Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-14-plugin-f10-f11",
+        "base": "b5048faafbdc30f27d23bd7dd98a379853f45988",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-14"
+      }
+    },
+    {
+      "at": "2026-11-04T02:14:47.226Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:designer",
+        "base": "b5048faafbdc30f27d23bd7dd98a379853f45988"
+      }
+    },
+    {
+      "at": "2026-11-04T02:40:17.264Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T02:46:47.809Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T02:46:48.031Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 3
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "b5048faafbdc30f27d23bd7dd98a379853f45988",
+  "branch": "task/T-MG-14-plugin-f10-f11"
 }

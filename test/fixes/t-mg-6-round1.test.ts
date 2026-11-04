@@ -1,3 +1,4 @@
+// Polish synthetic passwords verify login limits without changing the credential inputs.
 /** T-MG-6 fix round 1: review findings on the login limiter, logging and logout. */
 import { test } from "node:test";
 import assert from "node:assert/strict";

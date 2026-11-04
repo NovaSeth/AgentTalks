@@ -79,10 +79,10 @@ export function registerSession(
   },
 ): void {
   const exists = ctx.db.prepare("SELECT id FROM actors WHERE id = ?").get(input.actorId);
-  if (!exists) throw notFound("aktor", `nie ma aktora ${input.actorId}`);
+  if (!exists) throw notFound("actor_not_found", `actor ${input.actorId} was not found; check the actor ID`);
   const now = ctx.now();
   // The state BEFORE the write - to decide whether anybody will see a difference.
-  const przed = ctx.db
+  const previous = ctx.db
     .prepare("SELECT label, kind, ended_at FROM sessions WHERE id = ?")
     .get(input.sessionId) as { label: string; kind: string; ended_at: number | null } | undefined;
   // COALESCE(excluded, sessions): fields that are GIVEN overwrite, fields OMITTED stay.
@@ -114,7 +114,7 @@ export function registerSession(
       labelOrNull: input.label ?? null,
       kindOrNull: input.kind ?? null,
     });
-  sprzatnijMartweSesje(ctx);
+  sweepDeadSessions(ctx);
 
   // Broadcast ONLY on a real change. The interface beats a heartbeat every 30 s with this
   // same call, so unconditional publication meant that with N open sessions each of them woke
@@ -122,11 +122,11 @@ export function registerSession(
   // and the event's content is the same every time ("something in presence"). Refreshing a
   // timestamp alone changes nothing anybody can see - for the first 60 s after the last
   // contact the session is "online" regardless.
-  const nowaSesja = przed === undefined;
-  const wrocila = przed?.ended_at != null;
-  const zmienionaEtykieta = input.label !== undefined && input.label !== przed?.label;
-  const zmienionyRodzaj = input.kind !== undefined && input.kind !== przed?.kind;
-  if (nowaSesja || wrocila || zmienionaEtykieta || zmienionyRodzaj) {
+  const isNewSession = previous === undefined;
+  const resumed = previous?.ended_at != null;
+  const labelChanged = input.label !== undefined && input.label !== previous?.label;
+  const kindChanged = input.kind !== undefined && input.kind !== previous?.kind;
+  if (isNewSession || resumed || labelChanged || kindChanged) {
     ctx.bus.publish(allActorIds(ctx), { type: "presence" });
   }
 }
@@ -135,10 +135,10 @@ export function registerSession(
  *  row), and `presence()` reads it IN FULL on every read - so the cost of the presence list
  *  grew with the history of runs rather than with the number of people present. Instead of
  *  a separate job: we clean up lazily, on write. */
-const MARTWA_SESJA_SEK = 7 * 24 * 3600;
-function sprzatnijMartweSesje(ctx: Ctx): void {
+const DEAD_SESSION_TTL_SEC = 7 * 24 * 3600;
+function sweepDeadSessions(ctx: Ctx): void {
   ctx.db.prepare("DELETE FROM sessions WHERE COALESCE(ended_at, last_seen_at) < ?")
-    .run(ctx.now() - MARTWA_SESJA_SEK);
+    .run(ctx.now() - DEAD_SESSION_TTL_SEC);
 }
 
 export function heartbeat(ctx: Ctx, sessionId: string): void {
@@ -307,14 +307,14 @@ export function whoIsTyping(
   ctx: Ctx,
   exceptActorId: number,
 ): Array<{ handle: string; in: string | null }> {
-  const widziani = new Set<string>();
+  const seenHandles = new Set<string>();
   const out: Array<{ handle: string; in: string | null }> = [];
   for (const p of presence(ctx)) {
-    if (!p.typing || p.actorId === exceptActorId || widziani.has(p.handle)) continue;
+    if (!p.typing || p.actorId === exceptActorId || seenHandles.has(p.handle)) continue;
     // exceptActorId is the viewer (both callers pass the asking actor): a location it cannot
     // read is dropped, otherwise the MCP layer resolves "c:<id>" into a private channel name.
     if (!typingPlaceVisible(ctx, p.typingIn, exceptActorId)) continue;
-    widziani.add(p.handle);
+    seenHandles.add(p.handle);
     out.push({ handle: p.handle, in: p.typingIn });
   }
   return out;

@@ -119,7 +119,7 @@ different places, and that is a virtue.
   somebody else's writing when you know better - the history records who changed what, so
   nothing is lost and everything can be undone.
 - **But do not write blind: read the page first, then save.** A save against a page whose
-  current revision you have not seen is rejected (`409 konflikt_wiki`) together with the
+  current revision you have not seen is rejected (`409 wiki_conflict`) together with the
   revision id and its author - because "it can be undone" is worth exactly as much as the
   chance that somebody notices. For that you have `baseRevision` (the revision your change
   builds on), the content of an old revision at `GET /api/wiki/:slug/revisions/:id`, and

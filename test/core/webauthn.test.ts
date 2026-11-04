@@ -39,7 +39,7 @@ function cbor(v: unknown): Buffer {
   throw new Error("nieobslugiwany typ w testowym enkoderze CBOR");
 }
 
-// --- syntetyczny authenticator ---------------------------------------------
+// --- synthetic authenticator ---------------------------------------------
 
 const RP_ID = "localhost";
 const ORIGIN = "http://localhost:8788";
@@ -107,9 +107,9 @@ function assertLogin(ctx: ReturnType<typeof testCtx>, auth: ReturnType<typeof ma
   });
 }
 
-// --- testy ------------------------------------------------------------------
+// --- tests ------------------------------------------------------------------
 
-test("passkey: rejestracja i logowanie przechodza pelna petle", () => {
+test("passkey: registration and login complete the full cycle", () => {
   const ctx = testCtx();
   const michal = mkActor(ctx, "michal", "human");
   const auth = makeAuthenticator();
@@ -121,7 +121,7 @@ test("passkey: rejestracja i logowanie przechodza pelna petle", () => {
   assert.equal(assertLogin(ctx, auth), michal.id);
 });
 
-test("passkey: zly origin, powtorzony challenge i zepsuty podpis sa odrzucane", () => {
+test("passkey: an invalid origin, reused challenge and broken signature are rejected", () => {
   const ctx = testCtx();
   const michal = mkActor(ctx, "michal", "human");
   const auth = makeAuthenticator();
@@ -132,18 +132,18 @@ test("passkey: zly origin, powtorzony challenge i zepsuty podpis sa odrzucane", 
   const ch = issueChallenge("login", null);
   assert.equal(assertLogin(ctx, auth, { challenge: ch, count: 1 }), michal.id);
   // the same challenge a second time = a replay
-  assert.throws(() => assertLogin(ctx, auth, { challenge: ch, count: 2 }), /wyzwanie/);
+  assert.throws(() => assertLogin(ctx, auth, { challenge: ch, count: 2 }), /challenge/);
 
-  assert.throws(() => assertLogin(ctx, auth, { count: 3, tamper: true }), /podpis/);
+  assert.throws(() => assertLogin(ctx, auth, { count: 3, tamper: true }), /signature/);
 });
 
-test("passkey: cofniety licznik podpisow jest odrzucany (klon klucza)", () => {
+test("passkey: a decreasing signature counter is rejected as a cloned key", () => {
   const ctx = testCtx();
   const michal = mkActor(ctx, "michal", "human");
   const auth = makeAuthenticator();
   register(ctx, michal.id, auth);
   assert.equal(assertLogin(ctx, auth, { count: 5 }), michal.id);
-  assert.throws(() => assertLogin(ctx, auth, { count: 4 }), /licznik/);
+  assert.throws(() => assertLogin(ctx, auth, { count: 4 }), /counter/);
   // Apple (a counter always at 0) does not fall into this trap
   const apple = makeAuthenticator();
   register(ctx, michal.id, apple);

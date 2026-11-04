@@ -1,3 +1,4 @@
+// Polish fixture actor names exercise invite redemption and name-conflict handling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkActor, testCtx } from "../helpers.ts";
@@ -5,7 +6,7 @@ import { createInvite, redeemInvite, revokeInvite } from "../../src/core/invites
 import { verifyToken } from "../../src/core/tokens.ts";
 import { getActorByHandle } from "../../src/core/actors.ts";
 
-test("zaproszenie: agent zaklada nim aktora i dziala token", () => {
+test("invite: an agent creates an actor with it and the token works", () => {
   const ctx = testCtx();
   const admin = mkActor(ctx, "admin");
   const { code } = createInvite(ctx, { createdBy: admin.id });
@@ -15,39 +16,39 @@ test("zaproszenie: agent zaklada nim aktora i dziala token", () => {
   assert.equal(verifyToken(ctx, token)?.id, actor.id);
 });
 
-test("zaproszenie z limitem uzyc wyczerpuje sie", () => {
+test("an invite with a usage limit runs out", () => {
   const ctx = testCtx();
   const { code } = createInvite(ctx, { createdBy: null, uses: 1 });
   redeemInvite(ctx, { code, handle: "pierwszy" });
-  assert.throws(() => redeemInvite(ctx, { code, handle: "drugi" }), /zuzyte|nieprawidlowe/);
+  assert.throws(() => redeemInvite(ctx, { code, handle: "drugi" }), /used up|invalid/);
 });
 
-test("zaproszenie wygasa po TTL", () => {
+test("an invite expires after its TTL", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const { code } = createInvite(ctx, { createdBy: null, ttlSec: 60 });
   t = 1061;
-  assert.throws(() => redeemInvite(ctx, { code, handle: "spozniony" }), /wygasle|nieprawidlowe/);
+  assert.throws(() => redeemInvite(ctx, { code, handle: "spozniony" }), /expired|invalid/);
 });
 
-test("zajeta nazwa NIE zuzywa zaproszenia", () => {
+test("an occupied name does NOT consume the invite", () => {
   const ctx = testCtx();
   mkActor(ctx, "zajety");
   const { code } = createInvite(ctx, { createdBy: null, uses: 1 });
-  assert.throws(() => redeemInvite(ctx, { code, handle: "zajety" }), /zajeta/);
+  assert.throws(() => redeemInvite(ctx, { code, handle: "zajety" }), /already taken/);
   // the use was not consumed - a different name goes through
   const r = redeemInvite(ctx, { code, handle: "wolny" });
   assert.equal(r.actor.handle, "wolny");
 });
 
-test("odwolane zaproszenie nie dziala", () => {
+test("a revoked invite no longer works", () => {
   const ctx = testCtx();
   const { code, info } = createInvite(ctx, { createdBy: null });
   assert.equal(revokeInvite(ctx, info.id), true);
-  assert.throws(() => redeemInvite(ctx, { code, handle: "ktos" }), /nieprawidlowe/);
+  assert.throws(() => redeemInvite(ctx, { code, handle: "ktos" }), /invalid/);
 });
 
-test("revokeInvite: nieistniejace/juz-odwolane id zwraca false (bez falszywego sukcesu)", () => {
+test("revokeInvite: a missing/already-revoked id returns false without false success", () => {
   const ctx = testCtx();
   const { info } = createInvite(ctx, { createdBy: null });
   assert.equal(revokeInvite(ctx, 99999), false); // there is no such id
@@ -55,7 +56,7 @@ test("revokeInvite: nieistniejace/juz-odwolane id zwraca false (bez falszywego s
   assert.equal(revokeInvite(ctx, info.id), false); // the second does not - it was already revoked
 });
 
-test("zaproszenie --admin nadaje aktorowi uprawnienia admina", () => {
+test("an --admin invite gives the actor admin privileges", () => {
   const ctx = testCtx();
   const { code } = createInvite(ctx, { createdBy: null, makeAdmin: true });
   const { actor } = redeemInvite(ctx, { code, handle: "szef" });
@@ -63,14 +64,14 @@ test("zaproszenie --admin nadaje aktorowi uprawnienia admina", () => {
   assert.equal(getActorByHandle(ctx, "szef")?.isAdmin, true);
 });
 
-test("smieciowy kod jest odrzucany bez tworzenia aktora", () => {
+test("a garbage code is rejected without creating an actor", () => {
   const ctx = testCtx();
-  assert.throws(() => redeemInvite(ctx, { code: "smiec", handle: "x" }), /nieprawidlowy/);
+  assert.throws(() => redeemInvite(ctx, { code: "smiec", handle: "x" }), /invalid/);
   assert.equal(getActorByHandle(ctx, "x"), null);
 });
 
-// --- klucz limitera (login/enroll) wobec X-Forwarded-For ---
-test("clientKey: przy proxy bierze PRAWY czlon XFF (nie spoofowalny lewy)", async () => {
+// --- limiter key (login/enroll) with X-Forwarded-For ---
+test("clientKey: behind a proxy, uses the RIGHT XFF entry, not the spoofable left one", async () => {
   const { clientKey } = await import("../../src/http/routes/auth.ts");
   const mk = (xff: string | undefined, ip = "10.0.0.1") =>
     ({ headers: xff === undefined ? {} : { "x-forwarded-for": xff }, socket: { remoteAddress: ip } });
@@ -81,6 +82,6 @@ test("clientKey: przy proxy bierze PRAWY czlon XFF (nie spoofowalny lewy)", asyn
   assert.equal(clientKey(mk("9.9.9.9, 203.0.113.9"), true), "203.0.113.9");
   // Without trusting a proxy: only the socket address counts.
   assert.equal(clientKey(mk("1.1.1.1, 203.0.113.9"), false), "10.0.0.1");
-  // Brak naglowka: adres gniazda.
+  // No header: use the socket address.
   assert.equal(clientKey(mk(undefined), true), "10.0.0.1");
 });

@@ -103,16 +103,16 @@ Object.assign(globals, {
   EventSource: EventSourceStub, Notification: NotificationStub,
 });
 const base = new URL("../../src/http/ui/js/", import.meta.url).href;
-const model = await import(base + "stan.js");
-const { state, widok, upsertMessage } = model;
-const { connectSSE, disconnectSSE } = await import(base + "zdarzenia-sse.js");
-const { sendMessage } = await import(base + "akcje.js");
-const { renderThread, renderComposer } = await import(base + "widok-czat.js");
+const model = await import(base + "state.js");
+const { state, views, upsertMessage } = model;
+const { connectSSE, disconnectSSE } = await import(base + "sse-events.js");
+const { sendMessage } = await import(base + "actions.js");
+const { renderThread, renderComposer } = await import(base + "view-chat.js");
 const { mdToHtml } = await import(base + "markdown.js");
-const { doLogout } = await import(base + "widok-login.js");
+const { doLogout } = await import(base + "view-login.js");
 const { confirmModal } = await import(base + "dom.js");
 const initial = structuredClone(state);
-const initialViews = { ...widok };
+const initialViews = { ...views };
 const message = { id: 100, conversationId: 7, actorId: 2, body: "hello", kind: "text", ts: 1, threadId: null };
 function element(id: string) {
   const el = new ElementStub();
@@ -130,7 +130,7 @@ const settle = () => new Promise<void>((done) => setImmediate(done));
 beforeEach(() => {
   disconnectSSE();
   Object.assign(state, structuredClone(initial));
-  Object.assign(widok, initialViews);
+  Object.assign(views, initialViews);
   state.actor = { id: 1, handle: "me", kind: "human" };
   state.conversations = [{ id: 7, kind: "dm", slug: null }];
   state.memberships = { 7: { conversationId: 7, notify: "all" } };
@@ -150,7 +150,7 @@ test("B-MG-35: edits, deletes and replayed updates replace messages without new-
   element("messages");
   const live = element("live");
   const drawn: any[] = [];
-  widok.wiadomosc = (msg: any) => drawn.push(msg);
+  views.message = (msg: any) => drawn.push(msg);
   connectSSE();
   await EventSourceStub.current.message("message", message);
   assert.equal(state.unread[7], 1);
@@ -211,7 +211,7 @@ test("B-MG-36: a thread send response upserts the reply already received over SS
 test("B-MG-37: Enter then further typing keeps the composer, focus and new draft after send", async () => {
   state.activeId = 7;
   element("composer");
-  widok.composer = renderComposer;
+  views.composer = renderComposer;
   renderComposer();
   const input = elements.get("composer-input")!;
   input.value = "first";
@@ -281,7 +281,7 @@ test("B-MG-41: logout clears all account state and drafts while preserving brows
   state.threadOpen = 100; state.threadMsgs = [message];
   state.notifications = [{ body: "private" }]; state.notifUnread = 1;
   state.wiki = { ...state.wiki, editing: true, draft: { body: "private wiki" }, pages: [{ slug: "private" }] };
-  model.dmMembersCache[7] = [2]; model.animatedMsgs.add(100); model.zgloszenia.add(100);
+  model.dmMembersCache[7] = [2]; model.animatedMsgs.add(100); model.reports.add(100);
   for (const key of ["atalks_draft_7", "atalks_draft_8", "atalks_wiki_draft_private", "atalks_last_conv"]) storage.setItem(key, "private");
   storage.setItem("atalks_lang", "en"); storage.setItem("unrelated", "keep");
   session.setItem("atalks_actor", "me"); session.setItem("atalks_csrf", "test");
@@ -289,7 +289,7 @@ test("B-MG-41: logout clears all account state and drafts while preserving brows
   assert.deepEqual(state, initial);
   assert.deepEqual(model.dmMembersCache, {});
   assert.equal(model.animatedMsgs.size, 0);
-  assert.equal(model.zgloszenia.size, 0);
+  assert.equal(model.reports.size, 0);
   assert.deepEqual([...storage.data], [["atalks_lang", "en"], ["unrelated", "keep"]]);
   assert.equal(session.getItem("atalks_actor"), null);
   assert.equal(session.getItem("atalks_csrf"), null);
@@ -315,9 +315,9 @@ test("B-MG-37: sending a main-composer thread reply does not rebuild the compose
   const root = { ...message, id: 90 };
   state.msgs[7] = [root];
   element("main"); element("composer");
-  const { openThread } = await import(base + "widok-czat.js");
-  widok.otworzWatek = openThread;
-  widok.composer = renderComposer;
+  const { openThread } = await import(base + "view-chat.js");
+  views.openThread = openThread;
+  views.composer = renderComposer;
   renderComposer();
   const input = elements.get("composer-input")!;
   input.value = "reply"; input.focus();

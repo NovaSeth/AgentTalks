@@ -51,7 +51,7 @@ export function defaultDataDir(): string {
       accessSync(system, constants.W_OK);
       return system;
     }
-  } catch { /* nie istnieje albo nie da sie pisac - katalog uzytkownika */ }
+  } catch { /* missing or not writable; use the user directory */ }
   return join(homedir(), ".local", "share", "agenttalks");
 }
 
@@ -77,7 +77,7 @@ export function initData(dataDir: string = defaultDataDir()): Config {
   try {
     chmodSync(dataDir, 0o700);
     chmodSync(join(dataDir, "files"), 0o700);
-  } catch { /* np. wolumen dockera z innym wlascicielem - nie blokujemy startu */ }
+  } catch { /* e.g. a Docker volume with a different owner; do not block startup */ }
   const cfgPath = join(dataDir, CONFIG_NAME);
   if (!existsSync(cfgPath)) {
     const fresh = { ...DEFAULTS, secret: randomBytes(32).toString("hex") };
@@ -107,14 +107,14 @@ function loadSitePassword(stored: Record<string, unknown>): string {
       raw = readFileSync(file, "utf8");
     } catch (err) {
       throw new Error(
-        `AGENTTALKS_SITE_PASSWORD_FILE wskazuje na ${file}, ktorego nie da sie odczytac ` +
-          `(${(err as Error).message}). Odmawiam startu: puste haslo znaczy OTWARTA bramka.`,
+        `AGENTTALKS_SITE_PASSWORD_FILE points to ${file}, which cannot be read ` +
+          `(${(err as Error).message}). Refusing to start: an empty password would OPEN the gate. Fix the file permissions or path.`,
       );
     }
     // A password file usually ends with a newline - `echo > file` appends one.
     const value = raw.replace(/\r?\n$/, "");
     if (!value) {
-      throw new Error(`plik ${file} jest pusty - to wylaczyloby bramke publiczna`);
+      throw new Error(`file ${file} is empty; set a password in it before starting to keep the public gate enabled`);
     }
     return value;
   }
@@ -165,9 +165,9 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 export function assertBindAllowed(config: Config, host: string): void {
   if (LOOPBACK.has(host) || inContainer() || config.allowPublicBind) return;
   throw new Error(
-    `Odmawiam nasluchiwania na ${host}: to wystawiloby AgentTalks poza te maszyne.\n` +
-      `Wlasciwa droga to reverse proxy z TLS przed 127.0.0.1, albo kontener.\n` +
-      `Jesli naprawde chcesz bind publiczny, ustaw "allowPublicBind": true w ` +
+    `Refusing to listen on ${host}: this would expose AgentTalks beyond this machine.\n` +
+      `Use a TLS reverse proxy in front of 127.0.0.1, or a container.\n` +
+      `If you intend to bind publicly, set "allowPublicBind": true in ` +
       `${join(config.dataDir, CONFIG_NAME)}.`,
   );
 }

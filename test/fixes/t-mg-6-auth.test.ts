@@ -1,3 +1,4 @@
+// Polish synthetic passwords and private message bodies verify authentication and non-disclosure of exact input.
 /** T-MG-6 (fix package A1): auth and sessions. One group of tests per finding. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -186,9 +187,9 @@ function passkeySetup() {
 test("passkey counter: 5->0 and 5->5 rejected, 5->6 ok, never lowered (B-MG-5)", () => {
   const p = passkeySetup();
   assert.equal(p.login(5), p.actor.id);
-  assert.throws(() => p.login(0), /licznik/);
+  assert.throws(() => p.login(0), /counter/);
   assert.equal(p.stored(), 5);
-  assert.throws(() => p.login(5), /licznik/);
+  assert.throws(() => p.login(5), /counter/);
   assert.equal(p.login(6), p.actor.id);
   assert.equal(p.stored(), 6);
 });

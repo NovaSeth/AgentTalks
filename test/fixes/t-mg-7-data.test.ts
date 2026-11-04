@@ -180,7 +180,7 @@ test("B-MG-47: a bad %-sequence in a wiki X-File-Name is a 400, not a 500", asyn
       body: "data",
     });
     assert.equal(r.status, 400);
-    assert.equal((await r.json()).code, "zla_nazwa");
+    assert.equal((await r.json()).code, "invalid_name");
     const ok = await fetch(s.url + "/api/wiki/docs/files", {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "text/plain",

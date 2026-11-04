@@ -1,3 +1,4 @@
+// Polish fixture arguments, paths and passwords exercise CLI parsing, configuration and exact credential handling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
@@ -14,35 +15,35 @@ import { nodeMajor } from "../../src/version.ts";
 
 const tmpDir = () => mkdtempSync(join(tmpdir(), "agenttalks-"));
 
-test("parseArgs rozdziela pozycyjne i flagi, w tym flagi bez wartosci", () => {
+test("parseArgs separates positional arguments and flags, including flags without values", () => {
   const a = parseArgs(["actor", "create", "michal", "--kind", "human", "--admin"]);
   assert.deepEqual(a.positional, ["actor", "create", "michal"]);
   assert.equal(a.flags.kind, "human");
   assert.equal(a.flags.admin, true);
 });
 
-test("init tworzy katalog danych, baze i sekret o dlugosci 64 znakow", () => {
+test("init creates the data directory, database and a 64-character secret", () => {
   const dir = tmpDir();
   const cfg = initData(dir);
   assert.equal(cfg.secret.length, 64);
-  assert.ok(existsSync(join(dir, "agenttalks.sqlite")) === false, "baza powstaje przy init CLI");
+  assert.ok(existsSync(join(dir, "agenttalks.sqlite")) === false, "the database is created by CLI init");
   assert.ok(existsSync(join(dir, "agenttalks.json")));
   assert.ok(existsSync(join(dir, "files")));
 });
 
-test("init nie nadpisuje sekretu istniejacej instancji", () => {
+test("init does not overwrite an existing instance secret", () => {
   const dir = tmpDir();
   const first = initData(dir);
   assert.equal(initData(dir).secret, first.secret);
 });
 
-test("plik konfiguracji ma prawa 600", () => {
+test("the configuration file has mode 600", () => {
   const dir = tmpDir();
   initData(dir);
   assert.equal(statSync(join(dir, "agenttalks.json")).mode & 0o777, 0o600);
 });
 
-test("komenda init zaklada kanal general i aktora systemowego", async () => {
+test("the init command creates the general channel and system actor", async () => {
   const dir = tmpDir();
   assert.equal(await main(["init", "--data", dir]), 0);
   const cfg = loadConfig(dir);
@@ -51,18 +52,18 @@ test("komenda init zaklada kanal general i aktora systemowego", async () => {
   assert.equal(getActorByHandle(ctx, "system")?.kind, "system");
 });
 
-test("komenda init jest idempotentna", async () => {
+test("the init command is idempotent", async () => {
   const dir = tmpDir();
   await main(["init", "--data", dir]);
   assert.equal(await main(["init", "--data", dir]), 0);
 });
 
-test("komendy na nieistniejacej instancji mowia, co zrobic", async () => {
+test("commands on a missing instance explain what to do", async () => {
   const dir = tmpDir();
   assert.equal(await main(["actor", "list", "--data", dir]), 1);
 });
 
-test("aktor i token przechodza przez CLI", async () => {
+test("an actor and token can be created through the CLI", async () => {
   const dir = tmpDir();
   await main(["init", "--data", dir]);
   assert.equal(await main(["actor", "create", "nestor", "--kind", "agent", "--data", dir]), 0);
@@ -75,20 +76,20 @@ test("aktor i token przechodza przez CLI", async () => {
   assert.equal(n.n, 1);
 });
 
-test("token dla nieistniejacego aktora konczy sie kodem 1, nie wyjatkiem", async () => {
+test("a token for a missing actor returns code 1 rather than throwing", async () => {
   const dir = tmpDir();
   await main(["init", "--data", dir]);
   assert.equal(await main(["token", "create", "--actor", "kogo-nie-ma", "--data", dir]), 1);
 });
 
-test("poza kontenerem bind na 0.0.0.0 jest zablokowany", async () => {
+test("binding to 0.0.0.0 is blocked outside a container", async () => {
   const dir = tmpDir();
   await main(["init", "--data", dir]);
   delete process.env.AGENTTALKS_IN_CONTAINER;
   assert.equal(await main(["serve", "--data", dir, "--host", "0.0.0.0"]), 1);
 });
 
-test("w kontenerze bind na 0.0.0.0 jest dozwolony", () => {
+test("binding to 0.0.0.0 is allowed inside a container", () => {
   const dir = tmpDir();
   const cfg = initData(dir);
   process.env.AGENTTALKS_IN_CONTAINER = "1";
@@ -100,13 +101,13 @@ test("w kontenerze bind na 0.0.0.0 jest dozwolony", () => {
   }
 });
 
-test("bind na petli zwrotnej zawsze przechodzi", () => {
+test("binding to loopback is always allowed", () => {
   const dir = tmpDir();
   const cfg = initData(dir);
   assert.doesNotThrow(() => assertBindAllowed(cfg, "127.0.0.1"));
 });
 
-test("AGENTTALKS_DATA wskazuje katalog danych", () => {
+test("AGENTTALKS_DATA selects the data directory", () => {
   process.env.AGENTTALKS_DATA = "/tmp/agenttalks-z-env";
   try {
     assert.equal(defaultDataDir(), "/tmp/agenttalks-z-env");
@@ -115,45 +116,45 @@ test("AGENTTALKS_DATA wskazuje katalog danych", () => {
   }
 });
 
-test("healthcheck zwraca 1, gdy serwer nie odpowiada", async () => {
+test("healthcheck returns 1 when the server does not respond", async () => {
   assert.equal(await main(["healthcheck", "--url", "http://127.0.0.1:1/api/health"]), 1);
 });
 
-test("wymagana wersja Node jest sprawdzana z majora", () => {
+test("the required Node version is checked by major version", () => {
   assert.equal(nodeMajor("24.1.0"), 24);
   assert.equal(nodeMajor("18.20.1"), 18);
 });
 
-test("clone robi spojna kopie z wlasnym sekretem", async () => {
+test("clone makes a consistent copy with its own secret", async () => {
   const src = tmpDir(), dst = tmpDir() + "/kopia";
   await main(["init", "--data", src]);
   await main(["actor", "create", "probny", "--kind", "agent", "--data", src]);
   assert.equal(await main(["clone", dst, "--data", src]), 0);
   const srcCfg = loadConfig(src), dstCfg = loadConfig(dst);
-  assert.notEqual(dstCfg.secret, srcCfg.secret, "kopia nie moze dzielic sekretu sesji");
+  assert.notEqual(dstCfg.secret, srcCfg.secret, "the clone must not share the session secret");
   const ctx = createCtx(openDb(dstCfg.dbPath));
-  assert.ok(getActorByHandle(ctx, "probny"), "dane nie przeszly do kopii");
+  assert.ok(getActorByHandle(ctx, "probny"), "the data was not copied");
 });
 
-test("parseArgs z lista znanych flag nie zjada tresci z --", () => {
+test("parseArgs with known flags preserves content containing --", () => {
   const a = parseArgs(["say", "testy", "padly", "na", "--coverage", "prosze", "sprawdz"],
     new Set(["to", "url"]));
   assert.deepEqual(a.positional,
     ["say", "testy", "padly", "na", "--coverage", "prosze", "sprawdz"]);
 });
 
-test("parseArgs terminator -- przenosi reszte do positional", () => {
+test("the parseArgs -- terminator moves the remaining arguments to positional", () => {
   const a = parseArgs(["say", "--", "--to", "@kto"], new Set(["to"]));
   assert.deepEqual(a.positional, ["say", "--to", "@kto"]);
 });
 
-test("parseArgs bez listy nadal parsuje znane flagi", () => {
+test("parseArgs without a list still parses flags", () => {
   const a = parseArgs(["claim", "deploy", "--ttl", "300"]);
   assert.deepEqual(a.positional, ["claim", "deploy"]);
   assert.equal(a.flags.ttl, "300");
 });
 
-test("haslo bramki z pliku: wartosc z pliku wygrywa, pusty/brakujacy plik nie wpuszcza cicho", () => {
+test("gate password from a file: the file takes precedence, an empty/missing file fails closed", () => {
   const dir = tmpDir();
   initData(dir);
   const pwPath = join(dir, "site-password");
@@ -169,10 +170,10 @@ test("haslo bramki z pliku: wartosc z pliku wygrywa, pusty/brakujacy plik nie wp
     assert.equal(loadConfig(dir).sitePassword, "tajne-haslo-bramki");
     // An empty file is not "no password" but an OPEN gate - hence the refusal to start.
     writeFileSync(pwPath, "", { mode: 0o600 });
-    assert.throws(() => loadConfig(dir), /pusty/);
+    assert.throws(() => loadConfig(dir), /empty/);
     // A missing file likewise: silent emptiness would be a failure nobody sees.
     process.env.AGENTTALKS_SITE_PASSWORD_FILE = join(dir, "nie-ma-takiego");
-    assert.throws(() => loadConfig(dir), /nie da sie odczytac/);
+    assert.throws(() => loadConfig(dir), /cannot be read/);
   } finally {
     if (prev === undefined) delete process.env.AGENTTALKS_SITE_PASSWORD_FILE;
     else process.env.AGENTTALKS_SITE_PASSWORD_FILE = prev;
@@ -181,7 +182,7 @@ test("haslo bramki z pliku: wartosc z pliku wygrywa, pusty/brakujacy plik nie wp
   }
 });
 
-test("NEWS.md ląduje na wiki jako strona z historią, ale nie dokłada rewizji bez zmian", async () => {
+test("NEWS.md becomes a wiki page with history, without adding revisions when unchanged", async () => {
   const { publishNewsToWiki, NEWS_SLUG } = await import("../../src/core/news.ts");
   const { getPage, pageHistory } = await import("../../src/core/wiki.ts");
   const dir = tmpDir();
@@ -192,12 +193,13 @@ test("NEWS.md ląduje na wiki jako strona z historią, ale nie dokłada rewizji 
   const { createActor } = await import("../../src/core/actors.ts");
   createActor(ctx, { kind: "system", handle: "system" });
 
-  assert.equal(publishNewsToWiki(ctx), "zapisane");
+  // Result values follow the publisher contract; a second import must stay a no-op.
+  assert.equal(publishNewsToWiki(ctx), "saved");
   const page = getPage(ctx, NEWS_SLUG)!;
   assert.match(page.body, /What's new in AgentTalks/);
   assert.equal(page.updatedBy, "system");
   // A server restart must not produce "no change" revisions - otherwise the page's history would
   // be about deployments rather than about content.
-  assert.equal(publishNewsToWiki(ctx), "bez_zmian");
+  assert.equal(publishNewsToWiki(ctx), "no_changes");
   assert.equal(pageHistory(ctx, NEWS_SLUG).length, 1);
 });

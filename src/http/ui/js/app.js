@@ -3,7 +3,7 @@
  *
  * This file is the ROOT: it alone knows every view at once. That is what lets the
  * lower layers (state, data, actions, event stream) avoid importing anything that
- * draws - they receive the drawing functions through the `widok` registry, and the
+ * draws - they receive the drawing functions through the `views` registry, and the
  * import graph stays acyclic.
  *
  * Apart from registering the views, only what is global by nature lives here: the
@@ -12,24 +12,24 @@
 import {
   ensureActors, loadConversationsList, loadWikiList, markReadDebounced, refreshDigestAndLeases,
   refreshNotifications, refreshPresence, registerPresenceSession, startDigestTimer,
-} from "./dane.js";
+} from "./data.js";
 import { $app, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
-import { iconBell, iconChat, iconUsers } from "./ikony.js";
-import { lastMessageId, rebuildMentionRe, saveDraft, state, zarejestrujWidoki } from "./stan.js";
-import { showToast } from "./toasty.js";
-import { openSearchPalette } from "./szukaj.js";
-import { openUsersView, renderUsersMain, resetUsersError } from "./widok-admin.js";
+import { iconBell, iconChat, iconUsers } from "./icons.js";
+import { lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
+import { showToast } from "./toasts.js";
+import { openSearchPalette } from "./search.js";
+import { openUsersView, renderUsersMain, resetUsersError } from "./view-admin.js";
 import {
   bindMessageEvents, closeThread, openConversation, openThread, refreshDetailsData, renderComposer,
   renderDetails, renderMain, renderMessages, renderPresenceBar, renderThread, renderTopbar,
   typingFacesHtml, updateOfflineBar, upsertMessageNode,
-} from "./widok-czat.js";
-import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./widok-login.js";
-import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./widok-powiadomienia.js";
-import { renderSidebar, renderSidebarList, updateConvRow, updatePresenceDots } from "./widok-sidebar.js";
-import { openWikiPage, renderWikiMain } from "./widok-wiki.js";
-import { connectSSE, ensureSSE } from "./zdarzenia-sse.js";
+} from "./view-chat.js";
+import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./view-login.js";
+import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./view-notifications.js";
+import { renderSidebar, renderSidebarList, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
+import { openWikiPage, renderWikiMain } from "./view-wiki.js";
+import { connectSSE, ensureSSE } from "./sse-events.js";
 
 // -------------------------------------------------------------------- shell
 function render() {
@@ -48,9 +48,9 @@ function renderShell() {
   // is nothing to pick from it - it stood there only because the shell rendered it
   // unconditionally, and it took a third of the screen width for a list that leads
   // nowhere in that view (reported by @michal).
-  const zPanelem = state.view === "chat" || state.view === "wiki";
+  const withSidebar = state.view === "chat" || state.view === "wiki";
   $app.innerHTML = `
-    <div class="shell with-rail ${zPanelem ? "" : "bez-panelu"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
+    <div class="shell with-rail ${withSidebar ? "" : "without-sidebar"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
       <div class="scrim" id="scrim"></div>
       <nav class="rail" id="rail" aria-label="${t("Main navigation")}">
         <button class="rail-btn ${state.view === "notifications" ? "on" : ""}" id="rail-notif"
@@ -68,7 +68,7 @@ function renderShell() {
           ${state.view === "users" ? `aria-current="page"` : ""}
           aria-label="${t("Accounts and access")}" title="${t("Accounts and access")}">${iconUsers()}</button>` : ""}
       </nav>
-      ${zPanelem ? `<aside class="sidebar" id="sidebar" aria-label="${t("Channels, messages and wiki")}"></aside>` : ""}
+      ${withSidebar ? `<aside class="sidebar" id="sidebar" aria-label="${t("Channels, messages and wiki")}"></aside>` : ""}
       <main class="main" id="main"></main>
     </div>`;
   document.getElementById("scrim").addEventListener("click", () => { state.drawerOpen = false; toggleDrawerClass(); });
@@ -93,47 +93,47 @@ function renderShell() {
   });
   const ru = document.getElementById("rail-users");
   if (ru) ru.addEventListener("click", openUsersView);
-  if (zPanelem) renderSidebar();
+  if (withSidebar) renderSidebar();
   renderMain();
 }
 
 // ----------------------------------------------------------- view registration
 // The only place where the data and action layers "learn about" the views. Any
-// other route (importing a view inside akcje.js) would close a cycle: the view
+// other route (importing a view inside actions.js) would close a cycle: the view
 // calls the action, the action redraws the view.
-zarejestrujWidoki({
+registerViews({
   render,
-  powloka: renderShell,
-  glowny: renderMain,
+  shell: renderShell,
+  main: renderMain,
   sidebar: renderSidebarList,
-  wiersz: updateConvRow,
+  conversationRow: updateConvRow,
   // Presence touches four places at once - they are glued together here so that
   // refreshPresence does not have to know where the dots, the bar, the topbar and
   // the typing bubbles in the wiki live.
-  obecnosc: () => {
+  presence: () => {
     updatePresenceDots();
     renderPresenceBar();
     renderTopbar();
     const wt = document.getElementById("wiki-typing");
     if (wt && state.wiki.slug) wt.innerHTML = typingFacesHtml(`w:${state.wiki.slug}`);
   },
-  wiadomosci: renderMessages,
-  wiadomosc: upsertMessageNode,
-  naDol: scrollToBottom,
-  watek: renderThread,
-  otworzWatek: openThread,
-  pasekOffline: updateOfflineBar,
+  messages: renderMessages,
+  message: upsertMessageNode,
+  scrollToBottom: scrollToBottom,
+  thread: renderThread,
+  openThread: openThread,
+  offlineBar: updateOfflineBar,
   composer: renderComposer,
-  szczegoly: renderDetails,
+  details: renderDetails,
   wiki: renderWikiMain,
-  powiadomienia: renderNotificationsMain,
-  uzytkownicy: renderUsersMain,
-  podepnijTresc: bindMessageEvents,
-  pisze: typingFacesHtml,
-  szczegolyDane: refreshDetailsData,
-  otworzRozmowe: openConversation,
-  otworzWiki: openWikiPage,
-  poZalogowaniu: afterLogin,
+  notifications: renderNotificationsMain,
+  users: renderUsersMain,
+  bindContent: bindMessageEvents,
+  typing: typingFacesHtml,
+  detailsData: refreshDetailsData,
+  openConversation: openConversation,
+  openWiki: openWikiPage,
+  afterLogin: afterLogin,
 });
 
 // A language switch changes every rendered string, so the cheapest correct answer
@@ -146,13 +146,14 @@ onLangChange(() => render());
 // Now everything that wants something from the user queues up BEHIND the opening
 // of the first conversation, and the passkey waits for the second login: an offer
 // to "sign in faster" only makes sense once it is clear you come back here.
-const LOGOWANIA_KEY = "atalks_logowania";
+// Keep the stored key compatible with existing browsers so the passkey offer keeps its timing.
+const LOGIN_COUNT_KEY = "atalks_logowania";
 
-function policzLogowanie() {
+function countLogin() {
   let n = 0;
   try {
-    n = Number(localStorage.getItem(LOGOWANIA_KEY) || "0") + 1;
-    localStorage.setItem(LOGOWANIA_KEY, String(n));
+    n = Number(localStorage.getItem(LOGIN_COUNT_KEY) || "0") + 1;
+    localStorage.setItem(LOGIN_COUNT_KEY, String(n));
   } catch { n = 1; }
   return n;
 }
@@ -160,10 +161,10 @@ function policzLogowanie() {
 /** Greetings and offers one after another, not in a heap. Each step waits for the
  *  previous one to leave the screen - two modals at once are, to the user, a
  *  single unreadable stack. */
-async function kolejkaPowitan(logowanie) {
+async function queueWelcome(loginCount) {
   // Step 1: "What's new" - it is about what changed, so it comes first.
   if (state.news) {
-    await new Promise((gotowe) => showNewsModal(state.news, gotowe));
+    await new Promise((done) => showNewsModal(state.news, done));
     state.news = null;
   }
   // Step 2: the guidelines - only on the FIRST connection and only as a toast
@@ -173,7 +174,7 @@ async function kolejkaPowitan(logowanie) {
     state.guidelines = null;
   }
   // Step 3: passkey - from the second login onwards.
-  if (logowanie >= 2) await maybeOfferPasskey();
+  if (loginCount >= 2) await maybeOfferPasskey();
 }
 
 async function afterLogin() {
@@ -197,7 +198,7 @@ async function afterLogin() {
   startDigestTimer();
   render();
   updateTitleBadge();
-  const logowanie = policzLogowanie();
+  const loginCount = countLogin();
   // The last viewed conversation, not the first unread one: auto-opening an unread
   // conversation marked it as read before the user saw the counter.
   const lastId = Number(localStorage.getItem("atalks_last_conv"));
@@ -205,7 +206,7 @@ async function afterLogin() {
   const first = last || state.conversations.find((c) => state.memberships[c.id]) || state.conversations[0];
   if (first) await openConversation(first.id);
   // Only now - the user already sees the product rather than windows about the product.
-  kolejkaPowitan(logowanie);
+  queueWelcome(loginCount);
 }
 
 (async function boot() {

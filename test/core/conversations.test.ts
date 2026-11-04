@@ -1,3 +1,4 @@
+// Polish fixture slugs and topics exercise channel updates and access checks with Polish input.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkActor, testCtx } from "../helpers.ts";
@@ -16,7 +17,7 @@ import {
   setNotify,
 } from "../../src/core/conversations.ts";
 
-test("kanal publiczny jest czytelny bez czlonkostwa, pisanie dolacza", () => {
+test("a public channel is readable without membership; posting joins it", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "michal"), b = mkActor(ctx, "nestor");
   const c = createChannel(ctx, { slug: "general", kind: "public", createdBy: a.id });
@@ -26,42 +27,42 @@ test("kanal publiczny jest czytelny bez czlonkostwa, pisanie dolacza", () => {
   assert.equal(isMember(ctx, c.id, b.id), true);
 });
 
-test("tworca kanalu jest jego adminem", () => {
+test("the channel creator is its admin", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "michal");
   const c = createChannel(ctx, { slug: "general", kind: "public", createdBy: a.id });
   assert.equal(members(ctx, c.id)[0].role, "admin");
 });
 
-test("kanal prywatny jest niewidoczny dla obcego", () => {
+test("a private channel is invisible to an outsider", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "michal"), b = mkActor(ctx, "obcy");
   const c = createChannel(ctx, { slug: "infra", kind: "private", createdBy: a.id });
   assert.equal(canRead(ctx, c.id, b.id), false);
-  assert.throws(() => assertCanRead(ctx, c.id, b.id), /brak dostepu/);
-  assert.throws(() => assertCanPost(ctx, c.id, b.id), /brak dostepu/);
+  assert.throws(() => assertCanRead(ctx, c.id, b.id), /do not have access/);
+  assert.throws(() => assertCanPost(ctx, c.id, b.id), /do not have access/);
 });
 
-test("nieistniejaca konwersacja i zabroniona daja ten sam blad", () => {
+test("a missing conversation and a forbidden one return the same error", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "michal"), b = mkActor(ctx, "obcy");
   const c = createChannel(ctx, { slug: "infra", kind: "private", createdBy: a.id });
-  const brak = (() => { try { assertCanRead(ctx, 9999, b.id); } catch (e) { return e as Error; } })();
-  const zabroniona = (() => { try { assertCanRead(ctx, c.id, b.id); } catch (e) { return e as Error; } })();
-  assert.equal(brak!.message, zabroniona!.message);
+  const missing = (() => { try { assertCanRead(ctx, 9999, b.id); } catch (e) { return e as Error; } })();
+  const forbidden = (() => { try { assertCanRead(ctx, c.id, b.id); } catch (e) { return e as Error; } })();
+  assert.equal(missing!.message, forbidden!.message);
 });
 
-test("nie da sie zalozyc dwoch kanalow o tej samej nazwie", () => {
+test("two channels cannot have the same name", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "michal");
   createChannel(ctx, { slug: "general", kind: "public", createdBy: a.id });
   assert.throws(
     () => createChannel(ctx, { slug: "#General", kind: "public", createdBy: a.id }),
-    /juz istnieje/,
+    /already exists/,
   );
 });
 
-test("ensureDirect dla dwoch daje dm i jest idempotentne niezaleznie od kolejnosci", () => {
+test("ensureDirect for two actors returns a DM and is idempotent regardless of order", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const d1 = ensureDirect(ctx, [a.id, b.id]);
@@ -71,7 +72,7 @@ test("ensureDirect dla dwoch daje dm i jest idempotentne niezaleznie od kolejnos
   assert.equal(members(ctx, d1.id).length, 2);
 });
 
-test("ensureDirect dla trzech daje grupe i nie miesza sie z dm-em pary", () => {
+test("ensureDirect for three actors returns a group distinct from the pair's DM", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob"), c = mkActor(ctx, "cez");
   const dm = ensureDirect(ctx, [a.id, b.id]);
@@ -81,32 +82,32 @@ test("ensureDirect dla trzech daje grupe i nie miesza sie z dm-em pary", () => {
   assert.equal(members(ctx, gr.id).length, 3);
 });
 
-test("rozmowa bezposrednia dochodzi w calosci, nie tylko przy wzmiance", () => {
+test("a direct conversation delivers every message, including those without mentions", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const d = ensureDirect(ctx, [a.id, b.id]);
   assert.ok(members(ctx, d.id).every((m) => m.notify === "all"));
 });
 
-test("ensureDirect odrzuca liste krotsza niz dwa i duplikaty", () => {
+test("ensureDirect rejects fewer than two actors and duplicates", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
-  assert.throws(() => ensureDirect(ctx, [a.id]), /co najmniej/);
-  assert.throws(() => ensureDirect(ctx, [a.id, a.id]), /co najmniej/);
+  assert.throws(() => ensureDirect(ctx, [a.id]), /at least/);
+  assert.throws(() => ensureDirect(ctx, [a.id, a.id]), /at least/);
 });
 
-test("z rozmowy bezposredniej nie da sie wyjsc, z kanalu tak", () => {
+test("a direct conversation cannot be left, but a channel can", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const d = ensureDirect(ctx, [a.id, b.id]);
-  assert.throws(() => leave(ctx, d.id, a.id), /nie da sie wyjsc/);
+  assert.throws(() => leave(ctx, d.id, a.id), /cannot leave/);
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
   join(ctx, c.id, b.id);
   leave(ctx, c.id, b.id);
   assert.equal(isMember(ctx, c.id, b.id), false);
 });
 
-test("listForActor zwraca kanaly publiczne i wlasne prywatne, bez cudzych", () => {
+test("listForActor returns public channels and the actor's private channels, excluding others' private channels", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   createChannel(ctx, { slug: "general", kind: "public", createdBy: a.id });
@@ -118,7 +119,7 @@ test("listForActor zwraca kanaly publiczne i wlasne prywatne, bez cudzych", () =
   );
 });
 
-test("listForActor pokazuje DM-y, ktorych jestem uczestnikiem", () => {
+test("listForActor shows DMs the actor participates in", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob"), c = mkActor(ctx, "cez");
   ensureDirect(ctx, [a.id, b.id]);
@@ -126,7 +127,7 @@ test("listForActor pokazuje DM-y, ktorych jestem uczestnikiem", () => {
   assert.equal(listForActor(ctx, a.id).filter((x) => x.kind === "dm").length, 1);
 });
 
-test("recipientsOf zwraca czlonkow, a nie wszystkich aktorow", () => {
+test("recipientsOf returns members rather than all actors", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   mkActor(ctx, "obserwator-ktory-nie-dolaczyl");
@@ -135,7 +136,7 @@ test("recipientsOf zwraca czlonkow, a nie wszystkich aktorow", () => {
   assert.deepEqual(recipientsOf(ctx, c.id).sort(), [a.id, b.id].sort());
 });
 
-test("setNotify dolacza aktora, jesli jeszcze nie byl czlonkiem", () => {
+test("setNotify joins an actor who is not yet a member", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -143,9 +144,9 @@ test("setNotify dolacza aktora, jesli jeszcze nie byl czlonkiem", () => {
   assert.equal(isMember(ctx, c.id, b.id), true);
 });
 
-// --- zarzadzanie kanalem (edycja, archiwum, usuwanie uczestnikow) -----------
+// --- channel management (editing, archiving, removing members) -----------
 
-test("updateConversation: admin kanalu zmienia temat i slug, zwykly czlonek nie", async () => {
+test("updateConversation: a channel admin can change the topic and slug; an ordinary member cannot", async () => {
   const { updateConversation } = await import("../../src/core/conversations.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
@@ -158,14 +159,14 @@ test("updateConversation: admin kanalu zmienia temat i slug, zwykly czlonek nie"
   assert.equal(upd.slug, "nowy");
   assert.throws(
     () => updateConversation(ctx, { convId: c.id, actorId: b.id, isInstanceAdmin: false, topic: "hack" }),
-    /zarzadza/,
+    /can manage/,
   );
   // the instance admin can, despite having no role in the channel
   const upd2 = updateConversation(ctx, { convId: c.id, actorId: b.id, isInstanceAdmin: true, topic: "od admina" });
   assert.equal(upd2.topic, "od admina");
 });
 
-test("updateConversation: slug zajety przez inny kanal jest odrzucany, dm bez sluga", async () => {
+test("updateConversation: another channel's slug is rejected; DMs have no slug", async () => {
   const { updateConversation } = await import("../../src/core/conversations.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
@@ -173,7 +174,7 @@ test("updateConversation: slug zajety przez inny kanal jest odrzucany, dm bez sl
   const c2 = createChannel(ctx, { slug: "wolny", kind: "public", createdBy: a.id });
   assert.throws(
     () => updateConversation(ctx, { convId: c2.id, actorId: a.id, isInstanceAdmin: false, slug: "zajety" }),
-    /istnieje/,
+    /exists/,
   );
   const dm = ensureDirect(ctx, [a.id, b.id]);
   assert.throws(
@@ -182,22 +183,22 @@ test("updateConversation: slug zajety przez inny kanal jest odrzucany, dm bez sl
   );
 });
 
-test("archiveConversation: znika z list, nie przyjmuje wiadomosci, dm nietykalny", async () => {
+test("archiveConversation: disappears from lists and refuses messages; DMs are protected", async () => {
   const { archiveConversation, assertCanPost: acp } = await import("../../src/core/conversations.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "do-kasacji", kind: "public", createdBy: a.id });
   archiveConversation(ctx, { convId: c.id, actorId: a.id, isInstanceAdmin: false });
   assert.equal(listForActor(ctx, a.id).some((x) => x.id === c.id), false);
-  assert.throws(() => acp(ctx, c.id, a.id), /zarchiwizowana/);
+  assert.throws(() => acp(ctx, c.id, a.id), /archived/);
   const dm = ensureDirect(ctx, [a.id, b.id]);
   assert.throws(
     () => archiveConversation(ctx, { convId: dm.id, actorId: a.id, isInstanceAdmin: true }),
-    /1:1/,
+    /one-to-one/,
   );
 });
 
-test("removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie", async () => {
+test("removeMember: a channel admin can remove others, anyone can remove themselves; DMs/groups refuse removal", async () => {
   const { removeMember } = await import("../../src/core/conversations.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob"), c3 = mkActor(ctx, "celina");
@@ -207,7 +208,7 @@ test("removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie", async
   // an ordinary member does not throw others out
   assert.throws(
     () => removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: c3.id, isInstanceAdmin: false }),
-    /zarzadza/,
+    /can manage/,
   );
   // yourself - allowed
   removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: b.id, isInstanceAdmin: false });
@@ -218,6 +219,6 @@ test("removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie", async
   const grp = ensureDirect(ctx, [a.id, b.id, c3.id]);
   assert.throws(
     () => removeMember(ctx, { convId: grp.id, actorId: a.id, targetActorId: b.id, isInstanceAdmin: true }),
-    /bezposredniej/,
+    /direct conversation/,
   );
 });

@@ -85,7 +85,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
     try {
       handle = normalizeHandle(raw);
     } catch {
-      report.problems.push(`nie da sie zrobic handle z etykiety "${raw}"`);
+      report.problems.push(`cannot derive a handle from label "${raw}"; use a label with letters or digits`);
       return null;
     }
     // A collision after transliteration ("Michal" with and without diacritics is the same handle,
@@ -98,7 +98,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
       while (getActorByHandle(ctx, `${handle}-${n}`)?.displayName !== undefined
              && getActorByHandle(ctx, `${handle}-${n}`)!.displayName !== raw) n++;
       report.problems.push(
-        `kolizja handle "${handle}": etykieta "${raw}" dostaje "${handle}-${n}"`,
+        `handle collision for "${handle}": label "${raw}" gets "${handle}-${n}"`,
       );
       handle = `${handle}-${n}`;
       existing = getActorByHandle(ctx, handle);
@@ -149,7 +149,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
           ?? messageByImportKey(ctx, rec.ref);
         if (!target) {
           report.skipped++;
-          report.problems.push(`reakcja do nieznanej wiadomosci ${rec.ref ?? "?"}`);
+          report.problems.push(`reaction to unknown message ${rec.ref ?? "?"}; check the source message reference`);
           return;
         }
         const done = ctx.db
@@ -168,12 +168,12 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
         const target = resolveRecipient(ctx, rec.to, labelToActor, sidToActor);
         if (target === null) {
           report.skipped++;
-          report.problems.push(`nie rozwiazano adresata "${rec.to}"`);
+          report.problems.push(`could not resolve recipient "${rec.to}"; check the recipient label`);
           return;
         }
         if (target === author) {
           report.skipped++;
-          report.problems.push(`wiadomosc do samego siebie od "${rec.label ?? rec.sid}"`);
+          report.problems.push(`message to self from "${rec.label ?? rec.sid}"`);
           return;
         }
         conversationId = ensureDirect(ctx, [author, target]).id;
@@ -237,7 +237,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
             .prepare("UPDATE questions SET answer_message_id = ?, closed_at = ? WHERE id = ?")
             .run(row.id, Math.floor(rec.ts ?? 0), qid);
         } else {
-          report.problems.push(`odpowiedz na nieznane pytanie ${rec.ref}`);
+          report.problems.push(`answer to unknown question ${rec.ref}; check the source question reference`);
         }
       }
   };
@@ -255,7 +255,7 @@ export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport {
       } catch (err) {
         report.skipped++;
         report.problems.push(
-          `rekord ${rec.mid ?? "?"}: ${err instanceof Error ? err.message : err}`,
+          `record ${rec.mid ?? "?"}: ${err instanceof Error ? err.message : err}`,
         );
       }
     }
@@ -285,7 +285,7 @@ function readChannel(path: string, report: ImportReport): TalkRecord[] {
     } catch {
       // Counted and described, not skipped in silence - that was a concrete bug of the prototype.
       report.skipped++;
-      report.problems.push(`uszkodzona linia JSON: ${trimmed.slice(0, 60)}`);
+      report.problems.push(`invalid JSON line; check the source: ${trimmed.slice(0, 60)}`);
     }
   }
   return out;
@@ -305,7 +305,7 @@ function seedFromPresence(
       const data = JSON.parse(readFileSync(join(dir, name), "utf8")) as { label?: string };
       actorFor(data.label, name);
     } catch {
-      report.problems.push(`nieczytelny wpis obecnosci: ${name}`);
+      report.problems.push(`unreadable presence entry; check the file: ${name}`);
     }
   }
 }
@@ -324,7 +324,7 @@ function resolveRecipient(
   try {
     const byHandle = getActorByHandle(ctx, normalizeHandle(to));
     if (byHandle) return byHandle.id;
-  } catch { /* etykieta nie daje sie sprowadzic do handle */ }
+  } catch { /* the label cannot be normalized to a handle */ }
   // "4a925a82" is a digest of a sid, not of a label - hence a separate map.
   const bySid = sidToActor.get(needle);
   if (bySid !== undefined) return bySid;

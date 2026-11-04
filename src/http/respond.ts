@@ -3,8 +3,14 @@
  */
 import type { Req, Res } from "./router.ts";
 import { AppError, tooLarge, badRequest } from "../core/errors.ts";
+import { legacyOf } from "../core/error-codes.ts";
 
 export function json(res: Res, status: number, body: unknown): void {
+  if (status >= 400 && body && typeof body === "object" && "code" in body && typeof body.code === "string") {
+    const legacyCode = legacyOf(body.code);
+    // D-MG-15: legacyCode until 0.4.0
+    if (legacyCode !== undefined) body = { ...body, legacyCode };
+  }
   const text = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -17,7 +23,7 @@ export function json(res: Res, status: number, body: unknown): void {
 
 /**
  * A domain error gets its status and code; everything else is a 500 and a log entry.
- * That distinction matters operationally: a 400 with the code "puste_cialo" tells the client
+ * That distinction matters operationally: a 400 with the code "empty_body" tells the client
  * what to fix, while a 500 tells the operators that something is broken. The prototype had
  * one path, and so a validation error looked like a server failure.
  */
@@ -26,8 +32,8 @@ export function fail(res: Res, err: unknown): void {
     json(res, err.status, { error: err.message, code: err.code });
     return;
   }
-  console.error("[http] nieobsluzony blad:", err);
-  json(res, 500, { error: "blad wewnetrzny serwera", code: "wewnetrzny" });
+  console.error("[http] unhandled error:", err);
+  json(res, 500, { error: "internal server error; try again or contact an admin", code: "internal" });
 }
 
 export async function readJson(req: Req, maxBytes: number): Promise<Record<string, unknown>> {
@@ -37,7 +43,7 @@ export async function readJson(req: Req, maxBytes: number): Promise<Record<strin
     const buf = chunk as Buffer;
     size += buf.length;
     if (size > maxBytes) {
-      throw tooLarge("cialo_za_duze", `cialo zadania jest za duze (limit ${maxBytes} B)`);
+      throw tooLarge("body_too_large", `the request body exceeds ${maxBytes} B; send a smaller request`);
     }
     chunks.push(buf);
   }
@@ -46,7 +52,7 @@ export async function readJson(req: Req, maxBytes: number): Promise<Record<strin
     const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
   } catch {
-    throw badRequest("zly_json", "cialo zadania nie jest poprawnym JSON-em");
+    throw badRequest("invalid_json", "the request body is not valid JSON; check its syntax and try again");
   }
 }
 
@@ -59,7 +65,7 @@ export async function readRaw(req: Req, maxBytes: number): Promise<Buffer> {
     const buf = chunk as Buffer;
     size += buf.length;
     if (size > maxBytes) {
-      throw tooLarge("cialo_za_duze", `cialo zadania jest za duze (limit ${maxBytes} B)`);
+      throw tooLarge("body_too_large", `the request body exceeds ${maxBytes} B; send a smaller request`);
     }
     chunks.push(buf);
   }
@@ -83,22 +89,22 @@ export async function readRaw(req: Req, maxBytes: number): Promise<Buffer> {
  * We check the CONTENT, not just the header: the header is written by the client, while an
  * envelope is recognisable by its own shape (a `--...` boundary and a part header).
  */
-export function odrzucKoperteMultipart(data: Buffer, contentType?: string): void {
-  const poNaglowku = /^multipart\//i.test(String(contentType ?? ""));
-  const poczatek = data.subarray(0, 400).toString("latin1");
-  const poTresci = poczatek.startsWith("--") && /content-disposition:\s*form-data/i.test(poczatek);
-  if (!poNaglowku && !poTresci) return;
+export function rejectMultipartEnvelope(data: Buffer, contentType?: string): void {
+  const byHeader = /^multipart\//i.test(String(contentType ?? ""));
+  const prefix = data.subarray(0, 400).toString("latin1");
+  const byContent = prefix.startsWith("--") && /content-disposition:\s*form-data/i.test(prefix);
+  if (!byHeader && !byContent) return;
   // The message leads to the GOAL rather than only refusing. Without that the client gets a 400
   // and tries multipart again, just differently (@zelda's remark, #bugs [324]). The shape
   // first, examples after, and in TWO languages - the report came from somebody using Python,
   // and the previous version only spoke about curl.
   throw badRequest(
-    "multipart_niewspierany",
-    "ta trasa przyjmuje SUROWE BAJTY pliku jako CALE cialo zadania - bez formularza, " +
-      "bez JSON-a, bez kodowania. Naglowek content-type opisuje sam plik (np. image/png), " +
-      "a nazwe podaje sie osobno w X-File-Name. " +
-      "curl: --data-binary @plik | python: data=open('plik','rb').read(). " +
-      "Wyslana koperta multipart zostalaby zapisana JAKO TRESC pliku.",
+    "multipart_unsupported",
+    "this route accepts RAW FILE BYTES as the ENTIRE request body, without a form, " +
+      "JSON or encoding. The content-type header describes the file itself (e.g. image/png), " +
+      "and the name goes in X-File-Name. " +
+      "curl: --data-binary @file | python: data=open('file','rb').read(). " +
+      "A multipart envelope would be stored AS THE FILE CONTENT.",
   );
 }
 
@@ -119,11 +125,11 @@ export function odrzucKoperteMultipart(data: Buffer, contentType?: string): void
  * `actors{}` stays: it carries displayName, kind and avatar, which are not worth repeating on
  * every message.
  */
-export function zHandlem<T extends { actorId: number }>(
-  wiadomosci: readonly T[],
-  autorzy: Record<number, { handle: string }>,
+export function withActorHandles<T extends { actorId: number }>(
+  messages: readonly T[],
+  authors: Record<number, { handle: string }>,
 ): Array<T & { actorHandle: string }> {
-  return wiadomosci.map((m) => ({ ...m, actorHandle: autorzy[m.actorId]?.handle ?? "?" }));
+  return messages.map((m) => ({ ...m, actorHandle: authors[m.actorId]?.handle ?? "?" }));
 }
 
 export const str = (v: unknown): string | undefined =>
@@ -140,7 +146,7 @@ export const int = (v: unknown): number | undefined => {
  * We treat a negative value as an absent parameter rather than as zero, so that a typo does
  * not return an empty list pretending that "there is nothing".
  */
-export const intDodatni = (v: unknown): number | undefined => {
+export const nonNegativeInt = (v: unknown): number | undefined => {
   const n = int(v);
   return n === undefined || n < 0 ? undefined : n;
 };

@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 424,
+      "rule": "AGT-3",
+      "text": "Report item 4: the verified identity is not bound to the resumed channel. In-memory wake + plugin.json env-substitution test: /api/me verifies nestor on A and returns 202 woke:true, but configured plugin options make the channel resolve bob on B. Scrubbing parent environment variables cannot remove options injected at MCP launch. Enforce the verified actor/server in the actual channel/tool configuration or refuse the wake; add this regression."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/feed.mjs",
+      "line": 441,
+      "rule": "OWA-10",
+      "text": "Item 1: holding a mention now loses unrelated pending pushes on restart. In-memory createFeed test: resume (null,10), status=51, hold mention 51 and DM 52, stop, restart with status=52. Base delivers [52]; review HEAD saves (null,10), delivers [51], and permanently skips DM 52 in the live feed. Preserve a separate replay floor across handovers/restarts instead of replacing it with the newest status watermark; add this regression."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 444,
+      "rule": "OWA-10",
+      "text": "Item 2: replay state is committed before successful spawn. In-memory bridge request test with a nonexistent claudeBin returns 202 woke:true; identical retry returns 409 although ENOENT prevented any process starting. spawnRunner treats its error event as completion. Reserve the key while launching, await the child's spawn event, and persist it only on success; release the reservation and return a retryable failure on spawn error."
+    },
+    {
+      "id": "V1",
+      "severity": "minor",
+      "path": null,
+      "line": null,
+      "rule": "REV-6",
+      "text": "Original F10 ADDRESSED: held mention 51 survives restart with/without status. Original F11 ADDRESSED: fresh tombstone wakes; absent-session retry succeeds; successful replay returns 409. Ran in-memory reproductions and trust/identity/concurrency checks; 16 selected tests, typecheck and diff --check passed. Full integration suite and secrets gate were not rerun under read-only restrictions; rerun them after fixes in a writable environment."
+    }
+  ],
+  "run": "codex-T-MG-14-reviewer-1",
+  "sha256": "15d9ab44cfe7fa1755b73a744ab0efe975c9d15f1287944a9e5060e1a49ec8b5"
+}

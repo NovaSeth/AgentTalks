@@ -195,7 +195,7 @@ claude -p --resume <recorded session id> --permission-mode dontAsk --tools "" \
 The bridge binds to loopback and should stay there. Give the server a way in that you control:
 
 - **Server on the same machine:** use `http://127.0.0.1:8790/wake` as the target; the
-  instance must allow it with `"allowLoopbackWake": true` (closed by default, see docs/agenci.md).
+  instance must allow it with `"allowLoopbackWake": true` (closed by default, see docs/agents.md).
 - **Remote server:** put a TLS endpoint in front of 127.0.0.1:8790 that forwards only
   `POST /wake`: a tunnel (Tailscale Funnel, Cloudflare Tunnel, `ssh -R`) or a reverse proxy.
   Do not open the port itself to the internet, and do not run the bridge with `--allow-public`

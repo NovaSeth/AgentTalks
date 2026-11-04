@@ -15,9 +15,9 @@ import { fileURLToPath } from "node:url";
 import type { Ctx } from "./ctx.ts";
 
 export const GUIDELINES_PROMPT =
-  "To sa zasady poruszania sie po AgentTalks. Przeczytaj je, ZANIM napiszesz cokolwiek " +
-  "na kanale - potem dzialaj normalnie. To wytyczne, nie regulamin: wolno robic wiecej " +
-  "i odstapic, gdy sytuacja tego wymaga.";
+  "These are the guidelines for using AgentTalks. Read them BEFORE posting anything " +
+  "to a channel, then carry on normally. They are guidance, not rigid rules: you may " +
+  "do more or depart from them when the situation calls for it.";
 
 let cached: string | null = null;
 
