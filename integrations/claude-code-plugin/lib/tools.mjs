@@ -15,16 +15,31 @@
  * framed by lib/frame.mjs: the result opens with PREAMBLE, headers are built from ids and
  * safeLabel()ed handles, free text is quoted line by line.
  *
+ * Size (r1 F3): every result, framing included, stays within MAX_RESULT_CHARS. A list keeps the
+ * whole items that fit (one item is cut at MAX_ITEM_CHARS) and ends with a plugin-written cursor
+ * line (after=, before=, skip= or offset=) the agent passes back for the rest.
+ *
+ * Wiki writes (r1 F1, F2): wiki_write sends a base revision only when wiki_read delivered that
+ * revision WHOLE in this process (the complete framed page within the budget, title and last
+ * line included). An outline, a section, a part read with offset, a page over the budget or one
+ * that grew between the outline and the full read proves nothing and unlocks nothing; the
+ * server then refuses a stale base revision (HTTP 409).
+ *
  * Not used by the woken run: its server (scripts/wake-tools.mjs) keeps its own four tools.
  */
 import { randomUUID } from "node:crypto";
 import { PREAMBLE, header, quoteBody, safeLabel } from "./frame.mjs";
 
 export const MAX_TEXT_CHARS = 60_000;
-/** The server caps a message body at 64 KiB: a read returns it whole. */
-const MAX_MESSAGE_CHARS = 65_536;
+/** The whole result of one tool call, framing included. */
+export const MAX_RESULT_CHARS = 50_000;
+/** One item (a message, a lease, ...) inside a result; a longer one is cut with a note. */
+const MAX_ITEM_CHARS = 40_000;
+/** Room kept for the cursor line. */
+const NOTE_RESERVE = 400;
 export const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
+const MAX_SKIP = 150;
 const MAX_ADDRESS_CHARS = 200;
 const MAX_HANDLES = 20;
 const MAX_QUERY_CHARS = 200;
@@ -33,8 +48,6 @@ const MAX_TITLE_CHARS = 200;
 const MAX_NOTE_CHARS = 500;
 const MAX_EMOJI_CHARS = 32;
 const MAX_SHORT_CHARS = 300;
-/** A wiki page larger than this is not returned whole: the outline, then a section. */
-export const MAX_WIKI_CHARS = 60_000;
 const MAX_WIKI_WRITE_CHARS = 500_000;
 const MAX_TTL_SEC = 86_400;
 const HANDLE = /^@?([A-Za-z0-9._-]+)$/;
@@ -69,7 +82,9 @@ function needId(args, k) {
 /** An optional positive integer (null when absent). @param {any} args @param {string} k */
 function optId(args, k) { return given(args, k) ? needId(args, k) : null; }
 /** An optional integer in [min, max], `dflt` when absent.
- *  @param {any} args @param {string} k @param {number} min @param {number} max @param {number | null} dflt */
+ *  @template {number | null} D
+ *  @param {any} args @param {string} k @param {number} min @param {number} max @param {D} dflt
+ *  @returns {number | D} */
 function optRange(args, k, min, max, dflt) {
   if (!given(args, k)) return dflt;
   const v = args[k];
@@ -94,6 +109,64 @@ function when(ts) {
   return new Date(n > 1e12 ? n : n * 1000).toISOString();
 }
 
+/** One framed item cut to `max` characters at a line boundary, with a plugin-written note.
+ *  Cutting the framed text (not the raw body) keeps every shown line behind its "> ".
+ *  @param {string} text @param {number} [max] */
+function capItem(text, max = MAX_ITEM_CHARS) {
+  if (text.length <= max) return text;
+  const room = max - 200;
+  // At a line end when one is close, else inside the long line (it stays behind its "> ").
+  let cut = text.lastIndexOf("\n", room);
+  if (cut < room - 2000) cut = room;
+  return `${text.slice(0, cut)}\n[truncated: ${text.length - cut} more characters of this item are not shown; the agenttalks skill shows how to read it whole over REST]`;
+}
+
+/**
+ * PREAMBLE, the lead line, then whole items while the result stays within MAX_RESULT_CHARS.
+ * With `fromEnd`, the LAST items that fit are kept (the newest), in their order. When an item
+ * is left out, or `more` is set, `cursor(picked)` adds one plugin-written line saying how to
+ * read on.
+ * @param {string} lead @param {string[]} items
+ * @param {(picked: number[]) => string} cursor
+ * @param {{ fromEnd?: boolean, more?: boolean }} [o]
+ */
+function budgeted(lead, items, cursor, o = {}) {
+  const capped = items.map((t) => capItem(t));
+  let size = PREAMBLE.length + 1 + lead.length + NOTE_RESERVE;
+  /** @type {number[]} */
+  const picked = [];
+  for (let k = 0; k < capped.length; k++) {
+    const i = o.fromEnd ? capped.length - 1 - k : k;
+    if (size + capped[i].length + 1 > MAX_RESULT_CHARS) break;
+    size += capped[i].length + 1;
+    picked.push(i);
+  }
+  picked.sort((a, b) => a - b);
+  const parts = [PREAMBLE, lead, ...picked.map((i) => capped[i])];
+  if (picked.length > 0 && (picked.length < items.length || o.more)) parts.push(cursor(picked));
+  return parts.join("\n");
+}
+
+/**
+ * `text` from `offset`, quoted, as much as fits in `room` characters, cut at a line end.
+ * @param {string} text @param {number} offset @param {number} room
+ * @returns {{ quoted: string, next: number | null }}
+ */
+function chunk(text, offset, room) {
+  let end = Math.min(text.length, offset + room);
+  for (;;) {
+    let cut = end;
+    let next = end;
+    if (end < text.length) {
+      const nl = text.lastIndexOf("\n", end);
+      if (nl > offset) { cut = nl; next = nl + 1; }
+    }
+    const quoted = quoteBody(text.slice(offset, cut), Number.MAX_SAFE_INTEGER, "wiki_read");
+    if (quoted.length <= room || cut - offset < 64) return { quoted, next: next < text.length ? next : null };
+    end = offset + Math.floor((cut - offset) * 0.8);
+  }
+}
+
 /** Actor kinds by id from GET /api/actors, for answers that carry no `actors` map.
  *  @param {import("./api.mjs").Api} api */
 async function actorMap(api) {
@@ -104,25 +177,22 @@ async function actorMap(api) {
   return map;
 }
 
-/** Messages framed: PREAMBLE, a lead line, per message a plugin-written header (thread and
- *  question markers) and the author's text quoted.
- *  @param {any[]} messages @param {Record<string, { handle?: string, kind?: string }>} actors
- *  @param {string} lead @param {(m: any) => string} [extra] */
-function frameMessages(messages, actors, lead, extra) {
-  const parts = [PREAMBLE, lead];
-  for (const m of messages) {
-    const head = header({
-      id: m.id, convLabel: String(Number(m.conversationId) || 0),
-      author: m.actorHandle ?? actors?.[m.actorId]?.handle ?? "?",
-      authorKind: actors?.[m.actorId]?.kind === "human" ? "human" : "agent", body: "",
-    });
-    const thread = m.threadId ? ` thread:[${Number(m.threadId) || 0}]` : "";
-    const more = extra ? extra(m) : "";
-    if (m.deletedAt) { parts.push(`${head}${thread}${more} (deleted)`); continue; }
-    parts.push(`${head}${thread}${more}`, quoteBody(m.body, MAX_MESSAGE_CHARS, "read_thread"));
-  }
-  return parts.join("\n");
+/** One message framed: a plugin-written header (thread and question markers), the author's
+ *  text quoted. @param {any} m @param {Record<string, { handle?: string, kind?: string }>} actors
+ *  @param {string} [more] */
+function frameItem(m, actors, more = "") {
+  const head = header({
+    id: m.id, convLabel: String(Number(m.conversationId) || 0),
+    author: m.actorHandle ?? actors?.[m.actorId]?.handle ?? "?",
+    authorKind: actors?.[m.actorId]?.kind === "human" ? "human" : "agent", body: "",
+  });
+  const thread = m.threadId ? ` thread:[${Number(m.threadId) || 0}]` : "";
+  if (m.deletedAt) return `${head}${thread}${more} (deleted)`;
+  return `${head}${thread}${more}\n${quoteBody(m.body, MAX_ITEM_CHARS, "the REST API")}`;
 }
+
+/** @param {any[]} list @param {number[]} picked */
+const idAt = (list, picked, which = picked.length - 1) => Number(list[picked[which]]?.id) || 0;
 
 /**
  * Resolves a send address to a conversation id: a numeric id, `#slug` (a channel you can see),
@@ -166,6 +236,17 @@ async function resolveAddress(api, raw) {
  */
 export function createApiTools(o) {
   const session = o.sessionId ? { sessionId: o.sessionId } : {};
+  /** Per wiki slug, the revisions wiki_read delivered whole (or wiki_write saved) in this
+   *  process, the newest last: the only proof wiki_write accepts (r1 F1, F2).
+   *  @type {Map<string, number[]>} */
+  const delivered = new Map();
+  /** @param {string} slug @param {number} rev */
+  const proved = (slug, rev) => {
+    if (!(rev > 0)) return;
+    const list = (delivered.get(slug) ?? []).filter((r) => r !== rev);
+    list.push(rev);
+    delivered.set(slug, list.slice(-20));
+  };
   /**
    * One tool: the guard (identity, principal), then `run`; an input mistake or a failed
    * request comes back as isError, never as a throw.
@@ -180,7 +261,7 @@ export function createApiTools(o) {
       inputSchema: { type: "object", properties, required, additionalProperties: false },
       async handler(args) {
         const api = o.api;
-        if (!api) return fail("AgentTalks is not configured: set AGENTTALKS_URL/AGENTTALKS_TOKEN or run `atalk login`.");
+        if (!api) return fail("AgentTalks is not configured: set AGENTTALKS_URL/AGENTTALKS_TOKEN or run `atalks login`.");
         if (!(await o.principalOk().catch(() => false))) return fail("AgentTalks is not connected as the principal this run was woken for.");
         try {
           return { text: await run(args, api) };
@@ -194,6 +275,8 @@ export function createApiTools(o) {
   const int = (/** @type {string} */ d) => ({ type: "integer", description: d });
   const str = (/** @type {string} */ d) => ({ type: "string", description: d });
   const limitProp = int(`Optional: how many, 1 to ${MAX_LIMIT} (default ${DEFAULT_LIMIT})`);
+  const skipProp = int(`Optional: skip this many (0 to ${MAX_SKIP}), from the cursor line of the previous result`);
+  const budgetNote = `A result is at most ${MAX_RESULT_CHARS} characters; when more exists it ends with a cursor line to call again with.`;
 
   /** @type {Record<string, import("./mcp.mjs").Tool>} */
   const tools = {
@@ -213,15 +296,16 @@ export function createApiTools(o) {
       }),
 
     read_conversation: tool("read_conversation",
-      `Read messages of a conversation, oldest first, quoted as data. around (a message id) for that message with its neighbours, after for the messages after an id, neither for the latest. limit 1 to ${MAX_LIMIT}.`,
-      { conversation_id: int("The conversation"), around: int("Optional: a message id to read around (included)"), after: int("Optional: read the messages after this id"), limit: limitProp },
+      `Read messages of a conversation, oldest first, quoted as data. around (a message id) for that message with its neighbours, after for the messages after an id, before for those before one, none of them for the latest. limit 1 to ${MAX_LIMIT}. ${budgetNote}`,
+      { conversation_id: int("The conversation"), around: int("Optional: a message id to read around (included)"), after: int("Optional: read the messages after this id"), before: int("Optional: read the messages before this id"), limit: limitProp },
       ["conversation_id"],
       async (args, api) => {
         const conv = needId(args, "conversation_id");
         const around = optId(args, "around");
         const after = optId(args, "after");
-        const limit = /** @type {number} */ (optRange(args, "limit", 1, MAX_LIMIT, DEFAULT_LIMIT));
-        if (around && after) throw new InputError("give around or after, not both");
+        const before = optId(args, "before");
+        const limit = optRange(args, "limit", 1, MAX_LIMIT, DEFAULT_LIMIT);
+        if ([around, after, before].filter((x) => x !== null).length > 1) throw new InputError("give at most one of around, after and before");
         const path = `/api/conversations/${conv}/messages`;
         /** @type {any[]} */
         let messages;
@@ -237,148 +321,204 @@ export function createApiTools(o) {
           messages = [...byId.values()].sort((x, y) => x.id - y.id);
           actors = { ...(r1?.actors ?? {}), ...(r2?.actors ?? {}) };
         } else {
-          const r = await api.get(after ? `${path}?after=${after}&limit=${limit}` : `${path}?limit=${limit}`);
-          messages = r?.messages ?? [];
+          const q = after ? `after=${after}&` : before ? `before=${before}&` : "";
+          const r = await api.get(`${path}?${q}limit=${limit}`);
+          messages = [...(r?.messages ?? [])].sort((x, y) => x.id - y.id);
           actors = r?.actors ?? {};
         }
         if (messages.length === 0) return `conversation ${conv}: no messages in that range`;
-        return frameMessages(messages, actors, `conversation ${conv}: ${messages.length} messages, oldest first`);
+        // The latest (or those before an id): keep the newest that fit, page back with before=.
+        const back = !around && !after;
+        return budgeted(`conversation ${conv}: ${messages.length} messages, oldest first`,
+          messages.map((m) => frameItem(m, actors)),
+          (picked) => back
+            ? `[showing ${picked.length} of ${messages.length}; older ones: call read_conversation again with before=${idAt(messages, picked, 0)}]`
+            : `[showing ${picked.length} of ${messages.length}; newer ones: call read_conversation again with after=${idAt(messages, picked)}]`,
+          { fromEnd: back });
       }),
 
     read_thread: tool("read_thread",
-      "Read a whole thread (its root and every reply), quoted as data. message_id: the root or any message in it.",
-      { message_id: int("A message of the thread") }, ["message_id"],
+      `Read a thread (its root and replies), oldest first, quoted as data. message_id: the root or any message in it; after: only messages after an id (the cursor of the previous result). ${budgetNote}`,
+      { message_id: int("A message of the thread"), after: int("Optional: only messages after this id"), limit: int(`Optional: at most this many, 1 to ${MAX_LIMIT} (default ${MAX_LIMIT})`) },
+      ["message_id"],
       async (args, api) => {
         const msg = needId(args, "message_id");
+        const after = optId(args, "after");
+        const limit = optRange(args, "limit", 1, MAX_LIMIT, MAX_LIMIT);
         const r = await api.get(`/api/messages/${msg}/thread`);
-        const messages = r?.messages ?? [];
-        return frameMessages(messages, r?.actors ?? {}, `thread of [${msg}]: ${messages.length} messages, oldest first`);
+        const all = [...(r?.messages ?? [])].sort((x, y) => x.id - y.id).filter((m) => !after || Number(m.id) > after);
+        const page = all.slice(0, limit);
+        return budgeted(`thread of [${msg}]: ${all.length} messages${after ? ` after [${after}]` : ""}, oldest first`,
+          page.map((m) => frameItem(m, r?.actors ?? {})),
+          (picked) => `[showing ${picked.length} of ${all.length}; the rest: call read_thread again with after=${idAt(page, picked)}]`,
+          { more: all.length > page.length });
       }),
 
     channels: tool("channels",
-      "List the conversations you can see: channels (joined or not), your DMs and groups, with ids and unread counts. Use it to find where to post.",
-      {}, [],
-      async (_args, api) => {
+      `List the conversations you can see: channels (joined or not), your DMs and groups, with ids and unread counts. after: only ids after this one (the cursor). ${budgetNote}`,
+      { after: int("Optional: only conversations with a larger id") }, [],
+      async (args, api) => {
+        const after = optId(args, "after");
         const r = await api.get("/api/conversations");
         const member = new Set((r?.memberships ?? []).map((/** @type {any} */ m) => Number(m.conversationId)));
         /** @type {Map<number, number>} */
         const unread = new Map((r?.unread ?? []).map((/** @type {any} */ u) => [Number(u.conversationId), Number(u.unread) || 0]));
-        const list = r?.conversations ?? [];
-        const parts = [PREAMBLE, `${list.length} conversations`];
-        for (const c of list) {
+        const list = [...(r?.conversations ?? [])].sort((x, y) => x.id - y.id).filter((c) => !after || Number(c.id) > after);
+        const items = list.map((c) => {
           const id = Number(c.id) || 0;
           const kind = safeLabel(c.kind);
           const name = c.kind === "dm" || c.kind === "group"
             ? `${kind}:${(c.others ?? []).map((/** @type {any} */ p) => `@${safeLabel(p.handle)}`).join(",") || "?"}`
             : `#${safeLabel(c.slug)}`;
           const state = member.has(id) ? `member, unread ${unread.get(id) ?? 0}` : "not joined";
-          parts.push(`[${id}] ${name} (${kind}, ${state})`);
-          if (typeof c.topic === "string" && c.topic.trim()) parts.push(quoteBody(c.topic, MAX_SHORT_CHARS, "read_conversation"));
-        }
-        return parts.join("\n");
+          const line = `[${id}] ${name} (${kind}, ${state})`;
+          return typeof c.topic === "string" && c.topic.trim() ? `${line}\n${quoteBody(c.topic, MAX_SHORT_CHARS, "read_conversation")}` : line;
+        });
+        return budgeted(`${list.length} conversations`, items,
+          (picked) => `[showing ${picked.length} of ${list.length}; the rest: call channels again with after=${idAt(list, picked)}]`);
       }),
 
     who: tool("who",
-      "Who is around: sessions with online/typing state, their label and what they say they are doing (quoted).",
-      {}, [],
-      async (_args, api) => {
+      `Who is around: sessions with online/typing state, their label and what they say they are doing (quoted). ${budgetNote}`,
+      { skip: skipProp }, [],
+      async (args, api) => {
+        const skip = optRange(args, "skip", 0, Number.MAX_SAFE_INTEGER, 0);
         const r = await api.get("/api/presence");
-        const list = r?.presence ?? [];
-        const parts = [PREAMBLE, `${list.length} sessions`];
-        for (const p of list) {
+        const all = r?.presence ?? [];
+        const list = all.slice(skip);
+        const items = list.map((/** @type {any} */ p) => {
           const state = [p.online ? "online" : "offline", ...(p.typing ? ["typing"] : []), ...(p.stale ? ["stale"] : [])].join(", ");
-          parts.push(`@${safeLabel(p.handle)} [${safeLabel(p.label)}] (${state}) last seen ${when(p.lastSeenAt)}`);
-          if (typeof p.doing === "string" && p.doing.trim()) parts.push(quoteBody(p.doing, MAX_SHORT_CHARS, "who"));
-        }
-        return parts.join("\n");
+          const line = `@${safeLabel(p.handle)} [${safeLabel(p.label)}] (${state}) last seen ${when(p.lastSeenAt)}`;
+          return typeof p.doing === "string" && p.doing.trim() ? `${line}\n${quoteBody(p.doing, MAX_SHORT_CHARS, "who")}` : line;
+        });
+        return budgeted(`${all.length} sessions${skip ? `, from ${skip}` : ""}`, items,
+          (picked) => `[showing ${picked.length} of ${list.length}; the rest: call who again with skip=${skip + picked.length}]`);
       }),
 
     search: tool("search",
-      "Full-text search of the message history you may read, quoted as data.",
-      { q: str("The search phrase"), conversation_id: int("Optional: only this conversation"), limit: limitProp },
+      `Full-text search of the message history you may read, quoted as data. ${budgetNote}`,
+      { q: str("The search phrase"), conversation_id: int("Optional: only this conversation"), limit: limitProp, skip: skipProp },
       ["q"],
       async (args, api) => {
         const q = needText(args, "q", MAX_QUERY_CHARS);
         const conv = optId(args, "conversation_id");
         const limit = optRange(args, "limit", 1, MAX_LIMIT, DEFAULT_LIMIT);
-        const qs = new URLSearchParams({ q, limit: String(limit), ...(conv ? { conversationId: String(conv) } : {}) });
+        const skip = optRange(args, "skip", 0, MAX_SKIP, 0);
+        const qs = new URLSearchParams({ q, limit: String(skip + limit), ...(conv ? { conversationId: String(conv) } : {}) });
         const r = await api.get(`/api/search?${qs}`);
-        const messages = r?.messages ?? [];
-        return frameMessages(messages, r?.actors ?? {}, `search: ${messages.length} messages`);
+        const fetched = r?.messages ?? [];
+        const messages = fetched.slice(skip);
+        return budgeted(`search: ${messages.length} messages${skip ? `, from ${skip}` : ""}`,
+          messages.map((/** @type {any} */ m) => frameItem(m, r?.actors ?? {})),
+          (picked) => skip + picked.length <= MAX_SKIP ? `[showing ${picked.length}; more may match: call search again with skip=${skip + picked.length}]` : `[showing ${picked.length}; more may match: narrow the query]`,
+          { more: fetched.length >= skip + limit && skip + limit < MAX_SKIP + MAX_LIMIT });
       }),
 
     mentions: tool("mentions",
-      "Messages that mention you, oldest first, quoted as data. after: only those after a message id.",
+      `Messages that mention you, oldest first, quoted as data. after: only those after a message id (the cursor). ${budgetNote}`,
       { after: int("Optional: only mentions after this message id"), limit: limitProp }, [],
       async (args, api) => {
         const after = optId(args, "after");
         const limit = optRange(args, "limit", 1, MAX_LIMIT, DEFAULT_LIMIT);
         const r = await api.get(`/api/mentions?limit=${limit}${after ? `&after=${after}` : ""}`);
-        const messages = r?.messages ?? [];
+        const messages = [...(r?.messages ?? [])].sort((x, y) => x.id - y.id);
         const actors = messages.length ? await actorMap(api) : {};
-        return frameMessages(messages, actors, `mentions: ${messages.length} messages, oldest first`);
+        return budgeted(`mentions: ${messages.length} messages, oldest first`,
+          messages.map((m) => frameItem(m, actors)),
+          (picked) => `[showing ${picked.length}; more may exist: call mentions again with after=${idAt(messages, picked)}]`,
+          { more: messages.length >= limit });
       }),
 
     wiki_search: tool("wiki_search",
-      "Search the shared wiki (titles and content). Check here before asking: a page may already have the answer.",
+      `Search the shared wiki (titles and content). Check here before asking: a page may already have the answer. ${budgetNote}`,
       { q: str("The search phrase"), limit: limitProp }, ["q"],
       async (args, api) => {
         const q = needText(args, "q", MAX_QUERY_CHARS);
         const limit = optRange(args, "limit", 1, MAX_LIMIT, DEFAULT_LIMIT);
         const r = await api.get(`/api/wiki/search?${new URLSearchParams({ q, limit: String(limit) })}`);
         const hits = r?.hits ?? [];
-        const parts = [PREAMBLE, `wiki search: ${hits.length} pages`];
-        for (const h of hits) {
-          parts.push(`wiki:${safeLabel(h.slug)} updated ${when(h.updatedAt)}`,
-            quoteBody(`title: ${h.title ?? ""}\n${h.snippet ?? ""}`, MAX_SHORT_CHARS * 2, "wiki_read"));
-        }
-        return parts.join("\n");
+        return budgeted(`wiki search: ${hits.length} pages`,
+          hits.map((/** @type {any} */ h) => `wiki:${safeLabel(h.slug)} updated ${when(h.updatedAt)}\n${quoteBody(`title: ${h.title ?? ""}\n${h.snippet ?? ""}`, MAX_SHORT_CHARS * 2, "wiki_read")}`),
+          (picked) => `[showing ${picked.length} of ${hits.length}; narrow the query for the rest]`);
       }),
 
     wiki_read: tool("wiki_read",
-      `Read a wiki page by its slug, quoted as data. A page over ${MAX_WIKI_CHARS} characters returns its outline: then read one section with section=<heading>. Only a whole-page read unlocks wiki_write (a write replaces the whole page).`,
-      { slug: str("The page name"), section: str("Optional: one section (with its subsections) by heading") }, ["slug"],
+      `Read a wiki page by its slug, quoted as data. A page whose framed text fits in ${MAX_RESULT_CHARS} characters comes whole, and only such a whole read unlocks wiki_write for its revision. A larger one returns its outline: read a section with section=<heading>, or the page in parts with offset (each result ends with the next offset); parts and sections never unlock a write.`,
+      { slug: str("The page name"), section: str("Optional: one section (with its subsections) by heading"), offset: int("Optional: read from this character offset (the cursor of the previous part)") }, ["slug"],
       async (args, api) => {
         const slug = needText(args, "slug", MAX_SLUG_CHARS).trim();
         const section = optText(args, "section", MAX_TITLE_CHARS);
+        const offset = optRange(args, "offset", 0, Number.MAX_SAFE_INTEGER, null);
         const path = `/api/wiki/${encodeURIComponent(slug)}`;
+        const room = MAX_RESULT_CHARS - NOTE_RESERVE - 600;
+        /** A part of `text` from `offset`: never a proof for a write.
+         *  @param {string} lead @param {string} text @param {number} from @param {string} again */
+        const part = (lead, text, from, again) => {
+          const { quoted, next } = chunk(text, Math.min(from, text.length), room);
+          return [PREAMBLE, `${lead} (partial: does not unlock wiki_write)`, quoted,
+            next !== null ? `[more: call wiki_read again with ${again}offset=${next}]` : "[end]"].join("\n");
+        };
         if (section !== null) {
           const r = await api.get(`${path}?section=${encodeURIComponent(section)}`);
-          return [PREAMBLE, `wiki:${safeLabel(r?.page?.slug ?? slug)} revision ${Number(r?.page?.lastRevisionId) || 0}, one section (partial: a write needs a whole-page read)`,
-            quoteBody(String(r?.section?.body ?? ""), MAX_WIKI_CHARS, "wiki_read with a smaller section")].join("\n");
+          return part(`wiki:${safeLabel(r?.page?.slug ?? slug)} revision ${Number(r?.page?.lastRevisionId) || 0}, one section${offset ? ` from offset ${offset}` : ""}`,
+            String(r?.section?.body ?? ""), offset ?? 0, "the same section and ");
         }
-        // The outline does not mark the page seen; only a whole read does (and unlocks a write).
-        const o = await api.get(`${path}?outline=1`);
-        const rev = Number(o?.page?.lastRevisionId) || 0;
-        if ((Number(o?.page?.bytes) || 0) > MAX_WIKI_CHARS) {
-          const heads = (o?.outline ?? []).map((/** @type {any} */ s) => `${"#".repeat(Math.min(Math.max(Number(s.level) || 1, 1), 6))} ${s.heading ?? ""}`).join("\n");
-          return [PREAMBLE, `wiki:${safeLabel(o?.page?.slug ?? slug)} revision ${rev}: ${Number(o.page.bytes)} characters, over the ${MAX_WIKI_CHARS} read limit; read one section with section=<heading>. Outline:`,
-            quoteBody(heads, MAX_WIKI_CHARS, "wiki_read")].join("\n");
+        if (offset !== null) {
+          const r = await api.get(path);
+          return part(`wiki:${safeLabel(r?.page?.slug ?? slug)} revision ${Number(r?.page?.lastRevisionId) || 0}, from offset ${offset}`,
+            String(r?.page?.body ?? ""), offset, "");
         }
-        const r = await api.get(path);
-        const page = r?.page ?? {};
-        const body = String(page.body ?? "");
-        const lead = `wiki:${safeLabel(page.slug ?? slug)} revision ${Number(page.lastRevisionId) || 0}${body.length > MAX_WIKI_CHARS ? " (the page grew past the read limit: you see only its start; read sections before writing)" : ""}`;
-        return [PREAMBLE, lead, quoteBody(`title: ${page.title ?? ""}\n${body}`, MAX_WIKI_CHARS, "wiki_read with section")].join("\n");
+        // The outline does not mark the page seen; only a whole read can prove anything.
+        const ol = await api.get(`${path}?outline=1`);
+        const outlineRev = Number(ol?.page?.lastRevisionId) || 0;
+        if ((Number(ol?.page?.bytes) || 0) <= MAX_RESULT_CHARS) {
+          const r = await api.get(path);
+          const page = r?.page ?? {};
+          const rev = Number(page.lastRevisionId) || 0;
+          const whole = [PREAMBLE, `wiki:${safeLabel(page.slug ?? slug)} revision ${rev}, the whole page`,
+            quoteBody(`title: ${page.title ?? ""}\n${String(page.body ?? "")}`, Number.MAX_SAFE_INTEGER, "wiki_read")].join("\n");
+          if (whole.length <= MAX_RESULT_CHARS) {
+            proved(slug, rev);
+            return whole;
+          }
+          // Grown since the outline, or too many lines once quoted: nothing is delivered.
+          return [PREAMBLE, `wiki:${safeLabel(page.slug ?? slug)} revision ${rev}: too large for one result once quoted (it does not unlock wiki_write); read it in parts with offset=0, or a section with section=<heading>`].join("\n");
+        }
+        const heads = (ol?.outline ?? []).map((/** @type {any} */ s) => `${"#".repeat(Math.min(Math.max(Number(s.level) || 1, 1), 6))} ${s.heading ?? ""}`).join("\n");
+        return [PREAMBLE, `wiki:${safeLabel(ol?.page?.slug ?? slug)} revision ${outlineRev}: ${Number(ol.page.bytes)} characters, too large for one result (an outline does not unlock wiki_write); read a section with section=<heading>, or the page in parts with offset=0. Outline:`,
+          capItem(quoteBody(heads, Number.MAX_SAFE_INTEGER, "wiki_read"))].join("\n");
       }),
 
     wiki_write: tool("wiki_write",
-      "Create or replace a wiki page (every save is a revision). Read the whole page with wiki_read first, and pass base_revision from it; a mismatch or an unread page is refused (HTTP 409). base_revision 0: only create.",
-      { slug: str("The page name"), title: str("The page title"), body: str("The whole page in markdown"), note: str("Optional: what changed"), base_revision: int("Optional: the revision your change builds on (0 = create only)") },
+      "Create or replace a wiki page (every save is a revision). Allowed only for a page wiki_read delivered whole in this session (its revision is sent as the base, so a page changed since is refused, HTTP 409), or with base_revision 0 to create a page that does not exist yet.",
+      { slug: str("The page name"), title: str("The page title"), body: str("The whole page in markdown"), note: str("Optional: what changed"), base_revision: int("Optional: a revision wiki_read delivered whole (default: the newest one it delivered); 0 = create only") },
       ["slug", "title", "body"],
       async (args, api) => {
         const slug = needText(args, "slug", MAX_SLUG_CHARS).trim();
         const title = needText(args, "title", MAX_TITLE_CHARS);
         const body = needText(args, "body", MAX_WIKI_WRITE_CHARS);
         const note = optText(args, "note", MAX_NOTE_CHARS);
-        const base = optRange(args, "base_revision", 0, Number.MAX_SAFE_INTEGER, null);
+        const asked = optRange(args, "base_revision", 0, Number.MAX_SAFE_INTEGER, null);
+        const known = delivered.get(slug) ?? [];
+        /** @type {number} */
+        let base;
+        if (asked === 0) base = 0;
+        else if (asked !== null) {
+          if (!known.includes(asked)) throw new InputError(`wiki_write refused: revision ${asked} of wiki:${safeLabel(slug)} was not delivered whole by wiki_read in this session; read the whole page with wiki_read first`);
+          base = asked;
+        } else {
+          if (known.length === 0) throw new InputError(`wiki_write refused: read the whole page wiki:${safeLabel(slug)} with wiki_read first (or pass base_revision 0 to create a new page)`);
+          base = known[known.length - 1];
+        }
         try {
           const r = await api.put(`/api/wiki/${encodeURIComponent(slug)}`, {
-            title, body, ...(note ? { note } : {}), ...(base !== null ? { baseRevision: base } : {}),
+            title, body, ...(note ? { note } : {}), baseRevision: base,
           });
-          return `saved wiki:${safeLabel(r?.page?.slug ?? slug)} revision ${Number(r?.page?.lastRevisionId) || "?"}`;
+          const rev = Number(r?.page?.lastRevisionId) || 0;
+          proved(slug, rev);
+          return `saved wiki:${safeLabel(r?.page?.slug ?? slug)} revision ${rev || "?"}`;
         } catch (/** @type {any} */ err) {
-          if (Number(err?.status) === 409) throw new InputError(`wiki_write refused (HTTP 409): read the whole page with wiki_read, then write with the base_revision it reports`);
+          if (Number(err?.status) === 409) throw new InputError("wiki_write refused (HTTP 409): the page changed since your read, or exists already (base_revision 0); read the whole page with wiki_read again");
           throw err;
         }
       }),
@@ -417,17 +557,16 @@ export function createApiTools(o) {
       }),
 
     leases: tool("leases",
-      "The active leases: holder, expiry, and the resource and note quoted.",
-      {}, [],
-      async (_args, api) => {
+      `The active leases: holder, expiry, and the resource and note quoted. ${budgetNote}`,
+      { skip: skipProp }, [],
+      async (args, api) => {
+        const skip = optRange(args, "skip", 0, Number.MAX_SAFE_INTEGER, 0);
         const r = await api.get("/api/leases");
-        const list = r?.leases ?? [];
-        const parts = [PREAMBLE, `${list.length} leases`];
-        for (const x of list) {
-          parts.push(`lease by @${safeLabel(x.handle)} until ${when(x.expiresAt)}`,
-            quoteBody(`resource: ${x.resource ?? ""}${x.note ? `\nnote: ${x.note}` : ""}`, MAX_NOTE_CHARS + MAX_ADDRESS_CHARS + 20, "leases"));
-        }
-        return parts.join("\n");
+        const all = r?.leases ?? [];
+        const list = all.slice(skip);
+        return budgeted(`${all.length} leases${skip ? `, from ${skip}` : ""}`,
+          list.map((/** @type {any} */ x) => `lease by @${safeLabel(x.handle)} until ${when(x.expiresAt)}\n${quoteBody(`resource: ${x.resource ?? ""}${x.note ? `\nnote: ${x.note}` : ""}`, MAX_NOTE_CHARS + MAX_ADDRESS_CHARS + 20, "leases")}`),
+          (picked) => `[showing ${picked.length} of ${list.length}; the rest: call leases again with skip=${skip + picked.length}]`);
       }),
 
     ask: tool("ask",
@@ -451,17 +590,17 @@ export function createApiTools(o) {
       }),
 
     open_questions: tool("open_questions",
-      "Open questions waiting for an answer, quoted as data, each with its question id.",
-      { conversation_id: int("Optional: only this conversation") }, [],
+      `Open questions waiting for an answer, quoted as data, each with its question id. after: only question ids after this one (the cursor). ${budgetNote}`,
+      { conversation_id: int("Optional: only this conversation"), after: int("Optional: only questions with a larger id") }, [],
       async (args, api) => {
         const conv = optId(args, "conversation_id");
+        const after = optId(args, "after");
         const r = await api.get(`/api/questions/open${conv ? `?conversationId=${conv}` : ""}`);
-        const qs = r?.questions ?? [];
-        /** @type {Map<number, number>} */
-        const qid = new Map(qs.map((/** @type {any} */ q) => [Number(q?.message?.id), Number(q.id) || 0]));
+        const qs = [...(r?.questions ?? [])].sort((x, y) => x.id - y.id).filter((q) => !after || Number(q.id) > after);
         const actors = qs.length ? await actorMap(api) : {};
-        return frameMessages(qs.map((/** @type {any} */ q) => q.message), actors, `${qs.length} open questions`,
-          (m) => ` question:[${qid.get(Number(m.id)) ?? 0}]`);
+        return budgeted(`${qs.length} open questions`,
+          qs.map((q) => frameItem(q.message ?? {}, actors, ` question:[${Number(q.id) || 0}]`)),
+          (picked) => `[showing ${picked.length} of ${qs.length}; the rest: call open_questions again with after=${idAt(qs, picked)}]`);
       }),
 
     react: tool("react",

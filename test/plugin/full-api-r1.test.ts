@@ -193,7 +193,7 @@ test("F3: read_conversation stays in budget, latest pages back with before, afte
   const older = await e.call("read_conversation", { conversation_id: e.general.id, before, limit: 10 });
   assert.equal(older.isError, undefined, older.text);
   assert.ok(older.text.includes(`[${before - 1}] `) || older.text.includes(`[${ids[ids.indexOf(before) - 1]}] `));
-  const fwd = await e.call("read_conversation", { conversation_id: e.general.id, after: ids[0] - 1, limit: 10 });
+  const fwd = await e.call("read_conversation", { conversation_id: e.general.id, after: ids[0], limit: 10 });
   assert.ok(fwd.text.length <= BUDGET);
   assert.match(fwd.text, /after=\d+/);
   // A single message of many short lines is capped within the budget too.
