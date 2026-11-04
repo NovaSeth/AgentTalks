@@ -212,6 +212,24 @@ async function finish(code, notice) {
 process.on("SIGTERM", () => { void finish(0); });
 process.on("SIGINT", () => { void finish(0); });
 
+// With no deadline (--max-seconds 0) nothing else would end an orphan: if Claude Code dies
+// without signalling (crash, SIGKILL) this process would live on and the next session would start
+// a second monitor on the same cursor. So it ends when the claude process it found is gone, or
+// when its stdout breaks (nobody left to deliver to). stdin is NOT a signal: a monitor is
+// normally started with stdin closed or /dev/null. No claude ancestor found: unchanged.
+process.stdout.on("error", () => {
+  log("stdout is closed: nobody is reading, stopping");
+  void finish(0);
+});
+if (claudeProc) {
+  const orphanMs = Number(env.AGENTTALKS_ORPHAN_POLL_MS) > 0 ? Number(env.AGENTTALKS_ORPHAN_POLL_MS) : 15_000;
+  setInterval(() => {
+    if (processAlive(claudeProc.pid)) return;
+    log("the Claude Code session this monitor belongs to is gone: stopping");
+    void finish(0);
+  }, orphanMs).unref();
+}
+
 if (maxSeconds > 0) {
   setTimeout(() => {
     void finish(0, "[agenttalks monitor] stopping before the watch deadline; the cursor is saved, "

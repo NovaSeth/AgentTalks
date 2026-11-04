@@ -65,7 +65,7 @@ test("hooks.json and monitors.json reference existing scripts with only known ke
     assert.ok(!m.command.includes("user_config"), "monitors cannot use user_config");
     const script = /"\$\{CLAUDE_PLUGIN_ROOT\}([^"]+)"/.exec(m.command)?.[1];
     assert.ok(script && existsSync(join(PLUGIN, script)), m.command);
-    // T-MG-23: a plugin monitor runs for the whole session (no Claude Code deadline, and no
+    // T-MG-35 (formerly T-MG-23): a plugin monitor runs for the whole session (no Claude Code deadline, and no
     // restart once it exits), so the script must not end itself: --max-seconds 0 = no deadline.
     assert.match(m.command, /--max-seconds 0(\s|$)/, "the plugin monitor must not exit on its own");
   }
