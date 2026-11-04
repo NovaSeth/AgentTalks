@@ -52,6 +52,8 @@ let failAfterOnce = false;
 let onRequest: ((path: string) => void) | null = null;
 /** When set, a request whose path matches is answered from the table as it is NOW, but only after the gate opens. */
 let hold: { match: RegExp; gate: Promise<void> } | null = null;
+/** One-shot holds (T-MG-43 r1): only the FIRST request matching each entry waits for its gate. */
+let onceHolds: { match: RegExp; gate: Promise<void> }[] = [];
 g.fetch = async (path: string) => {
   requests.push(String(path));
   onRequest?.(String(path));
@@ -75,6 +77,8 @@ g.fetch = async (path: string) => {
   // The page is cut NOW (messages and reactions alike); a held request only answers later.
   const reactions = Object.fromEntries(messages.filter((x) => x.id in reactions5).map((x) => [x.id, structuredClone(reactions5[x.id])]));
   if (hold && hold.match.test(String(path))) await hold.gate;
+  const once = onceHolds.findIndex((h) => h.match.test(String(path)));
+  if (once >= 0) await onceHolds.splice(once, 1)[0].gate;
   return { ok: true, status: 200, json: async () => ({ messages, reactions, actors: [] }) };
 };
 
@@ -98,6 +102,7 @@ beforeEach(() => {
   requests.length = 0;
   onRequest = null;
   hold = null;
+  onceHolds = [];
   failAfterOnce = false;
   reactions5 = {};
   Object.assign(state, {
@@ -365,4 +370,86 @@ test("F4 (T-MG-43): a held gap message edited by a live event during the after= 
   await settle();
   assert.equal(bodyOf(1), "edited live");
   assert.deepEqual(ids(5), range(31));
+});
+
+// ---- T-MG-43 fix round 1 (codex review-r1 F1): a page of a superseded catch-up never undoes a newer one
+const general = () => { state.conversations = [{ id: 5, slug: "general", kind: "public" }]; };
+
+test("r1 F1 (codex repro): a superseded newest-30 page landing late keeps the newer catch-up's reactions and body", async (t) => {
+  const release = await heldResume(t, /messages\?limit=30$/);
+  hold = null;
+  last().drop(2);
+  server5[0] = edited(1, "edited in outage 2");
+  reactions5 = { 1: thumbs("nestor") };
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  release();
+  await settle();
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+});
+
+test("r1 F1: when the superseded page lands first, the newer catch-up's page still applies", async (t) => {
+  let releaseOld!: () => void;
+  let releaseNew!: () => void;
+  server5 = [msg(1), msg(2)];
+  state.msgs[5] = [msg(1)];
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  sse.connectSSE(); last().open();
+  live(msg(1));
+  last().drop(2);
+  t.mock.timers.tick(1000);
+  onceHolds = [{ match: /messages\?limit=30$/, gate: new Promise<void>((r) => { releaseOld = r; }) }];
+  last().open();
+  await settle();
+  general();
+  last().drop(2);
+  server5[0] = edited(1, "edited in outage 2");
+  reactions5 = { 1: thumbs("nestor") };
+  t.mock.timers.tick(1000);
+  onceHolds = [{ match: /messages\?limit=30$/, gate: new Promise<void>((r) => { releaseNew = r; }) }];
+  last().open();
+  await settle();
+  general();
+  releaseOld();
+  await settle();
+  releaseNew();
+  await settle();
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  assert.deepEqual(ids(5), [1, 2]);
+});
+
+test("r1 F1: an unstamped write during the after= page (an own edit, applyMessageUpdate) is kept", async (t) => {
+  const release = await heldResume(t, /after=1/);
+  store.upsertMessage(5, edited(2, "own edit"));
+  release();
+  await settle();
+  assert.equal(bodyOf(2), "own edit");
+});
+
+test("r1 F1: a reaction refresh sent before a newer catch-up and landing after it does not undo that catch-up", async (t) => {
+  await heldResume(t, /never/);
+  hold = null;
+  await settle();
+  let releaseRefresh!: () => void;
+  onceHolds = [{ match: /before=3&limit=1/, gate: new Promise<void>((r) => { releaseRefresh = r; }) }];
+  reacted(2);                         // its refresh is cut now: body m2, no reactions
+  await settle();
+  last().drop(2);
+  server5[1] = edited(2, "edited in outage 2");
+  reactions5 = { 2: thumbs("nestor") };
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  assert.equal(bodyOf(2), "edited in outage 2");
+  releaseRefresh();
+  await settle();
+  assert.equal(bodyOf(2), "edited in outage 2");
+  assert.deepEqual(state.reactions[2], thumbs("nestor"));
 });
