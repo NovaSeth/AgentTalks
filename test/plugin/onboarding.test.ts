@@ -6,10 +6,10 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { waitFor } from "../helpers.ts";
@@ -288,7 +288,11 @@ test("S10b: the git call passes safe.directory", () => {
 
 // ---- Fix round 1 (T-MG-21 review findings F1-F5) ----
 
-const lockBody = (at: number) => JSON.stringify({ pid: 999999, at });
+// Fix round 2 (spec change): a lock is evicted only when its owner is provably dead (same host,
+// pid gone), never by age. A "held" lock names a live pid (this test process); a "dead" one an
+// exited child.
+const lockBody = (at: number) => JSON.stringify({ pid: process.pid, host: hostname(), at });
+const deadLockBody = (at: number) => JSON.stringify({ pid: spawnSync(process.execPath, ["-e", ""]).pid, host: hostname(), at });
 
 test("R1-F1: a file swapped in between login's rename and the trust step -> exit 1, nothing trusted for the replacement", async (t) => {
   const fake: FakeAt = await fakeAt();
@@ -305,7 +309,7 @@ test("R1-F1: a file swapped in between login's rename and the trust step -> exit
   assert.equal(list.length, 0);
 });
 
-test("R1-F2: a fresh lock held by someone else -> login waits, then both the old and the new entry are present; a stale lock is cleared", async (t) => {
+test("R1-F2: a fresh lock held by someone else -> login waits, then both the old and the new entry are present; a lock whose owner is dead is cleared", async (t) => {
   const fake: FakeAt = await fakeAt();
   t.after(() => fake.close());
   const s = setup();
@@ -327,7 +331,7 @@ test("R1-F2: a fresh lock held by someone else -> login waits, then both the old
 
   const s2 = setup();
   mkdirSync(s2.conf, { recursive: true });
-  writeFileSync(s2.trustFile + ".lock", lockBody(Date.now() - 60_000));
+  writeFileSync(s2.trustFile + ".lock", deadLockBody(Date.now()));
   const r2 = await login(s2, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
   assert.equal(r2.code, 0, r2.stderr);
 });
