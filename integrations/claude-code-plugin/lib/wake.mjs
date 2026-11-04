@@ -173,19 +173,39 @@ async function whoamiOnServer(id) {
   return { handle: String(me?.actor?.handle ?? ""), id: Number(me?.actor?.id) };
 }
 
-/** @type {(cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv, timeoutMs?: number }) => Promise<void>} */
-export const spawnRunner = (cmd, argv, opts) => new Promise((resolve) => {
-  const child = spawn(cmd, argv, {
-    cwd: opts.cwd, env: opts.env ?? wakeEnv(process.env), shell: false, stdio: ["ignore", "ignore", "inherit"],
+/**
+ * A run: the promise settles when the run is over (exit, kill at the time limit, or a
+ * failure to start); its `started` promise resolves once the process exists (the child's
+ * 'spawn' event) and rejects when it never started (ENOENT, EACCES): the bridge commits a
+ * knock only to a run that started (codex T-MG-14 r1 F3).
+ * @typedef {Promise<void> & { started?: Promise<void> }} Run
+ * @type {(cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv, timeoutMs?: number }) => Run}
+ */
+export const spawnRunner = (cmd, argv, opts) => {
+  /** @type {(v?: unknown) => void} */
+  let onSpawn = () => {};
+  /** @type {(err: unknown) => void} */
+  let onFail = () => {};
+  const started = new Promise((resolve, reject) => { onSpawn = resolve; onFail = reject; });
+  started.catch(() => {}); // observed by the caller; never an unhandled rejection
+  /** @type {Run} */
+  const run = new Promise((resolve) => {
+    const child = spawn(cmd, argv, {
+      cwd: opts.cwd, env: opts.env ?? wakeEnv(process.env), shell: false, stdio: ["ignore", "ignore", "inherit"],
+    });
+    const limit = setTimeout(() => {
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+    }, opts.timeoutMs ?? MAX_RUN_MS);
+    const done = () => { clearTimeout(limit); resolve(); };
+    child.on("spawn", () => onSpawn());
+    child.on("error", (err) => { onFail(err); done(); });
+    child.on("exit", done);
   });
-  const limit = setTimeout(() => {
-    child.kill("SIGTERM");
-    setTimeout(() => child.kill("SIGKILL"), 5000).unref();
-  }, opts.timeoutMs ?? MAX_RUN_MS);
-  const done = () => { clearTimeout(limit); resolve(); };
-  child.on("error", done);
-  child.on("exit", done);
-});
+  run.started = started.then(() => undefined);
+  run.started.catch(() => {});
+  return run;
+};
 
 /**
  * A wake secret belongs to ONE actor on ONE server: the server that issued it at
@@ -258,7 +278,7 @@ export function checkWakeConfig(secrets) {
  * @param {{
  *   secrets: WakeSecret[] | Map<string, string>,
  *   sessionsDir: string,
- *   runner?: (cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv }) => Promise<void>,
+ *   runner?: (cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv }) => Promise<void> & { started?: Promise<void> },
  *   claudeBin?: string,
  *   allowedTools?: string,
  *   replayFile?: string | null,
@@ -441,14 +461,23 @@ export function createWakeBridge(opts) {
         }
         const argv = ["-p", "--resume", rec.sessionId, "--permission-mode", "dontAsk",
           "--tools", "", "--allowedTools", allowedTools, "--", wakePrompt(body)];
+        running.add(rec.sessionId);
+        log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
+        // The key stays reserved (checking) until the process exists: only a run that
+        // STARTED uses up the knock; one that cannot start leaves the retry open (r1 F3).
+        const run = runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env });
+        void Promise.resolve(run).catch(() => {}).finally(() => running.delete(rec.sessionId));
+        try {
+          await (run?.started ?? Promise.resolve());
+        } catch (err) {
+          checking.delete(key);
+          running.delete(rec.sessionId);
+          log(`could not start the resumed run: ${err instanceof Error ? err.message : err}`);
+          return reply(res, 503, { ok: false, woke: false, reason: "spawn failed" });
+        }
         seen.set(key, keepUntil);
         checking.delete(key);
         saveReplay();
-        running.add(rec.sessionId);
-        log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
-        void runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env })
-          .catch(() => {})
-          .finally(() => running.delete(rec.sessionId));
         reply(res, 202, { ok: true, woke: true });
       })();
     });

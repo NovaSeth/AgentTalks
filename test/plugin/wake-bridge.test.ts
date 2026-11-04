@@ -482,3 +482,20 @@ test("wake bridge: no wake when the session's principal cannot be resolved or do
   assert.equal(((await (await ok.send(legacyBody())).json()) as any).woke, true);
   assert.equal(ok.calls.length, 1);
 });
+
+test("wake bridge: a claude binary that cannot start is a retryable failure, not a used-up knock; the retry after fixing it wakes (codex T-MG-14 r1 F3)", async (t) => {
+  const bin = join(mkdtempSync(join(tmpdir(), "at-plugin-wbin-")), "claude");
+  const b = await bridge(t, () => NOW, { extra: { runner: spawnRunner, claudeBin: bin } });
+  const body = legacyBody({ exp: NOW + 300, nonce: "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a" });
+  const first = await b.send(body);
+  assert.equal(first.status, 503, "ENOENT: nothing started");
+  assert.deepEqual(await first.json(), { ok: false, woke: false, reason: "spawn failed" });
+  const again = await b.send(body);
+  assert.equal(again.status, 503, "still retryable, not a replay");
+  // The binary is installed: the sender's retry wakes the session, and only once.
+  writeFileSync(bin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const fixed = await b.send(body);
+  assert.equal(fixed.status, 202);
+  assert.deepEqual(await fixed.json(), { ok: true, woke: true });
+  assert.equal((await b.send(body)).status, 409);
+});
