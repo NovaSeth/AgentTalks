@@ -58,6 +58,8 @@ export async function openConversation(id, focusMessageId) {
     state.readMark[id] = state.memberships[id]?.lastReadMessageId ?? 0;
   }
   views.render();
+  let drawn = false;                 // the message list is on screen with what the state holds
+  let fresh = false;                 // the newest batch was fetched in THIS open
   if (!state.loaded[id]) {
     // W2-S2-B: the flag names the conversation being loaded. A boolean was shared by every open in
     // flight: a slow load of one conversation kept the skeleton over another, already loaded one
@@ -70,6 +72,23 @@ export async function openConversation(id, focusMessageId) {
     // redraw of this conversation (an SSE event, a theme switch) painted the skeleton again.
     if (state.loadingConv === id) state.loadingConv = false;
     if (gen !== sessionGeneration()) return;
+    // U14 (boot): the newest batch is on screen the moment it lands. Drawing it only after the
+    // focus fetch below left the skeleton up for as long as that fetch waited in the browser's
+    // per-host connection queue (a torn-down page's requests hold the sockets up to the server's
+    // headers timeout) although the messages were already in the state.
+    renderMain();
+    drawn = true;
+    fresh = state.loaded[id];
+  }
+  // U14 (boot): an id above the newest message of a batch fetched just now cannot exist in this
+  // conversation - that batch holds the newest messages - so no fetch is needed to know the
+  // link is dead, and the toast and the address rewrite happen at once instead of after a
+  // queued request. A cache from an earlier open proves nothing (a link to a message newer
+  // than it is the normal case), so only a fresh batch decides.
+  if (focusMessageId && fresh && focusMessageId > (lastMessageId(id) ?? 0)) {
+    focusMessageId = undefined;
+    if (routeConv) syncRoute(conversationRoute(routeConv, dmOthers(routeConv)));
+    showToast(t("That message is gone or you cannot see it."), { alert: true });
   }
   if (focusMessageId && !(state.msgs[id] || []).some((m) => m.id === focusMessageId)) {
     try {
@@ -77,6 +96,7 @@ export async function openConversation(id, focusMessageId) {
       for (const m of data.messages) { upsertMessage(id, m); animatedMsgs.add(m.id); }
       mergeActors(data.actors);
       mergeReactions(data.messages, data.reactions);
+      drawn = false;
     } catch { /* best effort */ }
     if (gen !== sessionGeneration()) return;
     // U14: a link to a message that is deleted, out of reach or never existed. The conversation
@@ -89,7 +109,7 @@ export async function openConversation(id, focusMessageId) {
       showToast(t("That message is gone or you cannot see it."), { alert: true });
     }
   }
-  renderMain();
+  if (!drawn) renderMain();
   const questionsReady = refreshQuestions(id);
   // Pins are needed straight away: without them the message menu does not know whether to offer
   // "Pin" or "Unpin". Previously only the details panel fetched them.
