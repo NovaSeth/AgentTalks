@@ -69,7 +69,8 @@ export function recordSession(file, rec) {
 /** The most recent recorded session of an actor, optionally on a given server.
  *  @param {string} file @param {string} handle @param {string} [url] */
 export function latestSessionFor(file, handle, url) {
+  const strip = (/** @type {string} */ u) => u.replace(/\/+$/, "");
   return readSessions(file)
-    .filter((r) => r.handle === handle && (!url || r.url === url))
+    .filter((r) => r.handle === handle && (!url || strip(r.url) === strip(url)))
     .sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
 }

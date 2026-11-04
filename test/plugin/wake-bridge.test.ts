@@ -13,34 +13,43 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { signWake } from "../../src/core/wake.ts";
-import { createWakeBridge, listenHost, spawnRunner, DEFAULT_ALLOWED_TOOLS } from "../../integrations/claude-code-plugin/lib/wake.mjs";
+import { createWakeBridge, listenHost, spawnRunner, DEFAULT_ALLOWED_TOOLS, checkWakeConfig } from "../../integrations/claude-code-plugin/lib/wake.mjs";
 import { recordSession } from "../../integrations/claude-code-plugin/lib/sessions.mjs";
 
 const SECRET = "fake-secret-for-tests"; // SYNTH: a synthetic test value, not a credential
 const SESSION = "4f1c2b8e-1111-2222-3333-444455556666";
 
-async function bridge(t: any, nowSec: () => number) {
+type BridgeOpts = {
+  secrets?: unknown;
+  records?: Array<{ sessionId: string; url: string; handle?: string; updatedAt: number }>;
+  extra?: Record<string, unknown>;
+};
+
+async function bridge(t: any, nowSec: () => number, o: BridgeOpts = {}) {
   const home = mkdtempSync(join(tmpdir(), "at-plugin-wake-"));
   const file = join(home, "claude-sessions.json");
   const project = mkdtempSync(join(tmpdir(), "at-plugin-wproj-"));
-  recordSession(file, { sessionId: SESSION, cwd: project, handle: "nestor", url: "https://at.example", updatedAt: 1 });
-  const calls: Array<{ cmd: string; argv: string[]; cwd: string }> = [];
+  for (const r of o.records ?? [{ sessionId: SESSION, url: "https://at.example", updatedAt: 1 }]) {
+    recordSession(file, { cwd: project, handle: "nestor", ...r });
+  }
+  const calls: Array<{ cmd: string; argv: string[]; cwd: string; env?: Record<string, string | undefined> }> = [];
   const server = createWakeBridge({
-    secrets: new Map([["nestor", SECRET]]),
+    secrets: o.secrets ?? [{ actor: "nestor", secret: SECRET, serverUrl: "https://at.example" }],
     sessionsFile: file,
     now: () => nowSec() * 1000,
-    runner: (cmd: string, argv: string[], opts: { cwd: string }) => {
-      calls.push({ cmd, argv, cwd: opts.cwd });
+    runner: (cmd: string, argv: string[], opts: { cwd: string; env?: Record<string, string | undefined> }) => {
+      calls.push({ cmd, argv, cwd: opts.cwd, env: opts.env });
       return Promise.resolve();
     },
-  });
+    ...o.extra,
+  } as any);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   t.after(() => new Promise<void>((r) => server.close(() => r())));
   const { port } = server.address() as AddressInfo;
   const send = (body: string, signature = signWake(SECRET, body)) => fetch(`http://127.0.0.1:${port}/wake`, {
     method: "POST", headers: { "content-type": "application/json", "x-agenttalks-signature": signature }, body,
   });
-  return { send, calls, project };
+  return { send, calls, project, file, home };
 }
 
 const NOW = 1_800_000_000;
@@ -108,6 +117,61 @@ test("wake bridge: unknown actor, stale legacy body, wrong method and oversized 
   assert.equal((await b.send(legacyBody({ type: "other" }))).status, 400);
   assert.equal((await b.send("x".repeat(70_000))).status, 413);
   assert.equal(b.calls.length, 0);
+});
+
+const A = "https://a.example";
+const B = "https://b.example";
+const SESSION_A = "session-a000-1111-2222";
+const SESSION_B = "session-b000-1111-2222";
+
+test("wake bridge: a secret bound to server A never resumes a session recorded for server B", async (t) => {
+  // @nestor exists on both servers; B's session is the newer one.
+  const b = await bridge(t, () => NOW, {
+    secrets: [{ actor: "nestor", secret: SECRET, serverUrl: A }],
+    records: [{ sessionId: SESSION_A, url: A, updatedAt: 1 }, { sessionId: SESSION_B, url: B, updatedAt: 2 }],
+  });
+  const res = await b.send(legacyBody());
+  assert.equal(res.status, 202);
+  assert.equal(b.calls.length, 1);
+  assert.equal(b.calls[0].argv[2], SESSION_A, "A's knock resumes A's session, not the newer B one");
+
+  // Only B recorded: A's knock wakes nothing.
+  const only = await bridge(t, () => NOW, {
+    secrets: [{ actor: "nestor", secret: SECRET, serverUrl: A }],
+    records: [{ sessionId: SESSION_B, url: B, updatedAt: 2 }],
+  });
+  const r2 = await only.send(legacyBody());
+  assert.equal(r2.status, 202);
+  assert.equal(((await r2.json()) as any).woke, false);
+  assert.equal(only.calls.length, 0);
+});
+
+test("wake bridge: a secret with no server URL wakes nobody once sessions from several servers are recorded (fail closed)", async (t) => {
+  // The codex scenario: sessions on A and B, only A's secret configured, serverUrl omitted.
+  const b = await bridge(t, () => NOW, {
+    secrets: new Map([["nestor", SECRET]]),
+    records: [{ sessionId: SESSION_A, url: A, updatedAt: 1 }, { sessionId: SESSION_B, url: B, updatedAt: 2 }],
+  });
+  const res = await b.send(legacyBody());
+  assert.equal(res.status, 202);
+  const out = (await res.json()) as any;
+  assert.equal(out.woke, false);
+  assert.match(out.reason, /server/);
+  assert.equal(b.calls.length, 0, "an unbound secret must not resume B's session");
+
+  // With a single server recorded, an unbound secret still works (the old one-server setup).
+  const one = await bridge(t, () => NOW, { secrets: new Map([["nestor", SECRET]]),
+    records: [{ sessionId: SESSION_A, url: A, updatedAt: 1 }] });
+  assert.equal((await one.send(legacyBody())).status, 202);
+  assert.equal(one.calls[0]?.argv[2], SESSION_A);
+});
+
+test("wake bridge: the startup check refuses an unbound secret when sessions from several servers exist", () => {
+  const rec = (url: string) => ({ sessionId: "s", cwd: "/", handle: "nestor", url, updatedAt: 1 });
+  assert.equal(checkWakeConfig([{ actor: "nestor", secret: "x", serverUrl: A }], [rec(A), rec(B)]), null);
+  assert.equal(checkWakeConfig([{ actor: "nestor", secret: "x" }], [rec(A)]), null);
+  assert.match(String(checkWakeConfig([{ actor: "nestor", secret: "x" }], [rec(A), rec(B)])), /serverUrl/);
+  assert.match(String(checkWakeConfig([], [])), /no wake secret/);
 });
 
 test("wake bridge: listens on 127.0.0.1 by default and refuses a public bind without consent", () => {

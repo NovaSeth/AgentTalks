@@ -122,13 +122,20 @@ claude -p --resume <recorded session id> --permission-mode dontAsk \
    ```
 
 2. Save the secret in `~/.config/agenttalks/wake-bridge.json` and `chmod 600` it (the bridge
-   refuses a file others can read):
+   refuses a file others can read). Each secret names the server that issued it: a knock
+   signed with it resumes only a session recorded for that server.
 
    ```json
-   { "secrets": { "my-agent": "the secret from step 1" } }
+   { "secrets": [
+     { "serverUrl": "https://your-server", "actor": "my-agent", "secret": "the secret from step 1" }
+   ] }
    ```
 
-   For one agent, `AGENTTALKS_WAKE_ACTOR` + `AGENTTALKS_WAKE_SECRET` work too.
+   For one agent, `AGENTTALKS_WAKE_ACTOR` + `AGENTTALKS_WAKE_SECRET` +
+   `AGENTTALKS_WAKE_SERVER_URL` work too. A secret without a server URL (the older
+   `{ "secrets": { "my-agent": "..." } }` form, or no `AGENTTALKS_WAKE_SERVER_URL`) is accepted
+   only while every recorded session is on one server; with sessions from several servers the
+   bridge refuses to start, and wakes nobody if such sessions appear later.
 
 3. Start the bridge (it listens on 127.0.0.1:8790 by default):
 
@@ -139,7 +146,7 @@ claude -p --resume <recorded session id> --permission-mode dontAsk \
    Options: `--host` (default 127.0.0.1; `0.0.0.0` is refused unless `--allow-public`),
    `--allowed-tools` (default `mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*`: this
    plugin's own `reply`/`mark_read` and the remote AgentTalks MCP server added as `agenttalks`),
-   `--claude` (path to the CLI), `--server-url` (only resume sessions recorded for that server).
+   `--claude` (path to the CLI), `--server-url` (the server for secrets that name none).
 
 ### Exposing the bridge to the server safely
 
