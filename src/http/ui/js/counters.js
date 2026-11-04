@@ -62,6 +62,17 @@ export function dividerAfter(list, mark, unread, me, lastUnreadId = 0) {
   return first.id - 1;
 }
 
+/** T-MG-44: the ids that get the unread HIGHLIGHT when the user comes back: every message by
+ *  somebody else above `mark` (the divider's mark on entry; the newest id seen while present on
+ *  a return to the tab). `null` mark = no divider = nothing. Own and deleted messages never. */
+export function highlightUnreadIds(list, mark, me) {
+  if (mark === null || mark === undefined) return [];
+  const since = Number(mark) || 0;
+  return (list || [])
+    .filter((m) => m && typeof m.id === "number" && m.id > since && m.actorId !== me && !m.deletedAt)
+    .map((m) => m.id);
+}
+
 /** The digest count moves forward in time only. Every poll carries a sequence number; an answer
  *  from an OLDER request arriving after a newer one is stale and dropped (that was the
  *  12 -> 5 -> 12 jump: the 30 s timer and a forced refresh after an action in flight at once).

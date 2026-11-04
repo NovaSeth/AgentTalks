@@ -29,7 +29,7 @@ import { openThreadsView, renderThreadsMain } from "./view-threads.js";
 import { findInConversation, renderSearchMain } from "./view-search.js";
 import { openUsersView, renderUsersMain, resetUsersError } from "./view-admin.js";
 import {
-  bindMessageEvents, closeThread, openConversation, openThread, refreshDetailsData, renderComposer,
+  bindMessageEvents, closeThread, fadeUnreadHighlights, noteTabVisible, openConversation, openThread, refreshDetailsData, renderComposer,
   renderDetails, renderMain, renderMessages, renderPresenceBar, renderThread, renderTopbar,
   toggleSidePanel, typingFacesHtml, updateOfflineBar, upsertMessageNode,
 } from "./view-chat.js";
@@ -445,11 +445,14 @@ window.addEventListener("hashchange", (e) => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !state.actor) return;
   ensureSSE();
+  // T-MG-44: what landed while the tab was hidden is tinted as unread (Slack's highlight).
+  noteTabVisible();
   // Returning to the tab = only now is what the user is looking at "read" (and
   // only when they really see the newest messages, i.e. are at the bottom).
   if (state.view === "chat" && state.activeId && state.memberships[state.activeId]
       && state.unread[state.activeId] > 0 && isScrolledToBottom()) {
     markReadDebounced(state.activeId, lastMessageId(state.activeId));
+    fadeUnreadHighlights(state.activeId, lastMessageId(state.activeId));
   }
 });
 

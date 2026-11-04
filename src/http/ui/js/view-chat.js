@@ -3,7 +3,7 @@
  */
 import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./actions.js";
 import { api, csrf, sessionGeneration } from "./api.js";
-import { dividerAfter } from "./counters.js";
+import { dividerAfter, highlightUnreadIds } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
 import { IMG_RE, avatarHtml, captureListPosition, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, notePinned, openModal, repinIfPinned, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior, watchListPin } from "./dom.js";
 import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconChevron, iconCopy, iconDigest, iconEdit, iconFile, iconFlame, iconGear, iconInfo, iconLink, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconUnpin, iconWrench } from "./icons.js";
@@ -20,6 +20,105 @@ import { bindProfileClicks, closeProfile, ensureHeaderMembers, headerFacesHtml, 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
 const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "👏", "✅", "🤔", "😢", "💯", "🙏", "👋", "⭐", "🙌"];
+
+// ------------------------------------------------- unread highlight (T-MG-44)
+// Slack's model: a message by somebody else that the user did NOT see arrive gets a soft tint,
+// next to the "New messages" divider. "Did not see" = it was above the divider when the
+// conversation was entered, or it landed while the tab was hidden. The tint fades once the read
+// mark is posted and never comes back for that message. Per conversation; own messages never.
+const READ_DEBOUNCE_MS = 500;      // markReadDebounced posts after this long; the fade starts then
+const FADE_MS = 3000;              // the CSS transition on .unread-hl-fade is shorter; the class leaves after it
+const unreadHl = new Map();        // convId -> { ids: Set (tinted), fading: Set, seen: newest id drawn while present }
+let highlightEntryPending = null;  // the conversation whose next drawn list takes the divider's ids
+
+function hlOf(convId) {
+  let h = unreadHl.get(convId);
+  if (!h) { h = { ids: new Set(), fading: new Set(), seen: 0 }; unreadHl.set(convId, h); }
+  return h;
+}
+
+/** Entering a conversation from elsewhere: the next drawn list tints what is above the divider. */
+export function noteConversationEntered(convId) {
+  const h = hlOf(convId);
+  h.ids.clear(); h.fading.clear(); h.seen = 0;
+  highlightEntryPending = convId;
+}
+
+/** Back to the tab (the app.js visibilitychange listener): what arrived while it was hidden is
+ *  tinted. The live path already did that per message; this covers a list redrawn meanwhile. */
+export function noteTabVisible() {
+  const convId = state.view === "chat" ? state.activeId : null;
+  if (!convId) return;
+  const h = hlOf(convId);
+  for (const id of highlightUnreadIds(visibleMessages(convId), h.seen, state.actor?.id)) {
+    if (!h.fading.has(id)) h.ids.add(id);
+  }
+  applyUnreadHighlightClasses(convId);
+}
+
+/** The class of a drawn row: tinted, fading, or nothing. */
+function unreadHlClass(convId, id) {
+  const h = unreadHl.get(convId);
+  if (!h) return "";
+  if (h.ids.has(id)) return "unread-hl";
+  if (h.fading.has(id)) return "unread-hl-fade";
+  return "";
+}
+
+/** Rows already on screen take the classes the state holds now (a return to the tab, a fade). */
+function applyUnreadHighlightClasses(convId, alsoIds = []) {
+  if (state.view !== "chat" || state.activeId !== convId) return;
+  const el = document.getElementById("messages");
+  const h = unreadHl.get(convId);
+  if (!el || !h) return;
+  for (const id of new Set([...h.ids, ...h.fading, ...alsoIds])) {
+    const node = el.querySelector(`[data-msg="${id}"]`);
+    if (!node) continue;
+    node.classList.toggle("unread-hl", h.ids.has(id));
+    node.classList.toggle("unread-hl-fade", h.fading.has(id));
+  }
+}
+
+/** The read mark was asked for up to `upToId` (markReadDebounced): when it is posted, the tint of
+ *  the rows up to there turns into the fade class (a CSS transition on the background), which
+ *  leaves once the transition is over. A read message is never tinted again. */
+export function fadeUnreadHighlights(convId, upToId) {
+  const h = unreadHl.get(convId);
+  if (!h || !h.ids.size) return;
+  const upTo = typeof upToId === "number" ? upToId : Infinity;
+  setTimeout(() => {
+    const done = [...h.ids].filter((id) => id <= upTo);
+    if (!done.length) return;
+    for (const id of done) { h.ids.delete(id); h.fading.add(id); }
+    h.seen = Math.max(h.seen, ...done);
+    applyUnreadHighlightClasses(convId);
+    setTimeout(() => {
+      for (const id of done) h.fading.delete(id);
+      applyUnreadHighlightClasses(convId, done);
+    }, FADE_MS);
+  }, READ_DEBOUNCE_MS);
+}
+
+/** Tests and an account change: no tint survives. */
+export function resetUnreadHighlights() { unreadHl.clear(); highlightEntryPending = null; }
+
+/** renderMessages reports the drawn list and the divider's mark: the entry snapshot takes the
+ *  divider's ids; a render behind a hidden tab (a replay after a break) tints what is newer than
+ *  the last message seen; a render while present only moves that "seen" watermark. */
+function noteListDrawn(convId, list, mark) {
+  const me = state.actor?.id;
+  const h = hlOf(convId);
+  const newest = list.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), 0);
+  if (highlightEntryPending === convId) {
+    highlightEntryPending = null;
+    for (const id of highlightUnreadIds(list, mark, me)) h.ids.add(id);
+    h.seen = newest;
+  } else if (document.visibilityState !== "visible") {
+    for (const id of highlightUnreadIds(list, h.seen, me)) if (!h.fading.has(id)) h.ids.add(id);
+  } else {
+    h.seen = Math.max(h.seen, newest);
+  }
+}
 
 // ------------------------------------------------- entering a conversation
 export async function openConversation(id, focusMessageId) {
@@ -57,6 +156,7 @@ export async function openConversation(id, focusMessageId) {
   if (state.readMark[id] === undefined) {
     state.readMark[id] = state.memberships[id]?.lastReadMessageId ?? 0;
   }
+  if (previousConversation !== id) noteConversationEntered(id);
   views.render();
   let drawn = false;                 // the message list is on screen with what the state holds
   let fresh = false;                 // the newest batch was fetched in THIS open
@@ -147,7 +247,10 @@ export async function openConversation(id, focusMessageId) {
   //    section would quietly enrol us in it (and wake us on @all);
   // 2) a jump to a particular message is a look at one place, not a statement of "I read all
   //    the rest" - reaching the bottom is what does that.
-  if (state.memberships[id] && !focusMessageId) markReadDebounced(id, lastMessageId(id));
+  if (state.memberships[id] && !focusMessageId) {
+    markReadDebounced(id, lastMessageId(id));
+    fadeUnreadHighlights(id, lastMessageId(id));
+  }
 }
 
 // U8: the root whose replies are being fetched. The panel says "Loading replies..." while this
@@ -336,6 +439,7 @@ export function renderMain() {
     updateJumpPill();
     if (state.activeId && state.memberships[state.activeId]) {
       markReadDebounced(state.activeId, lastMessageId(state.activeId));
+      fadeUnreadHighlights(state.activeId, lastMessageId(state.activeId));
     }
   });
   renderTopbar();
@@ -747,6 +851,7 @@ function bindScrollWatch(el, atBottom = true) {
     // alone.
     if (isScrolledToBottom() && state.activeId && state.memberships[state.activeId]) {
       markReadDebounced(state.activeId, lastMessageId(state.activeId));
+      fadeUnreadHighlights(state.activeId, lastMessageId(state.activeId));
     }
     // Loading older ones: without clicking, as you approach the top of the list. A 300 px
     // threshold, so the batch has time to arrive before you hit the ceiling.
@@ -825,6 +930,7 @@ export function renderMessages(position = null) {
   // id (W2-S7-A) keeps the line in place when the unread include thread replies the list does not show.
   const mark = dividerAfter(list, state.readMark[state.activeId] || 0, state.unread[state.activeId], state.actor.id,
     state.lastUnread[state.activeId]);
+  noteListDrawn(state.activeId, list, mark);
   let unreadLineShown = false;
   let lastDay = null, lastAuthor = null, lastTs = 0;
   for (const m of list) {
@@ -838,7 +944,7 @@ export function renderMessages(position = null) {
       lastAuthor = null;
     }
     const cont = m.actorId === lastAuthor && (m.ts - lastTs) < 300 && !m.deletedAt && m.kind !== "ask";
-    html += messageHtml(m, cont, { threads: idx });
+    html += messageHtml(m, cont, { threads: idx, unreadHl: unreadHlClass(state.activeId, m.id) });
     // A question has its own, distinct frame - nothing merges with it (neither it with the
     // previous message, nor the next message with it), otherwise the author gets lost.
     lastAuthor = m.kind === "ask" ? null : m.actorId;
@@ -870,13 +976,18 @@ export function upsertMessageNode(msg) {
     // The bubble the user is writing in right now is untouchable.
     if (existingNode.querySelector(".inline-edit")) return;
     const tmp = document.createElement("div");
-    tmp.innerHTML = messageHtml(msg, existingNode.classList.contains("cont"), { threads: idx });
+    tmp.innerHTML = messageHtml(msg, existingNode.classList.contains("cont"), { threads: idx, unreadHl: unreadHlClass(state.activeId, msg.id) });
     existingNode.replaceWith(tmp.firstElementChild);
     return;
   }
   // We append ONLY at the end, and only when the list really is on screen. An insertion in the
   // middle (a replay after a break) goes through a normal render, so as not to break the order
   // or the day separators.
+  // Seen arriving = not tinted; landed behind a hidden tab = tinted (own messages never).
+  const hl = hlOf(state.activeId);
+  const theirs = typeof msg.id === "number" && msg.actorId !== state.actor.id && !msg.deletedAt;
+  if (document.visibilityState !== "visible") { if (theirs && !hl.fading.has(msg.id)) hl.ids.add(msg.id); }
+  else if (typeof msg.id === "number") hl.seen = Math.max(hl.seen, msg.id);
   const list = visibleMessages(state.activeId);
   const i = list.findIndex((x) => x.id === msg.id);
   if (i !== list.length - 1 || !el.querySelector("[data-msg]")) { renderMessages(); return; }
@@ -885,7 +996,7 @@ export function upsertMessageNode(msg) {
   if (newDay) el.insertAdjacentHTML("beforeend", `<div class="day">${dayLabel(msg.ts)}</div>`);
   const cont = !newDay && !!previousMessage && previousMessage.actorId === msg.actorId
     && (msg.ts - previousMessage.ts) < 300 && !msg.deletedAt && msg.kind !== "ask" && previousMessage.kind !== "ask";
-  el.insertAdjacentHTML("beforeend", messageHtml(msg, cont, { threads: idx }));
+  el.insertAdjacentHTML("beforeend", messageHtml(msg, cont, { threads: idx, unreadHl: unreadHlClass(state.activeId, msg.id) }));
 }
 
 /** The tooltip of a reaction chip (S12): a sentence with the names, me first as "You". */
@@ -1134,7 +1245,7 @@ export function messageHtml(m, cont, opts = {}) {
   if (animatedMsgs.size > 5000) animatedMsgs.clear();
   if (fresh) animatedMsgs.add(m.id);
   return `
-    <div class="msg ${fresh ? "enter" : ""} ${cont ? "cont" : ""} ${m.deletedAt ? "deleted" : ""} ${mentionsCurrentActor ? "mine-mention" : ""} ${isAsk ? "ask" : ""} ${m.kind === "answer" ? "answer" : ""} ${resolved ? "resolved" : ""}" data-msg="${m.id}">
+    <div class="msg ${fresh ? "enter" : ""} ${cont ? "cont" : ""} ${m.deletedAt ? "deleted" : ""} ${mentionsCurrentActor ? "mine-mention" : ""} ${isAsk ? "ask" : ""} ${m.kind === "answer" ? "answer" : ""} ${resolved ? "resolved" : ""} ${opts.unreadHl || ""}" data-msg="${m.id}">
       <button type="button" class="av-btn" data-profile="${escapeHtml(handle)}" aria-label="${t("Open the profile of @{handle}", { handle: escapeHtml(handle) })}" ${cont ? "tabindex=\"-1\"" : ""}>${avatarHtml(handle)}</button>
       <div class="body">
         <div class="head">

@@ -117,7 +117,7 @@ const ME = 1, OTHER = 2;
 const msg = (conv: number, id: number, actorId = OTHER) =>
   ({ id, conversationId: conv, actorId, body: `m${id}`, ts: 1_700_000_000 + id * 1000, kind: "text" });
 
-/** Conversation 5: ten messages, mine and theirs alternating (odd ids are theirs); the server's
+/** Conversation 5: ten messages, mine and theirs alternating (even ids are theirs); the server's
  *  read mark for me is `lastRead`. */
 function setup(lastRead: number, { unread = 0 }: { unread?: number } = {}) {
   els.clear();
@@ -165,7 +165,7 @@ test("T-MG-44: highlightUnreadIds names the others' messages above the mark, nev
 // ------------------------------------------------------------------ 1: open after absence
 test("T-MG-44: opening a conversation with others' messages above the read mark tints exactly those rows", () => {
   const list = enter(setup(504));
-  assert.deepEqual(highlighted(list), [505, 507, 509], "theirs above 504; mine (506, 508, 510) are not tinted");
+  assert.deepEqual(highlighted(list), [506, 508, 510], "theirs above 504; mine (505, 507, 509) are not tinted");
   assert.match(list.innerHTML, /class="newline"/, "the divider is still there");
 });
 
@@ -176,7 +176,7 @@ test("T-MG-44: a conversation read to the end gets no tint", () => {
 
 test("T-MG-44: a first visit (mark 0) follows the divider's estimate from the unread count", () => {
   const list = enter(setup(0, { unread: 2 }));
-  assert.deepEqual(highlighted(list), [507, 509]);
+  assert.deepEqual(highlighted(list), [508, 510]);
 });
 
 // ------------------------------------------------------------------ 2: live while present, not tinted
@@ -221,15 +221,15 @@ test("T-MG-44: the read mark swaps the tint for the fade class, which leaves aft
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
     const list = enter(setup(504));
-    assert.deepEqual(highlighted(list), [505, 507, 509]);
+    assert.deepEqual(highlighted(list), [506, 508, 510]);
     chat.fadeUnreadHighlights(5, 510);               // markReadDebounced(5, 510) was asked for
-    assert.deepEqual(highlighted(list), [505, 507, 509], "nothing changes before the mark is posted");
+    assert.deepEqual(highlighted(list), [506, 508, 510], "nothing changes before the mark is posted");
     mock.timers.tick(500);                           // the debounce: the read is posted now
     assert.deepEqual(highlighted(list), [], "the tint is gone");
-    assert.deepEqual(fading(list), [505, 507, 509], "the fade class carries the transition");
+    assert.deepEqual(fading(list), [506, 508, 510], "the fade class carries the transition");
     chat.renderMessages();                           // a redraw mid-fade keeps fading, not tinting
     assert.deepEqual(highlighted(list), []);
-    assert.deepEqual(fading(list), [505, 507, 509]);
+    assert.deepEqual(fading(list), [506, 508, 510]);
     mock.timers.tick(3000);
     assert.deepEqual(fading(list), [], "the fade class is removed after the transition");
     chat.renderMessages();
@@ -242,10 +242,10 @@ test("T-MG-44: a partial read mark fades only up to it; the rest stays tinted", 
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
     const list = enter(setup(504));
-    chat.fadeUnreadHighlights(5, 507);
+    chat.fadeUnreadHighlights(5, 507);           // 506 is read; 508 and 510 are not
     mock.timers.tick(500);
-    assert.deepEqual(highlighted(list), [509]);
-    assert.deepEqual(fading(list), [505, 507]);
+    assert.deepEqual(highlighted(list), [508, 510]);
+    assert.deepEqual(fading(list), [506]);
   } finally { mock.timers.reset(); }
 });
 
@@ -255,7 +255,7 @@ test("T-MG-44: the highlight is per conversation: a read in another one touches 
     const list = enter(setup(504));
     chat.fadeUnreadHighlights(6, 999);
     mock.timers.tick(500);
-    assert.deepEqual(highlighted(list), [505, 507, 509]);
+    assert.deepEqual(highlighted(list), [506, 508, 510]);
   } finally { mock.timers.reset(); }
 });
 
