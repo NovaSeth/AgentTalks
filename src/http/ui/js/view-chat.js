@@ -30,6 +30,7 @@ const READ_DEBOUNCE_MS = 500;      // markReadDebounced posts after this long; t
 const FADE_MS = 3000;              // the CSS transition on .unread-hl-fade is shorter; the class leaves after it
 const unreadHl = new Map();        // convId -> { ids: Set (tinted), fading: Set, seen: newest id drawn while present }
 let highlightEntryPending = null;  // the conversation whose next drawn list takes the divider's ids
+let highlightResumePending = null; // the conversation whose next drawn list tints what is newer than "seen" (r1)
 
 function hlOf(convId) {
   let h = unreadHl.get(convId);
@@ -37,9 +38,15 @@ function hlOf(convId) {
   return h;
 }
 
-/** Entering a conversation from elsewhere: the next drawn list tints what is above the divider. */
-export function noteConversationEntered(convId) {
+/** Entering a conversation from elsewhere: the next drawn list tints what is above the divider.
+ *  `resumed` (r1): the SAME conversation comes back after another view (wiki, search, unreads)
+ *  covered the chat column: "present" means the chat of this conversation on screen AND the tab
+ *  visible, not merely activeId. The state is kept and the next drawn list tints what is newer
+ *  than the last message seen while present; a first visit without a watermark falls back to
+ *  the divider. */
+export function noteConversationEntered(convId, { resumed = false } = {}) {
   const h = hlOf(convId);
+  if (resumed && h.seen) { highlightResumePending = convId; return; }
   h.ids.clear(); h.fading.clear(); h.seen = 0;
   highlightEntryPending = convId;
 }
@@ -103,7 +110,7 @@ export function fadeUnreadHighlights(convId, upToId) {
 }
 
 /** Tests and an account change: no tint survives. */
-export function resetUnreadHighlights() { unreadHl.clear(); highlightEntryPending = null; }
+export function resetUnreadHighlights() { unreadHl.clear(); highlightEntryPending = null; highlightResumePending = null; }
 
 /** renderMessages reports the drawn list and the divider's mark: the entry snapshot takes the
  *  divider's ids; a render behind a hidden tab (a replay after a break) tints what is newer than
@@ -116,7 +123,8 @@ function noteListDrawn(convId, list, mark) {
     highlightEntryPending = null;
     for (const id of highlightUnreadIds(list, mark, me)) h.ids.add(id);
     h.seen = newest;
-  } else if (document.visibilityState !== "visible") {
+  } else if (highlightResumePending === convId || document.visibilityState !== "visible") {
+    if (highlightResumePending === convId) highlightResumePending = null;
     for (const id of highlightUnreadIds(list, h.seen, me)) if (!h.fading.has(id)) h.ids.add(id);
   } else {
     h.seen = Math.max(h.seen, newest);
@@ -129,6 +137,7 @@ export async function openConversation(id, focusMessageId) {
   const gen = sessionGeneration();
   saveDraft();                       // the PREVIOUS conversation's draft, before we redraw anything
   const previousConversation = state.activeId;
+  const previousView = state.view;
   // The "new messages" line disappears only on LEAVING a conversation - otherwise the one place
   // that said "this is where you stopped" gets lost while you are still reading.
   if (previousConversation && previousConversation !== id) delete state.readMark[previousConversation];
@@ -159,7 +168,10 @@ export async function openConversation(id, focusMessageId) {
   if (state.readMark[id] === undefined) {
     state.readMark[id] = state.memberships[id]?.lastReadMessageId ?? 0;
   }
+  // T-MG-44: a different conversation = a fresh entry; the same one after another view (wiki,
+  // search, unreads) covered the chat = a resume (r1): what arrived meanwhile is tinted.
   if (previousConversation !== id) noteConversationEntered(id);
+  else if (previousView !== "chat") noteConversationEntered(id, { resumed: true });
   views.render();
   let drawn = false;                 // the message list is on screen with what the state holds
   let fresh = false;                 // the newest batch was fetched in THIS open
