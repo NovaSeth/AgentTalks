@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-117",
+  "status": "open",
+  "task": "T-MG-16",
+  "round": 2,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F7",
+  "severity": "blocking",
+  "path": "src/http/ui/js/view-chat.js",
+  "line": 1425,
+  "rule": "REV-2",
+  "text": "Acceptance 5: thread-edit focus still fails when SSE precedes the PATCH response. In-memory ui-t16-chat repro using the real thread renderer: edit root 10, press Enter, deliver its message_updated SSE event, then resolve PATCH 200. Output: saved='thread edit saved', focused='body'; expected 'th-input'. SSE removes the editor before hadFocus is checked. Preserve focus ownership across background redraws while respecting deliberate user focus changes.",
+  "filedAt": "2026-11-04T10:22:46.677Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-115",
+  "status": "open",
+  "task": "T-MG-16",
+  "round": 2,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F5",
+  "severity": "blocking",
+  "path": "src/http/ui/js/state.js",
+  "line": 398,
+  "rule": "REV-2",
+  "text": "Acceptance 1-2/sign-out: claimed legacy text remains after logout. In-memory ui-t16-storage repro: seed atalks_owner='1' and atalks_unsent_5=[{clientMsgId:'secret',body:'ALICE-SECRET',ts:1}]; claim A, then clearLocalAccountData(1). A storage scan still finds ALICE-SECRET in atalks_unsent_5, expected none. Preserve first-run ownership bookkeeping so sign-out also removes the untagged entries it attributed to this account.",
+  "filedAt": "2026-11-04T10:22:46.677Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

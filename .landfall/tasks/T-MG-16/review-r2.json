@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 410,
+      "rule": "REV-2",
+      "text": "Acceptance 1-2: sign-out still deletes another account's newer write. In-memory ui-t16-storage repro: seed a1(owner 1) and b1(owner 2) in atalks_unsent_5; during A.clearLocalAccountData(1), inject oldTabPersist(2,5,[b1,b2]) after the second getItem of that key. Reload B: ['b1'], expected ['b1','b2']. Avoid destructive shared-list rewrites while old writers remain; cover the read/write window currently excluded by the test."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 383,
+      "rule": "REV-2",
+      "text": "Acceptance 2: concurrent completions overwrite tombstones. In-memory ui-t16-storage repro: seed B's b1/b2; pause B1.persistUnsent(5,['b1']) after reading atalks_unsent_done_2, run B2.persistUnsent(5,['b2']), then resume B1. Tombstones become ['b1']; reload restores ['b2'], expected []. Store completion markers independently per message or update them transactionally."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 383,
+      "rule": "REV-2",
+      "text": "Acceptance 2: the 500-marker cap resurrects completed messages without concurrency. In-memory ui-t16-storage repro: seed legacy b1, claim B, clear pending, call persistUnsent(5,['b1']), then complete 500 other IDs. Reload B: ['b1'], expected []. Its legacy source remains but its tombstone was evicted. Retain completion markers while any retained source can restore their messages."
+    },
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 361,
+      "rule": "REV-2",
+      "text": "Acceptance 1-2: collection deletes the only durable copy after an import failure. In-memory ui-t16-storage repro: set atalks_storage_v_since to eight days ago, seed legacy B/b1, and make setItem('atalks_unsent_2_5_b1') throw QuotaExceededError. Claim A, restore writes, reload B: [], expected ['b1']. The failed copy is swallowed and its source deleted. Keep the source whenever copying fails."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 398,
+      "rule": "REV-2",
+      "text": "Acceptance 1-2/sign-out: claimed legacy text remains after logout. In-memory ui-t16-storage repro: seed atalks_owner='1' and atalks_unsent_5=[{clientMsgId:'secret',body:'ALICE-SECRET',ts:1}]; claim A, then clearLocalAccountData(1). A storage scan still finds ALICE-SECRET in atalks_unsent_5, expected none. Preserve first-run ownership bookkeeping so sign-out also removes the untagged entries it attributed to this account."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 125,
+      "rule": "REV-2",
+      "text": "Acceptance 4: REST catch-up silently truncates gaps exceeding 30 messages. In-memory ui-t16-sse repro: start with loaded empty conversation 5 and hasMore=false, reconnect after messages 1..31 arrive, answer the limit=30 request with 2..31. Result: IDs 2..31, hasMore=false; message 1 is missing and cannot be paged in. Fetch through the captured replay floor and maintain pagination/recovery until the gap is complete."
+    },
+    {
+      "id": "F7",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 1425,
+      "rule": "REV-2",
+      "text": "Acceptance 5: thread-edit focus still fails when SSE precedes the PATCH response. In-memory ui-t16-chat repro using the real thread renderer: edit root 10, press Enter, deliver its message_updated SSE event, then resolve PATCH 200. Output: saved='thread edit saved', focused='body'; expected 'th-input'. SSE removes the editor before hadFocus is checked. Preserve focus ownership across background redraws while respecting deliberate user focus changes."
+    }
+  ],
+  "run": "codex-T-MG-16-reviewer-2",
+  "sha256": "0ef49c9c282ea06a45e7f5ae0ed53855c0a96a70a8409baf694341c07b566891"
+}

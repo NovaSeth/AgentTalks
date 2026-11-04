@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-112",
+  "status": "open",
+  "task": "T-MG-16",
+  "round": 2,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F2",
+  "severity": "blocking",
+  "path": "src/http/ui/js/state.js",
+  "line": 383,
+  "rule": "REV-2",
+  "text": "Acceptance 2: concurrent completions overwrite tombstones. In-memory ui-t16-storage repro: seed B's b1/b2; pause B1.persistUnsent(5,['b1']) after reading atalks_unsent_done_2, run B2.persistUnsent(5,['b2']), then resume B1. Tombstones become ['b1']; reload restores ['b2'], expected []. Store completion markers independently per message or update them transactionally.",
+  "filedAt": "2026-11-04T10:22:46.677Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

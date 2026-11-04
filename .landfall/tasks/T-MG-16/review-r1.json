@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 328,
+      "rule": "REV-2",
+      "text": "Acceptance 1-2: legacy cleanup deletes newer unsent writes. In-memory ui-t16-storage repro: seed B's b1; during A.clearLocalAccountData(1), after the third getItem('atalks_unsent_5') returns, run oldTabPersist(2,5,[b1,b2]); reload B. Output: ['b1'], expected ['b1','b2']. The check and removeItem are not atomic. Use non-destructive migration with bookkeeping while old tabs can still write the shared list."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/state.js",
+      "line": 325,
+      "rule": "REV-2",
+      "text": "Acceptance 2: a paused migration resurrects sent messages. In-memory ui-t16-storage repro: after A reads absent atalks_unsent_2_5_b1, B.claimLocalData(2) migrates b1, then B clears pending[5] and calls persistUnsent(5,['b1']); resume A and reload B. Output: ['b1'], expected []. A's stale setItem recreates the key although B removed the source. Preserve completion tombstones and honor them during import/restore so completed messages cannot reappear."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 175,
+      "rule": "REV-2",
+      "text": "Acceptance 4: retries before onopen still lose the gap. In-memory ui-t16-sse test with loaded message 40: connectSSE(); drop(CONNECTING) before open(); tick(1000) outputs cursor=0, sources=1, URL=/api/events, firstClosed=false. The browser retries future-only. CLOSED plus loading another history at 70 instead resumes after=70, skipping message 41. Capture the replay floor before the first attempt and ensure retries without a received event use it."
+    },
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 113,
+      "rule": "REV-2",
+      "text": "Acceptance 4: zero is a valid resume cursor for loaded empty histories, but the truthiness check omits it. In-memory ui-t16-sse repro: msgs={5:[]}, loaded={5:true}; connect, open, drop(CLOSED), tick(1000). Output: /api/events; expected /api/events?after=0 or REST catch-up. The first message posted during the gap stays absent from the loaded cache. Distinguish no loaded history from an empty loaded history and recover the latter on resume."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 1422,
+      "rule": "REV-2",
+      "text": "Acceptance 5: saving a thread edit still loses focus. In-memory ui-t16-chat test with views.thread=chat.renderThread and DOM removal blur: edit thread root 10, Enter, resolve PATCH 200. Output: saved='thread edit saved', replacedComposer=true, focused='body'; expected 'th-input'. finishEdit focuses the old input before applyMessageUpdate redraws the thread and removes it. Restore focus after all save redraws; test Enter with the real thread renderer."
+    }
+  ],
+  "run": "codex-T-MG-16-reviewer-1",
+  "sha256": "ae69453df0b0ad778b6dc86e0b1cb8c49bc93d9f70d4dff38957117af131f1f7"
+}

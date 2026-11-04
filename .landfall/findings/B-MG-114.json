@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-114",
+  "status": "open",
+  "task": "T-MG-16",
+  "round": 2,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F4",
+  "severity": "blocking",
+  "path": "src/http/ui/js/state.js",
+  "line": 361,
+  "rule": "REV-2",
+  "text": "Acceptance 1-2: collection deletes the only durable copy after an import failure. In-memory ui-t16-storage repro: set atalks_storage_v_since to eight days ago, seed legacy B/b1, and make setItem('atalks_unsent_2_5_b1') throw QuotaExceededError. Claim A, restore writes, reload B: [], expected ['b1']. The failed copy is swallowed and its source deleted. Keep the source whenever copying fails.",
+  "filedAt": "2026-11-04T10:22:46.677Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

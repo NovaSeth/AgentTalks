@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "a193c2e763417e7e22dcb8bb5598424aea1173e8",
-  "collectedAt": "2026-11-04T09:19:17.838Z",
+  "head": "b3dfe425e4516f0c60020731b120c18fbb9a69de",
+  "collectedAt": "2026-11-04T10:23:34.706Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -485,6 +485,61 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"B-MG-97 (repro): an open stream that closes before its first event resumes after the newest loaded message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-97 controls: an event's id is the cursor; with nothing loaded the return asks for the future only\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-97: a conversation loaded while the stream is down does not move the pinned cursor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-97: a drop the browser would retry by itself (CONNECTING, no event id) is taken over with the cursor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-97: a history that is cached but not loaded (one SSE message) does not seed the cursor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-97: a stream that never opened resumes after the newest loaded message on its return\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-98: Enter saves the inline edit and the focus returns to the composer\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-98: Enter with an unchanged text closes the edit and returns the focus too\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-98: Escape cancels the edit and the focus returns to the composer\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-98: an edit in the thread panel returns the focus to the thread box\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-98: focus moved elsewhere while the save was in flight stays where the user put it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"B-MG-99: a removed uploader gets 404 on download and info, a member gets 200\",1]",
       "file": "",
       "skipped": false
@@ -740,6 +795,76 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"F7 (codex repro): an old tab's attributable unsent write after the upgrade survives A's sign-out\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F7: every sweep moves tagged entries to their owners and still drops the unattributed ones\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F8 (codex repro): A paused after reading B's unsent storage cannot overwrite B's newer b2\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F8: a full storage refusing one write still removes the sent message and writes the others\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F8: a message B sent while A's migration was paused is not written back by A\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F8: a sign-out removes only this account's message keys\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F8: an r5 per-conversation list (atalks_unsent_<actor>_<conv>) is split into message keys on any sweep\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F8: at EVERY storage call of A's migration, B's concurrent migration and write keep [b1, b2]\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F8: one key per message; a write never rewrites another message's key\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F8: two tabs of the same account, one persisting at every point of the other's write, lose nothing\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F9 (codex repro): hold the POST in channel 5, open the wiki, reject with 503: one toast\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F9 control: the failed row visible in the open chat raises no toast\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F9: a failed row scrolled out of the list's visible box is not 'on screen': one toast\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F9: the chat view of the conversation with the row missing from the list (not drawn): one toast\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"FTS syntax in a user query does not break search\",1]",
       "file": "",
       "skipped": false
@@ -855,6 +980,71 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"R1 F1 (codex repro): an old tab's write while A's sign-out sweep reads the shared list keeps [b1, b2]\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F1: an old tab's write after EVERY storage call of A's sign-out sweep keeps [b1, b2]\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F2 (codex repro): a paused migration cannot resurrect a message B already sent\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F2: B's claim and send after EVERY storage call of A's migration never resurrect b1\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F3 (codex repro): a first stream that drops while CONNECTING is retried by the client, after the newest loaded id\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F3: a never-opened stream (CLOSED) and a history loaded during the break still resume after 40, not 70\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F4 (codex repro): an empty loaded history is a cursor of zero: the return catches that conversation up\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F4 control: nothing loaded at all is no cursor: the return is future-only and fetches no history\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F5 (codex repro): Enter saves a thread edit, the real thread renderer redraws, the focus is in the new th-input\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 F5: Enter saves a main-list edit; the focus lands in the composer that is in the document after the update\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 sign-out: a shared list holding only A's entries is deleted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 sign-out: an old tab of B writing the shared list at any point of A's sign-out is lost only inside A's read-to-write-back step\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1 sign-out: no storage value holds A's text afterwards; B's entries in the same shared list survive\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"R1-7a: a private typing location is invisible to a viewer who cannot read it\",1]",
       "file": "",
       "skipped": false
@@ -911,6 +1101,36 @@
     },
     {
       "id": "[\"\",\"R1-F6: caller-supplied values are echoed on one line; typing sec is clamped in the echo\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1: a sent or discarded message leaves a tombstone, bounded to the 500 newest ids\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1: a sign-out does not let the kept legacy lists hand the account's entries back\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1: a tombstone write that fails (quota) leaves nothing restorable: the copies in the old lists go\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1: an old tab's list is imported for each entry's owner only; unattributed entries are never shown\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1: legacy lists are collected 7 days after the new layout was first seen, after a last copy\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"R1: the legacy lists are only read: a sweep neither deletes nor rewrites them\",1]",
       "file": "",
       "skipped": false
     },
@@ -4781,5 +5001,5 @@
     }
   ],
   "failing": [],
-  "sha256": "83c90f1b46eaca6e77fcd795d4e9b70d8b283e1cd2318770efff845181139524"
+  "sha256": "e07bdd16e685407a12c149a124c3b37dc68ea242db6a2782a9e84078060c4a2a"
 }
