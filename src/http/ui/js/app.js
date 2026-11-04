@@ -353,6 +353,21 @@ async function openPeopleDirectory() {
 }
 
 // ------------------------------------------------------------------- routes (S3)
+/** T-MG-38 (fix round 2): a route that showed a page or a conversation settles the rail place
+ *  itself, whatever the reader came from: a wiki page on screen -> Wiki; a conversation on
+ *  screen while the place is Wiki -> Home (the Wiki place lists no conversations). The same
+ *  rule as view-sidebar's followPlace, applied here without its transition memory, because a
+ *  route is always a navigation. A no-op when the route did not land (no access, another
+ *  route applied meanwhile). */
+function settleRoutePlace() {
+  const place = getSidebarPlace();
+  const next = state.view === "wiki" ? "wiki" : state.view === "chat" && place === "wiki" ? "home" : place;
+  if (next === place) return;
+  setSidebarPlace(next);
+  paintRail();
+  renderSidebarList();
+}
+
 /** Open what a parsed route points at. Every branch ends on a screen: a place the user can read,
  *  or the in-column "no access" message with a way back - never a dead screen. */
 async function applyRoute(route) {
@@ -375,6 +390,7 @@ async function applyRoute(route) {
       if (!current() || location.hash !== hash) return;
       if (!c) { renderNoAccess(route); return; }
       await openConversation(c.id, route.messageId);
+      settleRoutePlace();
       if (route.threadId && current() && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
       return;
     }
@@ -384,16 +400,17 @@ async function applyRoute(route) {
         && dmOthers(x).map((o) => o.handle).sort().join(",") === want);
       if (c) {
         await openConversation(c.id, route.messageId);
+        settleRoutePlace();
         if (route.threadId && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
         return;
       }
       // A link to people I have not written to yet starts the conversation: one handle opens a DM,
       // several open a group (U19: nothing forbids it, so no lock screen; startDirect takes both).
-      if (route.handles.length >= 1) { await startDirect(route.handles); return; }
+      if (route.handles.length >= 1) { await startDirect(route.handles); settleRoutePlace(); return; }
       renderNoAccess(route);
       return;
     }
-    case "wiki": await openWikiPage(route.slug); return;
+    case "wiki": await openWikiPage(route.slug); settleRoutePlace(); return;
     case "activity": await openNotificationsView(); return;
     case "dms": goPlace("dms"); return;
     case "wikiPlace": goPlace("wiki"); return;
