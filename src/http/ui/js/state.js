@@ -42,6 +42,9 @@ export const state = {
   sseCursor: 0,            // highest message id delivered by SSE, never by REST
   newBelow: 0,             // how many new ones arrived while the list was scrolled up
   view: "chat",            // "chat" | "wiki" | "users" | "notifications"
+  route: null,             // parsed hash route (S3): {view, slug, messageId} or null
+  sidePanel: null,         // what the side panel shows (S2): null | "thread" | "details" | ...
+  sbCollapsed: {},         // sidebar section -> collapsed? (S1), persisted per browser
   notifUnread: 0,          // notification center count (the bell badge)
   notifications: [],       // recent notifications (GET /api/notifications)
   wiki: {

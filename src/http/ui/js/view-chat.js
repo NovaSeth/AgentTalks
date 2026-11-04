@@ -626,7 +626,7 @@ function reactionChipsHtml(m) {
   }).join("");
 }
 
-/** A thread bar as in Slack: the participants' avatars + the number of replies + the time of
+/** A thread bar as in other chat tools: the participants' avatars + the number of replies + the time of
 /**  the last one. Always visible when a thread exists - it is what makes threads discoverable
 /**  (the icon in the hover menu only CREATES one). */
 /** A "thread root -> replies" map, computed ONCE per render. Previously every message filtered
@@ -782,7 +782,7 @@ function messageHtml(m, cont, opts = {}) {
           <button class="answerbtn" data-answer="${qid}" data-msg-ref="${m.id}">${iconReply()} ${t("Answer")}</button>
         </div>` : ""}
         ${(() => {
-          // One fixed row under an entry, as in Slack: the reaction chips, then a visible "add a
+          // One fixed row under an entry, as in other chat tools: the reaction chips, then a visible "add a
           // reaction" button, and the thread replies on the right.
           if (m.deletedAt) return "";
           const tlink = !m.threadId && !opts.noThreadLink ? threadLinkHtml(m, opts.threads) : "";
@@ -869,7 +869,7 @@ export function bindMessageEvents(scope) {
     }
   });
   // Touch has no hover, and the action bar lived only on hover. A long press on a message
-  // (500 ms) reveals it exactly as in Slack.
+  // (500 ms) reveals it, the convention of touch chat clients.
   let holdTimer = null;
   scope.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse") return;
@@ -1120,7 +1120,7 @@ function updateSendButton() {
   send.classList.toggle("ready", can);
 }
 
-/** Dropping a file onto the WHOLE conversation area, as in Slack - three steps (save to disk,
+/** Dropping a file onto the WHOLE conversation area, as in other chat tools - three steps (save to disk,
 /**  open the dialog, find the file) turn into one. */
 function bindDropZone(el) {
   el.dataset.dropLabel = t("Drop to attach");
@@ -1186,7 +1186,7 @@ export function renderComposer() {
   ta.addEventListener("input", () => { autosize(); signalTyping(); mentionAutocomplete(ta); scheduleDraftSave(); });
   ta.addEventListener("keydown", (e) => {
     if (mentionKeydown(e, ta)) return;
-    // Slack's ArrowUp on an EMPTY field: edit your own last message. Without it a typo can be
+    // The chat convention of ArrowUp on an EMPTY field: edit your own last message. Without it a typo can be
     // fixed only by hitting a 1.8rem icon that is visible only on hover.
     if (e.key === "ArrowUp" && !ta.value.trim() && !state.pendingFiles.length) {
       const mine = [...visibleMessages(state.activeId)].reverse()

@@ -1,53 +1,51 @@
-/* AgentTalks web interface. Vanilla CSS, no dependencies. */
+/* AgentTalks web interface. Vanilla CSS on top of the Primer design system (vendored under
+   /vendor/primer, see VERSIONS.md there; decision D-MG-18).
+
+   EVERY color, shadow, radius, border and font below is a Primer token. The names on the left
+   are the application's own semantic aliases, kept so that the hundreds of rules in this file
+   read as before; each one resolves to a Primer variable, never to a raw value. Light and dark
+   come from the vendored palettes keyed on <html data-color-mode> (see js/theme.js), so this
+   file has NO color-mode block of its own. A test (test/ui-s0b-primer.test.ts) fails on any
+   hex/rgb/hsl literal outside a comment. */
 :root{
-  /* --faint is used for small text (.72-.85rem). #9aa2b5 on white had 2.56:1 contrast
-     against a 4.5:1 threshold. Use size and weight to distinguish secondary text,
-     so --faint matches the accessible --muted. Keep --faint-line light: it colors lines, not text. */
-  --bg:#f7f7f9; --surface:#ffffff; --surface-2:#f0f1f4; --sidebar:#f4f2ef;
-  --ink:#1b2030; --muted:#6b7488; --faint:#6b7488; --faint-line:#9aa2b5;
-  --amber:#8a5d00; --amber-soft:#c98a1f;
-  --accent:#3b5ce0; --accent-ink:#2a45c0; --accent-soft:#e9edfd; --on-accent:#fff;
-  --green:#1fae7a; --coral:#ff6b3d; --coral-soft:#ffe7de;
-  --line:#e7e6e2; --line-2:#dedcd6;
-  --shadow-sm:0 1px 2px rgba(20,25,40,.06);
-  --shadow:0 6px 24px rgba(20,25,40,.10);
-  --shadow-lg:0 18px 50px rgba(20,25,40,.22);
-  --radius:14px; --radius-sm:10px;
+  /* surfaces */
+  --bg:var(--bgColor-inset); --surface:var(--bgColor-default); --surface-2:var(--bgColor-muted);
+  --sidebar:var(--bgColor-inset);
+  /* text: --faint is small text and must stay readable, so it equals --muted (WCAG AA);
+     --faint-line colors lines and dots, never text. */
+  --ink:var(--fgColor-default); --muted:var(--fgColor-muted); --faint:var(--fgColor-muted);
+  --faint-line:var(--borderColor-emphasis);
+  /* roles */
+  --amber:var(--fgColor-attention); --amber-soft:var(--bgColor-attention-emphasis);
+  --accent:var(--bgColor-accent-emphasis); --accent-ink:var(--fgColor-accent);
+  --accent-soft:var(--bgColor-accent-muted); --on-accent:var(--fgColor-onEmphasis);
+  --green:var(--fgColor-success); --green-strong:var(--bgColor-success-emphasis);
+  --coral:var(--fgColor-danger); --coral-strong:var(--bgColor-danger-emphasis);
+  --coral-soft:var(--bgColor-danger-muted);
+  --line:var(--borderColor-default); --line-2:var(--borderColor-muted);
+  --scrim:var(--overlay-backdrop-bgColor);
+  /* elevation */
+  --shadow-sm:var(--shadow-resting-small); --shadow:var(--shadow-resting-medium);
+  --shadow-lg:var(--shadow-floating-large);
+  /* shape and type */
+  --radius:var(--borderRadius-large); --radius-sm:var(--borderRadius-medium);
+  --radius-xs:var(--borderRadius-small); --radius-full:var(--borderRadius-full);
+  --border:var(--borderWidth-thin);
   --sbw:264px;
-  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
-  --round:ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif;
-  --mono:ui-monospace,"SF Mono","Menlo",monospace;
-}
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
-  --bg:#0d0f16; --surface:#161925; --surface-2:#1e2230; --sidebar:#12141d;
-  --ink:#eceef5; --muted:#98a1b6; --faint:#98a1b6; --faint-line:#69718a;
-  --amber:#e0a83a; --amber-soft:#c98a1f;
-  --accent:#7f97ff; --accent-ink:#a7b6ff; --accent-soft:#222a46; --on-accent:#0d0f16;
-  --green:#3fd39a; --coral:#ff8259; --coral-soft:#3a2318;
-  --line:#262a38; --line-2:#313648;
-  --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow:0 8px 30px rgba(0,0,0,.4);
-  --shadow-lg:0 20px 60px rgba(0,0,0,.55);
-}}
-:root[data-theme="dark"]{
-  --bg:#0d0f16; --surface:#161925; --surface-2:#1e2230; --sidebar:#12141d;
-  --ink:#eceef5; --muted:#98a1b6; --faint:#98a1b6; --faint-line:#69718a;
-  --amber:#e0a83a; --amber-soft:#c98a1f;
-  --accent:#7f97ff; --accent-ink:#a7b6ff; --accent-soft:#222a46; --on-accent:#0d0f16;
-  --green:#3fd39a; --coral:#ff8259; --coral-soft:#3a2318;
-  --line:#262a38; --line-2:#313648;
-  --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow:0 8px 30px rgba(0,0,0,.4);
-  --shadow-lg:0 20px 60px rgba(0,0,0,.55);
+  --font:var(--fontStack-sansSerif);
+  --round:var(--fontStack-sansSerifDisplay);
+  --mono:var(--fontStack-monospace);
 }
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
-  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  font-size:var(--text-body-size-large);line-height:var(--text-body-lineHeight-large);-webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;overflow:hidden}
 #app{height:100%}
 button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
 input,textarea{font-family:inherit;font-size:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
-::selection{background:var(--accent-soft)}
+:focus-visible{outline:2px solid var(--focus-outlineColor);outline-offset:2px;border-radius:var(--radius-sm)}
+::selection{background:var(--selection-bgColor)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:99px;border:3px solid transparent;background-clip:padding-box}
 ::-webkit-scrollbar-thumb:hover{background:var(--faint-line)}
@@ -69,11 +67,16 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .field input{background:var(--surface-2);border:1.5px solid transparent;border-radius:12px;
   padding:.75rem .9rem;transition:border-color .18s,background .18s}
 .field input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
-.btn{width:100%;background:var(--accent);color:var(--on-accent);font-weight:700;
-  border-radius:12px;padding:.8rem;font-size:1rem;transition:transform .12s,filter .18s,box-shadow .18s;
-  box-shadow:var(--shadow-sm)}
-.btn:hover{filter:brightness(1.05)} .btn:active{transform:scale(.97)}
-.btn[disabled]{opacity:.6;cursor:progress}
+/* .btn is Primer's button class (vendor/primer/css/buttons.css); here it takes the PRIMARY
+   button tokens, because every .btn in this interface is the main action of its form. */
+.btn{width:100%;background:var(--button-primary-bgColor-rest);color:var(--button-primary-fgColor-rest);
+  border-color:var(--button-primary-borderColor-rest);font-weight:var(--base-text-weight-semibold);
+  border-radius:var(--radius-sm);padding:.8rem;font-size:1rem;line-height:1.25;
+  transition:transform .12s,background .18s,box-shadow .18s;box-shadow:var(--shadow-sm)}
+.btn:hover{background:var(--button-primary-bgColor-hover);border-color:var(--button-primary-borderColor-hover)}
+.btn:active{transform:scale(.97);background:var(--button-primary-bgColor-active)}
+.btn[disabled]{background:var(--button-primary-bgColor-disabled);color:var(--button-primary-fgColor-disabled);
+  border-color:var(--button-primary-borderColor-disabled);cursor:progress}
 .err{background:var(--coral-soft);color:var(--coral);border-radius:10px;padding:.6rem .8rem;
   font-size:.9rem;margin-bottom:.9rem;animation:shake .4s}
 .login .hint{text-align:center;font-size:.82rem;color:var(--faint);margin-top:1.2rem}
@@ -106,7 +109,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 /* The badge sits ON the icon so the count remains visible even when conversations are hidden.
    Hide zero: an alarm that never stops teaches people to ignore it. */
 .rail-badge{position:absolute;top:-.15rem;right:-.15rem;min-width:1.05rem;height:1.05rem;padding:0 .25rem;
-  border-radius:999px;background:var(--accent);color:#fff;font-size:.66rem;font-weight:700;
+  border-radius:var(--radius-full);background:var(--accent);color:var(--on-accent);font-size:.66rem;font-weight:700;
   display:grid;place-items:center;border:2px solid var(--sidebar);font-variant-numeric:tabular-nums}
 .rail-badge.off{display:none}
 
@@ -146,7 +149,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   display:flex;flex-direction:column;min-height:0}
 /* Match the .topbar height (56px) so both bottom borders align. */
 .sb-head{height:56px;flex:0 0 auto;padding:0 .9rem;display:flex;align-items:center;gap:.6rem;border-bottom:1px solid var(--line)}
-.sb-head .who{min-width:0;flex:1}
+/* The name truncates inside its box rather than running under the icons beside it. */
+.sb-head .who{min-width:0;flex:1;overflow:hidden}
+.sb-head .me{max-width:100%}
 /* Keep overflow:hidden on the text span, not .me, to avoid clipping the presence glow. */
 /* The avatar in the sidebar header is a BUTTON for changing the image. Keep its label-like
    appearance while exposing interaction through a pointer, hover and focus ring.
@@ -181,7 +186,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .conv.active .pre{color:var(--on-accent);opacity:.85}
 .conv .pre{color:var(--faint);flex:0 0 auto;width:1.1rem;text-align:center;font-weight:700}
 .conv .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.conv .badge{background:var(--coral);color:#fff;font-size:.68rem;font-weight:800;min-width:1.2rem;
+.conv .badge{background:var(--coral-strong);color:var(--on-accent);font-size:.68rem;font-weight:800;min-width:1.2rem;
   height:1.2rem;border-radius:99px;display:grid;place-items:center;padding:0 .35rem;
   animation:pop .3s cubic-bezier(.2,.9,.3,1.4)}
 .conv.active .badge{background:var(--on-accent);color:var(--accent)}
@@ -227,13 +232,13 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .msg:hover{background:var(--surface-2)}
 /* Avatars are circular everywhere, including panels and lists. Small (.sm) initials
    use a lighter weight: bold at 8px becomes a blot. */
-.av{border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;flex:0 0 auto}
+.av{border-radius:50%;display:grid;place-items:center;color:var(--fgColor-white);font-weight:700;flex:0 0 auto}
 .av.sm{font-weight:500;letter-spacing:0}
 /* Image avatars occupy exactly the same space as initials. object-fit crops any
    aspect ratio to a square without stretching the layout or leaving empty bands. */
 .av.avimg{object-fit:cover;background:var(--faint-line);display:block}
 .msg .av{width:2.2rem;height:2.2rem;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
-  font-weight:800;color:#fff;font-size:.9rem;margin-top:.15rem}
+  font-weight:800;color:var(--fgColor-white);font-size:.9rem;margin-top:.15rem}
 .msg .body{min-width:0;flex:1}
 .msg .head{display:flex;align-items:baseline;gap:.5rem}
 .msg .author{font-weight:700;color:var(--ink)}
@@ -250,9 +255,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .msg.mine-mention{background:color-mix(in srgb,var(--coral) 8%,transparent)}
 .msg .text .me-mention{background:var(--coral-soft);color:var(--coral)}
 /* @all mentions the whole channel: a stronger accent because it wakes everyone. */
-.mention-all{background:var(--coral);color:#fff;border-radius:5px;padding:0 .2em;font-weight:700}
+.mention-all{background:var(--coral-strong);color:var(--on-accent);border-radius:var(--radius-xs);padding:0 .2em;font-weight:700}
 .mention-pop .mention-all-ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
-  background:var(--coral);color:#fff;font-weight:800;flex:0 0 auto}
+  background:var(--coral-strong);color:var(--on-accent);font-weight:800;flex:0 0 auto}
 .msg.deleted .text{color:var(--faint);font-style:italic}
 .msg .edited{font-size:.7rem;color:var(--faint)}
 /* Hide actions visually, not with display:none, which removes them from Tab order
@@ -284,7 +289,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .react:hover{transform:translateY(-1px);border-color:var(--accent)}
 .react.mine{background:var(--accent-soft);border-color:var(--accent)}
 .react .n{font-weight:700;color:var(--muted);font-size:.76rem}
-/* Add reaction: below the content on the left, as in Slack, rather than in a hover-only corner. */
+/* Add reaction: below the content on the left, next to the reactions, rather than in a hover-only corner. */
 /* The persistent Add reaction chip sits beside reaction chips.
    The thread bar occupies the right side of the same row. */
 .react.addreact{color:var(--muted);padding:.14rem .5rem;border-style:dashed}
@@ -326,8 +331,8 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .dock::before{content:"";position:absolute;inset:0;pointer-events:none;
   -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);
   background:linear-gradient(to bottom, transparent, color-mix(in srgb,var(--surface) 82%,transparent) 45%);
-  -webkit-mask:linear-gradient(to bottom, transparent, #000 42%);
-  mask:linear-gradient(to bottom, transparent, #000 42%)}
+  -webkit-mask:linear-gradient(to bottom, transparent, black 42%);
+  mask:linear-gradient(to bottom, transparent, black 42%)}
 .dock > *{pointer-events:auto}
 /* The new-below pill appears above the composer while the list is scrolled up. */
 .jump-newest{position:absolute;bottom:100%;left:50%;transform:translate(-50%,8px);
@@ -346,11 +351,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .replying b{color:var(--ink)} .replying button{margin-left:auto;color:var(--faint);font-size:1rem}
 .composer .card{display:flex;flex-direction:column;gap:.3rem;background:var(--surface-2);
   border:1px solid transparent;border-radius:28px;padding:.4rem .4rem .4rem .55rem;
-  box-shadow:0 1px 2px rgba(20,25,40,.05),0 8px 24px rgba(20,25,40,.14);
+  box-shadow:var(--shadow-floating-medium);
   transition:background .18s,box-shadow .18s,border-radius .18s}
-:root[data-theme="dark"] .composer .card,
-:root:not([data-theme="light"]) .composer .card{box-shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.45)}
-.composer .card:focus-within{background:var(--surface);box-shadow:0 0 0 2px var(--accent) inset,0 10px 30px rgba(0,0,0,.2)}
+.composer .card:focus-within{background:var(--surface);box-shadow:0 0 0 2px var(--focus-outlineColor) inset,var(--shadow-floating-medium)}
 .composer .card:has(.previews:not(:empty)){border-radius:20px}
 .composer .row{display:flex;align-items:flex-end;gap:.35rem}
 /* An empty preview row leaves the layout entirely, so the .card gap does not
@@ -416,7 +419,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .thread .th-msgs{flex:1;overflow-y:auto;padding:.6rem 0}
 
 /* ---------- MODAL / TOAST / EMPTY ---------- */
-.overlay{position:fixed;inset:0;background:rgba(10,12,20,.45);display:grid;place-items:center;z-index:20;
+.overlay{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;z-index:20;
   animation:fade .2s;padding:1rem}
 .modal{width:min(420px,100%);background:var(--surface);border:1px solid var(--line);border-radius:18px;
   box-shadow:var(--shadow-lg);padding:1.5rem;animation:pop .35s cubic-bezier(.2,.9,.3,1.2) both}
@@ -426,7 +429,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
 .modal .row{display:flex;gap:.6rem;margin-top:1rem}
 .modal .row .btn{flex:1}
-.modal .ghost{background:var(--surface-2);color:var(--ink);box-shadow:none}
+/* The secondary button: Primer's default button tokens. */
+.modal .ghost,.btn.ghost{background:var(--button-default-bgColor-rest);color:var(--button-default-fgColor-rest);
+  border-color:var(--button-default-borderColor-rest);box-shadow:var(--button-default-shadow-resting)}
+.modal .ghost:hover,.btn.ghost:hover{background:var(--button-default-bgColor-hover);border-color:var(--button-default-borderColor-hover)}
 .empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:2rem}
 .empty .big{font-size:2.6rem;margin-bottom:.4rem}
 .empty h2{font-family:var(--round);color:var(--ink);margin:.2rem 0}
@@ -435,7 +441,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   gap:.55rem;align-items:flex-end;max-width:min(22rem,calc(100vw - 2.2rem))}
 .toast{pointer-events:auto;display:flex;align-items:center;gap:.7rem;background:var(--ink);color:var(--bg);
   padding:.75rem 1rem;border-radius:12px;font-size:.9rem;font-weight:600;line-height:1.35;
-  box-shadow:0 10px 30px rgba(0,0,0,.35),0 2px 6px rgba(0,0,0,.2);
+  box-shadow:var(--shadow-floating-large);
   animation:toast-in .22s cubic-bezier(.2,.9,.3,1.2) both}
 .toast.leaving{animation:toast-out .2s ease both}
 .toast .tmsg{flex:1}
@@ -488,7 +494,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
     transition:transform .26s cubic-bezier(.2,.8,.3,1)}
   /* Touch has no hover: a long press reveals .touch-actions, with 2.2rem touch targets. */
   .msg .actions button{width:2.2rem;height:2.2rem}
-  .shell.drawer .scrim{display:block;position:fixed;inset:0;background:rgba(10,12,20,.4);z-index:12;animation:fade .2s}
+  .shell.drawer .scrim{display:block;position:fixed;inset:0;background:var(--scrim);z-index:12;animation:fade .2s}
   /* Larger touch targets in the list. */
   .sb-head{padding:0 1rem}
   .conv{padding:.66rem .7rem;font-size:1rem}
@@ -516,7 +522,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
 /* Sidebar empty states. */
 .sb-empty{padding:.4rem .6rem;color:var(--faint);font-size:.85rem}
-.badge.coral{background:var(--coral);color:#fff}
+.badge.coral{background:var(--coral-strong);color:var(--on-accent)}
 .mhint{font-size:.8rem;color:var(--muted);margin:.2rem 0 .6rem}
 .fhint{font-size:.76rem;color:var(--faint);margin-top:.3rem;line-height:1.4}
 /* Radio pills: choices side by side instead of a dropdown. */
@@ -555,9 +561,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   padding:.7rem 1rem;display:flex;align-items:center;gap:.8rem;justify-content:space-between;
   animation:viewin .3s both}
 .joinbar span{font-size:.92rem;color:var(--muted)} .joinbar b{color:var(--ink)}
-.joinbtn{background:var(--accent);color:var(--on-accent);font-weight:700;border-radius:10px;
-  padding:.5rem 1.1rem;transition:filter .15s,transform .12s;min-width:5.5rem}
-.joinbtn:hover{filter:brightness(1.08)} .joinbtn:active{transform:scale(.95)}
+.joinbtn{background:var(--button-primary-bgColor-rest);color:var(--button-primary-fgColor-rest);font-weight:700;
+  border:var(--border) solid var(--button-primary-borderColor-rest);border-radius:var(--radius-sm);
+  padding:.5rem 1.1rem;transition:background .15s,transform .12s;min-width:5.5rem}
+.joinbtn:hover{background:var(--button-primary-bgColor-hover)} .joinbtn:active{transform:scale(.95)}
 
 /* ---------- open questions ---------- */
 .msg.ask{border-left:3px solid var(--coral);background:color-mix(in srgb,var(--coral) 4%,transparent)}
@@ -650,7 +657,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .toast .taction:hover{opacity:1}
 
 /* Irreversible-action confirmation: color carries weight, as does the button label. */
-.btn.danger{background:var(--coral);color:#fff}
+.btn.danger{background:var(--button-danger-bgColor-hover);color:var(--button-danger-fgColor-hover);
+  border-color:var(--button-danger-borderColor-hover)}
+.btn.danger:hover{background:var(--button-danger-bgColor-active);border-color:var(--button-danger-borderColor-active)}
 
 /* An empty state needs an action: None alone does not say what to do next. */
 .empty .btn.slim{width:auto;margin-top:.9rem}
@@ -670,6 +679,13 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .msg-menu .mm-o{font-size:.78rem;color:var(--muted);line-height:1.35;white-space:normal}
 .msg-menu button.danger .mm-l{color:var(--coral)}
 .msg-menu button.danger:hover{background:var(--coral-soft)}
+/* The account menu (avatar): an action list with a radio group for the color mode. */
+.account-menu{min-width:14rem}
+.account-menu button{flex-direction:row;align-items:center;gap:.55rem}
+.account-menu .octicon{color:var(--muted);flex:0 0 auto}
+.account-menu .mm-check{margin-left:auto;color:var(--ink);display:inline-flex;width:1rem;justify-content:center}
+.mm-sep{height:var(--border);background:var(--line);margin:.3rem 0}
+.mm-head{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);padding:.3rem .6rem 0}
 
 /* Attachment options: a collapsed menu with full labels replaces three icons,
    including the irreversible one-click burn-after-reading action. */
@@ -750,7 +766,7 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .msg-img-wrap:hover{transform:scale(1.015);box-shadow:var(--shadow)}
 .msg-img{max-width:100%;max-height:280px;object-fit:cover;display:block;animation:fadein .35s both}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
-.overlay.lightbox{background:rgba(8,10,16,.82);cursor:zoom-out}
+.overlay.lightbox{background:color-mix(in srgb,var(--bgColor-black) 82%,transparent);cursor:zoom-out}
 .overlay.lightbox img{max-width:92vw;max-height:90vh;border-radius:14px;box-shadow:var(--shadow-lg);
   animation:lbx .22s cubic-bezier(.2,.9,.3,1.1) both}
 @keyframes lbx{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:none}}
@@ -959,3 +975,19 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .we-parent{background:var(--surface-2);border:1.5px solid transparent;border-radius:10px;
   padding:.5rem .6rem;font-size:.88rem;color:var(--ink);max-width:14rem}
 .we-parent:focus{outline:none;border-color:var(--accent)}
+
+/* ============ T-MG-3 slice blocks (each slice writes ONLY inside its own marker) ============ */
+/* === S1 === */
+/* === S2 === */
+/* === S3 === */
+/* === S4 === */
+/* === S5 === */
+/* === S6 === */
+/* === S7 === */
+/* === S8 === */
+/* === S9 === */
+/* === S10 === */
+/* === S11 === */
+/* === S12 === */
+/* === S13 === */
+/* === S14 === */

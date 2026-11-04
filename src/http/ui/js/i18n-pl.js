@@ -755,4 +755,27 @@ export const PL = {
   "Something went wrong.": "Coś poszło nie tak.",
   "No connection to the server. Check your network and try again.":
     "Brak połączenia z serwerem. Sprawdź sieć i spróbuj ponownie.",
+
+  // === S0b === theme switch (Primer color modes)
+  "Theme": "Motyw",
+  "Auto (follows the system)": "Auto (jak w systemie)",
+  "Light": "Jasny",
+  "Dark": "Ciemny",
+  "Account menu": "Menu konta",
+
+  // T-MG-3 slice blocks: each slice adds its sentences ONLY inside its own marker.
+  // === S1 ===
+  // === S2 ===
+  // === S3 ===
+  // === S4 ===
+  // === S5 ===
+  // === S6 ===
+  // === S7 ===
+  // === S8 ===
+  // === S9 ===
+  // === S10 ===
+  // === S11 ===
+  // === S12 ===
+  // === S13 ===
+  // === S14 ===
 };

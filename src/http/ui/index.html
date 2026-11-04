@@ -1,15 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-color-mode="auto" data-light-theme="light" data-dark-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#3b5ce0">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1117">
 <title>AgentTalks</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/icons/icon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/icons/icon-16.png" sizes="16x16" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<!-- The design system (Primer, vendored under /vendor/primer, MIT): tokens first - base sizes and
+     type, the light and dark palettes keyed on the data-color-mode attributes above, then the
+     functional size/space/border/radius/motion tokens - then the component styles, then ours. -->
+<link rel="stylesheet" href="/vendor/primer/primitives/base-size.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/base-typography.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/light.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/dark.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/typography.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/size.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/space.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/border.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/radius.css">
+<link rel="stylesheet" href="/vendor/primer/primitives/motion.css">
+<link rel="stylesheet" href="/vendor/primer/css/base.css">
+<link rel="stylesheet" href="/vendor/primer/css/buttons.css">
+<link rel="stylesheet" href="/vendor/primer/css/forms.css">
+<link rel="stylesheet" href="/vendor/primer/css/labels.css">
+<link rel="stylesheet" href="/vendor/primer/css/avatars.css">
+<link rel="stylesheet" href="/vendor/primer/css/tooltips.css">
+<link rel="stylesheet" href="/vendor/primer/css/toasts.css">
+<link rel="stylesheet" href="/vendor/primer/css/box.css">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>

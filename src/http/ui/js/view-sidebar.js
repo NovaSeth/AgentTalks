@@ -5,8 +5,9 @@ import { claimLease, releaseLease, startDirect } from "./actions.js";
 import { api, csrf } from "./api.js";
 import { ensureActors, refreshDigestAndLeases } from "./data.js";
 import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
-import { iconChevron, iconDigest, iconDoc, iconLock, iconOut, iconQuestion, iconSearch } from "./icons.js";
+import { iconCheck, iconChevron, iconDesktop, iconDigest, iconDoc, iconLock, iconMoon, iconOut, iconQuestion, iconSearch, iconSun } from "./icons.js";
 import { msg, t } from "./i18n.js";
+import { THEMES, currentTheme, setTheme } from "./theme.js";
 import { mdToHtml } from "./markdown.js";
 import { actorHandle, dmLabel, dmOthers, handleOnline, state, views, wikiCollapsed } from "./state.js";
 import { openSearchPalette } from "./search.js";
@@ -45,7 +46,8 @@ export function renderSidebar() {
   el.innerHTML = `
     <div class="sb-head">
       <div class="who">
-        <button class="me" id="btn-avatar" title="${t("Change your avatar")}" aria-label="${t("Change your avatar")}">
+        <button class="me" id="btn-avatar" title="${t("Account menu")}" aria-label="${t("Account menu")}"
+          aria-haspopup="menu" aria-expanded="false">
           ${avatarHtml(state.actor.handle, 24)}<span class="mename">@${escapeHtml(state.actor.handle)}</span>
         </button>
       </div>
@@ -58,7 +60,7 @@ export function renderSidebar() {
     <div class="sb-foot" id="sb-foot">
       <span id="sb-ui" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}"></span>
     </div>`;
-  document.getElementById("btn-avatar").addEventListener("click", changeAvatar);
+  document.getElementById("btn-avatar").addEventListener("click", (e) => openAccountMenu(e.currentTarget));
   document.getElementById("btn-logout").addEventListener("click", doLogout);
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
@@ -482,6 +484,72 @@ function claimLeaseModal() {
   });
 }
 
+
+/**
+ * The account menu under the avatar: the avatar action, the color mode (Auto / Light / Dark,
+ * Primer's color modes through js/theme.js) and signing out. One small menu rather than a row
+ * of header icons: the header is the one place a person looks for "me" settings.
+ */
+const THEME_ITEMS = [
+  { mode: "auto", label: () => t("Auto (follows the system)"), icon: iconDesktop },
+  { mode: "light", label: () => t("Light"), icon: iconSun },
+  { mode: "dark", label: () => t("Dark"), icon: iconMoon },
+];
+
+function openAccountMenu(anchor) {
+  const pop = document.createElement("div");
+  pop.className = "msg-menu account-menu";
+  pop.setAttribute("role", "menu");
+  pop.setAttribute("aria-label", t("Account menu"));
+  const theme = currentTheme();
+  pop.innerHTML = `
+    <button role="menuitem" data-mact="avatar"><span class="mm-l">${escapeHtml(t("Change your avatar"))}</span></button>
+    <div class="mm-sep" role="separator"></div>
+    <div class="mm-head" id="am-theme">${escapeHtml(t("Theme"))}</div>
+    <div role="group" aria-labelledby="am-theme">
+      ${THEME_ITEMS.map((it) => `
+      <button role="menuitemradio" data-theme="${it.mode}" aria-checked="${theme === it.mode}">
+        ${it.icon()}<span class="mm-l">${escapeHtml(it.label())}</span>
+        <span class="mm-check">${theme === it.mode ? iconCheck(true) : ""}</span>
+      </button>`).join("")}
+    </div>
+    <div class="mm-sep" role="separator"></div>
+    <button role="menuitem" data-mact="logout" class="danger"><span class="mm-l">${escapeHtml(t("Sign out"))}</span></button>`;
+  document.body.appendChild(pop);
+  anchor.setAttribute("aria-expanded", "true");
+  const rect = anchor.getBoundingClientRect();
+  pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
+  pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+  function close() {
+    pop.remove();
+    document.removeEventListener("mousedown", onOutside, true);
+    document.removeEventListener("keydown", onKey, true);
+    anchor.setAttribute("aria-expanded", "false");
+    if (document.contains(anchor)) anchor.focus();
+  }
+  const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  pop.addEventListener("click", (e) => {
+    const th = e.target.closest("[data-theme]");
+    if (th && THEMES.includes(th.dataset.theme)) {
+      setTheme(th.dataset.theme);
+      for (const b of pop.querySelectorAll("[data-theme]")) {
+        const on = b.dataset.theme === th.dataset.theme;
+        b.setAttribute("aria-checked", String(on));
+        b.querySelector(".mm-check").innerHTML = on ? iconCheck(true) : "";
+      }
+      return;
+    }
+    const b = e.target.closest("[data-mact]");
+    if (!b) return;
+    close();
+    if (b.dataset.mact === "avatar") changeAvatar();
+    if (b.dataset.mact === "logout") doLogout();
+  });
+  setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  document.addEventListener("keydown", onKey, true);
+  pop.querySelector("[role=menuitem]")?.focus();
+}
 
 /**
  * Changing the avatar: pick a file from disk, with no screens in between.
