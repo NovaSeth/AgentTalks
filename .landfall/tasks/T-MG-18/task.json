@@ -234,8 +234,21 @@
       "data": {
         "head": "8e776cdc0d128d37f993680815fbc5efbfe12695"
       }
+    },
+    {
+      "at": "2026-11-04T12:04:47.950Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "ebcd30c1b7993e76f16c7b69db9d167055575772",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "3bb4dbfeaeedab08f0fadfeb672d4b5e3414cfdd"
+      }
     }
   ],
   "base": "b8bae5e4697a970c5d43f201a88b62c57198bdd9",
-  "branch": "task/T-MG-18-storage-simplify"
+  "branch": "task/T-MG-18-storage-simplify",
+  "mergedAt": "2026-11-04T12:04:47.950Z"
 }
