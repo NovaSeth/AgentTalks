@@ -5,13 +5,13 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
-const CHECKS = ["filenames", "titles", "strings", "identifiers", "comments", "markdown"] as const;
+const CHECKS = ["filenames", "titles", "strings", "identifiers", "comments", "markdown", "text"] as const;
 type Check = typeof CHECKS[number];
 type Finding = { check: Check; path: string; line: number; text: string };
 type Exception = { check: Check; path: string; text: string; reason: string };
@@ -80,9 +80,9 @@ function findings(path: string, source: string): Finding[] {
   };
   add("filenames", path, 1);
   if (path.endsWith(".md")) source.split("\n").forEach((line, i) => add("markdown", line, i + 1));
-  if (/\.[cm]?[jt]s$/.test(path)) {
+  if (/\.(?:[cm]?[jt]s|json)$/.test(path)) {
     const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true,
-      path.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.JS);
+      path.endsWith(".json") ? ts.ScriptKind.JSON : path.endsWith(".ts") ? ts.ScriptKind.TS : ts.ScriptKind.JS);
     const skipped = new Map<number, number>();
     const testFunctions = new Set(["test", "it", "describe", "suite"]);
     const testContexts = new Set<string>();
@@ -104,7 +104,12 @@ function findings(path: string, source: string): Finding[] {
       const line = ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1;
       if (ts.isIdentifier(node)) add("identifiers", node.text, line);
       if (ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
-        if (/^(src|bin)\//.test(path)) add("strings", node.text, line);
+        const translationKey = path === "src/http/ui/js/i18n-pl.js" &&
+          ts.isPropertyAssignment(node.parent) && node.parent.name === node;
+        if (translationKey) add("identifiers", node.text, line);
+        else if (/^(src|bin)\//.test(path) || /^integrations\/.*\.mjs$/.test(path) || path.endsWith(".json")) {
+          add("strings", node.text, line);
+        }
         skipped.set(node.getStart(ast), node.end);
       }
       if (ts.isRegularExpressionLiteral(node)) skipped.set(node.getStart(ast), node.end);
@@ -144,6 +149,17 @@ function findings(path: string, source: string): Finding[] {
         scanner.getTokenText().split("\n").forEach((line, i) => add("comments", line, firstLine + i));
       }
     }
+  } else if (path.endsWith(".svg")) {
+    // Match comments and text separately; tag attributes and path geometry are not prose.
+    for (const match of source.matchAll(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<[^>]*>|[^<]+/g)) {
+      const part = match[0];
+      const comment = part.startsWith("<!--");
+      if (part.startsWith("<") && !comment && !part.startsWith("<![CDATA[")) continue;
+      const firstLine = source.slice(0, match.index).split("\n").length;
+      part.split("\n").forEach((line, i) => add(comment ? "comments" : "text", line, firstLine + i));
+    }
+  } else if (path.endsWith(".py") || path.endsWith(".txt") || extensionlessScript(path)) {
+    source.split("\n").forEach((line, i) => add(/^\s*#/.test(line) ? "comments" : "text", line, i + 1));
   } else if (/\.(css|html)$/.test(path)) {
     const pattern = path.endsWith(".css") ? /\/\*[\s\S]*?\*\//g : /<!--[\s\S]*?-->/g;
     for (const match of source.matchAll(pattern)) {
@@ -173,8 +189,18 @@ function allowed(finding: Finding, list: Exception[]): boolean {
 
 const paths = files();
 const allowlist = exceptions().sort((a, b) => b.text.length - a.text.length);
+function extensionlessScript(path: string): boolean {
+  return /^(?:cli\/(?:.*\/)?|integrations\/(?:.*\/)?hooks\/(?:.*\/)?)[^/.]+$/.test(path);
+}
+
+function readsSource(path: string, mode = 0): boolean {
+  if (/(?:^|\/)package-lock\.json$/.test(path) || path === "test/language-allowlist.txt") return false;
+  return /\.(md|[cm]?[jt]s|json|py|svg|txt|sh|yml|yaml|example|css|html)$/.test(path)
+    || /(?:^|\/)\.(?:gitignore|dockerignore)$/.test(path) || path === "Dockerfile"
+    || (extensionlessScript(path) && (mode & 0o111) !== 0);
+}
 const all = paths.flatMap((path) => findings(path,
-  /\.(md|[cm]?[jt]s|sh|yml|yaml|example|css|html)$/.test(path) || /(?:^|\/)\.(?:gitignore|dockerignore)$/.test(path) || path === "Dockerfile" ? readFileSync(ROOT + path, "utf8") : ""));
+  readsSource(path, extensionlessScript(path) ? statSync(ROOT + path).mode : 0) ? readFileSync(ROOT + path, "utf8") : ""));
 
 test("the language gate sees the whole repository and explained exceptions", () => {
   assert.ok(paths.filter((p) => /\.[jt]s$/.test(p)).length >= 80, "source inventory shrank unexpectedly");
@@ -202,6 +228,7 @@ test("each language check fires independently for accented and unaccented Polish
       ["identifiers", "src/probe.ts", `const last${sample[0].toUpperCase() + sample.slice(1)}Count = 1;`],
       ["comments", "src/probe.ts", `const n = 1; /* ${sample} */`],
       ["markdown", "docs/probe.md", `# ${sample}`],
+      ["text", "docs/probe.txt", sample],
     ];
     for (const [check, path, source] of probes) {
       assert.ok(findings(path, source).some((f) => f.check === check && !allowed(f, allowlist)),
@@ -227,6 +254,48 @@ test("extraction covers templates, escaped strings, snake case, and inline comme
   for (const [check, path, source] of probes) assert.ok(findings(path, source).some((f) => f.check === check), check);
   assert.deepEqual(findings("src/probe.ts", 'const url = "https://example.org"; const re = /https?:\\/\\//; // English comment'), []);
   assert.deepEqual(findings("docs/probe.md", "# Read the message and save the page"), []);
+});
+
+for (const [path, makeSource] of [
+  ["integrations/probe.json", (sample: string) => JSON.stringify({ label: sample })],
+  ["cli/probe.py", (sample: string) => `print("${sample}")\n# ${sample}`],
+  ["src/probe.svg", (sample: string) => `<svg><text>${sample}</text><!-- ${sample} --></svg>`],
+  ["docs/probe.txt", (sample: string) => sample],
+  ["cli/probe", (sample: string) => `#!/bin/sh\nprintf '${sample}'\n# ${sample}`],
+  ["integrations/plugin/hooks/probe", (sample: string) => `#!/bin/sh\nprintf '${sample}'\n# ${sample}`],
+  ["integrations/plugin/lib/probe.mjs", (sample: string) => `const label = "${sample}";`],
+  ["src/http/ui/js/probe.js", (sample: string) => `const label = "${sample}";`],
+] as const) {
+  test(`language gate reads and detects Polish in ${path}`, () => {
+    assert.ok(readsSource(path, 0o755), `source inventory excludes ${path}`);
+    for (const sample of ["wiadomość", "wiadomosc"]) {
+      const hits = findings(path, makeSource(sample)).filter((f) => !allowed(f, allowlist));
+      assert.ok(hits.length > 0, `no Polish detected in ${path}: ${sample}`);
+      if (/\.(mjs|js|json)$/.test(path)) assert.ok(hits.some((f) => f.check === "strings"));
+      if (/\.py$|\.svg$|\/probe$/.test(path)) assert.ok(hits.some((f) => f.check === "comments"));
+      if (/\.(py|svg|txt)$|\/probe$/.test(path)) assert.ok(hits.some((f) => f.check === "text"));
+      assert.deepEqual(findings(path, makeSource("English message")), []);
+    }
+  });
+}
+
+test("new source types respect explicit inventory exclusions and decode JSON strings", () => {
+  for (const path of ["package-lock.json", "test/language-allowlist.txt", "docs/probe", "cli/probe.png"]) {
+    assert.equal(readsSource(path, 0o755), false, path);
+  }
+  assert.equal(readsSource("cli/probe", 0o644), false);
+  assert.equal(readsSource("integrations/plugin/hooks/nested/probe", 0o755), true);
+  assert.ok(findings("integrations/probe.json", '{"label":"wiadomo\\u015b\\u0107"}')
+    .some((f) => f.check === "strings"));
+});
+
+test("only Polish translation values are exempt, while UI keys and comments remain checked", () => {
+  const path = "src/http/ui/js/i18n-pl.js";
+  assert.deepEqual(findings(path, 'export const PL = { "Message": "wiadomość" };')
+    .filter((f) => !allowed(f, allowlist)), []);
+  for (const source of ['export const PL = { "wiadomość": "wiadomość" };', '// wiadomosc']) {
+    assert.ok(findings(path, source).some((f) => !allowed(f, allowlist)));
+  }
 });
 
 test("an exception cannot hide Polish text outside its quoted sample", () => {

@@ -44,12 +44,31 @@ function polishCodeLiterals(source: string): string[] {
   return [...matches.values()];
 }
 
+// Required migration tables document old codes; all other uses remain checked.
+function withoutMigrationRows(path: string, source: string): string {
+  if (!["integrations/claude-skill/SKILL.md", "integrations/claude-code/skills/agenttalks/SKILL.md"]
+    .includes(path)) return source;
+  const rows = new Set(Object.entries(LEGACY).map(([code, oldCode]) => `| \`${oldCode}\` | \`${code}\` |`));
+  return source.split("\n").filter((line) => !rows.has(line.trim())).join("\n");
+}
+
+test("migration row exceptions retain checks on incorrect mappings and old code usage", () => {
+  const path = "integrations/claude-skill/SKILL.md";
+  const row = `| \`${LEGACY.token_expired}\` | \`token_expired\` |`;
+  const use = `Match code: "${LEGACY.token_expired}"`;
+  const incorrect = `| \`${LEGACY.token_expired}\` | \`token_revoked\` |`;
+  assert.equal(withoutMigrationRows(path, row), "");
+  assert.equal(withoutMigrationRows(path, `${row}\n${use}\n${incorrect}`), `${use}\n${incorrect}`);
+  assert.equal(withoutMigrationRows("integrations/other.md", row), row);
+  assert.deepEqual(polishCodeLiterals(withoutMigrationRows(path, use)), [LEGACY.token_expired]);
+});
+
 test("Polish error code literals have no remaining producers or consumers", (t) => {
   const remaining: string[] = [];
   for (const dir of ["src", "bin", "integrations", "test"]) {
     for (const path of sourceFiles(join(ROOT, dir))) {
       if (path === join(ROOT, "src/core/error-codes.ts")) continue;
-      let source = readFileSync(path, "utf8");
+      let source = withoutMigrationRows(path.slice(ROOT.length), readFileSync(path, "utf8"));
       if (path === join(ROOT, "src/http/ui/js/api.js")) {
         source = source.replace(/export const LEGACY = \{[\s\S]*?\n\};/, "");
       }

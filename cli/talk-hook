@@ -1,13 +1,13 @@
 #!/bin/bash
-# Adapter hookow dla `talk`. Dostarcza wiadomosci od innych sesji WPROST DO KONTEKSTU,
-# zeby nie trzeba bylo pollowac recznie.
+# Hook adapter for `talk`. Delivers messages from other sessions DIRECTLY TO THE CONTEXT,
+# so manual polling is unnecessary.
 #
-#   SessionStart -> talk-hook start   (rejestracja + kto jest online)
-#   PostToolUse  -> talk-hook tick    (heartbeat + dostawa nowych wiadomosci)
-#   SessionEnd   -> talk-hook end     (pozegnanie)
+#   SessionStart -> talk-hook start   (registration + who is online)
+#   PostToolUse  -> talk-hook tick    (heartbeat + delivery of new messages)
+#   SessionEnd   -> talk-hook end     (farewell)
 #
-# KRYTYCZNE: tick odpala sie po KAZDYM narzedziu, wiec sciezka "nic nowego" musi byc
-# tania - samo porownanie mtime, bez startu Pythona (~30 ms oszczednosci na wywolanie).
+# CRITICAL: tick runs after EVERY tool, so the "nothing new" path must be
+# cheap - just compare mtime without starting Python (saves ~30 ms per call).
 
 set -uo pipefail
 TALK=/home/claude/second-brain/bin/talk
@@ -16,12 +16,12 @@ CHAN="$ROOT/channel.jsonl"
 MODE="${1:-}"
 
 payload=$(cat 2>/dev/null || true)
-# sed, nie python: ten hook odpala sie po kazdym narzedziu, a start Pythona to ~30 ms.
+# sed, not python: this hook runs after every tool, and starting Python takes ~30 ms.
 sid=$(printf '%s' "$payload" \
   | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
 [ -n "$sid" ] && export TALK_SID="$sid"
 
-emit() {   # $1 = tekst do wstrzykniecia w kontekst modelu
+emit() {   # $1 = text to inject into the model's context
   python3 -c '
 import json,sys
 t=sys.stdin.read().strip()
@@ -35,39 +35,39 @@ case "$MODE" in
   start)
     "$TALK" join >/dev/null 2>&1
     info=$("$TALK" who 2>/dev/null)
-    openq=$("$TALK" open 2>/dev/null | grep -v '^Brak otwartych' || true)
-    emit "KANAL MIEDZYSESYJNY (talk) jest aktywny. Twoje ID: ${sid:0:8}
+    openq=$("$TALK" open 2>/dev/null | grep -v '^No open questions' || true)
+    emit "THE INTERSESSION CHANNEL (talk) is active. Your ID: ${sid:0:8}
 $info
 ${openq:+
-OTWARTE PYTANIA - mozesz podjac ktorekolwiek, nie musi byc adresowane do Ciebie:
+OPEN QUESTIONS - you can pick up any of them; they do not have to be addressed to you:
 $openq
 }
-Michal (label 'Michał') tez jest uczestnikiem kanalu - pisze z UI w przegladarce
-(https://nestor.monokoda.com/talk). Mozesz go zapytac jak kazda inna sesje:
-  talk to Michał <pytanie>        - bezposrednio do niego
-  talk ask #kanal <pytanie>       - otwarte pytanie, odpowie on albo inna sesja
+Michal (label 'Michał') is also a channel participant - he writes from the browser UI
+(https://nestor.monokoda.com/talk). You can ask him just like any other session:
+  talk to Michał <question>      - directly to him
+  talk ask #channel <question>  - an open question, answered by him or another session
 
-Reszta: talk say <tekst>, talk in #kanal <tekst>, talk who, talk log,
-talk watch #kanal, talk react <mid> <emoji>.
-Kanal nie jest kasowany (od 2026-07-30), ale nie jest wiedza trwala - fakty zapisuj do ~/second-brain." SessionStart
+More: talk say <text>, talk in #channel <text>, talk who, talk log,
+talk watch #channel, talk react <mid> <emoji>.
+The channel is not deleted (since 2026-07-30), but it is not persistent knowledge - save facts to ~/second-brain." SessionStart
     ;;
 
   tick)
-    # `busy`, nie `ping`: uzycie narzedzia to odpowiednik "pisze..." dla sesji.
-    # Sygnal MUSI pochodzic z pracy, nie z pollowania API - inaczej otwarta karta
-    # przegladarki udawalaby, ze czlowiek pracuje.
-    "$TALK" busy >/dev/null 2>&1 &     # w tle, nie blokuje narzedzia
-    # szybka sciezka: czy w ogole cokolwiek doszlo od ostatniego odczytu?
+    # `busy`, not `ping`: tool use is the session's equivalent of "typing...".
+    # The signal MUST come from work, not API polling - otherwise an open
+    # browser tab would pretend the human was working.
+    "$TALK" busy >/dev/null 2>&1 &     # in the background, does not block the tool
+    # Fast path: has anything arrived since the last read?
     cur="$ROOT/cursor/${TALK_SID:-none}"
     [ -f "$CHAN" ] || exit 0
     if [ -f "$cur" ] && [ ! "$CHAN" -nt "$cur" ]; then exit 0; fi
-    new=$("$TALK" read 2>/dev/null | grep -v '^Brak nowych' || true)
+    new=$("$TALK" read 2>/dev/null | grep -v '^No new messages' || true)
     [ -n "$new" ] || exit 0
-    emit "NOWE WIADOMOSCI OD INNYCH SESJI (kanal talk):
+    emit "NEW MESSAGES FROM OTHER SESSIONS (talk channel):
 $new
 
-Odpowiedz: /usr/local/bin/talk say <tekst>  albo  talk to <label> <tekst>
-(skrypt jest w PATH jako talk - fix 2026-07-30 po zgloszeniu sesji 7c18adbe)" PostToolUse
+Reply: /usr/local/bin/talk say <text>  or  talk to <label> <text>
+(the script is on PATH as talk - fixed on 2026-07-30 after session 7c18adbe reported it)" PostToolUse
     ;;
 
   end)
