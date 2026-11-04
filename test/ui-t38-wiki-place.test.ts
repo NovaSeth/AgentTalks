@@ -146,3 +146,66 @@ test("T38: every new English string of the Wiki place has a Polish translation",
     assert.equal(typeof PL[key], "string", `i18n-pl.js has ${JSON.stringify(key)}`);
   }
 });
+
+// ------------------------------------------------------------------ fix round 1
+// The orchestrator's browser check: `#/wiki/<slug>` left the rail on Home, and `#/c/general`
+// from the Wiki place left a sidebar without channels. The place follows the NAVIGATION, in the
+// sidebar module itself (every path - route, row, [[link]], search, Cmd+K - ends in a sidebar
+// render), as a transition: the same page or conversation seen again never moves the place.
+
+test("T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched", async () => {
+  const { sidebar } = await loadUi();
+  assert.equal(sidebar.placeAfterNavigation("home", "wiki"), "wiki");
+  assert.equal(sidebar.placeAfterNavigation("dms", "wiki"), "wiki");
+  assert.equal(sidebar.placeAfterNavigation("wiki", "chat"), "home");
+  assert.equal(sidebar.placeAfterNavigation("dms", "chat"), "dms", "a conversation from DMs keeps DMs, as today");
+  assert.equal(sidebar.placeAfterNavigation("home", "chat"), "home");
+  assert.equal(sidebar.placeAfterNavigation("wiki", "notifications"), "wiki", "other views move nothing");
+});
+
+test("T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing", async (t) => {
+  const { sidebar, state } = await loadUi();
+  seedState(state);
+  stored.clear();
+  sidebar.setSidebarPlace("home");
+  state.view = "chat"; state.activeId = 1;
+  renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "home");
+
+  // #/wiki/runbook (or a row, a [[link]], a search result): openWikiPage sets the view and asks for the sidebar.
+  state.view = "wiki"; state.wiki.slug = "runbook";
+  let html = renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "wiki", "the page's tree is visible");
+  assert.ok(html.includes('data-section="wiki"'));
+
+  // The reader picks Home from the rail while on the page; a presence tick redraws the sidebar.
+  sidebar.setSidebarPlace("home");
+  renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "home", "the same page seen again does not drag the reader back");
+
+  // Back to the Wiki place, then #/c/general: a conversation from Wiki returns to Home.
+  sidebar.setSidebarPlace("wiki");
+  state.view = "chat"; state.activeId = 1;
+  html = renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "home", "no sidebar without channels");
+  assert.ok(html.includes('data-section="channels"'));
+
+  // In a conversation, the rail's Wiki place is a choice that survives redraws of the same conversation.
+  sidebar.setSidebarPlace("wiki");
+  renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  // Another conversation (Cmd+K) from the Wiki place: Home again.
+  state.activeId = 3;
+  renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "home");
+  sidebar.setSidebarPlace("home");
+});
+
+test("T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh", () => {
+  const app = readFileSync(UI + "app.js", "utf8");
+  const shell = app.indexOf("function renderShell()");
+  const follow = app.indexOf("followPlace()", shell);
+  const rail = app.indexOf('railButton("rail-chats"', shell);
+  assert.ok(follow > shell && follow < rail, "renderShell settles the place before the rail markup");
+  assert.match(app, /sidebar: \(\) => \{ renderSidebarList\(\); paintRail\(\); \}/, "views.sidebar paints the rail");
+});
