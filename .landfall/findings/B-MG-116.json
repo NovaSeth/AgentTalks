@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-116",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-16",
   "round": 2,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "Acceptance 4: REST catch-up silently truncates gaps exceeding 30 messages. In-memory ui-t16-sse repro: start with loaded empty conversation 5 and hasMore=false, reconnect after messages 1..31 arrive, answer the limit=30 request with 2..31. Result: IDs 2..31, hasMore=false; message 1 is missing and cannot be paged in. Fetch through the captured replay floor and maintain pagination/recovery until the gap is complete.",
   "filedAt": "2026-11-04T10:22:46.677Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-18",
   "closedAt": null,
   "closedBy": null,
   "reason": null

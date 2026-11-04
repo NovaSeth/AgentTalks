@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-113",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-16",
   "round": 2,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "Acceptance 2: the 500-marker cap resurrects completed messages without concurrency. In-memory ui-t16-storage repro: seed legacy b1, claim B, clear pending, call persistUnsent(5,['b1']), then complete 500 other IDs. Reload B: ['b1'], expected []. Its legacy source remains but its tombstone was evicted. Retain completion markers while any retained source can restore their messages.",
   "filedAt": "2026-11-04T10:22:46.677Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-18",
   "closedAt": null,
   "closedBy": null,
   "reason": null

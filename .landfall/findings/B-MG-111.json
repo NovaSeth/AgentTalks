@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-111",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-16",
   "round": 2,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "Acceptance 1-2: sign-out still deletes another account's newer write. In-memory ui-t16-storage repro: seed a1(owner 1) and b1(owner 2) in atalks_unsent_5; during A.clearLocalAccountData(1), inject oldTabPersist(2,5,[b1,b2]) after the second getItem of that key. Reload B: ['b1'], expected ['b1','b2']. Avoid destructive shared-list rewrites while old writers remain; cover the read/write window currently excluded by the test.",
   "filedAt": "2026-11-04T10:22:46.677Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-18",
   "closedAt": null,
   "closedBy": null,
   "reason": null

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-107",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-15",
   "round": 1,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "Failed principal requests lack diagnostics. Reproduction: inject apiFor.get rejecting HTTP 401 into createWakeTools and invoke all four handlers; all return errors, but there are four /api/me requests and zero stderr lines. Emit one sanitized notice via refuse() while preserving denial and retries for transient failures.",
   "filedAt": "2026-11-04T03:51:20.958Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-18",
   "closedAt": null,
   "closedBy": null,
   "reason": null

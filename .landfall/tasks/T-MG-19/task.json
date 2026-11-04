@@ -1,0 +1,40 @@
+{
+  "schema": 2,
+  "id": "T-MG-19",
+  "kind": "task",
+  "title": "Install guide (local, server, systemd, with or without the web UI) and plugin setup; API-only mode switch",
+  "lane": null,
+  "owner": "MG",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 5 files > 2; 400 LOC > 30",
+      "at": "2026-11-04T11:11:52.947Z"
+    }
+  ],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T11:11:32.371Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T11:11:52.947Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}
