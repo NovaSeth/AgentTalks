@@ -58,10 +58,17 @@ function hlOf(convId) {
 
 const newestIdIn = (list) => (list || []).reduce((n, m) => (m && typeof m.id === "number" && m.id > n ? m.id : n), 0);
 
+/** The read watermark as the SERVER reports it for the user (the membership; it moves with every
+ *  confirmed read), whatever the displayed list holds: a message at or below it is read (r3 F7). */
+const serverRead = (convId) => {
+  const n = state.memberships[convId]?.lastReadMessageId;
+  return typeof n === "number" ? n : 0;
+};
+
 /** Tints what the user missed: the others' messages above the floor and the confirmed read that
  *  were not seen arriving and are not mid-fade. */
-function tintMissed(h, list, me) {
-  for (const id of highlightUnreadIds(list, Math.max(h.floor, h.read), me)) {
+function tintMissed(h, list, me, convId) {
+  for (const id of highlightUnreadIds(list, Math.max(h.floor, h.read, serverRead(convId)), me)) {
     if (!h.live.has(id) && !h.fading.has(id)) h.ids.add(id);
   }
 }
@@ -72,7 +79,7 @@ function tintMissed(h, list, me) {
 export function noteTabVisible() {
   const convId = state.view === "chat" ? state.activeId : null;
   if (!convId || drawnConv !== convId) return;      // not drawn in this visit yet: the entry render decides
-  tintMissed(hlOf(convId), visibleMessages(convId), state.actor?.id);
+  tintMissed(hlOf(convId), visibleMessages(convId), state.actor?.id, convId);
   applyUnreadHighlightClasses(convId);
 }
 
@@ -133,12 +140,12 @@ function noteListDrawn(convId, list, mark) {
   const h = hlOf(convId);
   if (drawnConv !== convId) {
     h.ids.clear(); h.live.clear();
-    const since = mark === null || mark === undefined ? null : Math.max(mark, h.read);
+    const since = mark === null || mark === undefined ? null : Math.max(mark, h.read, serverRead(convId));
     for (const id of highlightUnreadIds(list, since, me)) if (!h.fading.has(id)) h.ids.add(id);
     h.floor = newestIdIn(list);
     drawnConv = convId;
   } else {
-    tintMissed(h, list, me);
+    tintMissed(h, list, me, convId);
   }
 }
 
