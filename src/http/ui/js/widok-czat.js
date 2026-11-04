@@ -55,14 +55,23 @@ export async function openConversation(id, focusMessageId) {
     } catch { /* best effort */ }
   }
   renderMain();
-  refreshQuestions(id);
+  const questionsReady = refreshQuestions(id);
   // Pins are needed straight away: without them the message menu does not know whether to offer
   // "Pin" or "Unpin". Previously only the details panel fetched them.
   // "Przypnij" czy "Odepnij". Wczesniej pobieral je wylacznie panel szczegolow.
   state.convPins = [];
-  loadPins(id);
+  const pinsReady = loadPins(id);
   if (focusMessageId) {
-    const el = document.querySelector(`#messages [data-msg="${focusMessageId}"]`);
+    // These refreshes can redraw the list, so highlight only after they finish.
+    await Promise.all([questionsReady, pinsReady]);
+    if (state.view !== "chat" || state.activeId !== id) return;
+    const target = (state.msgs[id] || []).find((m) => m.id === focusMessageId);
+    if (target?.threadId) {
+      await openThread(target.threadId);
+      if (state.view !== "chat" || state.activeId !== id || state.threadOpen !== target.threadId) return;
+    }
+    const list = target?.threadId ? "#th-msgs" : "#messages";
+    const el = document.querySelector(`${list} [data-msg="${focusMessageId}"]`);
     if (el) {
       el.scrollIntoView({ block: "center", behavior: zachowanieScrolla(false) });
       el.classList.add("flash");
@@ -84,7 +93,10 @@ export async function openConversation(id, focusMessageId) {
 }
 
 export async function openThread(rootId) {
+  const conversationId = state.activeId;
   state.threadOpen = rootId;
+  state.threadMsgs = [];
+  const isCurrent = () => state.view === "chat" && state.activeId === conversationId && state.threadOpen === rootId;
   // Opening the panel must not replace the main composer while a send is completing.
   if (!document.getElementById("thread-slot")) {
     const host = document.createElement("div");
@@ -94,12 +106,16 @@ export async function openThread(rootId) {
   renderThread();
   try {
     const data = await api("GET", `/api/messages/${rootId}/thread`);
+    if (!isCurrent()) return;
     state.threadMsgs = data.messages;
-    for (const m of data.messages) animatedMsgs.add(m.id);
+    for (const m of data.messages) {
+      upsertMessage(conversationId, m);
+      animatedMsgs.add(m.id);
+    }
     mergeActors(data.actors);
     mergeReactions(data.messages, data.reactions);
-  } catch (e) { showError(e); }
-  renderThread();
+  } catch (e) { if (isCurrent()) showError(e); }
+  if (isCurrent()) renderThread();
 }
 
 /** A broken event stream as a BAR ABOVE THE CONVERSATION, not as fine print under the whole
@@ -965,16 +981,21 @@ function startInlineEdit(messageId, scope) {
     </div>`;
   const ta = holder.querySelector("textarea");
   ta.value = msg.body;
+  const finishEdit = () => {
+    // A list redraw may have restored this editor in a new holder while saving.
+    const current = (scope || document).querySelector(`[data-text="${messageId}"]`);
+    if (current) current.innerHTML = renderBody((findMsgById(messageId) || msg).body, state.actor.handle);
+  };
   const autos = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 300) + "px"; };
   ta.addEventListener("input", autos);
   ta.addEventListener("keydown", async (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const v = ta.value.trim();
-      if (!v || v === msg.body) { renderMessages(); return; }
-      try { await saveEditedMsg(messageId, v); } catch (err) { showError(err); }
+      if (!v || v === msg.body) { finishEdit(); return; }
+      try { await saveEditedMsg(messageId, v, finishEdit); } catch (err) { showError(err); }
     }
-    if (e.key === "Escape") renderMessages();
+    if (e.key === "Escape") { e.preventDefault(); finishEdit(); }
   });
   autos(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
 }

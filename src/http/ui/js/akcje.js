@@ -209,8 +209,9 @@ export async function releaseLease(resource) {
   } catch (e) { showError(e); return false; }
 }
 
-export async function saveEditedMsg(messageId, text) {
+export async function saveEditedMsg(messageId, text, beforeUpdate) {
   const data = await api("PATCH", `/api/messages/${messageId}`, { body: text });
+  beforeUpdate?.();
   applyMessageUpdate(data.message);
 }
 
