@@ -129,8 +129,21 @@
       "data": {
         "head": "7da54b6bec81346e0ec315525091a035cbaf9d2b"
       }
+    },
+    {
+      "at": "2026-11-04T11:50:58.800Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "32e3b59deb5b35fd9530dd59dedd9c91366205d3",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "dfcf4f5afbc98333851a8b149bb8ab3a9ad7ccb7"
+      }
     }
   ],
   "base": "b8bae5e4697a970c5d43f201a88b62c57198bdd9",
-  "branch": "task/T-MG-19-install-guide"
+  "branch": "task/T-MG-19-install-guide",
+  "mergedAt": "2026-11-04T11:50:58.800Z"
 }
