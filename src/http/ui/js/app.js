@@ -203,6 +203,8 @@ registerViews({
   render,
   shell: renderShell,
   main: renderMain,
+  // T-MG-44: the unread highlight fades only once the server confirmed the read mark (data.js).
+  readConfirmed: fadeUnreadHighlights,
   sidebar: renderSidebarList,
   conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
@@ -452,7 +454,6 @@ document.addEventListener("visibilitychange", () => {
   if (state.view === "chat" && state.activeId && state.memberships[state.activeId]
       && state.unread[state.activeId] > 0 && isScrolledToBottom()) {
     markReadDebounced(state.activeId, lastMessageId(state.activeId));
-    fadeUnreadHighlights(state.activeId, lastMessageId(state.activeId));
   }
 });
 

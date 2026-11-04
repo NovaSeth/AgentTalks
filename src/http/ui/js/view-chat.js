@@ -24,51 +24,60 @@ const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀",
 // ------------------------------------------------- unread highlight (T-MG-44)
 // The chat-app model: a message by somebody else that the user did NOT see arrive gets a soft tint,
 // next to the "New messages" divider. "Did not see" = it was above the divider when the
-// conversation was entered, or it landed while the tab was hidden. The tint fades once the read
-// mark is posted and never comes back for that message. Per conversation; own messages never.
-const READ_DEBOUNCE_MS = 500;      // markReadDebounced posts after this long; the fade starts then
+// conversation was entered, or it landed while the user was absent: the tab hidden, another view
+// over the chat column, another conversation open, the stream down (r2 F3, F4). The tint fades
+// once the server CONFIRMS the read mark (data.js calls views.readConfirmed, r2 F2) and never
+// comes back for that message, navigation included (r2 F1). Per conversation; own messages never;
+// nothing outlives the session generation (r2 F5).
+//
+// Per conversation: `ids` tinted now; `fading` mid-transition; `live` the ids that arrived while
+// the user was present (seen arriving: never tinted); `floor` the newest id on screen when the
+// conversation was entered; `read` the highest CONFIRMED read id. Every render but the entry one
+// tints the others' messages above max(floor, read) that are neither live nor fading: whatever
+// is above the floor and was not seen arriving was missed, however it got into the list (a live
+// event behind a hidden tab, a replay, the reconnect catch-up after a return).
 const FADE_MS = 3000;              // the CSS transition on .unread-hl-fade is shorter; the class leaves after it
-const unreadHl = new Map();        // convId -> { ids: Set (tinted), fading: Set, seen: newest id drawn while present }
-let highlightEntryPending = null;  // the conversation whose next drawn list takes the divider's ids
-let highlightResumePending = null; // the conversation whose next drawn list tints what is newer than "seen" (r1)
+const unreadHl = new Map();        // convId -> { ids, fading, live, floor, read }
+let hlGeneration = -1;             // the session generation the map belongs to (F5)
+let drawnConv = null;              // the conversation whose list was drawn last: a change = a fresh entry
+
+/** The map of the CURRENT session generation: another account's state is dropped on first touch. */
+function hlMap() {
+  const gen = sessionGeneration();
+  if (gen !== hlGeneration) { unreadHl.clear(); drawnConv = null; hlGeneration = gen; }
+  return unreadHl;
+}
 
 function hlOf(convId) {
-  let h = unreadHl.get(convId);
-  if (!h) { h = { ids: new Set(), fading: new Set(), seen: 0 }; unreadHl.set(convId, h); }
+  const map = hlMap();
+  let h = map.get(convId);
+  if (!h) { h = { ids: new Set(), fading: new Set(), live: new Set(), floor: 0, read: 0 }; map.set(convId, h); }
   return h;
 }
 
-/** Entering a conversation from elsewhere: the next drawn list tints what is above the divider.
- *  `resumed` (r1): the SAME conversation comes back after another view (wiki, search, unreads)
- *  covered the chat column: "present" means the chat of this conversation on screen AND the tab
- *  visible, not merely activeId. The state is kept and the next drawn list tints what is newer
- *  than the last message seen while present; a first visit without a watermark falls back to
- *  the divider. */
-export function noteConversationEntered(convId, { resumed = false } = {}) {
-  const h = hlOf(convId);
-  if (resumed && h.seen) { highlightResumePending = convId; return; }
-  h.ids.clear(); h.fading.clear(); h.seen = 0;
-  highlightEntryPending = convId;
+const newestIdIn = (list) => (list || []).reduce((n, m) => (m && typeof m.id === "number" && m.id > n ? m.id : n), 0);
+
+/** Tints what the user missed: the others' messages above the floor and the confirmed read that
+ *  were not seen arriving and are not mid-fade. */
+function tintMissed(h, list, me) {
+  for (const id of highlightUnreadIds(list, Math.max(h.floor, h.read), me)) {
+    if (!h.live.has(id) && !h.fading.has(id)) h.ids.add(id);
+  }
 }
 
 /** Back to the tab (the app.js visibilitychange listener): what arrived while it was hidden is
- *  tinted. The live path already did that per message; this covers a list redrawn meanwhile. */
+ *  tinted on the rows already on screen. The live path already did that per message; this covers
+ *  a list redrawn meanwhile. A later render (the reconnect catch-up) classifies on its own. */
 export function noteTabVisible() {
   const convId = state.view === "chat" ? state.activeId : null;
-  if (!convId) return;
-  const h = hlOf(convId);
-  // No watermark yet (the entry render has not drawn the list): nothing to compare against; the
-  // entry render takes the divider's ids itself.
-  if (highlightEntryPending === convId || !h.seen) return;
-  for (const id of highlightUnreadIds(visibleMessages(convId), h.seen, state.actor?.id)) {
-    if (!h.fading.has(id)) h.ids.add(id);
-  }
+  if (!convId || drawnConv !== convId) return;      // not drawn in this visit yet: the entry render decides
+  tintMissed(hlOf(convId), visibleMessages(convId), state.actor?.id);
   applyUnreadHighlightClasses(convId);
 }
 
 /** The class of a drawn row: tinted, fading, or nothing. */
 function unreadHlClass(convId, id) {
-  const h = unreadHl.get(convId);
+  const h = hlMap().get(convId);
   if (!h) return "";
   if (h.ids.has(id)) return "unread-hl";
   if (h.fading.has(id)) return "unread-hl-fade";
@@ -79,7 +88,7 @@ function unreadHlClass(convId, id) {
 function applyUnreadHighlightClasses(convId, alsoIds = []) {
   if (state.view !== "chat" || state.activeId !== convId) return;
   const el = document.getElementById("messages");
-  const h = unreadHl.get(convId);
+  const h = hlMap().get(convId);
   if (!el || !h) return;
   for (const id of new Set([...h.ids, ...h.fading, ...alsoIds])) {
     const node = el.querySelector(`[data-msg="${id}"]`);
@@ -89,45 +98,46 @@ function applyUnreadHighlightClasses(convId, alsoIds = []) {
   }
 }
 
-/** The read mark was asked for up to `upToId` (markReadDebounced): when it is posted, the tint of
- *  the rows up to there turns into the fade class (a CSS transition on the background), which
- *  leaves once the transition is over. A read message is never tinted again. */
+/** The read-confirmed hook (views.readConfirmed, called by data.js once the server accepted the
+ *  read mark up to `upToId`; no id = the server moved it to the newest message). The confirmed
+ *  watermark moves; the tinted rows up to it take the fade class (a CSS transition on the
+ *  background), which leaves once the transition is over. A read message is never tinted again.
+ *  The timer belongs to this session generation: another account's rows are not touched. */
 export function fadeUnreadHighlights(convId, upToId) {
-  const h = unreadHl.get(convId);
-  if (!h || !h.ids.size) return;
-  const upTo = typeof upToId === "number" ? upToId : Infinity;
+  const h = hlOf(convId);
+  const upTo = typeof upToId === "number" ? upToId : newestIdIn(state.msgs[convId]);
+  h.read = Math.max(h.read, upTo);
+  const done = [...h.ids].filter((id) => id <= upTo);
+  if (!done.length) return;
+  for (const id of done) { h.ids.delete(id); h.fading.add(id); }
+  applyUnreadHighlightClasses(convId);
+  const gen = sessionGeneration();
   setTimeout(() => {
-    const done = [...h.ids].filter((id) => id <= upTo);
-    if (!done.length) return;
-    for (const id of done) { h.ids.delete(id); h.fading.add(id); }
-    h.seen = Math.max(h.seen, ...done);
-    applyUnreadHighlightClasses(convId);
-    setTimeout(() => {
-      for (const id of done) h.fading.delete(id);
-      applyUnreadHighlightClasses(convId, done);
-    }, FADE_MS);
-  }, READ_DEBOUNCE_MS);
+    if (gen !== sessionGeneration()) return;
+    for (const id of done) h.fading.delete(id);
+    applyUnreadHighlightClasses(convId, done);
+  }, FADE_MS);
 }
 
-/** Tests and an account change: no tint survives. */
-export function resetUnreadHighlights() { unreadHl.clear(); highlightEntryPending = null; highlightResumePending = null; }
+/** Tests: no tint survives (production relies on the session generation, see hlMap). */
+export function resetUnreadHighlights() { unreadHl.clear(); drawnConv = null; hlGeneration = sessionGeneration(); }
 
-/** renderMessages reports the drawn list and the divider's mark: the entry snapshot takes the
- *  divider's ids; a render behind a hidden tab (a replay after a break) tints what is newer than
- *  the last message seen; a render while present only moves that "seen" watermark. */
+/** renderMessages reports the drawn list and the divider's mark. A fresh entry (another
+ *  conversation was drawn before, or none) tints the others' messages above the divider that are
+ *  not confirmed read, and sets the floor; every later render of the same conversation, whatever
+ *  restored it (openConversation, a rail place switch, a route, a hidden-tab replay, the reconnect
+ *  catch-up), tints what was missed above the floor. */
 function noteListDrawn(convId, list, mark) {
   const me = state.actor?.id;
   const h = hlOf(convId);
-  const newest = list.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), 0);
-  if (highlightEntryPending === convId) {
-    highlightEntryPending = null;
-    for (const id of highlightUnreadIds(list, mark, me)) h.ids.add(id);
-    h.seen = newest;
-  } else if (highlightResumePending === convId || document.visibilityState !== "visible") {
-    if (highlightResumePending === convId) highlightResumePending = null;
-    for (const id of highlightUnreadIds(list, h.seen, me)) if (!h.fading.has(id)) h.ids.add(id);
+  if (drawnConv !== convId) {
+    h.ids.clear(); h.live.clear();
+    const since = mark === null || mark === undefined ? null : Math.max(mark, h.read);
+    for (const id of highlightUnreadIds(list, since, me)) if (!h.fading.has(id)) h.ids.add(id);
+    h.floor = newestIdIn(list);
+    drawnConv = convId;
   } else {
-    h.seen = Math.max(h.seen, newest);
+    tintMissed(h, list, me);
   }
 }
 
@@ -137,7 +147,6 @@ export async function openConversation(id, focusMessageId) {
   const gen = sessionGeneration();
   saveDraft();                       // the PREVIOUS conversation's draft, before we redraw anything
   const previousConversation = state.activeId;
-  const previousView = state.view;
   // The "new messages" line disappears only on LEAVING a conversation - otherwise the one place
   // that said "this is where you stopped" gets lost while you are still reading.
   if (previousConversation && previousConversation !== id) delete state.readMark[previousConversation];
@@ -168,10 +177,6 @@ export async function openConversation(id, focusMessageId) {
   if (state.readMark[id] === undefined) {
     state.readMark[id] = state.memberships[id]?.lastReadMessageId ?? 0;
   }
-  // T-MG-44: a different conversation = a fresh entry; the same one after another view (wiki,
-  // search, unreads) covered the chat = a resume (r1): what arrived meanwhile is tinted.
-  if (previousConversation !== id) noteConversationEntered(id);
-  else if (previousView !== "chat") noteConversationEntered(id, { resumed: true });
   views.render();
   let drawn = false;                 // the message list is on screen with what the state holds
   let fresh = false;                 // the newest batch was fetched in THIS open
@@ -262,10 +267,7 @@ export async function openConversation(id, focusMessageId) {
   //    section would quietly enrol us in it (and wake us on @all);
   // 2) a jump to a particular message is a look at one place, not a statement of "I read all
   //    the rest" - reaching the bottom is what does that.
-  if (state.memberships[id] && !focusMessageId) {
-    markReadDebounced(id, lastMessageId(id));
-    fadeUnreadHighlights(id, lastMessageId(id));
-  }
+  if (state.memberships[id] && !focusMessageId) markReadDebounced(id, lastMessageId(id));
 }
 
 // U8: the root whose replies are being fetched. The panel says "Loading replies..." while this
@@ -454,7 +456,6 @@ export function renderMain() {
     updateJumpPill();
     if (state.activeId && state.memberships[state.activeId]) {
       markReadDebounced(state.activeId, lastMessageId(state.activeId));
-      fadeUnreadHighlights(state.activeId, lastMessageId(state.activeId));
     }
   });
   renderTopbar();
@@ -866,7 +867,6 @@ function bindScrollWatch(el, atBottom = true) {
     // alone.
     if (isScrolledToBottom() && state.activeId && state.memberships[state.activeId]) {
       markReadDebounced(state.activeId, lastMessageId(state.activeId));
-      fadeUnreadHighlights(state.activeId, lastMessageId(state.activeId));
     }
     // Loading older ones: without clicking, as you approach the top of the list. A 300 px
     // threshold, so the batch has time to arrive before you hit the ceiling.
@@ -998,11 +998,14 @@ export function upsertMessageNode(msg) {
   // We append ONLY at the end, and only when the list really is on screen. An insertion in the
   // middle (a replay after a break) goes through a normal render, so as not to break the order
   // or the day separators.
-  // Seen arriving = not tinted; landed behind a hidden tab = tinted (own messages never).
+  // Seen arriving (tab visible, this chat on screen) = live, never tinted; landed behind a hidden
+  // tab = missed, tinted (own messages never).
   const hl = hlOf(state.activeId);
   const theirs = typeof msg.id === "number" && msg.actorId !== state.actor.id && !msg.deletedAt;
-  if (document.visibilityState !== "visible") { if (theirs && !hl.fading.has(msg.id)) hl.ids.add(msg.id); }
-  else if (typeof msg.id === "number") hl.seen = Math.max(hl.seen, msg.id);
+  if (theirs && !hl.live.has(msg.id)) {
+    if (document.visibilityState === "visible") hl.live.add(msg.id);
+    else if (msg.id > Math.max(hl.floor, hl.read) && !hl.fading.has(msg.id)) hl.ids.add(msg.id);
+  }
   const list = visibleMessages(state.activeId);
   const i = list.findIndex((x) => x.id === msg.id);
   if (i !== list.length - 1 || !el.querySelector("[data-msg]")) { renderMessages(); return; }

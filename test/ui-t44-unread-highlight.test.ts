@@ -346,7 +346,7 @@ test("T-MG-44 r2 F2: the fade starts only when the server confirms the read; a r
     chat.renderMessages();
     assert.deepEqual(highlighted(l), [], "a re-render never tints a read message again");
     assert.deepEqual(fading(l), []);
-  } finally { mock.timers.reset(); }
+  } finally { data.cancelMarkRead(); mock.timers.reset(); }   // a mocked read timer must not outlive its mock
 });
 
 test("T-MG-44 r2 F2: a failed read (503) leaves the rows tinted", async () => {
@@ -361,7 +361,7 @@ test("T-MG-44 r2 F2: a failed read (503) leaves the rows tinted", async () => {
     assert.equal(state.unread[5], 3, "the counter stays: the server did not confirm");
     assert.deepEqual(highlighted(l), [506, 508, 510], "no confirmation, no fade");
     assert.deepEqual(fading(l), []);
-  } finally { mock.timers.reset(); }
+  } finally { data.cancelMarkRead(); mock.timers.reset(); }   // a mocked read timer must not outlive its mock
 });
 
 test("T-MG-44: a partial confirmed read fades only up to it; the rest stays tinted", async () => {
@@ -373,7 +373,7 @@ test("T-MG-44: a partial confirmed read fades only up to it; the rest stays tint
     await confirmRead(507);
     assert.deepEqual(highlighted(l), [508, 510]);
     assert.deepEqual(fading(l), [506]);
-  } finally { mock.timers.reset(); }
+  } finally { data.cancelMarkRead(); mock.timers.reset(); }   // a mocked read timer must not outlive its mock
 });
 
 test("T-MG-44: the highlight is per conversation: a confirmed read in another one touches nothing here", async () => {
@@ -385,7 +385,7 @@ test("T-MG-44: the highlight is per conversation: a confirmed read in another on
     data.markReadDebounced(6, 610);
     await confirmRead(610);
     assert.deepEqual(highlighted(l), [506, 508, 510]);
-  } finally { mock.timers.reset(); }
+  } finally { data.cancelMarkRead(); mock.timers.reset(); }   // a mocked read timer must not outlive its mock
 });
 
 // ------------------------------------------------------------------ 4: never again, across navigation (F1, r2)
@@ -406,7 +406,7 @@ test("T-MG-44 r2 F1: a message read here does not regain its tint after going to
     assert.deepEqual(highlighted(l), [], "506, 508, 510 were read: no tint");
     assert.deepEqual(fading(l), []);
     assert.match(l.innerHTML, /class="newline"/, "the divider itself is the existing, unchanged behaviour");
-  } finally { mock.timers.reset(); }
+  } finally { data.cancelMarkRead(); mock.timers.reset(); }   // a mocked read timer must not outlive its mock
 });
 
 // ------------------------------------------------------------------ 6: account change (F5, r2)
@@ -427,7 +427,7 @@ test("T-MG-44 r2 F5: highlight state and timers do not cross an account change (
     mock.timers.tick(400);                          // A's fade-end timer fires now
     assert.deepEqual(highlighted(l), [506, 508, 510], "A's timer did not strip B's tint");
     assert.deepEqual(fading(l), []);
-  } finally { mock.timers.reset(); }
+  } finally { data.cancelMarkRead(); mock.timers.reset(); }   // a mocked read timer must not outlive its mock
 });
 
 // ------------------------------------------------------------------ 7: CSS
