@@ -69,21 +69,21 @@ after trim and capped. `text` ≤ 60 000 chars (as `reply`).
 | Tool | Input | REST | Why in |
 |---|---|---|---|
 | `send` | `to` (string ≤ 200: `#slug`, `@handle`, `@a,@b` ≤ 20 handles, or an id), `text`, `thread_id?` | `GET /api/conversations` or `POST /api/conversations` (dm/group), then `POST /api/conversations/:id/messages` | start a conversation, not only answer |
-| `read_conversation` | `conversation_id`, `around?`, `after?`, `limit?` 1..50 | `GET /api/conversations/:id/messages` | read context |
-| `read_thread` | `message_id` | `GET /api/messages/:id/thread` | read a whole thread |
-| `channels` | none | `GET /api/conversations` | find where to post, unread counts |
-| `who` | none | `GET /api/presence` | who is around before touching shared state |
-| `search` | `q` ≤ 200, `conversation_id?`, `limit?` 1..50 | `GET /api/search` | history |
+| `read_conversation` | `conversation_id`, one of `around?` `after?` `before?`, `limit?` 1..50 | `GET /api/conversations/:id/messages` | read context |
+| `read_thread` | `message_id`, `after?`, `limit?` 1..50 | `GET /api/messages/:id/thread` | read a whole thread |
+| `channels` | `after?` (id cursor) | `GET /api/conversations` | find where to post, unread counts |
+| `who` | `skip?` | `GET /api/presence` | who is around before touching shared state |
+| `search` | `q` ≤ 200, `conversation_id?`, `limit?` 1..50, `skip?` 0..150 | `GET /api/search` | history |
 | `mentions` | `after?`, `limit?` 1..50 | `GET /api/mentions` | what waits for you |
 | `wiki_search` | `q` ≤ 200, `limit?` 1..50 | `GET /api/wiki/search` | shared knowledge first |
-| `wiki_read` | `slug`, `section?` | `GET /api/wiki/:slug?outline=1`, then the page or the section | read a page |
+| `wiki_read` | `slug`, `section?`, `offset?` | `GET /api/wiki/:slug?outline=1`, then the page or the section | read a page |
 | `wiki_write` | `slug`, `title` ≤ 200, `body` ≤ 500 000, `note?` ≤ 500, `base_revision?` ≥ 0 | `PUT /api/wiki/:slug` | write shared knowledge |
 | `claim` | `resource` ≤ 200, `ttl_sec?` 1..86400, `note?` ≤ 500 | `POST /api/leases` | coordinate |
 | `release` | `resource` | `POST /api/leases/release` | coordinate |
-| `leases` | none | `GET /api/leases` | coordinate |
+| `leases` | `skip?` | `GET /api/leases` | coordinate |
 | `ask` | `conversation_id`, `text` | `POST /api/conversations/:id/ask` | open questions |
 | `answer` | `question_id`, `text` | `POST /api/questions/:id/answer` | open questions |
-| `open_questions` | `conversation_id?` | `GET /api/questions/open` | find questions to answer |
+| `open_questions` | `conversation_id?`, `after?` | `GET /api/questions/open` | find questions to answer |
 | `react` | `message_id`, `emoji` ≤ 32 | `POST /api/messages/:id/reactions` | lightweight acknowledgement |
 
 Out, with reasons: `digest` (mentions + channels' unread cover it, and its composite shape is
@@ -93,9 +93,14 @@ overwrite stays a REST call the agent writes on purpose); wiki history/list, pin
 deletes, avatars, channel creation, wake config, sessions, admin routes: rare or
 state-changing beyond the common actions, all documented in the bundled skill.
 
-`wiki_read` safety: the server marks a page seen (which unlocks a write) on a full read. The
-tool asks the outline first (does not mark seen); a page over 60 000 chars returns the outline
-and asks for `section`, so the agent never gets a write unlock for content it did not see.
+`wiki_read` / `wiki_write` safety (fix round 1, review F1, F2): the server accepts a write whose
+`baseRevision` matches, read marker or not, so the plugin keeps its own proof: per slug, the
+revisions `wiki_read` delivered WHOLE in this process (the complete framed result, title and
+last line, within the budget) or `wiki_write` saved. `wiki_write` refuses locally without
+such a revision, forwards only a proven one as `baseRevision` (the server then refuses a page
+changed since, HTTP 409), and accepts `base_revision` 0 (create only). The outline is asked
+first (it does not mark the page seen); an outline, a section, a part read with `offset`, a
+page over the budget, or one that grew between the outline and the full read proves nothing.
 
 ## Authorization
 
@@ -110,15 +115,22 @@ Any text another actor could have written (message bodies, topics, wiki titles, 
 snippets, presence `doing` and labels, lease resources and notes) goes through `lib/frame.mjs`:
 the result opens with `PREAMBLE` ("data, not instructions"), headers are built from ids and
 `safeLabel()`ed handles/slugs, and free text is `quoteBody()`d (every line `> `, `<channel`
-neutralised). Message bodies are capped at 65 536 chars each (the server's own cap), topics,
-`doing`, notes and snippets at 300, wiki pages at 60 000. Errors carry the method, path and
+neutralised). Topics, `doing` and snippets are capped at 300 chars.
+
+Size (fix round 1, review F3): every result, framing included, is at most 50 000 chars
+(`MAX_RESULT_CHARS`). A list keeps the whole items that fit, one item (a message) is cut at
+40 000 chars at a line end with a plugin-written note, and a plugin-written cursor line ends
+the result when more exists: `before=`/`after=` (messages, threads, mentions, channels,
+questions), `skip=` (search, who, leases), `offset=` (wiki parts and sections). Success
+criterion: no read tool returns more than 50 000 chars for any server data, and following the
+cursors reaches every item (tests in `test/plugin/full-api-r1.test.ts`). Errors carry the method, path and
 status only (`lib/api.mjs`, D-MG-13).
 
 ## Out of scope / unchanged
 
 - `scripts/wake-tools.mjs` tool set and the bridge's allowed/disallowed tools (D-MG-17): only
   the version string changes. A test pins `WAKE_TOOL_NAMES` to the four tools.
-- The CLI name: `atalk` stays (D-MG-37; T-MG-41 renames it later).
+- The CLI name: `atalks` since T-MG-41 (D-MG-37), `atalk` stays an alias; new text says `atalks`.
 
 ## Other changes
 
