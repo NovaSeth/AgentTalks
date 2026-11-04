@@ -107,25 +107,44 @@ async function readMcpBody(
 ): Promise<unknown | undefined> {
   const chunks: Buffer[] = [];
   let size = 0;
-  let tooBig = Number(req.headers["content-length"] ?? 0) > MCP_MAX_BODY;
-  await new Promise<void>((resolve) => {
-    req.on("data", (c: Buffer) => {
-      size += c.length;
-      if (size > MCP_MAX_BODY) tooBig = true;
-      // Over the cap we keep draining (so the client can read the answer) but store nothing.
-      if (!tooBig) chunks.push(c);
+  const refuse = (): undefined => {
+    // Answer at once and close: the rest of an oversized body is neither read nor waited for.
+    // After the answer we discard a few more MB so a client that is still uploading can read
+    // the 413 (an abrupt close would show up as a connection reset), then cut the request.
+    res.once("finish", () => {
+      let drained = 0;
+      req.on("data", (c: Buffer) => { drained += c.length; if (drained > 4 * MCP_MAX_BODY) req.destroy(); });
+      req.on("error", () => {});
+      req.resume();
+      setTimeout(() => req.destroy(), 2000).unref();
     });
-    req.on("end", () => resolve());
-    req.on("error", () => resolve());
-    req.on("close", () => resolve());
-  });
-  if (tooBig) {
     json(res, 413, {
       error: "request body over 1 MB: send a smaller message or split the work into several calls",
       code: "body_too_large",
     });
     return undefined;
-  }
+  };
+  // A declared length over the cap is refused before a single body byte is read.
+  if (Number(req.headers["content-length"] ?? 0) > MCP_MAX_BODY) return refuse();
+  let tooBig = false;
+  await new Promise<void>((resolve) => {
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > MCP_MAX_BODY) {
+        // A chunked body has no declared length: stop at the cap instead of draining it.
+        tooBig = true;
+        chunks.length = 0;
+        req.pause();
+        resolve();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => resolve());
+    req.on("error", () => resolve());
+    req.on("close", () => resolve());
+  });
+  if (tooBig) return refuse();
   let parsed: unknown;
   try {
     parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));

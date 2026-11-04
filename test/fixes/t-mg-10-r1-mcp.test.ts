@@ -127,3 +127,46 @@ test("R1-7b: an unrevoked wait still delivers", async () => {
   assert.ok(out.includes(NOTE));
   await s.close();
 });
+
+import net from "node:net";
+
+function rawRequest(port: number, head: string, body?: Buffer): Promise<{ status: number; ms: number }> {
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const sock = net.connect(port, "127.0.0.1", () => {
+      sock.write(head);
+      if (body) sock.write(body);
+    });
+    let buf = "";
+    sock.on("data", (d) => {
+      buf += d.toString("latin1");
+      const m = /^HTTP\/1\.1 (\d{3})/.exec(buf);
+      if (m) { sock.destroy(); resolve({ status: Number(m[1]), ms: Date.now() - t0 }); }
+    });
+    sock.on("error", reject);
+    setTimeout(() => { sock.destroy(); reject(new Error("no response within 2 s")); }, 2000);
+  });
+}
+
+test("R1-F5: Content-Length 60 MB gets 413 at once, without the body being sent", async () => {
+  const s = await startTestServer();
+  const { token } = seed(s);
+  const port = Number(new URL(s.url).port);
+  const head = `POST /mcp HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer ${token}\r\nContent-Type: application/json\r\nContent-Length: ${60 * 1024 * 1024}\r\n\r\n`;
+  const r = await rawRequest(port, head);
+  assert.equal(r.status, 413);
+  assert.ok(r.ms < 200, `took ${r.ms} ms`);
+  await s.close();
+});
+
+test("R1-F5: a chunked body over the cap gets 413 and the request is destroyed", async () => {
+  const s = await startTestServer();
+  const { token } = seed(s);
+  const port = Number(new URL(s.url).port);
+  const head = `POST /mcp HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer ${token}\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n`;
+  const chunk = Buffer.alloc(512 * 1024, 0x61);
+  const frame = Buffer.concat([Buffer.from(chunk.length.toString(16) + "\r\n"), chunk, Buffer.from("\r\n")]);
+  const r = await rawRequest(port, head, Buffer.concat([frame, frame, frame]));
+  assert.equal(r.status, 413);
+  await s.close();
+});
