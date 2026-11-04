@@ -16,6 +16,7 @@ import type { Ctx } from "./ctx.ts";
 import { messageFromRow, type Message, type MsgRow } from "./messages.ts";
 import { openQuestions } from "./questions.ts";
 import { mentionsOf } from "./mentions.ts";
+import { UNREAD_CAP } from "./unread.ts";
 
 export type Digest = {
   sinceId: number;
@@ -44,14 +45,23 @@ export function digestFor(ctx: Ctx, actorId: number): Digest | null {
       `SELECT a.handle AS who,
               COALESCE('#' || c.slug, 'rozmowa prywatna') AS conv,
               COUNT(*) AS n
-         FROM messages m
-         JOIN members mem ON mem.conversation_id = m.conversation_id AND mem.actor_id = :me
-         JOIN conversations c ON c.id = m.conversation_id
+         FROM members mem
+         JOIN conversations c ON c.id = mem.conversation_id
+         -- At most UNREAD_CAP unread rows per conversation (the same "99+" cap as unreadFor):
+         -- counting every unread row made the cost grow with the history.
+         JOIN messages m ON m.id IN (
+                SELECT x.id FROM messages x
+                 WHERE x.conversation_id = mem.conversation_id
+                   AND x.id > mem.last_read_message_id
+                   AND x.actor_id <> mem.actor_id
+                   AND x.deleted_at IS NULL
+                 ORDER BY x.id DESC
+                 LIMIT :cap)
          JOIN actors a ON a.id = m.actor_id
-        WHERE m.id > mem.last_read_message_id AND m.actor_id <> :me AND m.deleted_at IS NULL
+        WHERE mem.actor_id = :me
         GROUP BY a.handle, conv`,
     )
-    .all({ me: actorId }) as Array<{ who: string; conv: string; n: number }>;
+    .all({ me: actorId, cap: UNREAD_CAP }) as Array<{ who: string; conv: string; n: number }>;
 
   if (rows.length === 0) return null;
 

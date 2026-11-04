@@ -246,7 +246,7 @@ export function registerAuthRoutes(router: Router): void {
     const ip = clientKey(req, rc.config.trustProxy);
     const now = Math.floor(Date.now() / 1000);
     const keys = loginKeys(rc.ctx, rc.config.secret, ip, handle);
-    const knownDevice = keys.actorId !== null && hasDeviceCookie(rc.config, req, keys.actorId);
+    const knownDevice = keys.actorId !== null && hasDeviceCookie(rc.ctx, rc.config, req, keys.actorId);
     assertLoginAllowed(keys, ip, now, knownDevice);
     const actor = verifyPassword(rc.ctx, handle, password);
     // One message for a bad handle and a bad password: otherwise the server's answer is an
@@ -259,7 +259,7 @@ export function registerAuthRoutes(router: Router): void {
     }
     loginFailures.delete(keys.ipHandle);
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
-    res.setHeader("set-cookie", [cookie, makeDeviceCookie(rc.config, actor.id, requestIsSecure(req))]);
+    res.setHeader("set-cookie", [cookie, makeDeviceCookie(rc.ctx, rc.config, actor.id, requestIsSecure(req))]);
     json(res, 200, {
       actor,
       csrf: csrfFor(cookie.split(";")[0].slice(COOKIE_NAME.length + 1)),
@@ -365,7 +365,7 @@ export function registerAuthRoutes(router: Router): void {
     const actor = getActor(rc.ctx, actorId);
     if (!actor || actor.disabledAt) throw unauthorized("konto_wylaczone", "to konto jest wylaczone");
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
-    res.setHeader("set-cookie", [cookie, makeDeviceCookie(rc.config, actor.id, requestIsSecure(req))]);
+    res.setHeader("set-cookie", [cookie, makeDeviceCookie(rc.ctx, rc.config, actor.id, requestIsSecure(req))]);
     json(res, 200, {
       actor,
       csrf: csrfFor(cookie.split(";")[0].slice(COOKIE_NAME.length + 1)),
