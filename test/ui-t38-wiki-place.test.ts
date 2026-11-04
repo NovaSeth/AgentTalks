@@ -201,69 +201,6 @@ test("T38: every new English string of the Wiki place has a Polish translation",
   }
 });
 
-// ------------------------------------------------------------------ fix round 1
-// The orchestrator's browser check: `#/wiki/<slug>` left the rail on Home, and `#/c/general`
-// from the Wiki place left a sidebar without channels. The place follows the NAVIGATION, in the
-// sidebar module itself (every path - route, row, [[link]], search, Cmd+K - ends in a sidebar
-// render), as a transition: the same page or conversation seen again never moves the place.
-
-test("T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched", async () => {
-  const { sidebar } = await loadUi();
-  assert.equal(sidebar.placeAfterNavigation("home", "wiki"), "wiki");
-  assert.equal(sidebar.placeAfterNavigation("dms", "wiki"), "wiki");
-  assert.equal(sidebar.placeAfterNavigation("wiki", "chat"), "home");
-  assert.equal(sidebar.placeAfterNavigation("dms", "chat"), "dms", "a conversation from DMs keeps DMs, as today");
-  assert.equal(sidebar.placeAfterNavigation("home", "chat"), "home");
-  assert.equal(sidebar.placeAfterNavigation("wiki", "notifications"), "wiki", "other views move nothing");
-});
-
-test("T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing", async (t) => {
-  const { sidebar, state } = await loadUi();
-  seedState(state);
-  stored.clear();
-  sidebar.setSidebarPlace("home");
-  state.view = "chat"; state.activeId = 1;
-  renderWith(sidebar, t);
-  assert.equal(sidebar.getSidebarPlace(), "home");
-
-  // #/wiki/runbook (or a row, a [[link]], a search result): openWikiPage sets the view and asks for the sidebar.
-  state.view = "wiki"; state.wiki.slug = "runbook";
-  let html = renderWith(sidebar, t);
-  assert.equal(sidebar.getSidebarPlace(), "wiki", "the page's tree is visible");
-  assert.ok(html.includes('data-section="wiki"'));
-
-  // The reader picks Home from the rail while on the page; a presence tick redraws the sidebar.
-  sidebar.setSidebarPlace("home");
-  renderWith(sidebar, t);
-  assert.equal(sidebar.getSidebarPlace(), "home", "the same page seen again does not drag the reader back");
-
-  // Back to the Wiki place, then #/c/general: a conversation from Wiki returns to Home.
-  sidebar.setSidebarPlace("wiki");
-  state.view = "chat"; state.activeId = 1;
-  html = renderWith(sidebar, t);
-  assert.equal(sidebar.getSidebarPlace(), "home", "no sidebar without channels");
-  assert.ok(html.includes('data-section="channels"'));
-
-  // In a conversation, the rail's Wiki place is a choice that survives redraws of the same conversation.
-  sidebar.setSidebarPlace("wiki");
-  renderWith(sidebar, t);
-  assert.equal(sidebar.getSidebarPlace(), "wiki");
-  // Another conversation (Cmd+K) from the Wiki place: Home again.
-  state.activeId = 3;
-  renderWith(sidebar, t);
-  assert.equal(sidebar.getSidebarPlace(), "home");
-  sidebar.setSidebarPlace("home");
-});
-
-test("T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh", () => {
-  const app = readFileSync(UI + "app.js", "utf8");
-  const shell = app.indexOf("function renderShell()");
-  const follow = app.indexOf("followPlace()", shell);
-  const rail = app.indexOf('railButton("rail-chats"', shell);
-  assert.ok(follow > shell && follow < rail, "renderShell settles the place before the rail markup");
-  assert.match(app, /sidebar: \(\) => \{ renderSidebarList\(\); paintRail\(\); \}/, "views.sidebar paints the rail");
-});
-
 // ------------------------------------------------------------------ fix round 2
 // The orchestrator's second browser check: `#/c/general` from a wiki page kept the Wiki place,
 // `#/wiki/<slug>` from DMs kept DMs. This test drives the REAL route handler (the hashchange
@@ -273,7 +210,16 @@ test("T38-r1: app.js decides the place before drawing the rail and repaints the 
 async function bootApp() {
   const ui = await loadUi();
   const g = globalThis as Record<string, any>;
+  // A held GET (fix round 3): `holdWiki(key)` makes every request whose path contains the key
+  // wait until the returned release() is called - a slow server, for the race of F3.
+  const holds = new Map<string, Promise<void>>();
+  const holdWiki = (key: string) => {
+    let release = () => {};
+    holds.set(key, new Promise<void>((r) => { release = () => { holds.delete(key); r(); }; }));
+    return release;
+  };
   g.fetch = async (path: string) => {
+    for (const [key, p] of holds) if (path.includes(key)) await p;
     const json = /\/api\/wiki\/[^/]+\/history/.test(path) ? { revisions: [] }
       : /\/api\/wiki\/[^/]+$/.test(path) ? { page: { slug: path.split("/").pop(), title: "Page", revisions: 1, updatedBy: "nestor", updatedAt: 0, createdBy: "nestor" }, files: [] }
       : /\/messages/.test(path) ? { messages: [] }
@@ -282,18 +228,21 @@ async function bootApp() {
   };
   await import(UI + "app.js");
   await new Promise((r) => setTimeout(r, 30));
-  const { state, sidebar } = ui;
+  const { state, sidebar, views } = ui;
   seedState(state);
-  state.wiki = { pages: [{ slug: "nowosci", title: "Nowosci" }], slug: null, editing: false, draft: null, page: null, files: [], history: [] };
+  state.wiki = { pages: [{ slug: "nowosci", title: "Nowosci" }, { slug: "slow", title: "Slow" }], slug: null, editing: false, draft: null, page: null, files: [], history: [] };
   state.msgs = state.msgs || {}; state.loaded = state.loaded || {}; state.readMark = state.readMark || {};
-  const go = async (hash: string) => {
+  const goNoWait = (hash: string) => {
     g.location.hash = hash;
-    await listeners.hashchange({ newURL: "https://test.local/" + hash });
+    return listeners.hashchange({ newURL: "https://test.local/" + hash });
+  };
+  const go = async (hash: string) => {
+    await goNoWait(hash);
     await new Promise((r) => setTimeout(r, 10));
   };
   const railOn = () => ["rail-chats", "rail-dms", "rail-wiki"].filter((id) => el(id).classList.contains("on")
     || new RegExp('id="' + id + '" aria-current="page"').test(el("app").innerHTML));
-  return { state, sidebar, go, railOn };
+  return { state, sidebar, views, go, goNoWait, holdWiki, railOn };
 }
 
 test("T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki", async () => {
@@ -320,4 +269,87 @@ test("T38-r2: the route handler - a conversation opened from a wiki page returns
   assert.equal(sidebar.getSidebarPlace(), "wiki", "a wiki page from DMs lights Wiki");
   assert.ok(railOn().includes("rail-wiki"));
   assert.ok(!railOn().includes("rail-dms"));
+});
+
+// ------------------------------------------------------------------ fix round 3 (Codex review r1)
+// F1 Wiki chosen from Activity opened Home; F2 reopening the current page by a non-route entry
+// kept the tree hidden; F3 a delayed route completion overrode a newer place. The rule now lives
+// in ONE place: router.js reports every navigation (syncRoute, which every opener calls at the
+// START, before it awaits anything) and app.js moves the place from that report alone. Nothing
+// happens on completion or on a redraw, so a newer choice always wins.
+
+test("T38-r3: placeAfterNavigation - a wiki page selects Wiki; a conversation (channel or DM) leaves Wiki for Home; the rest moves nothing", async () => {
+  const { sidebar } = await loadUi();
+  assert.equal(sidebar.placeAfterNavigation("home", "wiki"), "wiki");
+  assert.equal(sidebar.placeAfterNavigation("dms", "wiki"), "wiki");
+  assert.equal(sidebar.placeAfterNavigation("wiki", "chat"), "home");
+  assert.equal(sidebar.placeAfterNavigation("wiki", "dm"), "home");
+  assert.equal(sidebar.placeAfterNavigation("dms", "chat"), "dms", "a conversation from DMs keeps DMs, as today");
+  assert.equal(sidebar.placeAfterNavigation("home", "dm"), "home");
+  for (const v of ["search", "threads", "unreads", "activity", "dms", "wikiPlace", "home"]) {
+    assert.equal(sidebar.placeAfterNavigation("wiki", v), "wiki", v);
+  }
+});
+
+test("T38-r3 F1: Wiki chosen from Activity opens the chat with the Wiki place and its tree", async () => {
+  const { state, sidebar, go, views } = await bootApp();
+  await go("#/c/general");
+  state.view = "notifications";
+  views.render();
+  await go("#/wiki");
+  assert.equal(state.view, "chat");
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  assert.ok(String(el("sb-scroll").innerHTML).includes('data-section="wiki"'), "the tree is drawn");
+  // A redraw of the sidebar (a presence tick) keeps the choice.
+  views.sidebar();
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+});
+
+test("T38-r3 F2: reopening the current page through a non-route entry selects Wiki again; a plain redraw keeps Home", async () => {
+  const { state, sidebar, views } = await bootApp();
+  const { openWikiPage } = await import(UI + "view-wiki.js");
+  await openWikiPage("nowosci");
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  sidebar.setSidebarPlace("home");
+  views.sidebar();
+  assert.equal(sidebar.getSidebarPlace(), "home", "a redraw keeps the reader's choice");
+  await openWikiPage("nowosci");   // a [[link]] or a breadcrumb to the page on screen
+  assert.equal(state.view, "wiki");
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  assert.ok(String(el("sb-scroll").innerHTML).includes('data-section="wiki"'));
+});
+
+test("T38-r3 F3: a route that completes after a newer place was chosen does not take the place back", async () => {
+  const { state, sidebar, go, goNoWait, holdWiki } = await bootApp();
+  await go("#/c/general");
+  const release = holdWiki("slow");
+  const pending = goNoWait("#/wiki/slow");
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(sidebar.getSidebarPlace(), "wiki", "the place moves when the navigation starts");
+  await go("#/dms");
+  assert.equal(sidebar.getSidebarPlace(), "dms");
+  release();
+  await pending;
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(sidebar.getSidebarPlace(), "dms", "the late completion changes nothing");
+  // The same for a conversation whose load finishes after the reader picked Wiki from the rail.
+  const releaseMsgs = holdWiki("messages");
+  const pendingConv = goNoWait("#/c/general");
+  await new Promise((r) => setTimeout(r, 5));
+  sidebar.setSidebarPlace("wiki");
+  releaseMsgs();
+  await pendingConv;
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  assert.equal(state.view, "chat");
+});
+
+test("T38-r3: the rule has ONE home - router.js reports navigations, app.js applies them; no settle-on-completion, no follow-on-render", () => {
+  const app = readFileSync(UI + "app.js", "utf8");
+  const router = readFileSync(UI + "router.js", "utf8");
+  const sidebar = readFileSync(UI + "view-sidebar.js", "utf8");
+  assert.match(router, /export function onNavigate\(/, "router.js exports onNavigate");
+  assert.match(app, /onNavigate\(/, "app.js listens");
+  assert.doesNotMatch(app, /settleRoutePlace|followPlace/, "no second rule in app.js");
+  assert.doesNotMatch(sidebar, /function followPlace/, "no follow-on-render in view-sidebar.js");
 });
