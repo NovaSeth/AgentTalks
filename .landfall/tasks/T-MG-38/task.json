@@ -13,8 +13,8 @@
       "at": "2026-11-04T16:58:54.553Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "implemented",
+  "round": 2,
   "events": [
     {
       "at": "2026-11-04T16:28:08.011Z",
@@ -51,6 +51,64 @@
       "data": {
         "executor": "landfall:implementer",
         "base": "3b666b9eda33"
+      }
+    },
+    {
+      "at": "2026-11-04T17:23:20.298Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T17:24:24.900Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 2,
+        "note": "browser check: deep link #/wiki/<slug> keeps Home; conversation route from Wiki place keeps Wiki sidebar"
+      }
+    },
+    {
+      "at": "2026-11-04T17:24:25.180Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "3b666b9eda33",
+        "note": "fix round 1"
+      }
+    },
+    {
+      "at": "2026-11-04T17:23:24.965Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "0450e435b870609c2b0eab47b486ef495943d916",
+        "class": "standard",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T19:33:11.587Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T19:33:16.291Z",
+      "by": "MG",
+      "event": "self-verified",
+      "data": {
+        "round": 2,
+        "note": "orchestrator re-checked all route transitions in Chrome on a restarted server at b01c47f: all correct"
       }
     }
   ],

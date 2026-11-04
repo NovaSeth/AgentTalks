@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "path": "integrations/claude-code/hooks/atalk-hook.sh",
+      "line": 22,
+      "rule": "COD-2",
+      "text": "The hook now requires `atalks` on PATH (command -v atalks). A machine that still has the old install (only `atalk`) gets the hook silently disabled (one stderr line) until `npm i -g .` is rerun. NEWS says to reinstall; a fallback to `atalk` would be safer but is not required by the acceptance points."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "path": "NEWS.md",
+      "line": 193,
+      "rule": "PRI-2",
+      "text": "Historical NEWS entries (e.g. wiki delete, typing bubble) had `atalk` rewritten to `atalks`, which edits past release notes. Harmless to readers and consistent with the brief's 'user-facing text', but it is a small rewrite of history."
+    }
+  ]
+}

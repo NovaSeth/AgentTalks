@@ -5,18 +5,138 @@
   "title": "Naming: atalk (CLI) vs atalks (domain) confuse people; propose a clearer CLI name with a compatibility alias",
   "lane": null,
   "owner": "MG",
-  "class": null,
-  "classHistory": [],
-  "status": "new",
-  "round": 0,
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: matches risk glob bin/**; matches risk glob **/AGENTS.md; matches risk glob **/SKILL.md",
+      "at": "2026-11-04T19:18:29.868Z"
+    }
+  ],
+  "status": "implemented",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-04T16:28:11.791Z",
       "by": "MG",
       "event": "created",
       "data": {}
+    },
+    {
+      "at": "2026-11-04T19:18:29.868Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:469917e480700f46",
+          "risk-path:a384388adcb2ed2b",
+          "risk-path:5445e7dd8e840133",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T19:18:30.850Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-41-atalks-cli-name",
+        "base": "a85b76d43d9603b341c401f465604f5219275749",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-41"
+      }
+    },
+    {
+      "at": "2026-11-04T19:18:51.915Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:implementer",
+        "base": "a85b76d43d96"
+      }
+    },
+    {
+      "at": "2026-11-04T19:26:38.763Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T19:27:05.423Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:reviewer",
+        "base": "a85b76d43d96",
+        "note": "cross-provider review r1 (claude reviews codex)"
+      }
+    },
+    {
+      "at": "2026-11-04T19:27:45.790Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "approved",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T19:27:58.120Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "a85b76d43d96",
+        "note": "fix round 1: minor F1 hook fallback, F2 NEWS history"
+      }
+    },
+    {
+      "at": "2026-11-04T19:33:11.897Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T19:33:16.052Z",
+      "by": "MG",
+      "event": "self-verified",
+      "data": {
+        "round": 1,
+        "note": "orchestrator scoped self-check of minor fix round (REV-20): hook CLI fallback + NEWS history restore"
+      }
+    },
+    {
+      "at": "2026-11-04T19:33:19.087Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:b3be0a31f9e13857",
+          "files-over",
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T19:33:19.087Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "baseline-shrunk",
+        "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c",
+        "class": "critical",
+        "attempt": 1
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "a85b76d43d9603b341c401f465604f5219275749",
+  "branch": "task/T-MG-41-atalks-cli-name"
 }

@@ -1,0 +1,30 @@
+{
+  "schema": 2,
+  "id": "T-MG-42",
+  "kind": "task",
+  "title": "UI SSE catch-up: keep REST reactions and newer revisions of held messages (B-MG-118, B-MG-119)",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "cancelled",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T19:17:39.075Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T19:17:43.215Z",
+      "by": "MG",
+      "event": "cancelled",
+      "data": {
+        "reason": "Duplicate: recreated by findings take so the findings are linked"
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

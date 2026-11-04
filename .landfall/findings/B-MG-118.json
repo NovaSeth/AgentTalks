@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-118",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-18",
   "round": 4,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "Item 2; F4 ADDRESSED: both delayed-response repros pass; mutations fail. New in-memory ui-t18-catchup repro: start with message/cursor 1; server has 1..32 and a reaction on 2; deliver SSE message(2) during the newest-30 refresh, then finish catch-up. Output: reactions[2]=undefined; base retains it. SSE messages carry no reactions, so excluding held IDs discards needed REST reaction state. Merge reactions independently with protection against newer reaction updates; add this regression.",
   "filedAt": "2026-11-04T12:03:00.771Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-43",
   "closedAt": null,
   "closedBy": null,
   "reason": null
