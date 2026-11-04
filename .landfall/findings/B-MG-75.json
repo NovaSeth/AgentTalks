@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-75",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M8",
+  "severity": "minor",
+  "path": "src/http/ui/js/markdown.js",
+  "line": 30,
+  "rule": null,
+  "text": "No #channel references: '#bugs' in a message stays plain text and typing '#bu' offers no autocomplete; no emoji picker or formatting toolbar in the composer; reactions limited to 16 fixed emoji (widok-czat.js:17). Slack users expect #channel links, an emoji picker and a formatting bar. Fix: link #slug to openConversation, add '#' autocomplete, a searchable emoji picker.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

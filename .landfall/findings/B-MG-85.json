@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-85",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M18",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-admin.js",
+  "line": 84,
+  "rule": null,
+  "text": "Admin panel: a token for an existing account cannot be issued (panel says 'still needs server access') - audit item 20 still holds; account rows are unlabeled buttons; otherwise the disable/revoke flows use named confirm modals and are clear.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

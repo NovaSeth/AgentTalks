@@ -41,3 +41,16 @@ Status: DONE_WITH_CONCERNS
 ## Open issues / deviations from the brief
 - Per-handle cap (20) lets an attacker lock a victim's handle for 15 min (follows from per-handle counting in the brief).
 - RED and GREEN not in separate commits; tests landed in d6c05b8; red output in scratchpad t-mg-6-red.txt.
+
+## Fix round 1 (findings-r1.md)
+<!-- Stored by the orchestrator: the implementer's harness refused the write; content is the implementer's reply. -->
+Status: DONE_WITH_CONCERNS
+
+1 (blocking): loginKeys resolves the handle with getActorByHandle and keys the per-handle buckets on the actor id; unresolved handles use normalizeLoginHandle (strip ^@+, trim, lowercase). Tests: "an '@' prefix does not open fresh limiter buckets"; "the michal, @michal, @@michal, @@@michal sequence is limited from the 9th". Commit 41df517.
+2: resolved handle logs actorId; otherwise handleLen + handleHash (HMAC with the instance secret, 8 hex). Test: 'Sup3r-Secret-Pass!' appears in no security line. 41df517.
+3: handle-wide cap (20) checked only after a failed verification (then 429); pre-verification caps IP+handle (8) and IP (20). Test: 20 failures from 3 IPs then the right password from a 4th IP -> 200; 9th wrong guess from one IP -> 429. 41df517.
+4: cookie cleared first; failed CSRF -> 403 English message, no epoch bump; success -> {"ok":true,"signedOutEverywhere":true}; per-actor epoch bump kept. Test: bad-CSRF logout clears the cookie, keeps the epoch, answers 403. 41df517.
+5: invite_minted {inviteId, by}, actor_disabled / actor_enabled {actorId, by} in src/http/routes/admin.ts; rate_limited for enroll (scope enroll) and webauthn (scope webauthn). src/core/actors.ts untouched. Test asserts the lines and that the invite code is not logged. 5e6f2f7, 41df517.
+
+Gate: tests 341 pass / 0 fail; typecheck clean; secrets clean for 0561f86..HEAD.
+Concerns: getActorByHandle lives in src/core/actors.ts (PR #1), so the unresolved-handle normalization is a local copy of the same regex. Item 3 weakens the handle-wide cap as the review asked: a guesser rotating IPs is limited by the per-IP and IP+handle caps and by 429 after 20 handle-wide failures.

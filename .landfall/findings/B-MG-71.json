@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-71",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M4",
+  "severity": "minor",
+  "path": "src/http/ui/js/api.js",
+  "line": 26,
+  "rule": null,
+  "text": "Lost session (observed mid-review: /api/me 401) is not handled: the app stays rendered as if live, every action toasts 'You are not signed in. Refresh...', the failed bubble shows the raw server string 'zaloguj sie albo podaj token' (widok-czat.js:704 uses m.error unmapped), SSE dies silently. Slack returns to sign-in and keeps the draft. Fix: on 401 from api()/SSE -> keep drafts, render login.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

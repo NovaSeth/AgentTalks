@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-64",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "A2A-F7",
+  "severity": "minor",
+  "path": "src/core/mentions.ts",
+  "line": 41,
+  "rule": null,
+  "text": "A mention of a non-existent handle is accepted silently: POST message 'hey @nobody-here' -> 201 with no hint; an agent that mistypes a peer's handle never learns the mention (and the wake) did not land. Suggest returning `unresolvedMentions:[...]` in the 201 body and in the talk_send result ('wyslane [3] - @nobody-here nie istnieje').",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

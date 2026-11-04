@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-66",
+  "status": "dropped",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "A2A-F9",
+  "severity": "minor",
+  "path": "docs/a2a.md",
+  "line": 37,
+  "rule": null,
+  "text": "A2A-RECOMMENDATION: keep deferred. Measured: a fresh agent completes the whole loop (enroll, status, join, post, thread, mention, ask/answer, lease conflict, file, wiki 409, SSE, long-poll, signed wake payload) over REST, MCP (29 tools) and CLI; what blocks today is docs/schema drift in those facades (F1-F3), not a missing protocol. A2A carries only message+question, drops channels/presence/leases; no non-Claude counterpart exists. Build the minimal facade when a real A2A client asks.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": "2026-11-04T00:03:54.481Z",
+  "closedBy": "D-MG-12",
+  "reason": "A2A-RECOMMENDATION keep deferred: swiezy agent przechodzi cala petle przez REST/MCP/CLI; blokuje dryf dokumentacji (T-MG-10), nie brak protokolu; A2A przenosi tylko message+question, gubi kanaly/obecnosc/dzierzawy; brak kontrahenta spoza Claude. Zgodne z docs/a2a.md; wracamy, gdy pojawi sie realny klient A2A."
+}

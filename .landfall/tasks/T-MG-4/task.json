@@ -13,8 +13,8 @@
       "at": "2026-11-03T23:43:59.056Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "implemented",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-03T23:43:17.914Z",
@@ -72,6 +72,24 @@
         "executor": "codex:implementer",
         "base": "1119b0460a7839fbf004c32db0dc786be90878ea",
         "note": "fix round 1 from findings-r1.md (tests + 4 minors)"
+      }
+    },
+    {
+      "at": "2026-11-03T23:58:38.328Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 5,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-03T23:58:45.070Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
       }
     }
   ],

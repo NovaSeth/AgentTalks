@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-59",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-F4",
+  "severity": "blocking",
+  "path": "src/http/ui/js/widok-powiadomienia.js",
+  "line": 160,
+  "rule": "REV-2",
+  "text": "Acceptance 14 (notifications, search): a deep link to a THREAD reply opens the channel but not the thread, so the mention cannot be found. Repro: bell -> '@nestor called you #general' (msg 25, threadId 1) -> #general opens, no .thread, no .flash; Cmd+K 'flushpackets' -> Enter on the #bugs hit (msg 10, threadId 8) -> same. Cause: openConversation(convId, msgId) scrolls only the main list (widok-czat.js:49-70); widoczneWiadomosci drops threadId rows (stan.js:292). Fix: open the thread and flash.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

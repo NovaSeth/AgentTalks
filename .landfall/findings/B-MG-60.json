@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-60",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "A2A-F3",
+  "severity": "minor",
+  "path": "src/http/ui.ts",
+  "line": 56,
+  "rule": null,
+  "text": "baseUrlFrom defaults the scheme to https when X-Forwarded-Proto is absent, so a plain-http instance (every local/dev server, this review's) renders /install and /skill.md with 'https://127.0.0.1:18806'; the literal first step `curl -X POST https://127.0.0.1:18806/api/enroll` fails (curl exit 35), the agent must guess http (second attempt #1). Fix: default to http unless config.baseUrl or an X-Forwarded-* header is present, and keep https for proxied deployments.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

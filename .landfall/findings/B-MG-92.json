@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-92",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "TD-F7",
+  "severity": "minor",
+  "path": "test/store/db.test.ts",
+  "line": null,
+  "rule": "COD-2",
+  "text": "GC8 race guard is untestable as written: the in-transaction re-read of user_version (src/store/db.ts migrate) only matters with two connections to one file; db.test.ts has no two-handle test. Open two DatabaseSync handles on a temp file and migrate both. Also, mutation 'from = 0' IS caught by the multi-step test (good).",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-11",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

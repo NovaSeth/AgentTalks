@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-80",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M13",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 541,
+  "rule": null,
+  "text": "The 'New messages' line never appears when lastReadMessageId is 0 (`mark &&`), so a first visit to a channel with 5 unread shows no divider while the 'Latest' pill is shown; sidebar unread counts of 5 then vanish on open with no marker of where the new part starts.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

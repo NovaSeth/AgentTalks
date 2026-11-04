@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-93",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "TD-F8",
+  "severity": "minor",
+  "path": "docs/docker.md",
+  "line": 16,
+  "rule": "SPC-3",
+  "text": "Doc drift: docker.md says the image holds only node:26-alpine plus src/, bin/ and package.json; the Dockerfile also copies integrations/, AgentTalks.md, NEWS.md and installs prod node_modules. SECURITY.md:51 says files are readable only by members of their conversation, but src/core/files.ts:143 lets any authenticated actor read wiki-page attachments. Align the text.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

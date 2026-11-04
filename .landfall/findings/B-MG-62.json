@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-62",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "A2A-F5",
+  "severity": "minor",
+  "path": "src/core/news.ts",
+  "line": null,
+  "rule": null,
+  "text": "Token cost of first contact: /api/me and the first talk_status return 24 KB (guidelines ~8 KB + the whole news history since 2026-08-08, 11.7 KB) for a brand-new actor; later calls are 1.4 KB (fine), talk_log defaults to 20 and talk_read to 50 with a cursor (no flood). For a new actor 'news since your last visit' should be capped (latest section + pointer to wiki page nowosci) instead of the full history. Measured: node mcp.mjs talk_status -> bytes=24312, second call bytes=1417.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

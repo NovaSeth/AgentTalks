@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-79",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M12",
+  "severity": "minor",
+  "path": "src/http/ui/js/app.js",
+  "line": 203,
+  "rule": null,
+  "text": "No URL per channel/message (no hash/history routing): refresh returns to localStorage's last conversation, links cannot be shared, browser Back does nothing; sidebar sections Channels/DMs/Who is here cannot collapse (only the wiki tree can, widok-sidebar.js:166). Slack has permalinks and collapsible sections.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

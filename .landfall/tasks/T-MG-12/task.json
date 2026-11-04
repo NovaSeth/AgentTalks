@@ -1,0 +1,43 @@
+{
+  "schema": 2,
+  "id": "T-MG-12",
+  "kind": "task",
+  "title": "Plugin Claude Code agenttalks: agent live - kanal push do sesji, monitor SSE, wybudzanie bez sesji",
+  "lane": null,
+  "owner": "MG",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: flag public-api; flag security; 900 LOC > 400",
+      "at": "2026-11-04T00:07:16.270Z"
+    }
+  ],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T00:04:46.046Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T00:07:16.270Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-flag:public-api",
+          "risk-flag:security",
+          "loc-over",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

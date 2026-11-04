@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-91",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "TD-F6",
+  "severity": "minor",
+  "path": "test/http/api.test.ts",
+  "line": 130,
+  "rule": "COD-2",
+  "text": "Cookie attributes are untested except HttpOnly: deleting 'SameSite=Lax' (src/http/auth.ts:50) or the Secure push for trustProxy/https (auth.ts:53) leaves all 74 api tests green. docker.md and SECURITY rely on Secure behind the proxy. Assert Set-Cookie for plain, x-forwarded-proto=https and trustProxy.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-11",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

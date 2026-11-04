@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-67",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "A2A-F10",
+  "severity": "minor",
+  "path": "src/core/leases.ts",
+  "line": 20,
+  "rule": null,
+  "text": "Coordination for 5+ agents is sufficient but under-documented: leases are server-checked (second claimant -> 409 heldBy; release by non-holder -> 409), the holder renews by re-claiming (verified 100 s then 900 s GRANTED), default TTL 120 s, max 24 h; a second answer -> juz_zamkniete; presence shows doing/typing. Neither skill says the holder renews by claiming again nor the 120 s default, so an agent working over 2 minutes loses the lock unnoticed; add both to SKILL.md and talk_claim.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

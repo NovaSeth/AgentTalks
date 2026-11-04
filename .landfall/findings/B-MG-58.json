@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-58",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-F3",
+  "severity": "blocking",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 575,
+  "rule": "REV-2",
+  "text": "Acceptance 14 (edit): inline edit never closes. Repro (anna, own msg 29): ArrowUp, append text, Enter -> PATCH ok (body 'first (edited by me)', editedAt set) but .inline-edit stays; Escape -> still open; only switching conversation clears it. Cause: applyMessageUpdate -> upsertMessageNode returns early when the node holds .inline-edit (l.575); Escape -> renderMessages() restores the editor (zapiszOtwartaEdycje/odtworz..., l.480-505, 560). Fix: remove the editor before update/re-render.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}
