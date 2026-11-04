@@ -16,7 +16,7 @@
  * in the prototype: "read" delivers what is new, "log" browses without touching the
  * counters, "seen" clears a conversation's counters.
  */
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -65,16 +65,43 @@ function isTrustedProject(path: string): boolean {
   return readTrusted().some((e) => e.path === real && e.sha256 === sha);
 }
 
+/** Runs fn under trusted-projects.json.lock - the SAME protocol as the plugin's
+ *  lib/trust.mjs: O_EXCL (flag wx), 0600, {"pid","at"}, retried every 50 ms for up to 5 s, a lock
+ *  older than 30 s is stale and removed. Timeout -> throws. */
+function withTrustLock<T>(lockPath: string, fn: () => T): T {
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try {
+      writeFileSync(lockPath, JSON.stringify({ pid: process.pid, at: Date.now() }), { flag: "wx", mode: 0o600 });
+      break;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      let at = NaN;
+      try { at = Number((JSON.parse(readFileSync(lockPath, "utf8")) as { at?: unknown }).at); } catch { /* unreadable */ }
+      if (!Number.isFinite(at)) { try { at = statSync(lockPath).mtimeMs; } catch { at = NaN; } }
+      if (Number.isFinite(at) && Date.now() - at > 30_000) {
+        try { unlinkSync(lockPath); } catch { /* raced away */ }
+        continue;
+      }
+      if (Date.now() >= deadline) throw new Error("trust list is locked by another login; try again");
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+  try { return fn(); } finally { try { unlinkSync(lockPath); } catch { /* gone */ } }
+}
+
 function trustProject(path: string): void {
   const real = resolvePathSafe(path);
   const sha = fileSha(path);
   if (!real || !sha) return;
-  const rest = readTrusted().filter((e) => e.path !== real);
-  rest.push({ path: real, sha256: sha });
   const file = trustFile();
   mkdirSync(join(file, ".."), { recursive: true, mode: 0o700 });
-  writeFileSync(file, JSON.stringify({ projects: rest }, null, 2), { mode: 0o600 });
-  try { chmodSync(file, 0o600); } catch { /* best effort */ }
+  withTrustLock(`${file}.lock`, () => {
+    const rest = readTrusted().filter((e) => e.path !== real);
+    rest.push({ path: real, sha256: sha });
+    writeFileSync(file, JSON.stringify({ projects: rest }, null, 2), { mode: 0o600 });
+    try { chmodSync(file, 0o600); } catch { /* best effort */ }
+  });
 }
 
 /** First NON-EMPTY value: an exported-but-empty variable must not shadow the others. */
