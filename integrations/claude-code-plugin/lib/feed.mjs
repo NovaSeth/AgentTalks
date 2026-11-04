@@ -421,21 +421,21 @@ export function createFeed(opts) {
           if (!isDefinitive(err)) throw err;
         }
       }
-      if (opts.mentionCursor) {
-        // A resumed feed (the monitor after a restart): mentions after the saved cursor are
-        // read first (and retried like any event), so a call into a non-member conversation
-        // during the gap is not lost.
+      if (opts.mentionCursor !== undefined && opts.mentionCursor !== null) {
+        // A resumed feed (0 included: no mention existed when the last run started):
+        // mentions after the saved cursor are read first (and retried like any event), so a
+        // call into a non-member conversation during the gap is not lost.
         enqueue({ type: "notification", id: null, data: {} });
       } else {
         // A fresh feed starts the mention cursor at "now": older mentions are the
-        // SessionStart summary's job.
+        // SessionStart summary's job. Nothing is marked seen here: a message is marked seen
+        // only once decided, or the stream's copy of it would be dropped unseen.
         try {
           const r = await api.get("/api/mentions?limit=1");
           for (const m of r.messages ?? []) {
-            mentionCursor = Math.max(mentionCursor, m.id);
-            pullCursor = mentionCursor;
-            markSeen(m.id);
+            if (typeof m?.id === "number") mentionCursor = Math.max(mentionCursor, m.id);
           }
+          pullCursor = mentionCursor;
         } catch { /* starts from 0: at worst old mentions are pushed once */ }
       }
       if (stopped) return;

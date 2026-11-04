@@ -91,3 +91,13 @@ test("fresh feed: the stream opens with the server's newest message id as its cu
   assert.deepEqual(delivered, [71]);
   assert.equal(feed.lastEventId, 71);
 });
+
+test("feed restart with mentionCursor 0 (no mention existed when the last run started): a member mention after the event cursor is replayed and delivered, not marked seen as 'old' (property seed 1)", async (t) => {
+  const fake = await fakeAt();
+  t.after(() => fake.close());
+  gapFake(fake);
+  const { feed, delivered } = await run(t, fake, { lastEventId: 3, mentionCursor: 0 });
+  await waitFor(() => delivered.length >= 1, 3000).catch(() => assert.fail(`51 was lost: mentionCursor=${feed.mentionCursor}`));
+  await new Promise((r) => setTimeout(r, 200));
+  assert.deepEqual(delivered, [51]);
+});
