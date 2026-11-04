@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-77",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M10",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 1338,
+  "rule": null,
+  "text": "Mention autocomplete is async (await ensureActors): a stale response re-opened the popover after a pick, and the next Shift+Enter was consumed as a pick (mentionKeydown l.1415 ignores shiftKey), replacing 'Hello @all and #bu' with 'Hello @motowolt '. Fix: sequence counter to drop stale results; ignore Enter with Shift in the popover.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

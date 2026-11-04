@@ -4,7 +4,9 @@
 # Powod istnienia tego pliku: serwer docelowy ma juz usluge na Node 18. Kontener
 # czyni wersje Node wlasnoscia obrazu, a nie maszyny, wiec nic nie koliduje
 # i nic sie nie psuje przy aktualizacji systemu.
-FROM node:26-alpine
+# Pinned by digest (node:26-alpine as of 2026-10-28): a moving tag means a rebuild can
+# silently pull a different base. Bump the digest deliberately, together with a CI run.
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94
 
 WORKDIR /app
 
@@ -25,7 +27,9 @@ ENV AGENTTALKS_DATA=/data \
 
 # Katalog danych powstaje przed przejsciem na uzytkownika `node`, inaczej proces
 # bez uprawnien nie zalozy bazy przy pierwszym starcie.
-RUN mkdir -p /data && chown -R node:node /data /app
+# Only /data belongs to the runtime user: the application code in /app stays owned by
+# root, so a compromised process cannot rewrite the code it runs.
+RUN mkdir -p /data && chown -R node:node /data
 VOLUME /data
 EXPOSE 8080
 

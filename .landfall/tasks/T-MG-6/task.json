@@ -13,8 +13,8 @@
       "at": "2026-11-03T23:49:26.815Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "fix-round",
+  "round": 2,
   "events": [
     {
       "at": "2026-11-03T23:49:15.112Z",
@@ -52,6 +52,93 @@
       "data": {
         "executor": "claude:implementer",
         "base": "0561f866f0737576cc087c30a3cdaff79a1ed8b3"
+      }
+    },
+    {
+      "at": "2026-11-03T23:56:52.260Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T00:00:54.040Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T00:01:24.197Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "0561f866f0737576cc087c30a3cdaff79a1ed8b3",
+        "note": "fix round 1 (findings-r1.md)"
+      }
+    },
+    {
+      "at": "2026-11-04T00:03:28.855Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:03:29.040Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 5,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T00:09:42.424Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:10:05.217Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 0,
+        "open": 3,
+        "note": "dispatched round 2 (D-MG-14 device cookie)"
+      }
+    },
+    {
+      "at": "2026-11-04T00:12:49.949Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T00:12:50.148Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 3,
+        "open": 0
       }
     }
   ],

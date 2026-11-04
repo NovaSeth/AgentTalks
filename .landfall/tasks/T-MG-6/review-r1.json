@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:security-reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/routes/auth.ts",
+      "line": 126,
+      "rule": "OWA-7",
+      "text": "High: B-MG-44 NOT ADDRESSED. loginKeys() normalizes with trim+lowercase only; getActorByHandle also strips leading '@'. '@michal', '@@michal' hit the same account but fresh buckets. Repro: 8 wrong guesses each for michal,@michal,@@michal,@@@michal -> 20x401 then 429 (only the per-IP cap stops it); after 8 on 'michal' (9th=429), '@michal' with the correct password -> 200. Fix: reuse the exact getActorByHandle normalization (strip ^@+) in loginKeys."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "path": "src/http/routes/auth.ts",
+      "line": 227,
+      "rule": "SEC-5",
+      "text": "Medium: login_failed (and rate_limited, line 152) log the raw handle field. A password typed into the handle field is written to the log: repro login handle 'Sup3r-Secret-Pass!' -> console.warn 'security: {\"event\":\"login_failed\",\"handle\":\"sup3r-secret-pass!\",...}'. Violates 'never log a secret'. Fix: log only when the handle resolves to an existing actor (actor id), else a short hash/length or a truncated, charset-checked handle."
+    },
+    {
+      "id": "F3",
+      "severity": "minor",
+      "path": "src/http/routes/auth.ts",
+      "line": 150,
+      "rule": "OWA-6",
+      "text": "Medium: lockout by anyone. The check runs before password verification and the per-handle key (20 failures) blocks all IPs. Repro: 12 wrong logins on 'michal' -> 401x8 then 429x4, then the CORRECT password from the same server -> 429. 20 requests per 15 min keep the admin out indefinitely. The author disclosed it and the brief asked for per-handle counting, so minor; consider exempting a proven good IP+handle pair or a higher handle cap with a delay instead of a hard block."
+    },
+    {
+      "id": "F4",
+      "severity": "minor",
+      "path": "src/http/routes/auth.ts",
+      "line": 247,
+      "rule": "OWA-7",
+      "text": "Medium: B-MG-45 is addressed (test: pre-logout cookie -> 401) but logout bumps the PER-ACTOR session_epoch: signing out in one browser kills the human's every other device, SSE and long-polls,. Allowed by the brief (epoch is per actor); owner should be told. Also assertCsrf throws before clearCookie: a missing csrf makes the UI (widok-login.js:49 swallows errors) look logged out while the cookie stays valid. Fix: clear cookie first or surface the 403."
+    },
+    {
+      "id": "F5",
+      "severity": "minor",
+      "path": "src/core/tokens.ts",
+      "line": 36,
+      "rule": "OWA-9",
+      "text": "Medium: B-MG-51 only partly done. Not logged: invite minted, actor disabled/enabled (author lists as a gap); rate_limited is logged for login only, not enroll/webauthn limiters. Items 1-5,7 ADDRESSED: 13/13 tests in test/fixes/t-mg-6-auth.test.ts pass; long-poll re-auth answers 401 for revoked token, disabled actor, password change; wake skips disabled_at in the send read; exp+nonce signed; NAT64/6to4 blocked; passkey 5->0/5->5 rejected; requireHumanAdmin on POST /api/actors."
+    }
+  ]
+}

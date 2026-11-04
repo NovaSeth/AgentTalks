@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-76",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M9",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 1439,
+  "rule": null,
+  "text": "Thread composer lacks @mention autocomplete, attachments and 'also send to channel'; only the main composer has them. Fix: reuse renderComposer for the thread with threadId.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

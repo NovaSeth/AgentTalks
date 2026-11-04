@@ -26,6 +26,18 @@ REPO_DIR=${AGENTTALKS_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 ENV_PLIK=${AGENTTALKS_ENV_FILE:-/etc/agenttalks/instancja.env}
 z_env() { grep -E "^$1=" "$ENV_PLIK" 2>/dev/null | cut -d= -f2- || true; }
 
+# The gate request body {"password": "..."} built by a JSON encoder, not by printf:
+# a password containing a double quote or a backslash used to produce invalid JSON,
+# and the post-deploy check then failed with a misleading STOP. The password is read
+# from the file by python itself, so it never appears on a command line (ps).
+password_json() {
+  # Fail loudly: under `set -euo pipefail` a failing helper inside $( ... | curl ) stops the
+  # script with THIS message, instead of curl sending an empty body and the check below
+  # reporting a misleading "the gate rejects the right password".
+  command -v python3 >/dev/null 2>&1 || { echo "STOP: python3 is required to build the gate request body (password_json)." >&2; return 1; }
+  python3 -c 'import json, sys; print(json.dumps({"password": open(sys.argv[1], encoding="utf-8").read().rstrip("\n")}))' "$1"
+}
+
 WOLUMEN_OCZEKIWANY=$(z_env AGENTTALKS_DATA_VOLUME); WOLUMEN_OCZEKIWANY=${WOLUMEN_OCZEKIWANY:-agenttalks_data}
 KONTENER=$(z_env AGENTTALKS_CONTAINER); KONTENER=${KONTENER:-agenttalks}
 
@@ -123,7 +135,7 @@ if [[ -r $haslo_host ]]; then
   # polecen. Argumenty procesu (w tym `curl ... --data "haslo-w-tekscie"`) sa
   # widoczne w `ps aux` / `/proc/<pid>/cmdline` dla kazdego na maszynie przez
   # caly czas trwania zadania - STDIN nie zostawia takiego sladu.
-  wpuszcza=$(printf '{"password":"%s"}' "$(cat "$haslo_host")" | curl -s -o /dev/null \
+  wpuszcza=$(password_json "$haslo_host" | curl -s -o /dev/null \
     -w '%{http_code}' -X POST "http://127.0.0.1:${PORT}/api/site-gate" \
     -H 'content-type: application/json' --data @-)
   echo "bramka wpuszcza wlasciwe haslo (oczekiwane 200): $wpuszcza"
@@ -143,7 +155,7 @@ fi
 # modulu - czyli odpowiada 200 na pytanie, ktorego nikt nie zadal.
 naglowek_bramki=()
 if [[ -r $haslo_host ]]; then
-  ciasteczko=$(printf '{"password":"%s"}' "$(cat "$haslo_host")" | curl -s -i -X POST \
+  ciasteczko=$(password_json "$haslo_host" | curl -s -i -X POST \
     "http://127.0.0.1:${PORT}/api/site-gate" -H 'content-type: application/json' --data @- \
     | tr -d '\r' | grep -i '^set-cookie:' | sed 's/set-cookie: *//; s/;.*//')
   [[ -n $ciasteczko ]] && naglowek_bramki=(-H "cookie: ${ciasteczko}")

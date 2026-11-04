@@ -1,0 +1,1705 @@
+{
+  "schema": 1,
+  "collector": "node-test",
+  "head": "694017705f33ab046ca3ec693be884edb1df8141",
+  "collectedAt": "2026-11-04T00:08:17.140Z",
+  "tests": [
+    {
+      "id": "[\"\",\"/api/me pokazuje, kto pisze - bez pytania o liste obecnych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"AGENTTALKS_DATA wskazuje katalog danych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"DM budzi nieobecnego adresata podpisanym ladunkiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"FTS5 jest dostepny i synchronizuje sie triggerem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"GET /api/guidelines zwraca tekst zasad na zadanie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"HEAD na trasie GET odpowiada jak GET, bez ciala (monitoring)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad protokolu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"MCP bez tokenu daje 401, z tokenem odpowiada na initialize\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"MCP: zdania czytane maszynowo maja staly ksztalt\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"NEWS.md ląduje na wiki jako strona z historią, ale nie dokłada rewizji bez zmian\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"SSE bez kursora NIE dosyla historii - tylko to, co nadejdzie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"SSE dostarcza wiadomosc do czlonka konwersacji\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"SSE nie dostarcza z konwersacji, ktorej nie jestem czlonkiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"SSE wznawia sie od kursora i dosyla zaleglosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"SSE wznawia z Last-Event-ID i dosyla backlog wiekszy niz jedna strona\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"UI nie sklada atrybutow zdarzen z danych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"X-File-Name ze zlym %-kodowaniem daje 400 z instrukcja, nie 500\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a message immediately restores an actor silent for 14 days without fetching\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a message immediately restores an actor silent for 90 days without fetching\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"actorLiveness: zywa sesja -> online, zakonczona -> nieobecny\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"adres e-mail nie jest wzmianka\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"adresat znany tylko z katalogu obecnosci daje sie rozwiazac\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"agent wysyla wiadomosc, a drugi ja czyta\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"aktor bez hasla nie zaloguje sie pustym haslem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"aktor i token przechodza przez CLI\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"aktor z zywym SSE nie jest budzony - push juz dotarl\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"archiveConversation: znika z list, nie przyjmuje wiadomosci, dm nietykalny\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"ask i answer odtwarzaja pytanie razem z watkiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"ask publikuje zdarzenie dopiero, gdy pytanie JUZ istnieje (drugie polaczenie)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk bez tokenu konczy sie kodem bledu, a nie wyjatkiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk mowi do zywego serwera: whoami, say, read\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk przyjmuje ATALKS_* obok AGENTTALKS_*, kanoniczne wygrywa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk wiki write --force dziala jako FLAGA, a nie jako tresc strony\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"bez uwierzytelnienia API zwraca 401, nie 500\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"bind na petli zwrotnej zawsze przechodzi\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"blad domenowy mapuje sie na kod HTTP, nie na 500\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"bramka skladni POTRAFI zawiesc - probka celowo zepsuta\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"bramka wylaczona (brak hasla) nie blokuje niczego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"bramka: strona zamknieta bez ciasteczka, wlasciwe haslo wpuszcza, zle nie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"burn: plik znika po pobraniu przez nie-autora, autor nie spala\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"clientKey: przy proxy bierze PRAWY czlon XFF (nie spoofowalny lewy)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"clientMsgId jest per aktor - dwoch aktorow moze uzyc tego samego id\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"clientMsgId przez API: powtorzony POST zwraca to samo id, bez drugiej wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"clientMsgId: retry nie dubluje wiadomosci ani zdarzenia\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"clone robi spojna kopie z wlasnym sekretem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"cookie sesji jest ODWOLYWALNE: zmiana hasla uniewaznia wydane wczesniej\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"czlowiek i dwoch agentow rozmawiaja przez zywy serwer\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"czlowiek loguje sie i dostaje cookie oraz token CSRF\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktora\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"digest i search nie wyciekaja tresci z cudzego kanalu prywatnego (ACL)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"digest streszcza od kotwicy odczytu i wskazuje wzmianki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"digest zwraca null, gdy nic sie nie dzialo\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"displayName domyslnie rowna sie handle i daje sie zmienic bez ruszania handle\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"dlawienie: druga wiadomosc w oknie nie strzela drugi raz\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"dluga tresc przechodzi pelny obieg bez obciecia (zgloszenie [71])\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"doing widac w obecnosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"drugi przebieg nie dubluje reakcji, pytan ani znacznikow\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"dwie ROZNE etykiety zderzone w jeden handle nie sa zlewane w jednego aktora\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"dwie sesje tego samego aktora to jeden rozmowca, bez sufiksow\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"dzierzawa przez API: 200 przy zajeciu, 409 z wlascicielem przy odmowie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"dzierzawa wygasa po TTL i daje sie przejac\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"dzierzawa: jeden bierze, drugi dostaje odmowe z danymi wlasciciela\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"edycja i kasowanie cudzej wiadomosci daje 403\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"edycja przelicza wzmianki od nowa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"edycja wiadomosci aktualizuje indeks wyszukiwania\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"edytowac i kasowac moze tylko autor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"efemeryda znika z obecnosci szybciej niz sesja trwala\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"enroll: zaproszenie zaklada aktora, token dziala; zly kod = 403\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"ensureDirect dla dwoch daje dm i jest idempotentne niezaleznie od kolejnosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"ensureDirect dla trzech daje grupe i nie miesza sie z dm-em pary\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"ensureDirect odrzuca liste krotsza niz dwa i duplikaty\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"firstConnectGuidelines: raz zwraca zasady, potem null\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"flaga logiczna nie polyka nastepnego slowa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"formy mnogie pokrywaja kategorie, o ktore pyta polski Intl.PluralRules\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"getActorByHandle nie rzuca na smieciach, tylko zwraca null\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"handle jest normalizowany i walidowany\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"haslo bramki z pliku: wartosc z pliku wygrywa, pusty/brakujacy plik nie wpuszcza cicho\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"haslo weryfikuje sie przez scrypt i nie jest przechowywane jawnie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"health dziala bez uwierzytelnienia\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"health robi realna sonde DB (liczby, nie tylko ok)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"healthcheck zwraca 1, gdy serwer nie odpowiada\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"heartbeat odswieza, sesja przestaje byc stale\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"heartbeat sesji NIE budzi wszystkich - rozgloszenie tylko przy realnej zmianie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"import jest idempotentny - drugi przebieg nie dubluje\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"import odtwarza kanaly, aktorow i kolejnosc wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"import przyrostowy: reakcja z drugiego pliku trafia w wiadomosc z pierwszego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"inboxAfter zwraca cudze wiadomosci z moich konwersacji, bez wlasnych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"init nie nadpisuje sekretu istniejacej instancji\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"init tworzy katalog danych, baze i sekret o dlugosci 64 znakow\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"isBlockedIp: prywatne blokowane, publiczne przepuszczane, loopback za zgoda\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"isWakeable: rozroznia zarejestrowany webhook od jego braku\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"join i leave sa pomijane jako szum\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kanal prywatny jest niewidoczny dla obcego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kanal publiczny jest czytelny bez czlonkostwa, pisanie dolacza\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazda flaga CLI z dokumentacji istnieje w parserze\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazda flaga uzywana w kodzie jest wymieniona w KNOWN_FLAGS\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazde pole, ktore skill kaze wyslac, jest czytane przez trase\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazde zdanie interfejsu ma tlumaczenie, a kazde tlumaczenie jest uzywane\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazdy import miedzy modulami UI wskazuje na plik, ktory serwer odda\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazdy modul UI parsuje sie jako modul ES\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazdy modul UI wykonuje sie przy ladowaniu, nie tylko parsuje\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazdy modul UI z katalogu jest serwowany pod /js/\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"kind=ask przemycone przez POST /messages nie tworzy pytania-sieroty\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"klient nie moze podszyc sie pod innego aktora polem w ciele\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"klucze obce sa egzekwowane\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"komenda init jest idempotentna\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"komenda init zaklada kanal general i aktora systemowego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"komendy na nieistniejacej instancji mowia, co zrobic\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"komentarze w kodzie sa po angielsku (dwa rozlaczne kryteria)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"licznik nieprzeczytanych zeruje sie po oznaczeniu widoku\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"liczniki nie wyciekaja z konwersacji, ktorych nie jestem czlonkiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"limit prob logowania: 429 po serii, a udane wejscie zwalnia licznik\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors does not expose the timestamp of a deleted public message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors does not expose the timestamp of a dm message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors does not expose the timestamp of a group message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors does not expose the timestamp of a private message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors looks up activity by actor without scanning message or session history\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors sortuje po handle\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses account creation when an actor has no activity\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses the newest created timestamp for lastActiveAt\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses the newest message timestamp for lastActiveAt\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses the newest session timestamp for lastActiveAt\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses the newest token timestamp for lastActiveAt\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listForActor pokazuje DM-y, ktorych jestem uczestnikiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listForActor zwraca kanaly publiczne i wlasne prywatne, bez cudzych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listMessages stronicuje po id, nie po czasie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"lista dzierzaw sprzata wygasle\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"lista konwersacji rozroznia kanal moj od kanalu, ktory tylko widze\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"long-poll bez uwierzytelnienia daje 401\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"long-poll budzi sie na wiadomosc NATYCHMIAST, nie przez timeout\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"long-poll konczy sie pusta lista po uplywie wait\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"long-poll nie zwraca wlasnych wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"long-poll wraca natychmiast, gdy sa zalegle wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"markRead bez argumentu zeruje do najnowszej\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"markRead nie cofa sie do starszej wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"migracja jest idempotentna: drugie otwarcie nie robi nic i nie psuje danych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"migracja wielokrokowa: stara baza dochodzi do biezacej wersji, z danymi\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"moduly UI: kazdy import ma odpowiadajacy eksport\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej koperty\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"mutacja z cookie bez naglowka CSRF jest odrzucona\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"na zamkniete pytanie nie da sie odpowiedziec drugi raz\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nazwa pliku nie moze byc sciezka\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nazwa zasobu ze spacja jest odrzucona\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"news: aktor dostaje nowosci dokladnie raz na wersje tresci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nie da sie czytac cudzego kanalu prywatnego przez API\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nie da sie dolaczyc do kanalu prywatnego przez join\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nie da sie przymusowo dopisac kogos do kanalu publicznego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nie da sie przypiac wiadomosci z kanalu bez dostepu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nie da sie utworzyc dwoch aktorow o tym samym handle\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nie da sie zalozyc dwoch kanalow o tej samej nazwie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nie da sie zareagowac na wiadomosc z kanalu bez dostepu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nieistniejaca konwersacja i zabroniona daja ten sam blad\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nierozwiazywalny adresat trafia do raportu, nie ginie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"nieznana sciezka daje 404 z kodem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"oba kryteria POTRAFIA zaswiecic - probka negatywna dla kazdego z osobna\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"obcy agent nie widzi cudzej rozmowy grupowej\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"obecnosc pokazuje zarejestrowana sesje z sygnalem busy\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"odpowiedz laduje w watku pytania\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"odpowiedz na odpowiedz splaszcza sie do korzenia watku\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"odpowiedz z wiadomosciami niesie mape aktorow z kind (egzekwowanie human)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"odsubskrybowanie przestaje dostarczac i zwalnia licznik\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"odwolane zaproszenie nie dziala\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"odwolany token przestaje dzialac, pozostale zyja dalej\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"onCommitted w transakcji odklada wywolanie do commita; blad = brak wywolania\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"online presence wins over old activity\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"openDb jest idempotentne na TYM SAMYM pliku\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"openDb tworzy schemat i ustawia wersje\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"otwarte pytania nie wyciekaja z kanalu prywatnego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"otwarte pytanie zamyka odpowiedz od kogokolwiek\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"panel admina: czlowiek-admin wchodzi, agent (nawet adminowski) nie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"panel admina: wylaczenie konta gasi token, wlaczenie przywraca\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"panel admina: zaproszenie z UI dziala w enrollu, odwolane przestaje\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"parseArgs bez listy nadal parsuje znane flagi\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"parseArgs rozdziela pozycyjne i flagi, w tym flagi bez wartosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"parseArgs terminator -- przenosi reszte do positional\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"parseArgs z lista znanych flag nie zjada tresci z --\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"parseMentions wyciaga handle bez duplikatow i bez wielkosci liter\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"parser argumentow: nieznana flaga zostaje trescia, terminator konczy flagi\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"passkey: cofniety licznik podpisow jest odrzucany (klon klucza)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"passkey: rejestracja i logowanie przechodza pelna petle\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"passkey: zly origin, powtorzony challenge i zepsuty podpis sa odrzucane\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"pierwsze polaczenie serwuje zasady z promptem, drugie juz nie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"pin i unpin dzialaja w obrebie konwersacji, z autorem przypiecia\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"plik konfiguracji ma prawa 600\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"plik laduje w konwersacji jako wiadomosc i daje sie pobrac czlonkowi\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"plik sensitive z ttl=0 dostaje domyslny TTL, nie staje sie wieczny\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"plik z aktywnym MIME (text/html) jest serwowany inertnie (anty stored-XSS)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"plik z cudzej konwersacji jest niewidoczny i niepobieralny\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"po serii porazek wake gasnie i wlasciciel dostaje systemowy DM\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"ponowna rejestracja tej samej sesji aktualizuje, a nie dubluje\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"ponowne wziecie wlasnej dzierzawy przedluza, nie resetuje acquired_at\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"postMessage do cudzego kanalu prywatnego jest odrzucone\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"postMessage nadaje rosnace id i zapisuje wzmianki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"postMessage odrzuca puste cialo i cialo ponad limit\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"postMessage publikuje zdarzenie do czlonkow konwersacji\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"powiadomienia wiki: zmiana strony wola tych, ktorzy juz na niej pisali\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeruje licznik\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"poza kontenerem bind na 0.0.0.0 jest zablokowany\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"publish trafia tylko do subskrybentow z listy odbiorcow\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"punkt wejscia (app.js) startuje bez wyjatku, takze gdy serwer nie odpowiada\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"pytanie jest otwarte, dopoki ktokolwiek nie odpowie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"readJson odrzuca cialo ponad limit\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"readJson odrzuca niepoprawny JSON\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"reakcja jest przelacznikiem i nie duplikuje sie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"reakcja pokazuje KTO zareagowal, nie tylko ile\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"reakcje nie staja sie wiadomosciami\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"recipientsOf zwraca czlonkow, a nie wszystkich aktorow\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"rejestracja sesji nieistniejacego aktora jest odrzucona\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"revokeInvite: nieistniejace/juz-odwolane id zwraca false (bez falszywego sukcesu)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"rodzaj sesji jest deklarowany, nie zgadywany z ksztaltu nazwy\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"router dopasowuje parametry sciezki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"rozmowa bezposrednia dochodzi w calosci, nie tylko przy wzmiance\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"rozmowa grupowa powstaje z listy handle i zawiera nadawce\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"rozmowa z nieistniejacym aktorem daje 404 z nazwa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sensitive bez TTL dostaje domyslny TTL i wygasa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sesja trwala bez heartbeatu znika po oknie retencji, wczesniej jest stale\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"setNotify dolacza aktora, jesli jeszcze nie byl czlonkiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sfalszowane i wygasle cookie sesji daje 401 przez API\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sidebar classifies 13 silent days as active\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sidebar classifies 14 silent days as faded\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sidebar classifies 90 silent days as archived\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"skasowana wiadomosc nie utrzymuje licznika\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"skasowana wiadomosc traci tresc, ale zostaje w kolejnosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"skasowane pytanie znika z otwartych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzica\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"skill nie kaze juz wklejac tokenu do pliku, ktory idzie do repozytorium\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"skladnia FTS w zapytaniu uzytkownika nie wywraca wyszukiwania\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"slug kanalu gubi krzyzyk\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"smieciowy kod jest odrzucany bez tworzenia aktora\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sufiksy (N) scalaja sie w jednego aktora\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sweep kasuje wygasle wpisy i bajty z dysku\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"t() tlumaczy, wybiera forme i wraca do angielskiego przy braku wpisu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_claim i talk_release przechodza pelny cykl dzierzawy\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_log numerem cudzej prywatnej konwersacji jest odrzucone\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_read nie odpytuje bazy raz na kazda linie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_read: limit obowiazuje takze na sciezce long-poll\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_send przez MCP pisze jako aktor z tokenu i wraca z id wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"talk_status wypisuje pola narzedzi z TOOLS, nie z reki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"the actor directory cache retains uploaded avatars\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"token bez TTL nie wygasa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"token dla nieistniejacego aktora konczy sie kodem 1, nie wyjatkiem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"token weryfikuje sie i zwraca aktora\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"token wylaczonego aktora nie dziala\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"token z TTL wygasa i przestaje uwierzytelniac\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"tools/list zwraca komplet narzedzi talk_*\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"totalBadge sumuje plakietki ze wszystkich konwersacji\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"tworca kanalu jest jego adminem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"tx wycofuje wszystko przy bledzie w srodku\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"tx zagniezdzone: wewnetrzny rollback nie zabija zewnetrznej transakcji\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"typing gasnie po 7 s, busy trzyma 30 s\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"updateConversation: admin kanalu zmienia temat i slug, zwykly czlonek nie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"updateConversation: slug zajety przez inny kanal jest odrzucany, dm bez sluga\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"upload pliku przez API, pobranie przez czlonka, odmowa dla obcego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"uszkodzona linia JSON nie przerywa importu i jest policzona\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"uzycie tokenu odklada sie w last_used_at\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"w DM kazda wiadomosc jest plakietka, bez wzmianki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"w bazie lezy hash, nie token\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"w grupie kazda wiadomosc jest plakietka\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"w kanale budzi wzmianka, a nie kazda wiadomosc\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"w kanale plakietka liczy tylko wzmianki, licznik liczy wszystko\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"w kontenerze bind na 0.0.0.0 jest dozwolony\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake httpDeliver ODMAWIA polaczenia na adres prywatny przy strzale (SSRF rebinding)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake odrzuca adresy lokalne i prywatne (SSRF)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake pozwala na loopback tylko za jawna zgoda\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake: rejestracja zwraca sekret raz, GET pokazuje konfiguracje bez sekretu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"watek grupuje odpowiedzi pod korzeniem\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"watek nieistniejacy i watek bez dostepu daja te sama odpowiedz\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"watek z innej konwersacji jest odrzucony\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiadomosc z to staje sie DM-em, nie wiadomoscia kanalowa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiadomosci niosa actorHandle, nie tylko actorId do mapy o kluczach string\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki attach: plik podpiety, pobieralny przez innego zalogowanego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki drzewo: cykl (pod soba / pod potomkiem) jest odrzucany\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki drzewo: podstrona, przenoszenie, undefined nie rusza polozenia\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki przez API: zapis, odczyt, szukanie, historia, revert\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: baseRevision - zgodny przechodzi, rozjechany daje 409, 0 = tylko zaloz\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: kasowanie strony - tylko zalozyciel albo admin; dzieci nie gina\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: kazdy zalogowany moze edytowac (wspolna wiedza), ale nie na slepo\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: podglad pojedynczej rewizji zwraca pelna tresc; cudza/nieistniejaca -> 404\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: revert przywraca tresc jako nowa rewizje\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: slepy zapis na cudza strone -> 409 z numerem rewizji, po przeczytaniu -> 200\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: slug kolidujacy z trasa (search) jest odrzucany\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: strona jest wspolna - inny aktor tez ja edytuje (po przeczytaniu)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: wyszukiwarka znajduje po tresci i tytule\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: zalacznik jest publiczny dla kazdego zalogowanego\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wiki_read: przycieta strona NIE odblokowuje zapisu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wlasne wiadomosci nie licza sie jako nieprzeczytane\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wyjatek jednego subskrybenta nie blokuje pozostalych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wylaczenie konta uniewaznia otwarta sesje na cookie, nie tylko nastepne logowanie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wymagana wersja Node jest sprawdzana z majora\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wyszukiwanie dopasowuje przedrostek\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wyszukiwanie nie zwraca tresci z kanalow bez dostepu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wyszukiwanie pomija skasowane\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wyszukiwanie przez API respektuje dostep\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wzmianka na poczatku i po nawiasie jest lapana, interpunkcja odcieta\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wzmianka w cudzym kanale prywatnym nie wycieka przez mentionsOf\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wzmianka w kanale publicznym jest widoczna bez czlonkostwa\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wzmianki sa odtworzone po handle\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wznowienie SSE dosyla message_updated dla edycji sprzed kursora\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"z rozmowy bezposredniej nie da sie wyjsc, z kanalu tak\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"za krotkie haslo jest odrzucone\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zadanie z bearerem nie wymaga CSRF\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zaden plik UI nie przykrywa importowanego t() wlasnym `t`\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zajeta nazwa NIE zuzywa zaproszenia\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zakonczona sesja znika z obecnosci, tozsamosc zostaje w rosterze\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zaproszenie --admin nadaje aktorowi uprawnienia admina\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zaproszenie wygasa po TTL\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zaproszenie z limitem uzyc wyczerpuje sie\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zaproszenie: agent zaklada nim aktora i dziala token\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zdarzenie widzi wiadomosc juz zapisana w bazie (odczyt DRUGIM polaczeniem)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zerwany klient SSE zwalnia subskrypcje\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/admin\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zle haslo i nieistniejacy uzytkownik daja ten sam komunikat\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zle procent-kodowanie w sciezce daje 404, nie 500\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zly URL webhooka jest odrzucany przy rejestracji\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zly kanal w jednym rekordzie nie wywala calego importu\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zly token nie rzuca, tylko zwraca null\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"znacznik odczytu przelicza sie z czasu na id wiadomosci\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"znaczniki odczytu DM-ow sa przenoszone\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"zwolnic moze wlasciciel; cudza zywa dzierzawa daje odmowe\",1]",
+      "file": "",
+      "skipped": false
+    }
+  ],
+  "failing": [],
+  "sha256": "c9e69f2c68193750b3f3a9077e6a2590bfe70d64cc3a6e3212ea5a6513da2a60"
+}

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-55",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "A2A-F2",
+  "severity": "blocking",
+  "path": "src/mcp/server.ts",
+  "line": 249,
+  "rule": "COD-2",
+  "text": "talk_typing description tells the agent to pass `sec` (up to 300) but the inputSchema (lines 251-258) has only sessionId/to/stop, so the server drops it. Repro: tools/call talk_typing {sessionId,to:\"#general\",sec:60} -> \"[uwaga] talk_typing nie zna pola: sec. Zostalo ZIGNOROWANE\"; the bubble dies after 7 s, defeating an agent composing in one go. test/mcp/mcp.test.ts:177 never passes sec, so no test can fail. Fix: add sec {number, 1-300} to the schema and a test asserting the signal TTL.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

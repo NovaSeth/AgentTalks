@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-87",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "TD-F2",
+  "severity": "minor",
+  "path": "test/core/extras.test.ts",
+  "line": 297,
+  "rule": "COD-2",
+  "text": "RF1: the private-mention test checks only mentionsOf. Mutation: drop the canRead filter on mentions in postMessage (src/core/messages.ts ~L187) -> all 148 tests in api/extras/messages/unread pass, yet bob (not a member) gets the private message text in GET /api/notifications (HEAD: no leak). Assert on notifications too.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-11",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

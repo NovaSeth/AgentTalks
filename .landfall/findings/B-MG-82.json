@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-82",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M15",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-powiadomienia.js",
+  "line": 114,
+  "rule": null,
+  "text": "Notification copy reads '@nestor wrote privately @nestor' (the conversation label repeats the sender); notification rows, search results (szukaj.js:94) and digest/questions rows are buttons without aria-label (read_page reports empty names). Fix: 'wrote to you privately'; aria-label on row buttons.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

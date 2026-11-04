@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-89",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "TD-F4",
+  "severity": "minor",
+  "path": "test/http/sse.test.ts",
+  "line": null,
+  "rule": "COD-2",
+  "text": "RF2: nothing tests that an open SSE stream closes after revoke/disable. Mutation: replace authenticate() in the ping callback (src/http/sse.ts:159) with false -> sse.test.ts passes. PING_MS=20000 is a hard-coded const, so a test would wait 20 s; make it injectable. At HEAD I measured the stream closing at 19999 ms, so behavior is correct.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-11",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

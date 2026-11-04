@@ -13,8 +13,8 @@
       "at": "2026-11-03T23:43:59.056Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "done",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-03T23:43:17.914Z",
@@ -73,8 +73,68 @@
         "base": "1119b0460a7839fbf004c32db0dc786be90878ea",
         "note": "fix round 1 from findings-r1.md (tests + 4 minors)"
       }
+    },
+    {
+      "at": "2026-11-03T23:58:38.328Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 5,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-03T23:58:45.070Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
+      }
+    },
+    {
+      "at": "2026-11-04T00:08:09.008Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "approved",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T00:08:17.140Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "694017705f33ab046ca3ec693be884edb1df8141",
+        "class": "standard",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:08:30.386Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "694017705f33ab046ca3ec693be884edb1df8141"
+      }
+    },
+    {
+      "at": "2026-11-04T00:13:08.301Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "7a09af508a2f35b939e8279b88918b5425f70870",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "6173132fa7839d92a3c284d4816fbb990e5b9665"
+      }
     }
   ],
   "base": "ccd183c2c58358063e2a696c1d14e0777aceaeac",
-  "branch": "task/T-MG-4-pr1-sidebar-avatary-fade"
+  "branch": "task/T-MG-4-pr1-sidebar-avatary-fade",
+  "mergedAt": "2026-11-04T00:13:08.301Z"
 }

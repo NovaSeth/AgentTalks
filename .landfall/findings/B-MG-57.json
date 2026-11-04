@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-57",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-F2",
+  "severity": "blocking",
+  "path": "src/http/ui/js/akcje.js",
+  "line": 60,
+  "rule": "REV-2",
+  "text": "Acceptance 14 (composer): after Enter sends, focus leaves the composer; next keystrokes go nowhere, ArrowUp-edit unreachable. Repro (anna, #general): click composer, type 'first', Enter, wait 2 s -> document.activeElement = BODY; type 'second' -> composer value ''; ArrowUp -> no inline edit. Cause: sendMessage calls widok.composer() (renderComposer, widok-czat.js:1128), which replaces the textarea without refocusing. Fix: focusComposer() after the re-render.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

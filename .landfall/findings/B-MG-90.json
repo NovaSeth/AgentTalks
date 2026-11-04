@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-90",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "TD-F5",
+  "severity": "minor",
+  "path": "test/http/api.test.ts",
+  "line": null,
+  "rule": "COD-2",
+  "text": "No test for non-member pin or core markRead: mutating canRead out of pin() (src/core/pins.ts:15) passes 133 tests in api/extras/mcp; removing the guard at src/core/unread.ts:93 passes 142 (routes also guard, so this is depth, not an open hole). HEAD answers 404/403 on every private path I probed (messages, search, thread, react, pin, pins, fix, notifications, digest, unread).",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-11",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-69",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M2",
+  "severity": "minor",
+  "path": "src/http/ui/app.css",
+  "line": 342,
+  "rule": null,
+  "text": "Join bar ('You are previewing #bugs - join to write' + Join) is nearly unreadable: .dock::before (absolute gradient + blur) paints over the non-positioned .joinbar (l.576), computed opacity 1 but visually dim (zoom screenshot). The composer card is unaffected. Fix: position:relative;z-index on .joinbar.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

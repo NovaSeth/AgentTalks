@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:security-reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "path": "deploy/uruchom-produkcje.sh",
+      "line": 135,
+      "rule": "SEC-8",
+      "text": "Low: password_json runs inside a pipeline, so if python3 is missing or fails, curl gets an empty body and the script reports 'STOP: bramka nie wpuszcza wlasciwego hasla', a misleading cause (the exact class B-MG-22 complained about). Add a 'command -v python3' preflight with a clear message, or check password_json's exit status before curl. python3 is confirmed on the VPS, so no current impact."
+    }
+  ]
+}

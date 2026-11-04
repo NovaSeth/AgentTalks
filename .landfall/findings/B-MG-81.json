@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-81",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M14",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 1192,
+  "rule": null,
+  "text": "A message that failed to send lives only in memory: submit() clears the field and the draft (l.1192, 1202), the failed bubble is in state.pending; after the forced reload (M4) the text was gone. Slack keeps unsent text. Fix: keep the draft until the server confirms.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

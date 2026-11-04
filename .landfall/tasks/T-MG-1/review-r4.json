@@ -1,0 +1,330 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "findings": [
+    {
+      "id": "A2A-F1",
+      "severity": "blocking",
+      "path": "integrations/claude-skill/SKILL.md",
+      "line": 26,
+      "rule": "REV-3",
+      "text": "Acceptance 13/10: the REST path the served /skill.md calls \"the reliable path for any agent; start here\" (line 26) documents no route for thread reply (threadId), ask (POST /api/conversations/:id/ask), answer (POST /api/questions/:id/answer), leases (POST /api/leases, /leases/release), join, or the PUT /api/wake body. Repro: grep -c threadId|/ask|/api/leases|/join on /skill.md -> 0 each; I found them only in src/http/routes/*.ts. Fix: a REST block per route + the /ask shape {question:<number>}."
+    },
+    {
+      "id": "A2A-F2",
+      "severity": "blocking",
+      "path": "src/mcp/server.ts",
+      "line": 249,
+      "rule": "COD-2",
+      "text": "talk_typing description tells the agent to pass `sec` (up to 300) but the inputSchema (lines 251-258) has only sessionId/to/stop, so the server drops it. Repro: tools/call talk_typing {sessionId,to:\"#general\",sec:60} -> \"[uwaga] talk_typing nie zna pola: sec. Zostalo ZIGNOROWANE\"; the bubble dies after 7 s, defeating an agent composing in one go. test/mcp/mcp.test.ts:177 never passes sec, so no test can fail. Fix: add sec {number, 1-300} to the schema and a test asserting the signal TTL."
+    },
+    {
+      "id": "UX-F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 1459,
+      "rule": "REV-2",
+      "text": "Acceptance 14 (threads): every reply sent from the thread panel is shown TWICE. Repro (michal, #general, thread of msg 1): type reply, Enter -> DOM #th-msgs [data-msg] = [1,2,3,24,24]; second reply -> [...,26,26]; server GET /api/messages/1/thread has 24 and 26 once. Cause: submit() pushes the POST result into state.threadMsgs after the SSE echo (zdarzenia-sse.js:157-159) already pushed it; no dedupe by id. Fix: findIndex before push (as SSE does) or drop the push and rely on the echo."
+    },
+    {
+      "id": "UX-F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/akcje.js",
+      "line": 60,
+      "rule": "REV-2",
+      "text": "Acceptance 14 (composer): after Enter sends, focus leaves the composer; next keystrokes go nowhere, ArrowUp-edit unreachable. Repro (anna, #general): click composer, type 'first', Enter, wait 2 s -> document.activeElement = BODY; type 'second' -> composer value ''; ArrowUp -> no inline edit. Cause: sendMessage calls widok.composer() (renderComposer, widok-czat.js:1128), which replaces the textarea without refocusing. Fix: focusComposer() after the re-render."
+    },
+    {
+      "id": "UX-F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 575,
+      "rule": "REV-2",
+      "text": "Acceptance 14 (edit): inline edit never closes. Repro (anna, own msg 29): ArrowUp, append text, Enter -> PATCH ok (body 'first (edited by me)', editedAt set) but .inline-edit stays; Escape -> still open; only switching conversation clears it. Cause: applyMessageUpdate -> upsertMessageNode returns early when the node holds .inline-edit (l.575); Escape -> renderMessages() restores the editor (zapiszOtwartaEdycje/odtworz..., l.480-505, 560). Fix: remove the editor before update/re-render."
+    },
+    {
+      "id": "UX-F4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/widok-powiadomienia.js",
+      "line": 160,
+      "rule": "REV-2",
+      "text": "Acceptance 14 (notifications, search): a deep link to a THREAD reply opens the channel but not the thread, so the mention cannot be found. Repro: bell -> '@nestor called you #general' (msg 25, threadId 1) -> #general opens, no .thread, no .flash; Cmd+K 'flushpackets' -> Enter on the #bugs hit (msg 10, threadId 8) -> same. Cause: openConversation(convId, msgId) scrolls only the main list (widok-czat.js:49-70); widoczneWiadomosci drops threadId rows (stan.js:292). Fix: open the thread and flash."
+    },
+    {
+      "id": "A2A-F3",
+      "severity": "minor",
+      "path": "src/http/ui.ts",
+      "line": 56,
+      "rule": null,
+      "text": "baseUrlFrom defaults the scheme to https when X-Forwarded-Proto is absent, so a plain-http instance (every local/dev server, this review's) renders /install and /skill.md with 'https://127.0.0.1:18806'; the literal first step `curl -X POST https://127.0.0.1:18806/api/enroll` fails (curl exit 35), the agent must guess http (second attempt #1). Fix: default to http unless config.baseUrl or an X-Forwarded-* header is present, and keep https for proxied deployments."
+    },
+    {
+      "id": "A2A-F4",
+      "severity": "minor",
+      "path": "src/mcp/server.ts",
+      "line": 245,
+      "rule": null,
+      "text": "Acceptance 12 (agent-visible strings the inventory misses): all 29 MCP tool and parameter descriptions, every MCP result (talk_status headings KTO JEST, \"wyslane [8] do\", \"GRANTED ... do\"), HTTP error texts (\"zaloguj sie albo podaj token\"), the guidelines/news `prompt` fields on /api/me, atalk help and output are Polish, while the served news says \"the API, the error codes and the skill were English already\". Translate tool descriptions first: they cost tokens in every session."
+    },
+    {
+      "id": "A2A-F5",
+      "severity": "minor",
+      "path": "src/core/news.ts",
+      "line": null,
+      "rule": null,
+      "text": "Token cost of first contact: /api/me and the first talk_status return 24 KB (guidelines ~8 KB + the whole news history since 2026-08-08, 11.7 KB) for a brand-new actor; later calls are 1.4 KB (fine), talk_log defaults to 20 and talk_read to 50 with a cursor (no flood). For a new actor 'news since your last visit' should be capped (latest section + pointer to wiki page nowosci) instead of the full history. Measured: node mcp.mjs talk_status -> bytes=24312, second call bytes=1417."
+    },
+    {
+      "id": "A2A-F6",
+      "severity": "minor",
+      "path": "src/mcp/server.ts",
+      "line": null,
+      "rule": null,
+      "text": "Error is not actionable (guess point #2): talk_send {to:'general'} (no #) -> 'blad: nie ma aktora general'; the agent is told a non-existent actor, not that an address must start with # or @ (fix: 'address must be #channel, @handle or @a,@b'). Related cosmetic: POST /api/conversations {kind:dm, members:['@ghost']} -> 'nie ma aktora @@ghost' (double @). Everything else I hit (409 konflikt_wiki, 409 lease heldBy, handle_zajety, brak_target, zly_target, juz_zamkniete) names the next step."
+    },
+    {
+      "id": "A2A-F7",
+      "severity": "minor",
+      "path": "src/core/mentions.ts",
+      "line": 41,
+      "rule": null,
+      "text": "A mention of a non-existent handle is accepted silently: POST message 'hey @nobody-here' -> 201 with no hint; an agent that mistypes a peer's handle never learns the mention (and the wake) did not land. Suggest returning `unresolvedMentions:[...]` in the 201 body and in the talk_send result ('wyslane [3] - @nobody-here nie istnieje')."
+    },
+    {
+      "id": "A2A-F8",
+      "severity": "minor",
+      "path": "integrations/claude-code/hooks/atalk-hook.sh",
+      "line": 10,
+      "rule": null,
+      "text": "Acceptance 10: the hook header says atalk comes from `npm i -g agenttalks`, while the served skill says atalk 'is NOT a standalone download' and needs the repo checked out; an agent following the hook comment on a machine without the repo gets 'command not found' and the hook exits 0 silently (line 18), so the integration never reports why it is dead. Pick one story and make the hook emit one line when atalk is missing."
+    },
+    {
+      "id": "A2A-F9",
+      "severity": "minor",
+      "path": "docs/a2a.md",
+      "line": 37,
+      "rule": null,
+      "text": "A2A-RECOMMENDATION: keep deferred. Measured: a fresh agent completes the whole loop (enroll, status, join, post, thread, mention, ask/answer, lease conflict, file, wiki 409, SSE, long-poll, signed wake payload) over REST, MCP (29 tools) and CLI; what blocks today is docs/schema drift in those facades (F1-F3), not a missing protocol. A2A carries only message+question, drops channels/presence/leases; no non-Claude counterpart exists. Build the minimal facade when a real A2A client asks."
+    },
+    {
+      "id": "A2A-F10",
+      "severity": "minor",
+      "path": "src/core/leases.ts",
+      "line": 20,
+      "rule": null,
+      "text": "Coordination for 5+ agents is sufficient but under-documented: leases are server-checked (second claimant -> 409 heldBy; release by non-holder -> 409), the holder renews by re-claiming (verified 100 s then 900 s GRANTED), default TTL 120 s, max 24 h; a second answer -> juz_zamkniete; presence shows doing/typing. Neither skill says the holder renews by claiming again nor the 120 s default, so an agent working over 2 minutes loses the lock unnoticed; add both to SKILL.md and talk_claim."
+    },
+    {
+      "id": "UX-M1",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 427,
+      "rule": null,
+      "text": "Thread and details panels are position:absolute overlays: message text runs under the panel (milosz '@all heads-up...' clipped at 'SSE clients rec'), the details (i) button disappears while a thread is open. Slack shrinks the main column. Fix: grid column for the side panel at desktop width."
+    },
+    {
+      "id": "UX-M2",
+      "severity": "minor",
+      "path": "src/http/ui/app.css",
+      "line": 342,
+      "rule": null,
+      "text": "Join bar ('You are previewing #bugs - join to write' + Join) is nearly unreadable: .dock::before (absolute gradient + blur) paints over the non-positioned .joinbar (l.576), computed opacity 1 but visually dim (zoom screenshot). The composer card is unaffected. Fix: position:relative;z-index on .joinbar."
+    },
+    {
+      "id": "UX-M3",
+      "severity": "minor",
+      "path": "src/http/ui/js/akcje.js",
+      "line": 208,
+      "rule": null,
+      "text": "After clicking Join on a previewed channel the row stays bold with the full badge (#bugs '7') while the channel is open and fully visible; it cleared only after an unrelated action. joinChannel never marks read. Fix: markReadDebounced(id, lastMessageId(id)) after join."
+    },
+    {
+      "id": "UX-M4",
+      "severity": "minor",
+      "path": "src/http/ui/js/api.js",
+      "line": 26,
+      "rule": null,
+      "text": "Lost session (observed mid-review: /api/me 401) is not handled: the app stays rendered as if live, every action toasts 'You are not signed in. Refresh...', the failed bubble shows the raw server string 'zaloguj sie albo podaj token' (widok-czat.js:704 uses m.error unmapped), SSE dies silently. Slack returns to sign-in and keeps the draft. Fix: on 401 from api()/SSE -> keep drafts, render login."
+    },
+    {
+      "id": "UX-M5",
+      "severity": "minor",
+      "path": "src/http/ui/js/dom.js",
+      "line": 49,
+      "rule": null,
+      "text": "Three counters disagree and the digest jumps: 'What happened while you were away' went 12 -> 5 -> 12 -> 8 -> 12 within minutes with no new messages; bell 7/8, tab title (5). Partial regression of audit items 13/14/35. Fix: one anchor per conversation for the digest; make the title badge = sum of sidebar badges."
+    },
+    {
+      "id": "UX-M6",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 730,
+      "rule": null,
+      "text": "Resolving a #bugs report needs a hidden step: the check button appears only after More -> 'Treat as report' (czyZgloszenie). The channel topic says 'Resolved = green check' but a human hovering the report sees only reply/more. Fix: offer 'Confirm fixed' directly in the More menu, or auto-treat messages in channels named bugs/issues."
+    },
+    {
+      "id": "UX-M7",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-sidebar.js",
+      "line": 374,
+      "rule": null,
+      "text": "'How we talk here' tells a human to 'send it with the question-mark button', but that composer button was removed (commit 0ccf0d9); humans now cannot ask a tracked question at all (audit item 18 reopened), while agents can. The modal's footnote also overlaps the last paragraph (gd-body overflow). Fix: rewrite the paragraph; give the modal a scrollable body."
+    },
+    {
+      "id": "UX-M8",
+      "severity": "minor",
+      "path": "src/http/ui/js/markdown.js",
+      "line": 30,
+      "rule": null,
+      "text": "No #channel references: '#bugs' in a message stays plain text and typing '#bu' offers no autocomplete; no emoji picker or formatting toolbar in the composer; reactions limited to 16 fixed emoji (widok-czat.js:17). Slack users expect #channel links, an emoji picker and a formatting bar. Fix: link #slug to openConversation, add '#' autocomplete, a searchable emoji picker."
+    },
+    {
+      "id": "UX-M9",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 1439,
+      "rule": null,
+      "text": "Thread composer lacks @mention autocomplete, attachments and 'also send to channel'; only the main composer has them. Fix: reuse renderComposer for the thread with threadId."
+    },
+    {
+      "id": "UX-M10",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 1338,
+      "rule": null,
+      "text": "Mention autocomplete is async (await ensureActors): a stale response re-opened the popover after a pick, and the next Shift+Enter was consumed as a pick (mentionKeydown l.1415 ignores shiftKey), replacing 'Hello @all and #bu' with 'Hello @motowolt '. Fix: sequence counter to drop stale results; ignore Enter with Shift in the popover."
+    },
+    {
+      "id": "UX-M11",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 1530,
+      "rule": null,
+      "text": "New direct conversation uses a native <select multiple> ('@anna - human', '@system - agent'...) instead of a people picker with search and avatars; @system is offered as a DM target, listed as a removable member in channel details and as an account in the admin panel. Fix: hide the system actor from pickers/members; use the same list as 'Who is here'."
+    },
+    {
+      "id": "UX-M12",
+      "severity": "minor",
+      "path": "src/http/ui/js/app.js",
+      "line": 203,
+      "rule": null,
+      "text": "No URL per channel/message (no hash/history routing): refresh returns to localStorage's last conversation, links cannot be shared, browser Back does nothing; sidebar sections Channels/DMs/Who is here cannot collapse (only the wiki tree can, widok-sidebar.js:166). Slack has permalinks and collapsible sections."
+    },
+    {
+      "id": "UX-M13",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 541,
+      "rule": null,
+      "text": "The 'New messages' line never appears when lastReadMessageId is 0 (`mark &&`), so a first visit to a channel with 5 unread shows no divider while the 'Latest' pill is shown; sidebar unread counts of 5 then vanish on open with no marker of where the new part starts."
+    },
+    {
+      "id": "UX-M14",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": 1192,
+      "rule": null,
+      "text": "A message that failed to send lives only in memory: submit() clears the field and the draft (l.1192, 1202), the failed bubble is in state.pending; after the forced reload (M4) the text was gone. Slack keeps unsent text. Fix: keep the draft until the server confirms."
+    },
+    {
+      "id": "UX-M15",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-powiadomienia.js",
+      "line": 114,
+      "rule": null,
+      "text": "Notification copy reads '@nestor wrote privately @nestor' (the conversation label repeats the sender); notification rows, search results (szukaj.js:94) and digest/questions rows are buttons without aria-label (read_page reports empty names). Fix: 'wrote to you privately'; aria-label on row buttons."
+    },
+    {
+      "id": "UX-M16",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-wiki.js",
+      "line": 284,
+      "rule": null,
+      "text": "Wiki editor: when 'draft kept in the browser' appears the Save button wraps onto its own line below Cancel; the message More menu has no 'Copy link' / 'Mark unread' (Slack staples); the join bar and 'Latest' pill coexist oddly for non-members. Polish only."
+    },
+    {
+      "id": "UX-M17",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-login.js",
+      "line": 120,
+      "rule": null,
+      "text": "The 'Sign in with fingerprint / Face ID' button is shown whenever the device has a platform authenticator, even before any passkey exists for this origin (login/options returns allowCredentials []), so the first click yields the browser's 'no passkeys' dialog. Consider hiding until a passkey was enrolled in this browser (localStorage flag)."
+    },
+    {
+      "id": "UX-M18",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-admin.js",
+      "line": 84,
+      "rule": null,
+      "text": "Admin panel: a token for an existing account cannot be issued (panel says 'still needs server access') - audit item 20 still holds; account rows are unlabeled buttons; otherwise the disable/revoke flows use named confirm modals and are clear."
+    },
+    {
+      "id": "TD-F1",
+      "severity": "minor",
+      "path": "test/http/api.test.ts",
+      "line": 339,
+      "rule": "COD-2",
+      "text": "Forged-cookie test cannot fail on the signature check: its cookie 'id.9999999999.deadbeef' has 3 parts and is dropped by the !mac guard before the MAC compare. Mutation: delete the timingSafeEqual line in src/http/auth.ts (~L86) -> all 74 api tests pass and a forged admin cookie 'id.9999999999.1.AAAA' gets 200 on /api/me (HEAD: 401). Add a 4-part cookie with a wrong MAC."
+    },
+    {
+      "id": "TD-F2",
+      "severity": "minor",
+      "path": "test/core/extras.test.ts",
+      "line": 297,
+      "rule": "COD-2",
+      "text": "RF1: the private-mention test checks only mentionsOf. Mutation: drop the canRead filter on mentions in postMessage (src/core/messages.ts ~L187) -> all 148 tests in api/extras/messages/unread pass, yet bob (not a member) gets the private message text in GET /api/notifications (HEAD: no leak). Assert on notifications too."
+    },
+    {
+      "id": "TD-F3",
+      "severity": "minor",
+      "path": "test/http/api.test.ts",
+      "line": 825,
+      "rule": "COD-2",
+      "text": "Admin guards: (a) POST /api/actors has no test at all - mutating requireAdmin (src/http/auth.ts:145) passes 99 tests across api/mcp/cli/e2e; (b) panel test never uses a NON-admin human - dropping isAdmin in requireHumanAdmin (src/http/routes/admin.ts:24) passes all 74 api tests. HEAD returns 403 in both. Add both cases."
+    },
+    {
+      "id": "TD-F4",
+      "severity": "minor",
+      "path": "test/http/sse.test.ts",
+      "line": null,
+      "rule": "COD-2",
+      "text": "RF2: nothing tests that an open SSE stream closes after revoke/disable. Mutation: replace authenticate() in the ping callback (src/http/sse.ts:159) with false -> sse.test.ts passes. PING_MS=20000 is a hard-coded const, so a test would wait 20 s; make it injectable. At HEAD I measured the stream closing at 19999 ms, so behavior is correct."
+    },
+    {
+      "id": "TD-F5",
+      "severity": "minor",
+      "path": "test/http/api.test.ts",
+      "line": null,
+      "rule": "COD-2",
+      "text": "No test for non-member pin or core markRead: mutating canRead out of pin() (src/core/pins.ts:15) passes 133 tests in api/extras/mcp; removing the guard at src/core/unread.ts:93 passes 142 (routes also guard, so this is depth, not an open hole). HEAD answers 404/403 on every private path I probed (messages, search, thread, react, pin, pins, fix, notifications, digest, unread)."
+    },
+    {
+      "id": "TD-F6",
+      "severity": "minor",
+      "path": "test/http/api.test.ts",
+      "line": 130,
+      "rule": "COD-2",
+      "text": "Cookie attributes are untested except HttpOnly: deleting 'SameSite=Lax' (src/http/auth.ts:50) or the Secure push for trustProxy/https (auth.ts:53) leaves all 74 api tests green. docker.md and SECURITY rely on Secure behind the proxy. Assert Set-Cookie for plain, x-forwarded-proto=https and trustProxy."
+    },
+    {
+      "id": "TD-F7",
+      "severity": "minor",
+      "path": "test/store/db.test.ts",
+      "line": null,
+      "rule": "COD-2",
+      "text": "GC8 race guard is untestable as written: the in-transaction re-read of user_version (src/store/db.ts migrate) only matters with two connections to one file; db.test.ts has no two-handle test. Open two DatabaseSync handles on a temp file and migrate both. Also, mutation 'from = 0' IS caught by the multi-step test (good)."
+    },
+    {
+      "id": "TD-F8",
+      "severity": "minor",
+      "path": "docs/docker.md",
+      "line": 16,
+      "rule": "SPC-3",
+      "text": "Doc drift: docker.md says the image holds only node:26-alpine plus src/, bin/ and package.json; the Dockerfile also copies integrations/, AgentTalks.md, NEWS.md and installs prod node_modules. SECURITY.md:51 says files are readable only by members of their conversation, but src/core/files.ts:143 lets any authenticated actor read wiki-page attachments. Align the text."
+    }
+  ]
+}

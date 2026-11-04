@@ -40,3 +40,10 @@ The CI docker job (build + /api/health smoke) exercises the pinned image on the 
 
 ## Open issues / deviations from the brief
 None.
+
+## Fix round 1
+Problem: review r1 F1 (minor): password_json ran inside `$( ... | curl ...)`; without python3, curl got an empty body and the script reported the misleading "gate rejects the right password".
+Fix: password_json checks `command -v python3` first and returns 1 with "STOP: python3 is required ..." on stderr; under `set -euo pipefail` the failing substitution stops the script with that message. Commit 2f453bf.
+RED/GREEN: new test runs the helper with PATH=/nonexistent-bin -> failed before (helper exited 127 silently into the pipe, no message), passes after (exit 1, message on stderr).
+Gate: npm test 328 pass / 0 fail; typecheck clean; secrets range clean.
+Status: DONE

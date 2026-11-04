@@ -13,8 +13,8 @@
       "at": "2026-11-03T23:49:27.459Z"
     }
   ],
-  "status": "implemented",
-  "round": 0,
+  "status": "done",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-03T23:49:16.304Z",
@@ -52,8 +52,78 @@
       "data": {
         "report": "done"
       }
+    },
+    {
+      "at": "2026-11-03T23:54:53.706Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "approved",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-03T23:55:37.930Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-03T23:55:38.143Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 1,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-03T23:55:38.389Z",
+      "by": "MG",
+      "event": "self-verified",
+      "data": {
+        "round": 1,
+        "note": "REV-20: mechanical deploy-script preflight, not data/auth/concurrency"
+      }
+    },
+    {
+      "at": "2026-11-03T23:55:47.616Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "2f453bf1eb0c4471470dd52d56dd4e5252ca88c5",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-03T23:56:31.598Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "2f453bf1eb0c4471470dd52d56dd4e5252ca88c5"
+      }
+    },
+    {
+      "at": "2026-11-04T00:11:38.050Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "612a1db66e84dc7ed367ea3a68f031b86d860804",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "6c3a02d4d9ddc064766ba36118cc7f86b816876c"
+      }
     }
   ],
   "base": "0561f866f0737576cc087c30a3cdaff79a1ed8b3",
-  "branch": "task/T-MG-9-fix-d-infra"
+  "branch": "task/T-MG-9-fix-d-infra",
+  "mergedAt": "2026-11-04T00:11:38.050Z"
 }

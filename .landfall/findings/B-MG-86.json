@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-86",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "TD-F1",
+  "severity": "minor",
+  "path": "test/http/api.test.ts",
+  "line": 339,
+  "rule": "COD-2",
+  "text": "Forged-cookie test cannot fail on the signature check: its cookie 'id.9999999999.deadbeef' has 3 parts and is dropped by the !mac guard before the MAC compare. Mutation: delete the timingSafeEqual line in src/http/auth.ts (~L86) -> all 74 api tests pass and a forged admin cookie 'id.9999999999.1.AAAA' gets 200 on /api/me (HEAD: 401). Add a 4-part cookie with a wrong MAC.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-11",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-73",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M6",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 730,
+  "rule": null,
+  "text": "Resolving a #bugs report needs a hidden step: the check button appears only after More -> 'Treat as report' (czyZgloszenie). The channel topic says 'Resolved = green check' but a human hovering the report sees only reply/more. Fix: offer 'Confirm fixed' directly in the More menu, or auto-treat messages in channels named bugs/issues.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

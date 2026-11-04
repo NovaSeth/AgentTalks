@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-56",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-F1",
+  "severity": "blocking",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 1459,
+  "rule": "REV-2",
+  "text": "Acceptance 14 (threads): every reply sent from the thread panel is shown TWICE. Repro (michal, #general, thread of msg 1): type reply, Enter -> DOM #th-msgs [data-msg] = [1,2,3,24,24]; second reply -> [...,26,26]; server GET /api/messages/1/thread has 24 and 26 once. Cause: submit() pushes the POST result into state.threadMsgs after the SSE echo (zdarzenia-sse.js:157-159) already pushed it; no dedupe by id. Fix: findIndex before push (as SSE does) or drop the push and rely on the echo.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

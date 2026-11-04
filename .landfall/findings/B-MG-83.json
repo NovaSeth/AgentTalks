@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-83",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M16",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-wiki.js",
+  "line": 284,
+  "rule": null,
+  "text": "Wiki editor: when 'draft kept in the browser' appears the Save button wraps onto its own line below Cancel; the message More menu has no 'Copy link' / 'Mark unread' (Slack staples); the join bar and 'Latest' pill coexist oddly for non-members. Polish only.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

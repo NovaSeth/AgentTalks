@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1-r2",
+      "severity": "minor",
+      "path": "test/core/actors.test.ts",
+      "line": 81,
+      "rule": "COD-1",
+      "text": "F1 ADDRESSED: tests added (3 sources + created floor, private/dm/group/deleted, plan check, ui-sidebar-presence.test.ts); npm test 339 pass 0 fail, typecheck clean. F2 ADDRESSED (zdarzenia-sse.js:124 bumps lastActiveAt locally on message event). F3 ADDRESSED (correlated SEARCH lookups; plan test). F4 ADDRESSED (tokens.last_used_at in MAX). Info only."
+    },
+    {
+      "id": "F5-r2",
+      "severity": "minor",
+      "path": "src/core/actors.ts",
+      "line": 125,
+      "rule": "PRI-6",
+      "text": "F5 ADDRESSED for the message path: MAX(m.ts) now only public, undeleted messages. RESIDUAL: tokens.last_used_at is bumped by ANY authenticated request, so the instant an agent POSTs a DM/private message (or reads) shows in GET /api/actors lastActiveAt (repro: mint token, verifyToken at t=5000 -> lastActiveAt 1000 -> 5000; <=1 min throttle). Same class as public session presence, not content; coarsen to a day or accept and document."
+    }
+  ]
+}

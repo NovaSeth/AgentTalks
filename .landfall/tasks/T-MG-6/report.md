@@ -1,0 +1,67 @@
+---
+red: {"command": "node --test --test-timeout=20000 test/fixes/t-mg-6-auth.test.ts", "exit": 1, "excerpt": "tests 13, pass 1, fail 12. long-poll after revoke: actual 200 expected 401; disabled actor isWakeable actual true expected false; wake body exp undefined expected 1000300; isBlockedIp(64:ff9b::7f00:1) false expected true; passkey 5->0 missing expected exception; agent admin POST /api/actors actual 201 expected 403; 9th victim guess actual 401 expected 429; logout: pre-logout cookie still valid; no security: line on failed login"}
+green: {"command": "npm test", "exit": 0, "excerpt": "tests 335, pass 335, fail 0 (baseline 322 + 13 new in test/fixes/t-mg-6-auth.test.ts). typecheck exit 0, landfall secrets --range 0561f86..HEAD clean"}
+---
+# Report: Fix A1 auth and sessions (T-MG-6)
+<!-- Stored by the orchestrator: the implementer's harness refused the write; content is the implementer's reply verbatim. -->
+
+Worktree / branch: /Users/michal/Documents/Code/AgentTalks-wt/T-MG-6, task/T-MG-6-fix-a1-auth-sessions. Commits: 735eccb, 9f5eb38, d6c05b8. Push: no.
+Scope touched: src/http/sse.ts, src/http/auth.ts, src/core/tokens.ts, src/core/wake.ts, src/core/webauthn.ts, src/http/routes/auth.ts, test/fixes/t-mg-6-auth.test.ts.
+Status: DONE_WITH_CONCERNS
+
+## Decisions
+1. B-MG-2 + B-MG-50: the long-poll keeps the request and calls `stillAuthenticated(ctx, config, req, actorId)` (new, exported from src/http/auth.ts) right before reading messages, and every 20 s while waiting. If it fails, the promise rejects with 401 (with the authFailureNote diagnosis for a dead token) and the body carries no message. Covers revoked token, disabled actor, and cookie after password change (epoch). Helper for package B (MCP talk_read wait): `stillAuthenticated`; without a `req`, B can call `verifyToken(ctx, token)` and compare the actor id.
+2. B-MG-3: `registerWake` reads `actors.disabled_at` in the same row read that precedes the send and skips; `isWakeable` returns false for a disabled actor. Wake is not token-bound (the secret lives on the actor).
+3. B-MG-19: the wake body has `exp` (now + 300, WAKE_BODY_TTL_SEC) and `nonce` (16 random bytes, hex) inside the signed JSON. isBlockedIp blocks 64:ff9b::/96, 64:ff9b:1::/48 and 2002::/16. Sentence for AgentTalks.md (wake section): "Every wake body carries `exp` (a Unix time, 300 s after sending) and a random `nonce` inside the signed JSON; a receiver must reject a body whose `exp` has passed or whose `nonce` it has already seen, after verifying `x-agenttalks-signature`."
+4. B-MG-5 + B-MG-52: reject when (stored > 0 or received > 0) and received <= stored; 5->0 and 5->5 rejected, 5->6 ok, 0->0 ok; stored value never lowered.
+5. B-MG-8: `requireHumanAdmin` exported from src/http/auth.ts (same rule and code `tylko_admin_czlowiek` as routes/admin.ts); POST /api/actors uses it.
+6. B-MG-44: password login counts failures under IP+handle (max 8), handle (max 20), IP (max 20), window 900 s; a success clears only IP+handle. The 9th guess on the victim gets 429. WebAuthn login keeps the old counter.
+7. B-MG-45: logout bumps `session_epoch` (PER ACTOR: logout signs the human out of all devices; existing mechanism, no migration). CSRF required when the request carries a valid cookie session.
+8. B-MG-51: `securityLog(event, fields)` in src/core/tokens.ts prints `security: {json}` via console.warn. Wired: login_failed, rate_limited, token_minted, token_revoked, admin_denied. No secret logged.
+
+## Files
+- src/http/sse.ts, src/http/auth.ts, src/core/tokens.ts, src/core/wake.ts, src/core/webauthn.ts, src/http/routes/auth.ts, test/fixes/t-mg-6-auth.test.ts (13 tests).
+
+## RED / GREEN
+- RED: 12 of 13 new tests failed (frontmatter); the always-zero authenticator test passed by design as a regression guard.
+- GREEN: 335 pass, 0 fail.
+
+## Gate
+| Command | Result | Exit |
+|---|---|---|
+| typecheck | clean | 0 |
+| tests | 335 pass, 0 fail (322 + 13) | 0 |
+| secrets scan | clean for 0561f86..HEAD | 0 |
+
+## Shared gaps (for the orchestrator)
+- B-MG-51 events not wired (out of scope): invite minted (src/core/invites.ts or admin route), actor disabled/enabled (src/core/actors.ts setDisabled; PR #1 touches actors.ts).
+- src/http/routes/admin.ts keeps a private requireHumanAdmin copy; can import the exported one.
+- src/mcp/server.ts talk_read wait: reuse the re-check (package B, item 13).
+
+## Open issues / deviations from the brief
+- Per-handle cap (20) lets an attacker lock a victim's handle for 15 min (follows from per-handle counting in the brief).
+- RED and GREEN not in separate commits; tests landed in d6c05b8; red output in scratchpad t-mg-6-red.txt.
+
+## Fix round 1 (findings-r1.md)
+<!-- Stored by the orchestrator: the implementer's harness refused the write; content is the implementer's reply. -->
+Status: DONE_WITH_CONCERNS
+
+1 (blocking): loginKeys resolves the handle with getActorByHandle and keys the per-handle buckets on the actor id; unresolved handles use normalizeLoginHandle (strip ^@+, trim, lowercase). Tests: "an '@' prefix does not open fresh limiter buckets"; "the michal, @michal, @@michal, @@@michal sequence is limited from the 9th". Commit 41df517.
+2: resolved handle logs actorId; otherwise handleLen + handleHash (HMAC with the instance secret, 8 hex). Test: 'Sup3r-Secret-Pass!' appears in no security line. 41df517.
+3: handle-wide cap (20) checked only after a failed verification (then 429); pre-verification caps IP+handle (8) and IP (20). Test: 20 failures from 3 IPs then the right password from a 4th IP -> 200; 9th wrong guess from one IP -> 429. 41df517.
+4: cookie cleared first; failed CSRF -> 403 English message, no epoch bump; success -> {"ok":true,"signedOutEverywhere":true}; per-actor epoch bump kept. Test: bad-CSRF logout clears the cookie, keeps the epoch, answers 403. 41df517.
+5: invite_minted {inviteId, by}, actor_disabled / actor_enabled {actorId, by} in src/http/routes/admin.ts; rate_limited for enroll (scope enroll) and webauthn (scope webauthn). src/core/actors.ts untouched. Test asserts the lines and that the invite code is not logged. 5e6f2f7, 41df517.
+
+Gate: tests 341 pass / 0 fail; typecheck clean; secrets clean for 0561f86..HEAD.
+Concerns: getActorByHandle lives in src/core/actors.ts (PR #1), so the unresolved-handle normalization is a local copy of the same regex. Item 3 weakens the handle-wide cap as the review asked: a guesser rotating IPs is limited by the per-IP and IP+handle caps and by 429 after 20 handle-wide failures.
+
+## Fix round 2 (findings-r2.md, D-MG-14)
+<!-- Stored by the orchestrator: the implementer's harness refused the write. -->
+Status: DONE_WITH_CONCERNS
+1 (blocking): D-MG-14 implemented. Successful password or passkey login sets at_dev (<hmac>.<nonce>.<actorId>, HttpOnly, SameSite=Lax, Path /api/login, Max-Age 180 d, Secure as the session cookie) via makeDeviceCookie/hasDeviceCookie in src/http/auth.ts. Before verification the per-account cap (20 / 15 min per resolved actor) answers 429 unless a valid at_dev for that actor is present. Tests: (a) 24 failures from 24 IPs then the right password from a 25th IP without at_dev -> 429, no Set-Cookie, no login_failed line (verification not run); (b) browser with at_dev -> 200 after 24 failures elsewhere, cookie attributes asserted; (c) other-actor, forged, and actor-id-swapped at_dev -> 429. Commit dcc38a7.
+2: a valid at_dev also skips the IP+handle cap; the plain per-IP cap (20) always applies. Test: shared IP, 8 failures -> 429 without at_dev, 200 with it. dcc38a7.
+3: securityLog("invite_minted", {inviteId, by: "cli"}) in src/cli/main.ts; the CLI has no disable/enable command. Test runs main(["init"]) then main(["invite","create"]). 0ceb6ef.
+4: logout behavior kept; comment `// D-MG-14: forced logout of one browser accepted (no epoch bump without CSRF).` dcc38a7.
+Test change: the round-1 test (added in this task, not in the main baseline) "a high handle-wide failure count does not lock out the right password elsewhere" asserted the behavior D-MG-14 reverses; renamed to "... refuses a browser without at_dev (item 3, D-MG-14)", first assertion 200 -> 429, comment cites D-MG-14.
+Gate: tests 346 pass / 0 fail; typecheck clean; secrets clean for 0561f86..HEAD.
+Concern: the per-account cap can lock a victim's OTHER (unknown) browsers for 15 minutes; accepted by D-MG-14.

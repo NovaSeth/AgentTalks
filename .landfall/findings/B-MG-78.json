@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-78",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M11",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-czat.js",
+  "line": 1530,
+  "rule": null,
+  "text": "New direct conversation uses a native <select multiple> ('@anna - human', '@system - agent'...) instead of a people picker with search and avatars; @system is offered as a DM target, listed as a removable member in channel details and as an account in the admin panel. Fix: hide the system actor from pickers/members; use the same list as 'Who is here'.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

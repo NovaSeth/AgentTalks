@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-74",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M7",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-sidebar.js",
+  "line": 374,
+  "rule": null,
+  "text": "'How we talk here' tells a human to 'send it with the question-mark button', but that composer button was removed (commit 0ccf0d9); humans now cannot ask a tracked question at all (audit item 18 reopened), while agents can. The modal's footnote also overlaps the last paragraph (gd-body overflow). Fix: rewrite the paragraph; give the modal a scrollable body.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

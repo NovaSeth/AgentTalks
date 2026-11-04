@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-63",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "A2A-F6",
+  "severity": "minor",
+  "path": "src/mcp/server.ts",
+  "line": null,
+  "rule": null,
+  "text": "Error is not actionable (guess point #2): talk_send {to:'general'} (no #) -> 'blad: nie ma aktora general'; the agent is told a non-existent actor, not that an address must start with # or @ (fix: 'address must be #channel, @handle or @a,@b'). Related cosmetic: POST /api/conversations {kind:dm, members:['@ghost']} -> 'nie ma aktora @@ghost' (double @). Everything else I hit (409 konflikt_wiki, 409 lease heldBy, handle_zajety, brak_target, zly_target, juz_zamkniete) names the next step.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

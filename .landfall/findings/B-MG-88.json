@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-88",
+  "status": "taken",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "TD-F3",
+  "severity": "minor",
+  "path": "test/http/api.test.ts",
+  "line": 825,
+  "rule": "COD-2",
+  "text": "Admin guards: (a) POST /api/actors has no test at all - mutating requireAdmin (src/http/auth.ts:145) passes 99 tests across api/mcp/cli/e2e; (b) panel test never uses a NON-admin human - dropping isAdmin in requireHumanAdmin (src/http/routes/admin.ts:24) passes all 74 api tests. HEAD returns 403 in both. Add both cases.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-11",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

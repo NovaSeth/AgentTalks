@@ -22,6 +22,20 @@ import { assertCsrf, requireAuth } from "../auth.ts";
 import { int, json, odrzucKoperteMultipart, readJson, readRaw, str } from "../respond.ts";
 import type { Router } from "../router.ts";
 
+/** The X-File-Name header decoded, or a 400. A raw decodeURIComponent throws a URIError on a
+ *  bad %-sequence ("bad%zz.txt"), which surfaced as a 500. The same code and message as the
+ *  conversation file route (routes/extras.ts, which does not export its decoder). */
+function decodeFileNameHeader(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw badRequest(
+      "zla_nazwa",
+      "naglowek X-File-Name ma nieprawidlowe kodowanie procentowe (uzyj encodeURIComponent)",
+    );
+  }
+}
+
 export function registerWikiRoutes(router: Router): void {
   router.add("GET", "/api/wiki", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
@@ -166,7 +180,7 @@ export function registerWikiRoutes(router: Router): void {
     const file = storeWikiFile(rc.ctx, rc.config.filesDir, {
       actorId: actor.id,
       wikiPageId: id,
-      name: decodeURIComponent(nameHeader),
+      name: decodeFileNameHeader(nameHeader),
       data,
       mime: str(req.headers["content-type"]) ?? "application/octet-stream",
       maxBytes: rc.config.maxFileBytes,

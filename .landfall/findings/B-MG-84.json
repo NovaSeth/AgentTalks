@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-84",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M17",
+  "severity": "minor",
+  "path": "src/http/ui/js/widok-login.js",
+  "line": 120,
+  "rule": null,
+  "text": "The 'Sign in with fingerprint / Face ID' button is shown whenever the device has a platform authenticator, even before any passkey exists for this origin (login/options returns allowCredentials []), so the first click yields the browser's 'no passkeys' dialog. Consider hiding until a passkey was enrolled in this browser (localStorage flag).",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

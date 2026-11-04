@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-70",
+  "status": "open",
+  "task": "T-MG-1",
+  "round": 4,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "UX-M3",
+  "severity": "minor",
+  "path": "src/http/ui/js/akcje.js",
+  "line": 208,
+  "rule": null,
+  "text": "After clicking Join on a previewed channel the row stays bold with the full badge (#bugs '7') while the channel is open and fully visible; it cleared only after an unrelated action. joinChannel never marks read. Fix: markReadDebounced(id, lastMessageId(id)) after join.",
+  "filedAt": "2026-11-04T00:03:37.081Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}
