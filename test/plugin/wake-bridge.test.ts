@@ -504,3 +504,22 @@ test("wake bridge: a claude binary that cannot start is a retryable failure, not
   assert.deepEqual(await fixed.json(), { ok: true, woke: true });
   assert.equal((await b.send(body)).status, 409);
 });
+
+test("wake bridge: a spawn that throws synchronously (E2BIG) is a retryable 503, never a hang; the retry without it wakes, then replay 409 (codex T-MG-14 r2 F5)", async (t) => {
+  const bin = join(mkdtempSync(join(tmpdir(), "at-plugin-wbin-")), "claude");
+  writeFileSync(bin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const env: Record<string, string> = { PATH: "/usr/bin:/bin" };
+  const b = await bridge(t, () => NOW, { extra: { runner: spawnRunner, claudeBin: bin, env } });
+  env.HOME = b.home;
+  env.PAD = "x".repeat(4 * 1024 * 1024); // past ARG_MAX together with the wake argv
+  const body = legacyBody({ exp: NOW + 300, nonce: "e2b1ge2b1ge2b1ge2b1ge2b1ge2b1g00" });
+  const first = await Promise.race([b.send(body), new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+  assert.ok(first, "the bridge answered (no hang)");
+  assert.equal(first!.status, 503);
+  assert.deepEqual(await first!.json(), { ok: false, woke: false, reason: "spawn failed" });
+  delete env.PAD;
+  const retry = await b.send(body);
+  assert.equal(retry.status, 202, "the reservation was released");
+  assert.deepEqual(await retry.json(), { ok: true, woke: true });
+  assert.equal((await b.send(body)).status, 409);
+});

@@ -139,6 +139,8 @@ export function wakePrompt(body) {
 /** A resumed run gets at most this long: a hung run would otherwise keep its session marked
  *  as running and block every later wake for it. */
 export const MAX_RUN_MS = 15 * 60 * 1000;
+/** How long the bridge waits for a resumed run's process to exist before it answers 503. */
+export const START_TIMEOUT_MS = 10_000;
 
 /** The AgentTalks credential variables (lib/identity.mjs): the bridge's own never reach a
  *  woken run. */
@@ -192,9 +194,18 @@ export const spawnRunner = (cmd, argv, opts) => {
   started.catch(() => {}); // observed by the caller; never an unhandled rejection
   /** @type {Run} */
   const run = new Promise((resolve) => {
-    const child = spawn(cmd, argv, {
-      cwd: opts.cwd, env: opts.env ?? wakeEnv(process.env), shell: false, stdio: ["ignore", "ignore", "inherit"],
-    });
+    let child;
+    try {
+      child = spawn(cmd, argv, {
+        cwd: opts.cwd, env: opts.env ?? wakeEnv(process.env), shell: false, stdio: ["ignore", "ignore", "inherit"],
+      });
+    } catch (err) {
+      // spawn() can THROW instead of emitting 'error' (E2BIG, invalid arguments): the run
+      // never started, and `started` must say so, or the caller waits forever (r2 F5).
+      onFail(err);
+      resolve();
+      return;
+    }
     const limit = setTimeout(() => {
       child.kill("SIGTERM");
       setTimeout(() => child.kill("SIGKILL"), 5000).unref();
@@ -282,6 +293,7 @@ export function checkWakeConfig(secrets) {
  *   replayFile?: string | null,
  *   env?: NodeJS.ProcessEnv,
  *   whoami?: (id: { url: string, token: string }) => Promise<{ handle: string, id?: number }>,
+ *   startTimeoutMs?: number,
  *   now?: () => number,
  *   log?: (line: string) => void,
  * }} opts
@@ -468,14 +480,25 @@ export function createWakeBridge(opts) {
         const runEnv = { ...env, AGENTTALKS_EXPECT_SERVER_URL: server, AGENTTALKS_EXPECT_ACTOR: body.actor };
         const run = runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env: runEnv });
         void Promise.resolve(run).catch(() => {}).finally(() => running.delete(rec.sessionId));
+        /** @type {ReturnType<typeof setTimeout> | undefined} */
+        let startTimer;
         try {
-          await (run?.started ?? Promise.resolve());
+          // Bounded: nothing may hold the reservation forever (r2 F5).
+          await Promise.race([
+            run?.started ?? Promise.resolve(),
+            new Promise((_, reject) => {
+              startTimer = setTimeout(() => reject(new Error("the run did not start in time")), opts.startTimeoutMs ?? START_TIMEOUT_MS);
+            }),
+          ]);
         } catch (err) {
           checking.delete(key);
-          running.delete(rec.sessionId);
+          // A run that is merely slow to start keeps its session busy until it settles; one
+          // that failed to start frees it now.
+          if (!(err instanceof Error && err.message === "the run did not start in time")) running.delete(rec.sessionId);
           log(`could not start the resumed run: ${err instanceof Error ? err.message : err}`);
           return reply(res, 503, { ok: false, woke: false, reason: "spawn failed" });
         }
+        finally { clearTimeout(startTimer); }
         seen.set(key, keepUntil);
         checking.delete(key);
         saveReplay();
