@@ -56,27 +56,34 @@ function cleanUrl(s) {
   return u.origin + u.pathname.replace(/\/+$/, "");
 }
 
-/** Whether `dir` is inside a git work tree. @param {string} dir */
-function inGitTree(dir) {
+/** The top of the git work tree `dir` is in (the nearest ancestor with a .git), or null.
+ *  @param {string} dir @returns {string | null} */
+function gitTop(dir) {
   for (let d = dir; ; d = dirname(d)) {
-    if (existsSync(join(d, ".git"))) return true;
-    if (dirname(d) === d) return false;
+    if (existsSync(join(d, ".git"))) return d;
+    if (dirname(d) === d) return null;
   }
 }
+const inGitTree = (/** @type {string} */ dir) => gitTop(dir) !== null;
 
 /** @param {string} p */
 function isLink(p) {
   try { return lstatSync(p).isSymbolicLink(); } catch { return false; }
 }
 
-/** Whether git tracks .agenttalks.json in `dir` (false when git is absent or this is no work tree).
- *  @param {string} dir */
-function isTracked(dir) {
+/** Whether git tracks .agenttalks.json in `dir`: "tracked", "untracked" (git answered with
+ *  exit status 1 = not in the index) or "unknown" (git absent, status 128, timeout, anything
+ *  else) - the caller fails closed on "unknown". Only a directory with no .git upward is
+ *  "untracked" without asking git.
+ *  @param {string} dir @returns {"tracked" | "untracked" | "unknown"} */
+function trackedState(dir) {
+  const top = gitTop(dir);
+  if (top === null) return "untracked";
   try {
     // The repository is untrusted input: no program its config names may run (fsmonitor,
     // hooks), the config of the cwd is not consulted, and the env is minimal.
     execFileSync("git", [
-      "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+      "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", `safe.directory=${top}`,
       "-C", dir, "ls-files", "--error-unmatch", "--", NAME,
     ], {
       cwd: tmpdir(),
@@ -84,8 +91,10 @@ function isTracked(dir) {
       stdio: "ignore",
       timeout: 5000,
     });
-    return true;
-  } catch { return false; }
+    return "tracked";
+  } catch (err) {
+    return /** @type {any} */ (err)?.status === 1 ? "untracked" : "unknown";
+  }
 }
 
 /** A new file under a fresh name (flag wx: never follows or reuses an existing path), then a
@@ -143,9 +152,14 @@ const gi = join(dir, ".gitignore");
 // Preflight: every refusal comes before the first write.
 if (isLink(file)) fail(`${NAME} in the target directory is a symbolic link; refusing to write through it; nothing was written`);
 if (isLink(gi)) fail(".gitignore in the target directory is a symbolic link; refusing to write through it; nothing was written");
-if (isTracked(dir)) {
+const tracked = trackedState(dir);
+if (tracked === "tracked") {
   fail(`${NAME} is tracked by git here: writing the token into it would put the token in the repository. `
     + "Remove it from the index (git rm --cached) first; nothing was written");
+}
+if (tracked === "unknown") {
+  fail(`could not tell whether git tracks ${NAME} here (git is missing, failed or timed out); `
+    + "refusing to write a token into a possible repository; nothing was written");
 }
 
 writeAtomic(file, JSON.stringify({ url, token, writtenBy: "agenttalks-plugin-login" }, null, 2) + "\n", 0o600);
