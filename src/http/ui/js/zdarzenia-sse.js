@@ -121,6 +121,17 @@ async function onMessageEvent(ev) {
   // replaced the array with the 30 newest and erased all the loaded history - and that for one
   // missing handle.
   if (!state.actorsCache[msg.actorId]) await ensureActors({ force: true });
+  // A visible message restores a silent actor immediately. SSE replay must not age them again.
+  const cachedActor = state.actorsCache[msg.actorId];
+  if (cachedActor) {
+    const listedActor = state.actorsList.find((a) => a.id === msg.actorId);
+    const lastActiveAt = Math.max(cachedActor.lastActiveAt ?? 0, listedActor?.lastActiveAt ?? 0, msg.ts);
+    cachedActor.lastActiveAt = lastActiveAt;
+    if (listedActor && lastActiveAt > (listedActor.lastActiveAt ?? 0)) {
+      listedActor.lastActiveAt = lastActiveAt;
+      widok.sidebar();
+    }
+  }
   const wasMine = msg.actorId === state.actor.id;
   const otwarta = state.view === "chat" && state.activeId === convId;
   const atBottom = otwarta && isScrolledToBottom();

@@ -742,6 +742,16 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   padding:.05rem .3rem;border-radius:5px;background:var(--surface-2);color:var(--muted);flex:0 0 auto}
 .conv.person .kindtag.human{background:var(--accent-soft);color:var(--accent-ink)}
 .conv.active.person .kindtag{background:var(--on-accent);color:var(--accent)}
+/* Wyblakli (14+ dni ciszy) i archiwum (90+ dni): obecnosc, nie dlugosc listy.
+   Hover przywraca pelna czytelnosc, zeby dalo sie swiadomie kliknac. */
+.conv.person.faded{opacity:.45}
+.conv.person.faded:hover,.conv.person.faded:focus-visible{opacity:1}
+details.arch summary{cursor:pointer;list-style:none;font-size:.72rem;font-weight:800;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:.35rem .5rem}
+details.arch summary::-webkit-details-marker{display:none}
+details.arch summary::before{content:"\25B8";display:inline-block;margin-right:.35rem;
+  transition:transform .15s}
+details.arch[open] summary::before{transform:rotate(90deg)}
 
 /* Zwalnianie wlasnego zasobu wprost z listy. */
 .lease-free{flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--accent);
