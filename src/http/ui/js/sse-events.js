@@ -2,7 +2,7 @@
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
 import { ACTOR_KEY, CSRF_KEY, api, newSessionGeneration, onUnauthorized, sessionGeneration, setCsrf } from "./api.js";
-import { cancelMarkRead, ensureActors, loadConversationsList, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { cancelMarkRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { announce, closeAccountOverlays, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
 import { actorHandle, findMsgById, mentionsMe, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
@@ -59,6 +59,13 @@ let sseTimer = null;
 
 let sseResume = false; // whether this connection is a return after a break
 
+// T-MG-16 fix round 1 (codex F3, F4): the replay floor for a return before any event arrived.
+// undefined = not captured; 0 = loaded histories that are all empty; > 0 = the newest loaded id.
+// It is captured BEFORE the first connection attempt (and, if nothing was loaded then, at the
+// first drop), and every retry that has not received an event uses it: a history loaded during
+// the break, or a stream that opened without delivering anything, must not move it past the gap.
+let replayFloor;
+
 function setOnline(online) {
   if (state.online === online) return;
   state.online = online;
@@ -88,20 +95,56 @@ export function disconnectSSE() {
   sseRetry = 0;
   state.sseCursor = 0;
   sseResume = false;
+  replayFloor = undefined;
+}
+
+/** The newest message id among the conversations whose history was fetched (REST): undefined
+ *  when no history is loaded, 0 when every loaded history is empty (F4: a valid floor, not "none").
+ *  Message ids are global, so it is a valid replay cursor for every conversation. */
+function newestLoadedId() {
+  let newest;
+  for (const [convId, list] of Object.entries(state.msgs)) {
+    if (!state.loaded[convId]) continue;
+    newest ??= 0;
+    for (const m of list) if (typeof m.id === "number" && m.id > newest) newest = m.id;
+  }
+  return newest;
+}
+
+function captureReplayFloor() {
+  if (!state.sseCursor && replayFloor === undefined) replayFloor = newestLoadedId();
+}
+
+/** F4: a floor of 0 is not sent as `after=0` (that replays every message of every conversation
+ *  from the beginning); the loaded histories are fetched again instead, once the stream is open,
+ *  so nothing posted during the break is missing from them. With a floor of 0 every one of them was
+ *  empty when it was captured or was loaded during the break, so each may have a gap. */
+async function catchUpLoadedHistories(gen) {
+  const loaded = Object.keys(state.loaded).filter((id) => state.loaded[id]).map(Number);
+  for (const convId of loaded) {
+    try { await loadMessages(convId); } catch { continue; }
+    if (gen !== sessionGeneration()) return;
+    if (state.view === "chat" && state.activeId === convId) views.messages?.();
+  }
 }
 
 export function connectSSE() {
   clearTimeout(sseTimer);
   if (es) es.close();
+  captureReplayFloor();
   // NO parameter and after=0 are two different things to the server: absent means "the future
   // only", zero means "replay from the beginning". On a first connection we want the former,
-  // after a break - a replay from the cursor.
-  es = new EventSource(state.sseCursor ? `/api/events?after=${state.sseCursor}` : "/api/events");
+  // after a break - a replay from the cursor: the last event's id, or (B-MG-97, F3) the floor
+  // captured before the first attempt while no event has arrived.
+  const after = state.sseCursor || (sseResume ? replayFloor : undefined);
+  const catchUp = sseResume && !state.sseCursor && replayFloor === 0;
+  const source = es = new EventSource(after ? `/api/events?after=${after}` : "/api/events");
   es.onopen = async () => {
     sseRetry = 0;
     setOnline(true);
     if (!sseResume) return;
     sseResume = false;
+    if (catchUp) catchUpLoadedHistories(sessionGeneration());
     // After a break the unread counters and list contents can be arbitrarily stale - a replay
     // carries messages only, not state.
     try { await loadConversationsList(); views.sidebar(); updateTitleBadge(); }
@@ -148,10 +191,23 @@ export function connectSSE() {
     // readyState CONNECTING (0) = the browser is resuming by itself, we do not interfere.
     // CLOSED (2) = the end, nobody will try again - that is our job.
     setOnline(false);
-    if (es && es.readyState === EventSource.CLOSED) {
+    if (es !== source) return;
+    // B-MG-97, F3: the cursor moves only with message events, so a stream that drops before its
+    // first one has none, and a return without `?after` is "the future only": the messages posted
+    // during the break were lost for the loaded conversations. The return uses the replay floor
+    // captured before the first attempt (or now, if nothing was loaded then), never a value read
+    // at the return.
+    captureReplayFloor();
+    if (es.readyState === EventSource.CLOSED) {
       // EventSource hides the status code. A closed stream with a dead session must not loop on
       // reconnecting forever: one cheap probe - a 401 there fires onSessionLost through api().
       api("GET", "/api/me").catch(() => {});
+      scheduleReconnect();
+    } else if (!state.sseCursor) {
+      // The browser's own retry reuses the URL of this attempt and, with no event id received,
+      // sends no Last-Event-ID: it would come back without the floor. It is stopped, and ours
+      // carries the floor (whether this stream ever opened or not).
+      es.close();
       scheduleReconnect();
     }
   };

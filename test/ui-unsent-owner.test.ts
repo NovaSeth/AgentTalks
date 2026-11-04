@@ -153,6 +153,9 @@ const seed = (conv: number, list: Any[]) => { store["atalks_unsent_" + conv] = J
 const entry = (id: string, body: string, ownerId?: number) =>
   ({ clientMsgId: id, body, threadId: null, ts: 1, error: null, ...(ownerId === undefined ? {} : { ownerId }) });
 const failedBodies = (ui: Any) => ui.st.visibleMessages(5).filter((m: Any) => m.failed).map((m: Any) => m.body);
+/** T-MG-16 (F8 r7): one key per message, atalks_unsent_<actor>_<conv>_<clientMsgId>. */
+const storedIds = (owner: number, conv: number) => Object.keys(store)
+  .filter((k) => k.startsWith(`atalks_unsent_${owner}_${conv}_`)).map((k) => JSON.parse(store[k]).clientMsgId).sort();
 
 test("(a) A and B entries in one key: each account restores only its own", async (t) => {
   for (const [actor, marker, want] of [[A, "1", ["a-text"]], [B, "2", ["b-text"]]] as Any[]) {
@@ -177,9 +180,10 @@ test("(b) B persists after A wrote: A's entry stays, is not re-owned, is not sho
   ui.st.state.pending[5] = [{ clientMsgId: "m-b", body: "b-text", ts: 2, failed: true, error: null }];
   ui.st.persistUnsent(5);
   // F5 (r5): one key per account; the pre-r5 shared list was split by ownerId at sign-in.
-  assert.equal(store["atalks_unsent_5"], undefined, "no shared list is left");
-  assert.deepEqual(JSON.parse(store["atalks_unsent_1_5"]).map((u: Any) => u.clientMsgId), ["m-a"], "A's entry stays A's, untouched by B's write");
-  assert.deepEqual(JSON.parse(store["atalks_unsent_2_5"]).map((u: Any) => u.clientMsgId), ["m-b"], "B's entry only in B's key");
+  // T-MG-16 fix round 1: the shared list is only read (copied per message), and B's write leaves it as it was.
+  assert.equal(store["atalks_unsent_5"], JSON.stringify([entry("m-a", "a-text", 1)]), "the shared list is only read, never rewritten");
+  assert.deepEqual(storedIds(1, 5), ["m-a"], "A's entry stays A's, untouched by B's write");
+  assert.deepEqual(storedIds(2, 5), ["m-b"], "B's entry only in B's key");
   assert.equal(store["atalks_owner"], undefined, "persistUnsent never writes the owner marker (the migration removed it, F2 r3)");
   ui.st.state.pending = {};
   ui.st.claimLocalData(2);
@@ -195,7 +199,7 @@ test("(b2) persistUnsent leaves the marker alone even when it was never set", as
   ui.st.state.pending[5] = [{ clientMsgId: "m-a", body: "a-text", ts: 2, failed: true, error: null }];
   ui.st.persistUnsent(5);
   assert.equal(store["atalks_owner"], undefined);
-  assert.equal(JSON.parse(store["atalks_unsent_1_5"])[0].clientMsgId, "m-a", "stored in A's own key (F5 r5)");
+  assert.deepEqual(storedIds(1, 5), ["m-a"], "stored in A's own key (F5 r5)");
   assert.equal(store["atalks_unsent_5"], undefined);
 });
 
@@ -207,7 +211,7 @@ test("(c) a legacy entry without ownerId goes to the marker's account once, neve
   seed(5, [entry("old", "legacy-text")]);
   await signIn(ui, A, setFetch);
   assert.deepEqual(failedBodies(ui), ["legacy-text"]);
-  assert.equal(JSON.parse(store["atalks_unsent_1_5"])[0].clientMsgId, "old", "claimed by A, into A's key (F5 r5)");
+  assert.deepEqual(storedIds(1, 5), ["old"], "claimed by A, into A's key (F5 r5)");
 
   freshState(ui);
   store["atalks_owner"] = "2";

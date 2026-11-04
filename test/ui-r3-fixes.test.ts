@@ -91,6 +91,9 @@ const doc = Object.assign(new ElementStub(), {
   createElement: () => new ElementStub(), createTextNode: () => new ElementStub(), contains: () => true,
 });
 const storage = new StorageStub();
+/** T-MG-16 (F8 r7): one key per message, atalks_unsent_<actor>_<conv>_<clientMsgId>. */
+const storedIds = (owner: number, conv: number) => [...storage.data.keys()]
+  .filter((k) => k.startsWith(`atalks_unsent_${owner}_${conv}_`)).map((k) => JSON.parse(storage.data.get(k)!).clientMsgId).sort();
 const session = new StorageStub();
 const globals = globalThis as Record<string, Any>;
 Object.assign(globals, {
@@ -380,15 +383,18 @@ test("F2: sign-out clears only the signing-out account's keys (drafts, wiki, nav
   assert.equal(a2.loadWikiDraft("home")?.body, "ALICE_WIKI");
   assert.equal(a2.lastConvId(), 5);
   // F5 (r5): unsent messages are per actor too.
-  assert.deepEqual(JSON.parse(storage.getItem("atalks_unsent_1_5")!).map((u: Any) => u.clientMsgId), ["m-a"], "A's unsent entry stays");
-  assert.equal(storage.getItem("atalks_unsent_2_5"), null, "B's is gone");
+  assert.deepEqual(storedIds(1, 5), ["m-a"], "A's unsent entry stays");
+  assert.deepEqual(storedIds(2, 5), [], "B's is gone");
   const b2 = await tab("b6", B);
   assert.equal(b2.loadDraft(5), null);
   assert.equal(b2.loadWikiDraft("home"), null);
   assert.equal(b2.lastConvId(), null);
   a2.clearLocalAccountData(1);
-  // The storage-layout flag (F4 r5) is browser-level and names no account.
-  assert.deepEqual([...storage.data.keys()].filter((k) => k.startsWith("atalks_") && k !== "atalks_storage_v"), [], "nothing of either account is left");
+  // The storage-layout flag (F4 r5) and its first-seen time (T-MG-16 fix round 1) are browser-level
+  // and name no account.
+  const left = [...storage.data.keys()].filter((k) => k.startsWith("atalks_") && k !== "atalks_storage_v"
+    && k !== "atalks_storage_v_since");
+  assert.deepEqual(left, [], "nothing of either account is left");
 });
 
 test("F2: legacy un-namespaced keys go once to the actor the old marker names, and the marker goes", async () => {
@@ -404,9 +410,10 @@ test("F2: legacy un-namespaced keys go once to the actor the old marker names, a
   assert.equal(b.lastConvId(), null);
   assert.equal(storage.getItem("atalks_owner"), null, "the marker is gone");
   assert.equal(storage.getItem("atalks_draft_5"), null, "the legacy key is gone");
-  assert.equal(storage.getItem("atalks_unsent_5"), null, "the shared legacy list is gone");
-  assert.equal(JSON.parse(storage.getItem("atalks_unsent_1_5")!)[0].clientMsgId, "old", "the legacy unsent entry is A's (in A's key, F5 r5)");
-  assert.equal(storage.getItem("atalks_unsent_2_5"), null, "and not B's");
+  // T-MG-16 fix round 1: an old unsent list is only read (copied per message), never removed early.
+  assert.ok(storage.getItem("atalks_unsent_5"), "the shared legacy list is only read");
+  assert.deepEqual(storedIds(1, 5), ["old"], "the legacy unsent entry is A's (in A's key, F5 r5)");
+  assert.deepEqual(storedIds(2, 5), [], "and not B's");
   const a = await tab("a7", A);
   assert.equal(a.loadDraft(5)?.text, "LEGACY_A");
   assert.equal(a.loadWikiDraft("home")?.body, "LEGACY_WIKI");
