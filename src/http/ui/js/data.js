@@ -44,12 +44,30 @@ export function reactionsOf(msgs, reactions) {
   return Object.fromEntries(msgs.filter((m) => reactions && m.id in reactions).map((m) => [m.id, reactions[m.id]]));
 }
 
+// T-MG-43 (codex T-MG-18 r4 F5, F6): live writes carry a stamp from one monotonic counter. A REST
+// page records the counter when it is sent (liveMark) and keeps away from what a live write stamped
+// after that mark: a live write follows an event whose newer revisions each bring their own event,
+// so a page cut at an unknown moment must not undo it. Everything else the page carries is applied.
+let liveSeq = 0;
+export function liveMark() { return liveSeq; }
+export function liveStamp() { return ++liveSeq; }
+/** messageId -> the stamp of the last reaction refresh triggered by a live reaction event. */
+const reactionStamps = new Map();
+/** The reaction merge of a REST page sent at `mark`, independent of which bodies the page was allowed
+ *  to replace (B-MG-118: an SSE message carries no reactions, so its REST reactions are still needed),
+ *  except for the messages a live reaction refresh wrote after the mark. */
+export function mergePageReactions(msgs, reactions, mark) {
+  const rx = msgs.filter((m) => (reactionStamps.get(m.id) ?? 0) <= mark);
+  mergeReactions(rx, reactionsOf(rx, reactions));
+}
+
 export async function loadMessages(convId, { keepTouched = false } = {}) {
   const firstLoad = !state.loaded[convId];
   // keepTouched (resume refresh, codex r3 F4): a message whose held object changed while the request
   // was in flight was replaced by a live event or a newer action, so the answer (cut earlier on the
   // server) must not put the older revision back. A reference comparison: every writer replaces the object.
   const before = keepTouched ? new Map((state.msgs[convId] || []).map((m) => [m.id, m])) : null;
+  const mark = liveMark();
   const data = await api("GET", `/api/conversations/${convId}/messages?limit=${INITIAL_BATCH_SIZE}`);
   // We MERGE rather than replace the array: assigning `state.msgs[id] = ...` erased everything
   // the user had loaded by scrolling up.
@@ -68,7 +86,9 @@ export async function loadMessages(convId, { keepTouched = false } = {}) {
   // conversation, a new batch says nothing about what lies ABOVE our list.
   if (firstLoad) state.hasMore[convId] = data.messages.length >= INITIAL_BATCH_SIZE;
   mergeActors(data.actors);
-  mergeReactions(fresh, reactionsOf(fresh, data.reactions));
+  // B-MG-118: a touched message keeps its live body, not the reactions it had before (none for an
+  // SSE arrival); only a live reaction refresh since the request was sent keeps the page's away.
+  mergePageReactions(data.messages, data.reactions, mark);
   // Thread replies do not stand in the main list, so a batch of 30 messages can produce a
   // screen with three. We fetch more until there is something to scroll - without that, lazy
   // loading would never start, because there simply is no scrollbar.
@@ -156,6 +176,8 @@ export async function loadReactionsForMessage(convId, messageId) {
   try {
     const data = await api("GET", `/api/conversations/${convId}/messages?before=${messageId + 1}&limit=1`);
     mergeReactions(data.messages, data.reactions);
+    // T-MG-43: stamped only when it landed, so a failed refresh does not keep a page's reactions out.
+    for (const m of data.messages) reactionStamps.set(m.id, liveStamp());
     mergeActors(data.actors);
     if (state.loaded[convId]) for (const m of data.messages) upsertMessage(convId, m);
   } catch { /* best effort */ }
