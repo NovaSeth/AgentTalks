@@ -29,15 +29,29 @@ async function askNotificationPermission() {
   renderNotificationsMain();
 }
 
+/** The part of NEWS.md meant for people: the intro plus every `## ` section whose heading does not
+ *  end with "(for agents)" (its `###` subsections and tables go with it). "" when nothing is left. */
+export function humanNews(text) {
+  const parts = String(text ?? "").split(/^(?=## )/m);
+  const intro = parts[0].startsWith("## ") ? "" : parts.shift();
+  // Text with no sections at all has nothing marked for agents: it is all for people.
+  if (!parts.length) return intro.trim() ? intro : "";
+  const kept = parts.filter((p) => !/^## .*\(for agents\)\s*$/.test(p.split("\n")[0]));
+  return kept.length ? (intro + kept.join("")).trimEnd() + "\n" : "";
+}
+
 /** The "What's new" modal: a list of fresh capabilities, shown once after a
  *  change. The content comes from the server (NEWS.md) and is already marked as
  *  delivered.
  *  @param onClose called when the window disappears - the greetings are a
  *         queue, so the next one can only start once this one frees the screen. */
 export function showNewsModal(news, onClose) {
+  const text = humanNews(news.text);
+  // Agent-only news: nothing to show a person, but the news still counts as delivered.
+  if (!text) { onClose?.(); return; }
   const { modal, close } = openModal(`
       <h2 id="m-title">${t("What's new")}</h2>
-      <div class="md news-body">${mdToHtml(news.text, "page", state.actor.handle)}</div>
+      <div class="md news-body">${mdToHtml(text, "page", state.actor.handle)}</div>
       <div class="row"><button class="btn" id="news-ok">${t("Got it, thanks")}</button></div>`,
   {
     modalClass: "wide news-modal",
