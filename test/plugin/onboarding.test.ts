@@ -241,13 +241,33 @@ test("S9: login's git calls run no repository-configured program (core.fsmonitor
   assert.equal(existsSync(marker), false, "the repository's fsmonitor program must not run");
 });
 
+test("S11: an ignore line that git does not honour (a later negation in the same .gitignore) -> refuse, no credential on disk, .gitignore unchanged, nothing trusted", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const s = setup();
+  execFileSync("git", ["init", "-q"], { cwd: s.project, stdio: "pipe" });
+  const gi = join(s.project, ".gitignore");
+  const body = ".agenttalks.json\n!.agenttalks.json\n";
+  writeFileSync(gi, body);
+  const r = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /nothing was written$/m);
+  assert.equal(existsSync(s.file), false, "no credential on disk");
+  assert.equal(readFileSync(gi, "utf8"), body);
+  assert.equal(existsSync(s.conf), false, "nothing trusted");
+  assert.ok(!(r.stdout + r.stderr).includes(TOKEN));
+});
+
 test("S9b: login.mjs spawns git only with the hardening flags, a neutral cwd and a minimal env", () => {
-  const src = readFileSync(LOGIN, "utf8");
+  // The git calls live in lib/credguard.mjs, shared with atalk; login.mjs must import it.
+  assert.ok(readFileSync(LOGIN, "utf8").includes("../lib/credguard.mjs"));
+  const src = readFileSync(join(PLUGIN, "lib", "credguard.mjs"), "utf8");
   assert.ok(src.includes('"core.fsmonitor=false"'));
   assert.ok(src.includes('"core.hooksPath=/dev/null"'));
   assert.ok(src.includes("GIT_CONFIG_NOSYSTEM"));
   assert.ok(src.includes("tmpdir()"));
   assert.ok(/"-C", dir/.test(src));
+  assert.ok(src.includes('"check-ignore"'));
 });
 
 test("S10: the tracked-file check fails closed: git exiting 128 (or anything but 1) inside a git tree -> refuse, nothing written; exit 1 = untracked -> proceeds; no .git upward -> git is not asked", async (t) => {
@@ -255,7 +275,8 @@ test("S10: the tracked-file check fails closed: git exiting 128 (or anything but
   t.after(() => fake.close());
   const bin = mkdtempSync(join(tmpdir(), "at-fakegit-"));
   const fakeGit = (code: number) => {
-    writeFileSync(join(bin, "git"), `#!/bin/sh\nexit ${code}\n`, { mode: 0o755 });
+    // check-ignore (exit 1 = NOT ignored) answers 0: this test is about the tracked-file check.
+    writeFileSync(join(bin, "git"), `#!/bin/sh\ncase "$*" in *check-ignore*) exit 0;; esac\nexit ${code}\n`, { mode: 0o755 });
     return { PATH: `${bin}:${process.env.PATH ?? ""}` };
   };
 
@@ -283,7 +304,7 @@ test("S10: the tracked-file check fails closed: git exiting 128 (or anything but
 });
 
 test("S10b: the git call passes safe.directory", () => {
-  assert.ok(readFileSync(LOGIN, "utf8").includes("safe.directory="));
+  assert.ok(readFileSync(join(PLUGIN, "lib", "credguard.mjs"), "utf8").includes("safe.directory="));
 });
 
 // ---- Fix round 1 (T-MG-21 review findings F1-F5) ----
