@@ -5,15 +5,20 @@
   "title": "Fix C: UI - liczniki przy edycji, duplikat w watku, composer po wyslaniu, kursor SSE, wylogowanie, Esc",
   "lane": null,
   "owner": "MG",
-  "class": "standard",
+  "class": "critical",
   "classHistory": [
     {
       "class": "standard",
       "reason": "standard: 7 files > 2; 200 LOC > 30",
       "at": "2026-11-03T23:49:27.242Z"
+    },
+    {
+      "class": "critical",
+      "reason": "critical: 932 LOC > 400",
+      "at": "2026-11-04T00:20:30.431Z"
     }
   ],
-  "status": "implemented",
+  "status": "done",
   "round": 1,
   "events": [
     {
@@ -78,6 +83,57 @@
       "data": {
         "report": "done",
         "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:20:23.357Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "approved",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T00:20:30.431Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T00:20:30.431Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "route-escalated",
+        "head": "47cca3658dfeadea8c70c6d39e6287c40fa6320d",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:21:30.038Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "72a3140c194408c9f46813362eed5108885c52d8",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T00:21:48.578Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "72a3140c194408c9f46813362eed5108885c52d8"
       }
     }
   ],

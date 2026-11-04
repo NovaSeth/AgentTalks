@@ -13,7 +13,7 @@
       "at": "2026-11-04T00:19:46.039Z"
     }
   ],
-  "status": "new",
+  "status": "dispatched",
   "round": 0,
   "events": [
     {
@@ -34,8 +34,27 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T00:19:46.568Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-11-guards-tests-hardening",
+        "base": "0394bdd67d877f4249257ed57c6e41b86d57a24e",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-11"
+      }
+    },
+    {
+      "at": "2026-11-04T00:20:08.802Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "0394bdd67d877f4249257ed57c6e41b86d57a24e"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "0394bdd67d877f4249257ed57c6e41b86d57a24e",
+  "branch": "task/T-MG-11-guards-tests-hardening"
 }

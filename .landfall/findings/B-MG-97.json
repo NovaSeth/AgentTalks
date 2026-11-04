@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-97",
+  "status": "open",
+  "task": "T-MG-8",
+  "round": 1,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "finding": "F1",
+  "severity": "minor",
+  "path": "src/http/ui/js/zdarzenia-sse.js",
+  "line": 60,
+  "rule": null,
+  "text": "Side effect of B-MG-38 (cursor only from SSE): until the first SSE event arrives, sseCursor is 0 and connectSSE() reconnects with no ?after, which the server reads as 'future only'. A drop before the first event loses messages posted in the gap for loaded conversations; onopen refreshes only the list and unread counts. Not reproduced live. Consider a reload of the active conversation on resume.",
+  "filedAt": "2026-11-04T00:20:23.699Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

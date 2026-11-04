@@ -1,0 +1,24 @@
+# Tests for unguarded controls + small hardening (T-MG-11)
+Executor: landfall:implementer. Class: critical (auth code touched). Review: landfall:security-reviewer.
+Worktree: /Users/michal/Documents/Code/AgentTalks-wt/T-MG-11 (branch task/T-MG-11-guards-tests-hardening from main at 0394bdd67d877f4249257ed57c6e41b86d57a24e, which contains T-MG-4, T-MG-6, T-MG-7, T-MG-9; npm ci done). Base for the gate range: 0394bdd67d877f4249257ed57c6e41b86d57a24e. Budget: 60 minutes.
+Common part (rules, tests, git, gate, report): /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-1/fix-common.md - read it first. Tests in new files test/fixes/t-mg-11-*.test.ts.
+Source: the tests+docs review (mutation testing) /private/tmp/claude-501/-Users-michal-Documents-Code-AgentTalks/9dfeb82b-2d22-46c9-bb1d-d218d405c517/scratchpad/reviews/tests-docs.json and tests-docs.json.repro.md (each finding names the mutation that no test caught: your test must FAIL under that mutation - prove it by applying the mutation in a scratch copy, running your test, and pasting the failing output in the report, then discard the copy).
+
+## Scope
+Tests for items 1-7 (new test files only, plus the minimal production change named in item 4). Production changes for items 8-11 in: src/http/auth.ts (item 8), src/http/sse.ts (item 4 only: make the ping interval injectable), src/core/digest.ts (item 9), src/core/notifications.ts (item 10), src/core/wiki.ts (item 11). NOT src/mcp/server.ts, src/cli/** or src/http/ui/** (other tasks are changing them).
+
+## Items (full texts: `landfall findings show <ID>`)
+1. B-MG-86 (TD-F1): the forged-cookie test never reaches the MAC compare. Add a test with a well-formed 4-part forged cookie (valid shape, wrong MAC) for an admin id -> 401 on /api/me. Mutation that must fail it: remove the timingSafeEqual/MAC check in src/http/auth.ts.
+2. B-MG-87 (TD-F2): a non-member must not get a private channel's message text through GET /api/notifications when mentioned. Mutation: drop the canRead filter on mentions in postMessage.
+3. B-MG-88 (TD-F3): (a) POST /api/actors: agent admin 403, non-admin human 403, human admin 201 (check what T-MG-6 already covers in test/fixes/t-mg-6-*.test.ts and add only what is missing); (b) admin panel routes (GET /api/admin/actors etc.) with a NON-admin human -> 403. Mutation: drop isAdmin in requireHumanAdmin.
+4. B-MG-89 (TD-F4): an open SSE stream closes after token revoke and after actor disable. Make the ping/revalidation interval injectable (config or an exported setter used only by tests, default unchanged 20 s) so the test runs in < 2 s. Mutation: replace the revalidation in the ping callback with `false`.
+5. B-MG-90 (TD-F5): pin by a non-member of a private channel -> 403/404; core markRead by a non-member -> refused. Mutations: canRead out of pin(); remove the guard in unread.ts markRead.
+6. B-MG-91 (TD-F6): Set-Cookie attributes: HttpOnly + SameSite=Lax always; Secure when x-forwarded-proto=https with trustProxy, and when the server is https/baseUrl https; not Secure on plain http without trustProxy. Same assertions for the at_dev cookie. Mutations: delete 'SameSite=Lax'; delete the Secure push.
+7. B-MG-92 (TD-F7): two DatabaseSync handles on one temp file run migrate concurrently -> both end at the same user_version, no duplicate migration side effects. Mutation: remove the in-transaction re-read of user_version in src/store/db.ts migrate.
+8. B-MG-96 (T-MG-6 review F7): at_dev's 180-day expiry is client-only (a day-181 cookie still exempts). Put the issue time inside the signed value (e.g. <hmac>.<nonce>.<actorId>.<issuedAt>, HMAC over all fields) and reject one older than 180 days on the server. Test: forged/old issuedAt -> no exemption; fresh -> exemption.
+9. B-MG-94 (T-MG-7 review F2): src/core/digest.ts digestFor still counts every unread row; apply the same cap (UNREAD_CAP from unread.ts) with a LIMIT subquery. Test: counts exact under the cap, capped above; timing on 300k rows < 50 ms (state the number).
+10. B-MG-95 (T-MG-7 review F3): marking all notifications read must touch only notifications the actor can currently read (the READABLE_NOW filter) and report `changed` for those only. Test.
+11. B-MG-33 (CORE-11): wiki revisions grow without bound. Decision for this item (no history deletion): a save whose body and title are identical to the current revision creates no new revision (answer as a no-op with the current revision id); and an actor may save one page at most 60 times per hour (429 with an English hint). Tests for both.
+
+## Report
+/Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-11/report.md - writes there are usually refused; then put the whole report in your final reply starting with the line `---` (red:/green: JSON frontmatter lines first). Include for each of items 1-7 the mutation you applied and the failing output proving the test can fail.

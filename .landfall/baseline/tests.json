@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "dcc38a7d7255a78dff53db2548eefcc1aa20cb88",
-  "collectedAt": "2026-11-04T00:18:22.312Z",
+  "head": "72a3140c194408c9f46813362eed5108885c52d8",
+  "collectedAt": "2026-11-04T00:21:30.038Z",
   "tests": [
     {
       "id": "[\"\",\"/api/me pokazuje, kto pisze - bez pytania o liste obecnych\",1]",
@@ -11,6 +11,181 @@
     },
     {
       "id": "[\"\",\"AGENTTALKS_DATA wskazuje katalog danych\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-35: edits, deletes and replayed updates replace messages without new-message effects\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-36: a thread send response upserts the reply already received over SSE\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-37: Enter then further typing keeps the composer, focus and new draft after send\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-37: a response after switching conversations preserves both new drafts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-37: a successful send only clears unchanged sent text\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-37: sending a main-composer thread reply does not rebuild the composer\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-37: typing the same message again during a send preserves the new text\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-38: REST upserts do not advance the cursor used to reconnect SSE\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-39: a wiki title cannot inject an internal inline placeholder\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-39: markdown still escapes hostile HTML, URLs and wiki titles\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-39: mentions never rewrite link destinations or code\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-39: user NUL placeholders remain text instead of referencing code blocks\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-41: logout clears all account state and drafts while preserving browser preferences\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-43: confirmation closed by Escape releases every keydown listener\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-43: confirmation closed by backdrop releases every keydown listener\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-43: confirmation closed by cf-no releases every keydown listener\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-43: confirmation closed by cf-yes releases every keydown listener\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-43: news closed by Escape releases listeners and advances the queue once\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-43: news closed by backdrop releases listeners and advances the queue once\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-43: news closed by button releases listeners and advances the queue once\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-58: Enter saves an inline edit and replaces the editor with the new text\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-58: Enter with empty text closes the editor without saving\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-58: Enter with unchanged text closes the editor without saving\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-58: Escape cancels an inline edit without restoring it on redraw\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-58: a failed save preserves the editor and its draft\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-58: a live update and a full redraw preserve an unfinished edit\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-58: a save completing after a list redraw closes the restored editor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-59: a delayed destination refresh cannot open a thread after leaving its conversation\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-59: a delayed thread response cannot replace a newer thread destination\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-59: notification highlights a thread reply in its panel with an uncached root\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-59: notification highlights a thread reply in its panel\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-59: notification highlights a top-level message in the main list\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-59: search highlights a thread reply in its panel with an uncached root\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-59: search highlights a thread reply in its panel\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-59: search highlights a top-level message in the main list\",1]",
       "file": "",
       "skipped": false
     },
@@ -100,36 +275,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"a disabled actor is not woken and is not wakeable (B-MG-3)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"a failed login writes exactly one security: line without the password (B-MG-51)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"a forged or other-actor at_dev does not exempt (item 1c)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"a high handle-wide failure count refuses a browser without at_dev (item 3, D-MG-14)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"a known browser (valid at_dev) logs in despite the account cap (item 1b)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"a valid at_dev also skips the IP+handle cap, the plain IP cap stays (item 2)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"actorLiveness: zywa sesja -> online, zakonczona -> nieobecny\",1]",
       "file": "",
       "skipped": false
@@ -150,11 +295,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"agenttalks invite create writes an invite_minted line with by cli (item 3)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"aktor bez hasla nie zaloguje sie pustym haslem\",1]",
       "file": "",
       "skipped": false
@@ -166,16 +306,6 @@
     },
     {
       "id": "[\"\",\"aktor z zywym SSE nie jest budzony - push juz dotarl\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"an '@' prefix does not open fresh limiter buckets (item 1)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"an agent admin cannot create actors, a human admin can (B-MG-8)\",1]",
       "file": "",
       "skipped": false
     },
@@ -316,11 +446,6 @@
     },
     {
       "id": "[\"\",\"displayName domyslnie rowna sie handle i daje sie zmienic bez ruszania handle\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"distributed guesser: 25th IP with the right password and no at_dev gets 429, unverified (item 1a)\",1]",
       "file": "",
       "skipped": false
     },
@@ -510,21 +635,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"interleaved successful logins do not reset the guess counter on a victim (B-MG-44)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"invite minted and actor disabled are logged, enroll limit is logged (item 5)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"isBlockedIp blocks NAT64 and 6to4 ranges (B-MG-19)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"isBlockedIp: prywatne blokowane, publiczne przepuszczane, loopback za zgoda\",1]",
       "file": "",
       "skipped": false
@@ -690,26 +800,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"logout invalidates the cookie server-side and requires CSRF (B-MG-45)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"logout with a bad CSRF clears the cookie, keeps the epoch and answers 403 (item 4)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"long-poll answers 401 after the actor was disabled mid-wait (B-MG-2)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"long-poll answers 401 after the token was revoked mid-wait (B-MG-2)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"long-poll bez uwierzytelnienia daje 401\",1]",
       "file": "",
       "skipped": false
@@ -726,11 +816,6 @@
     },
     {
       "id": "[\"\",\"long-poll nie zwraca wlasnych wiadomosci\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"long-poll of a cookie session answers 401 after a password change (B-MG-50)\",1]",
       "file": "",
       "skipped": false
     },
@@ -970,16 +1055,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"passkey counter: 5->0 and 5->5 rejected, 5->6 ok, never lowered (B-MG-5)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"passkey counter: an always-zero authenticator stays allowed (B-MG-52)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"passkey: cofniety licznik podpisow jest odrzucany (klon klucza)\",1]",
       "file": "",
       "skipped": false
@@ -1170,11 +1245,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"security lines never contain the handle string a user typed (item 2)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"sensitive bez TTL dostaje domyslny TTL i wygasa\",1]",
       "file": "",
       "skipped": false
@@ -1300,22 +1370,12 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"the michal, @michal, @@michal, @@@michal sequence is limited from the 9th (item 1)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"token bez TTL nie wygasa\",1]",
       "file": "",
       "skipped": false
     },
     {
       "id": "[\"\",\"token dla nieistniejacego aktora konczy sie kodem 1, nie wyjatkiem\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"token mint and revoke and a denied admin action are logged without secrets (B-MG-51)\",1]",
       "file": "",
       "skipped": false
     },
@@ -1416,11 +1476,6 @@
     },
     {
       "id": "[\"\",\"w kontenerze bind na 0.0.0.0 jest dozwolony\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"wake body carries a signed exp (now+300) and a random nonce (B-MG-19)\",1]",
       "file": "",
       "skipped": false
     },
@@ -1736,5 +1791,5 @@
     }
   ],
   "failing": [],
-  "sha256": "bea437fa842bc25af9ef641be1b4caacd03e1e1918031002c281b1405071f797"
+  "sha256": "42b1ecaa99b4cbf6ff92e457c5236f2a0461cb0fcc8742dfbbd9d4f07abb9f9a"
 }
