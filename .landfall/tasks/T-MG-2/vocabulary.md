@@ -47,6 +47,8 @@ Old codes stay reachable for one minor version: `src/core/error-codes.ts` export
 | zly_rodzaj | invalid_kind | | zly_sygnal | invalid_signal |
 | zly_target | invalid_target | | zly_zasob | invalid_resource |
 Unchanged (already English): csrf, cbor, emoji, token, webauthn, webauthn_challenge, webauthn_origin, webauthn_rpid, webauthn_uv; language codes `en`, `pl` are not error codes.
+Added in EN-1 (already applied): brak_base_url -> base_url_required, cialo_za_dlugie -> message_too_long, multipart_niewspierany -> multipart_unsupported, nie_twoja_strona -> not_your_page, ttl_za_krotki -> ttl_too_short, sekcja -> section_not_found, zly_adres -> invalid_address, publiczny_sam -> public_channel_open; `sesja` split into session_not_found (404) and session_invalid (401).
+Internal reason enums are identifiers, not API codes (EN-4): e.g. tokenTrouble reasons "wygasl" -> "expired", "odwolany" -> "revoked", "aktor_wylaczony" -> "actor_disabled".
 
 ## 2. Agent-visible MCP / hook tags (P2)
 | old | new |

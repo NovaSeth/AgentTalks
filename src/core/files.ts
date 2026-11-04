@@ -138,9 +138,12 @@ export function getFileInfo(ctx: Ctx, id: string, actorId: number): FileInfo | n
     deleteFileRow(ctx, row);
     return null;
   }
-  const allowed = row.actor_id === actorId
-    || row.wiki_page_id !== null
-    || (row.conversation_id !== null && canRead(ctx, row.conversation_id, actorId));
+  // A file in a conversation follows CURRENT read access for everybody, the uploader included
+  // (an uploader removed from a private channel loses the file). A wiki attachment is public.
+  // Only a file with neither is owner-only.
+  const allowed = row.conversation_id !== null
+    ? canRead(ctx, row.conversation_id, actorId)
+    : row.wiki_page_id !== null || row.actor_id === actorId;
   if (!allowed) return null;
   return toInfo(row);
 }

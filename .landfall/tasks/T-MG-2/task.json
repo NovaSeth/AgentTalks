@@ -13,7 +13,7 @@
       "at": "2026-11-04T00:40:43.646Z"
     }
   ],
-  "status": "new",
+  "status": "dispatched",
   "round": 0,
   "events": [
     {
@@ -42,8 +42,28 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T00:40:44.171Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-2-english",
+        "base": "d89e721ef8bd4809aa9066030d2dd834632c996c",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-2"
+      }
+    },
+    {
+      "at": "2026-11-04T00:41:01.223Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:implementer",
+        "base": "d89e721ef8bd4809aa9066030d2dd834632c996c",
+        "note": "EN-1 error-code contract"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "d89e721ef8bd4809aa9066030d2dd834632c996c",
+  "branch": "task/T-MG-2-english"
 }

@@ -13,8 +13,8 @@
       "at": "2026-11-04T00:07:16.270Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "fix-round",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-04T00:04:46.046Z",
@@ -54,6 +54,55 @@
       "data": {
         "executor": "claude:designer",
         "base": "0e27f297bad975f9c8175754dafd9712d10d73ae"
+      }
+    },
+    {
+      "at": "2026-11-04T00:43:01.999Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T00:43:20.009Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:security-reviewer",
+        "base": "0e27f297bad975f9c8175754dafd9712d10d73ae",
+        "note": "review r1 (Claude security) + codex cross-review"
+      }
+    },
+    {
+      "at": "2026-11-04T00:46:27.406Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T00:52:55.314Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:53:24.495Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 14,
+        "note": "dispatched to a fresh designer (PRI-4)"
       }
     }
   ],
