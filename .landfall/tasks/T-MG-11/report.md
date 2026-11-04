@@ -22,3 +22,10 @@ Items 1-7 (tests; each proven to fail under its mutation in a scratch copy):
 
 Concerns / out of scope: hasDeviceCookie/makeDeviceCookie take ctx (epoch) -> three call sites changed in src/http/routes/auth.ts (needed by the epoch extension). No baseUrl-based Secure logic exists (Secure from trustProxy, x-forwarded-proto or TLS); requestIsSecure honours x-forwarded-proto without trustProxy (only adds Secure; pinned by a test). No existing test modified.
 Gate: 408 pass / 0 fail; typecheck clean; secrets clean for 0394bdd..HEAD.
+
+## Fix round 1 (codex review r1: 2 blocking)
+<!-- Stored by the orchestrator: the implementer's harness refused the write. -->
+Status: DONE
+1 (B-MG-91, https baseUrl): cookieIsSecure(config, secure) = secure || config.trustProxy || /^https:\/\//i.test(config.baseUrl), used by makeCookie and makeDeviceCookie (no signature change). Tests: direct (https, HTTPS, "", http) and a plain-http login against an https-baseUrl server (both Set-Cookie carry Secure). Mutation (remove the baseUrl branch) fails both.
+2 (B-MG-96, MAC-discriminating vectors): A) real cookie with issuedAt moved 10 days earlier (inside 180 d), old MAC -> 429; B) epoch bumped, cookie epoch field set to the new value, stale MAC -> 429; each preceded by checks that the cap is active and the untouched cookie exempts. Mutation (MAC compare disabled) fails exactly these two (actual 200).
+Commit 0361bec. Tests 408 -> 412. Gate: 412/0, typecheck clean, secrets clean.
