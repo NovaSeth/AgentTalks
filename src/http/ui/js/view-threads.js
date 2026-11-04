@@ -15,9 +15,7 @@ import { avatarHtml, emptyStateHtml, escapeHtml, hamburgerHtml, timeAgo, toggleD
 import { iconThread } from "./icons.js";
 import { t } from "./i18n.js";
 import { conversationRoute, syncRoute } from "./router.js";
-import { actorHandle, dmLabel, dmOthers, state, views } from "./state.js";
-
-const SEEN_KEY = "atalks_threads_seen";
+import { actorHandle, dmLabel, dmOthers, loadThreadsSeen, saveThreadsSeen, state, views } from "./state.js";
 
 /** The threads of `me` in a flat message list: `{ root, replies, last, conversationId, unread }`,
  *  newest activity first. A thread is mine when I wrote the root or one of the replies; it is
@@ -50,15 +48,14 @@ export function threadsFor(msgs, me, seen = {}) {
 }
 
 // ------------------------------------------------------------- seen marks
-function loadSeen() {
-  try { return JSON.parse(localStorage.getItem(SEEN_KEY) || "{}") || {}; } catch { return {}; }
-}
+// r4 (item 9): stored per actor by state.js (atalks_threads_seen_<actorId>), like the drafts.
+function loadSeen() { return loadThreadsSeen(); }
 
 function markSeen(rootId, lastId) {
   const seen = loadSeen();
   if (Number(seen[rootId] || 0) >= lastId) return;
   seen[rootId] = lastId;
-  try { localStorage.setItem(SEEN_KEY, JSON.stringify(seen)); } catch { /* storage full or blocked: the dot stays */ }
+  saveThreadsSeen(seen);
 }
 
 /** All loaded messages, every conversation, one flat list. */

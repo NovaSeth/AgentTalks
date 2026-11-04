@@ -210,6 +210,9 @@ const DRAFT_KEY = (owner, id) => `atalks_draft_${owner}_${id}`;
 const WIKI_DRAFT_KEY = (owner, slug) => `atalks_wiki_draft_${owner}_${slug}`;
 const LAST_CONV_KEY = (owner) => `atalks_last_conv_${owner}`;
 const RECENT_KEY = (owner) => `atalks_recent_${owner}`;
+// r4 (item 9): the Threads view's "seen" marks (root id -> last reply id seen) per actor too.
+const THREADS_SEEN_KEY = (owner) => `atalks_threads_seen_${owner}`;
+const LEGACY_THREADS_SEEN_KEY = "atalks_threads_seen";
 // Written before r3: one marker for the whole browser and un-namespaced keys. Read only by the
 // one-time migration below.
 const LEGACY_OWNER_KEY = "atalks_owner";
@@ -253,6 +256,7 @@ function migrateLegacy(fallback) {
         move(key, WIKI_DRAFT_KEY(owner, key.slice(LEGACY_WIKI_PREFIX.length)));
       } else if (key === "atalks_last_conv") move(key, LAST_CONV_KEY(owner));
       else if (key === "atalks_recent") move(key, RECENT_KEY(owner));
+      else if (key === LEGACY_THREADS_SEEN_KEY) move(key, THREADS_SEEN_KEY(owner));
       else if (marker !== null && key.startsWith(UNSENT_PREFIX)) {
         // Written by 4aa92d5 before entries carried an owner: the old marker is all we have.
         let list = null;
@@ -276,7 +280,7 @@ export function clearLocalAccountData(actorId) {
   try {
     for (const key of storageKeys()) {
       if (key.startsWith(DRAFT_KEY(me, "")) || key.startsWith(WIKI_DRAFT_KEY(me, ""))
-          || key === LAST_CONV_KEY(me) || key === RECENT_KEY(me)) {
+          || key === LAST_CONV_KEY(me) || key === RECENT_KEY(me) || key === THREADS_SEEN_KEY(me)) {
         localStorage.removeItem(key);
       } else if (key.startsWith(UNSENT_PREFIX)) {
         let list = null;
@@ -298,6 +302,19 @@ export function claimLocalData(actorId) {
   if (state.draftsOwner != null && String(state.draftsOwner) !== String(actorId)) { state.drafts = {}; state.pending = {}; }
   state.draftsOwner = actorId;
   restoreUnsent(actorId);
+}
+
+// The Threads view's "seen" marks (r4, item 9): root id -> the last reply id seen, per account.
+export function loadThreadsSeen() {
+  const owner = storageOwner();
+  if (owner == null) return {};
+  try { return JSON.parse(localStorage.getItem(THREADS_SEEN_KEY(owner)) || "{}") || {}; } catch { return {}; }
+}
+
+export function saveThreadsSeen(seen) {
+  const owner = storageOwner();
+  if (owner == null) return;
+  try { localStorage.setItem(THREADS_SEEN_KEY(owner), JSON.stringify(seen)); } catch { /* storage full or blocked: the dot stays */ }
 }
 
 // The wiki editor's draft (W5-S14): per account and page, the same namespace rule.

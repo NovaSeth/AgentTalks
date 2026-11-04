@@ -18,7 +18,7 @@ import { sessionGeneration } from "./api.js";
 import { commandSuggestions } from "./commands.js";
 import { avatarHtml, escapeHtml, trackOverlay, watchDockHeight } from "./dom.js";
 import { rememberEmoji, searchEmoji } from "./emoji.js";
-import { iconAddReaction, iconBold, iconCode, iconCodeSquare, iconItalic, iconLink, iconListUnordered, iconPlus, iconQuote, iconSend, iconStrikethrough } from "./icons.js";
+import { iconAddReaction, iconBold, iconCode, iconCodeSquare, iconItalic, iconLink, iconListUnordered, iconMore, iconPlus, iconQuote, iconSend, iconStrikethrough } from "./icons.js";
 import { lang, t } from "./i18n.js";
 import { state } from "./state.js";
 
@@ -121,15 +121,22 @@ const FORMATS = [
   { id: "quote", marker: "> ", icon: iconQuote, label: () => t("Quote"), key: "" },
 ];
 
+// U31 (r4): the tools a narrow (thread panel) card folds behind "More formatting". The four that
+// stay visible are the ones with a keyboard shortcut or daily use: bold, italic, code, link.
+const SECONDARY_FORMATS = new Set(["strike", "codeblock", "list", "quote"]);
+
 /**
  * The card both boxes share. `prefix` names the ids ("composer" or "th"): state.saveDraft and
- * actions.js read #composer-input, so the main box keeps its historical ids.
- * @param {{ prefix: string, placeholder: string, label: string, files?: boolean, footer?: string }} o
+ * actions.js read #composer-input, so the main box keeps its historical ids. `compact` (the
+ * thread panel, 380 px wide) hides the secondary tools behind a toggle so the row never
+ * overflows and the send button stays in view (U31).
+ * @param {{ prefix: string, placeholder: string, label: string, files?: boolean, footer?: string, compact?: boolean, sendLabel?: string }} o
  */
 export function composerCardHtml(o) {
   const p = o.prefix;
+  const fmtButton = (f) => `<button type="button" class="fmt" data-fmt="${f.id}"${o.compact && SECONDARY_FORMATS.has(f.id) ? " data-secondary" : ""} aria-label="${escapeHtml(f.label())}" title="${escapeHtml(f.label())}${f.key ? ` (Ctrl+${f.key.toUpperCase()})` : ""}">${f.icon()}</button>`;
   return `
-    <div class="card" id="${p}-card">
+    <div class="card${o.compact ? " compact" : ""}" id="${p}-card">
       ${o.files ? `<div class="previews" id="${p}-previews"></div>` : ""}
       <label class="sr-only" for="${p}-input">${escapeHtml(o.label)}</label>
       <textarea id="${p}-input" rows="1" placeholder="${escapeHtml(o.placeholder)}"></textarea>
@@ -140,7 +147,8 @@ export function composerCardHtml(o) {
         // a Primer tooltip in its place says where files go instead of leaving a silent gap.
         : `<span class="attach-note tooltipped tooltipped-n" role="img" tabindex="0" aria-label="${escapeHtml(t("Files go to the conversation: attach them in the main message box"))}">${iconPlus()}</span>`}
         <div class="fmtbar" role="toolbar" aria-label="${t("Formatting")}">
-          ${FORMATS.map((f) => `<button type="button" class="fmt" data-fmt="${f.id}" aria-label="${escapeHtml(f.label())}" title="${escapeHtml(f.label())}${f.key ? ` (Ctrl+${f.key.toUpperCase()})` : ""}">${f.icon()}</button>`).join("")}
+          ${FORMATS.map(fmtButton).join("")}
+          ${o.compact ? `<button type="button" class="fmt fmt-more" id="${p}-fmt-more" aria-expanded="false" aria-label="${t("More formatting")}" title="${t("More formatting")}">${iconMore()}</button>` : ""}
         </div>
         <span class="cspacer"></span>
         <button type="button" class="iconbtn emoji" id="${p}-emoji" aria-label="${t("Insert an emoji")}" title="${t("Emoji")}">${iconAddReaction()}</button>
@@ -166,6 +174,18 @@ export function bindFormatting(ta, card) {
     b.addEventListener("pointerdown", (e) => e.preventDefault());
     b.addEventListener("click", () => apply(b.dataset.fmt));
   });
+  // U31: the compact card's "More formatting" toggle shows and hides the secondary tools.
+  const more = card?.querySelector?.(".fmt-more") ?? document.getElementById(`${card?.id?.replace(/-card$/, "")}-fmt-more`);
+  if (more) {
+    // `card` may be the box's container (the thread panel passes #th-composer): the class goes on
+    // the .card element itself, where app.css reads it.
+    const box = card.classList?.contains?.("card") ? card : (card.querySelector?.(".card") ?? card);
+    more.addEventListener("pointerdown", (e) => e.preventDefault());
+    more.addEventListener("click", () => {
+      const open = box.classList.toggle("fmt-open");
+      more.setAttribute("aria-expanded", String(open));
+    });
+  }
   // U1: the main box floats over the list; its measured height becomes the list's bottom padding
   // (--dock-h on .main), so the last message and a failed message's "Send again" row stay visible.
   // The thread box has no dock, so this is a no-op there.

@@ -118,7 +118,8 @@ export async function sendMessage(text, opts = {}) {
     // The human sentence, never fetch's raw "Failed to fetch" (W3-S4-B).
     rec.pending = false; rec.failed = true; rec.error = describeError(e);
     persistUnsent(convId);
-    if (state.activeId === convId && inMainList) views.message(rec);
+    // U1 (r4): the bubble grows by its "Send again" row; a list that was at the bottom follows.
+    if (state.activeId === convId && inMainList) { views.message(rec); views.repin?.(); }
     // U7: with the offline bar already up, a connection error is told twice (the bar, the
     // "not sent" bubble with Send again) - a toast saying the same again only covers the bar.
     const connectionLost = !state.online && !e.status && !e.code;

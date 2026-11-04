@@ -1179,9 +1179,7 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .report-none{margin:var(--base-size-8) var(--base-size-12);color:var(--muted);font-size:var(--text-body-size-small)}
 .linkbtn{color:var(--fgColor-accent);font:inherit;text-decoration:underline;padding:0}
 .linkbtn:hover,.linkbtn:focus-visible{color:var(--fgColor-accent);text-decoration:none}
-/* The + menu reuses the message menu card; the icon sits before the label. */
-.plus-menu .mm-l{display:inline-flex;align-items:center;gap:var(--base-size-8)}
-.plus-menu .mm-l svg{width:var(--base-size-16);height:var(--base-size-16);color:var(--muted)}
+/* The + menu reuses the message menu card and, since U34 (r4), its ActionList item layout. */
 /* "How we talk here": the body scrolls inside the flex column (M7) - without min-height the
    flex child grows past the modal and the overflow rule never fires. */
 .gd-body{min-height:0}
@@ -1498,3 +1496,46 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .topbar .iconbtn.danger{color:var(--fgColor-danger)}
 .topbar .iconbtn.danger:hover{background:var(--bgColor-danger-muted);color:var(--fgColor-danger)}
 .topbar .iconbtn.danger:focus-visible{outline:2px solid var(--focus-outlineColor);outline-offset:-2px}
+/* === R4 (UX review round 2: U31-U36) === */
+/* U31: the thread card (380 px) keeps bold, italic, code and link; the rest sits behind "More
+   formatting". The tools row may wrap but never overflows: the send button stays in view. */
+.composer .cfoot{flex-wrap:wrap}
+.composer .fmtbar{min-width:0;flex-wrap:wrap}
+.composer .card.compact .fmt[data-secondary]{display:none}
+.composer .card.compact.fmt-open .fmt[data-secondary]{display:grid}
+.composer .card.compact.fmt-open .fmt-more{background:var(--control-transparent-bgColor-hover);color:var(--ink)}
+/* Expanded, the row wraps: the emoji and send pair keeps to the right edge of its own line. */
+.composer .card.compact.fmt-open .emoji{margin-left:auto}
+/* U32: the help dialog's scrolling body fades out at its bottom edge and keeps a padding there, so
+   a cut line reads as "more below" instead of colliding with the footnote; the footnote stays
+   outside the scroll area under a divider. */
+.gd-body{padding-bottom:var(--base-size-28);-webkit-mask-image:linear-gradient(to bottom,black calc(100% - var(--base-size-28)),transparent);mask-image:linear-gradient(to bottom,black calc(100% - var(--base-size-28)),transparent)}
+.gd-body + .mhint{border-top:var(--borderWidth-thin) solid var(--line);padding-top:var(--base-size-12);margin-top:var(--base-size-4)}
+/* U33: an open-question card says what a click does: "Go to the question" with a chevron (the
+   chevron alone on a phone). */
+.qrow .qmain{flex:1}
+.qrow .qgo{display:inline-flex;align-items:center;gap:var(--base-size-4);flex:0 0 auto;align-self:center;
+  color:var(--fgColor-muted);font-size:var(--text-body-size-small);white-space:nowrap}
+.qrow .qgo svg{flex:0 0 auto}
+.qrow:hover .qgo,.qrow:focus-visible .qgo{color:var(--fgColor-accent)}
+@media (max-width:760px){.qrow .qgo-l{display:none}}
+/* U34: the + menu shares the message menu's ActionList rules (.mm-i, .mm-body); nothing extra. */
+/* U35: rail labels keep a side padding and an ellipsis as the safety net; the Polish rail is 80 px
+   on desktop ("Aktywnosc" needs about 66 px plus the padding), so the English 64 px rail is
+   unchanged. */
+.rail-btn .rail-l{padding:0 var(--base-size-4);max-width:100%;overflow:hidden;text-overflow:ellipsis}
+@media (min-width:761px){
+  :root[lang="pl"] .shell.with-rail{grid-template-columns:var(--base-size-80) var(--sbw) 1fr}
+  :root[lang="pl"] .shell.with-rail.without-sidebar{grid-template-columns:var(--base-size-80) 1fr}
+}
+/* U36: toasts sit bottom-centre above the composer dock (--dock-h is mirrored on the root by
+   dom.js), never over the channel header's buttons; on a phone also above the tab bar. */
+.toast-stack{top:auto;bottom:calc(var(--dock-h,var(--base-size-80)) + var(--base-size-16));right:auto;left:50%;transform:translateX(-50%);
+  align-items:center;max-width:min(calc(var(--base-size-128) * 3.5),calc(100vw - var(--base-size-32)))}
+.toast{animation-name:toast-up}
+.toast.leaving{animation-name:toast-down}
+@keyframes toast-up{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes toast-down{to{opacity:0;transform:translateY(12px) scale(.97)}}
+@media (max-width:760px){
+  .toast-stack{bottom:calc(var(--dock-h,var(--base-size-80)) + var(--base-size-64) + env(safe-area-inset-bottom,0px))}
+}

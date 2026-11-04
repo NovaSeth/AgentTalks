@@ -358,6 +358,12 @@ export function watchDockHeight(dock) {
   const apply = () => {
     const h = Math.ceil(dock.getBoundingClientRect().height);
     host.style.setProperty("--dock-h", `${h}px`);
+    // U36: the toast stack stands outside #app and sits above the dock, so it reads the same
+    // height from the root element.
+    document.documentElement?.style?.setProperty?.("--dock-h", `${h}px`);
+    // U1 (r4): a taller dock means more bottom padding, so a list pinned to the bottom has to
+    // follow - otherwise the last message slides under the composer.
+    repinIfPinned();
   };
   new ResizeObserver(apply).observe(dock);
   apply();
@@ -370,12 +376,47 @@ export function isScrolledToBottom() {
   return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 }
 
+/** U1 (r4) "keep pinned": `pinned` remembers whether the list was at the bottom BEFORE a layout
+ *  change (the thread panel opening or closing, the dock growing, a failed message gaining its
+ *  "Send again" row). The list's scroll events update it (notePinned), every scrollToBottom sets
+ *  it; repinIfPinned, called after such a change, scrolls to the bottom only when it is set - a
+ *  user who scrolled up is never yanked. During a smooth scroll to the bottom the intermediate
+ *  scroll events do not count: the intent was the bottom. */
+let pinned = true;
+let settleUntil = 0;
+
+export function notePinned() {
+  if (Date.now() < settleUntil) return;
+  pinned = isScrolledToBottom();
+}
+
+export function repinIfPinned() {
+  if (!pinned) return;
+  const el = document.getElementById("messages");
+  if (!el || el.scrollHeight - el.scrollTop - el.clientHeight <= 0) return;
+  el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+}
+
+/** The list's own box changes when the side panel opens or closes (the column narrows and the
+ *  content reflows taller) and when the viewport changes: one observer per list element re-pins.
+ *  A fresh list starts pinned: a conversation opens at the bottom or at the unread line, and the
+ *  scroll event of that first positioning sets the flag right. */
+export function watchListPin(list) {
+  pinned = true;
+  if (!list || list.dataset.pinWatched || typeof ResizeObserver !== "function") return;
+  list.dataset.pinWatched = "1";
+  new ResizeObserver(() => repinIfPinned()).observe(list);
+}
+
 export function scrollToBottom(smooth) {
   const el = document.getElementById("messages");
   if (!el) return;
+  pinned = true;
   // The "reduced motion" preference has to be honoured here too: scrollTo is not
   // a CSS animation, so no @media rule would stop it.
-  el.scrollTo({ top: el.scrollHeight, behavior: scrollBehavior(smooth) });
+  const behavior = scrollBehavior(smooth);
+  if (behavior === "smooth") settleUntil = Date.now() + 600;
+  el.scrollTo({ top: el.scrollHeight, behavior });
 }
 
 /** The "new below" pill: visible when you are not at the bottom; a click scrolls

@@ -971,4 +971,7 @@ export const PL = {
   "Find in this conversation": "Szukaj w tej rozmowie",
   // === C2 ===
   "Files go to the conversation: attach them in the main message box": "Pliki trafiają do rozmowy: dołącz je w głównym polu wiadomości",
+  // === R4 ===
+  "More formatting": "Więcej formatowania",
+  "Go to the question": "Przejdź do pytania",
 };

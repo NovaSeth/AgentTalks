@@ -220,7 +220,7 @@ test("F1: an account change during the first send makes no second send (no post 
   assert.deepEqual(state.threadMsgs.map((m: Any) => m.id), [11]);
 });
 
-test("F1: a thread switch after the first send (same account) stops the continuation: no copy, no thread insert", async () => {
+test("F1: a thread switch after the first send (same account) still sends the channel copy to the original channel, no thread insert", async () => {
   const net = recordFetch();
   net.setHold((url, n) => n === 1);
   const send = openThreadBox("reply for 9");
@@ -229,7 +229,12 @@ test("F1: a thread switch after the first send (same account) stops the continua
   state.activeId = 6; state.threadOpen = 11; state.threadMsgs = [state.msgs[6][0]];
   net.held[0].release(undefined);
   await submitting; await settle();
-  assert.equal(net.calls.filter((c) => c.method === "POST").length, 1);
+  // r4 (fix round 4, item 10): the SAME account's switch no longer cancels the channel copy -
+  // both sends name their conversation explicitly, so the copy goes to the original channel;
+  // only the state and DOM updates for the place no longer on screen are skipped.
+  const posts = net.calls.filter((c) => c.method === "POST");
+  assert.equal(posts.length, 2);
+  assert.equal(posts[1].url, "/api/conversations/5/messages");
   assert.deepEqual(state.threadMsgs.map((m: Any) => m.id), [11]);
 });
 

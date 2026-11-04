@@ -18,6 +18,19 @@ export async function loadConversationsList() {
   applyUnreadRows(data.unread);
 }
 
+/** U30 (r4): the conversation a route's slug names (a channel slug, or the id of a conversation
+ *  without one). A slug the loaded list does not know is looked up on the server ONCE - a public
+ *  channel created after this page loaded is otherwise "no access" until a reload. null when the
+ *  server does not list it either (private, archived, misspelt), or when the refresh fails. */
+export async function conversationBySlug(slug) {
+  const find = () => state.conversations.find((x) => x.slug === slug)
+    || state.conversations.find((x) => !x.slug && String(x.id) === slug) || null;
+  const known = find();
+  if (known) return known;
+  try { await loadConversationsList(); } catch { return null; }
+  return find();
+}
+
 // Entering a conversation must show the NEWEST messages at once, so the first batch is small
 // (roughly what fits on a screen); older ones load themselves, 20 at a time, as you scroll
 // up. Fetching 200 messages on open was paying in time-to-first-view for history nobody

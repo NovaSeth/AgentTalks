@@ -10,10 +10,10 @@
  * application shell, the boot sequence, and window-wide keyboard shortcuts.
  */
 import {
-  ensureActors, loadConversationsList, loadWikiList, markReadDebounced, refreshDigestAndLeases,
+  conversationBySlug, ensureActors, loadConversationsList, loadWikiList, markReadDebounced, refreshDigestAndLeases,
   refreshNotifications, refreshPresence, registerPresenceSession, startDigestTimer,
 } from "./data.js";
-import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
+import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, repinIfPinned, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
 import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
 import { dmOthers, lastConvId, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
@@ -217,6 +217,7 @@ registerViews({
   messages: renderMessages,
   message: upsertMessageNode,
   scrollToBottom: scrollToBottom,
+  repin: repinIfPinned,
   thread: renderThread,
   openThread: openThread,
   offlineBar: updateOfflineBar,
@@ -348,8 +349,11 @@ async function applyRoute(route) {
   state.route = route;
   switch (route.view) {
     case "chat": {
-      const c = state.conversations.find((x) => x.slug === route.slug)
-        || state.conversations.find((x) => !x.slug && String(x.id) === route.slug);
+      // U30 (r4): a slug this page has not seen yet (a channel created after it loaded, an
+      // agent's link) is looked up on the server once before it counts as "no access".
+      const known = state.conversations.length;
+      const c = await conversationBySlug(route.slug);
+      if (state.conversations.length !== known) renderSidebarList();
       if (!c) { renderNoAccess(route); return; }
       await openConversation(c.id, route.messageId);
       if (route.threadId && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);

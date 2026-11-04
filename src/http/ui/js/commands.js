@@ -247,10 +247,16 @@ export function openPlusMenu(anchor, o = {}) {
   const pop = document.createElement("div");
   pop.className = "msg-menu plus-menu";
   pop.setAttribute("role", "menu");
+  // U34 (r4): the Primer ActionList layout the message menu uses - a leading icon cell, the label
+  // on one line, the description below it in muted small text (the old two-column row wrapped
+  // every label: "Attach a / file").
   pop.innerHTML = items.map((p) => `
     <button type="button" role="menuitem" data-pact="${p.action}">
-      <span class="mm-l">${p.icon} ${escapeHtml(p.label)}</span>
-      <span class="mm-o">${escapeHtml(p.description)}</span>
+      <span class="mm-i" aria-hidden="true">${p.icon}</span>
+      <span class="mm-body">
+        <span class="mm-l">${escapeHtml(p.label)}</span>
+        <span class="mm-o">${escapeHtml(p.description)}</span>
+      </span>
     </button>`).join("");
   document.body.appendChild(pop);
   const rect = anchor.getBoundingClientRect();

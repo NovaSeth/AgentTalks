@@ -5,9 +5,9 @@ import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg
 import { api, csrf, sessionGeneration } from "./api.js";
 import { dividerAfter } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
-import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior } from "./dom.js";
-import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconDigest, iconEdit, iconFile, iconFlame, iconGear, iconInfo, iconLink, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconUnpin, iconWrench } from "./icons.js";
-import { renderBody } from "./markdown.js";
+import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, notePinned, openModal, repinIfPinned, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior, watchListPin } from "./dom.js";
+import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconChevron, iconCopy, iconDigest, iconEdit, iconFile, iconFlame, iconGear, iconInfo, iconLink, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconUnpin, iconWrench } from "./icons.js";
+import { renderBody, stripMd } from "./markdown.js";
 import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
 import { openPlusMenu } from "./commands.js";
 import { t } from "./i18n.js";
@@ -171,6 +171,10 @@ export async function openThread(rootId) {
     document.getElementById("main")?.appendChild(host);
   }
   renderThread();
+  // U1 (r4): the panel takes a column, the list reflows taller; a list that was at the bottom
+  // stays there (the ResizeObserver on the list catches the width change too; this is the
+  // explicit call for browsers without one).
+  repinIfPinned();
   try {
     const data = await api("GET", `/api/messages/${rootId}/thread`);
     if (!isCurrent()) return;
@@ -725,7 +729,10 @@ export function renderPresenceBar() {
 
 /** Attached once per list render: tracks the scroll position and drives the pill. */
 function bindScrollWatch(el) {
+  // U1 (r4): the list's own size changes re-pin it when it was at the bottom.
+  watchListPin(el);
   el.addEventListener("scroll", () => {
+    notePinned();
     updateJumpPill();
     // Marking as read belongs to THIS condition: you reached the bottom, so you really do see the
     // newest. Previewing a channel you do not belong to must not enrol you in it by scrolling
@@ -1846,6 +1853,7 @@ export function renderThread() {
   const tc = document.getElementById("th-composer");
   tc.innerHTML = composerCardHtml({
     prefix: "th", label: t("Reply in the thread"), placeholder: t("Reply in the thread..."), sendLabel: t("Send the reply"),
+    compact: true,   // U31 (r4): 380 px wide - the secondary tools fold behind "More formatting"
     footer: `<label class="th-also"><input id="th-also" type="checkbox"${keep.also ? " checked" : ""}> <span>${alsoLabel}</span></label>`,
   });
   const ta = document.getElementById("th-input"), send = document.getElementById("th-send");
@@ -1875,20 +1883,27 @@ export function renderThread() {
     // panel. F1 (r3): `current()` is asked again after EVERY await - a value computed before an
     // await says nothing about the world after it (A's reply once landed in B's thread).
     const convId = state.activeId, rootId = state.threadOpen;
+    const gen = sessionGeneration();
+    const sameAccount = () => gen === sessionGeneration();
     const current = submitTarget({ withThread: true });
     const msg = await sendMessage(v, { threadId: rootId, conversationId: convId });
-    // sendMessage already stored the reply for its root; a stale continuation touches nothing.
-    if (!current()) return;
+    // sendMessage already stored the reply for its root; a continuation under ANOTHER account
+    // touches nothing and sends nothing more.
+    if (!sameAccount()) return;
     // A failed send returns the text to the field - exactly as in the main composer.
     if (!msg) {
-      if (document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
+      if (current() && document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
       return;
     }
-    // "Also send to the channel": a second POST without threadId, a copy in the main list.
+    // "Also send to the channel": a second POST without threadId, a copy in the main list. Both
+    // sends name their conversation and thread explicitly, so the SAME account switching
+    // conversation or thread meanwhile still gets the copy it asked for (r4, item 10); only the
+    // state and DOM updates below are skipped for a place no longer on screen.
     if (also) {
       await sendMessage(v, { conversationId: convId, threadId: null });
-      if (!current()) return;
+      if (!sameAccount()) return;
     }
+    if (!current()) return;
     const index = state.threadMsgs.findIndex((entry) => entry.id === msg.id);
     if (index >= 0) state.threadMsgs[index] = msg;
     else { state.threadMsgs.push(msg); state.threadMsgs.sort((a, b) => a.id - b.id); }
@@ -1910,6 +1925,7 @@ export function closeThread() {
   if (rootId) lastSidePanel = { kind: "thread", id: rootId };
   state.threadOpen = null;
   renderMain();
+  repinIfPinned();   // U1 (r4): the column widens back; a list that was at the bottom stays there
   document.querySelector(`#messages [data-thread="${rootId}"]`)?.focus();
 }
 
@@ -1928,8 +1944,9 @@ export async function openQuestionsPanel() {
             ${avatarHtml(actorHandle(q.message.actorId), 26)}
             <span class="qmain">
               <span class="qtop">@${escapeHtml(actorHandle(q.message.actorId))} <span class="pal-where">${escapeHtml(where)} · ${timeAgo(q.message.ts)}</span></span>
-              <span class="qbody">${escapeHtml(q.message.body.slice(0, 160))}</span>
+              <span class="qbody">${escapeHtml(stripMd(q.message.body).slice(0, 160))}</span>
             </span>
+            <span class="qgo"><span class="qgo-l">${t("Go to the question")}</span>${iconChevron()}</span>
           </button>`;
         }).join("") : `<p class="sb-empty">${t("There are no open questions - everything is closed.")}</p>`}
       </div>
