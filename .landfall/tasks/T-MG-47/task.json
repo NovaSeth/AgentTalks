@@ -13,7 +13,7 @@
       "at": "2026-11-04T20:42:21.570Z"
     }
   ],
-  "status": "dispatched",
+  "status": "done",
   "round": 0,
   "events": [
     {
@@ -40,8 +40,48 @@
         "executor": "landfall:implementer",
         "base": "8d225efd6918"
       }
+    },
+    {
+      "at": "2026-11-04T20:48:57.612Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T20:48:57.918Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "ceef3a5e98526893c26a27f305fef495182edf2b",
+        "class": "trivial",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:53:04.080Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "ceef3a5e98526893c26a27f305fef495182edf2b"
+      }
+    },
+    {
+      "at": "2026-11-04T20:53:05.605Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "1974c09c7da13aeef634ef1eca024afc6a436d75",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "4c107397b5e229320ae5d13d4c1e851e9fa0445e"
+      }
     }
   ],
   "base": "8d225efd6918e1067af2aada901c4e12176ffcce",
-  "branch": "task/T-MG-47-highlight-server-watermark"
+  "branch": "task/T-MG-47-highlight-server-watermark",
+  "mergedAt": "2026-11-04T20:53:05.605Z"
 }

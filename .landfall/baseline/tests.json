@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "e1dc1a675775623129fed208853ef3ce50b33b6c",
-  "collectedAt": "2026-11-04T20:40:22.645Z",
+  "head": "c4b78e5439774ea31dcafcc8dea11a3cb146083b",
+  "collectedAt": "2026-11-04T20:57:25.494Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -1791,211 +1791,6 @@
     },
     {
       "id": "[\"\",\"T-MG-41: with only the old atalk on PATH the hook falls back to it\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44 r1: messages that arrive while another view (wiki) covers the active conversation are tinted on return\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44 r2 F1: a message read here does not regain its tint after going to another conversation and back\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44 r2 F2: a failed read (503) leaves the rows tinted\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44 r2 F2: the fade starts only when the server confirms the read; a rescheduled read posts nothing yet\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44 r2 F3: a rail place switch (goPlace: view = chat, renderShell) tints what arrived while the Activity view was up\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44 r2 F4: messages recovered by the SSE catch-up after returning to a disconnected tab are tinted\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44 r2 F5: highlight state and timers do not cross an account change (session generation)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44 r3 F7: later renders never tint a message at or below the server's read watermark\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: a conversation read to the end gets no tint\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: a first visit (mark 0) follows the divider's estimate from the unread count\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: a message that arrives while the tab is hidden is tinted, and stays so on a re-render\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: a message that arrives while the tab is visible and the conversation open is not tinted\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: a partial confirmed read fades only up to it; the rest stays tinted\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: coming back to the tab tints what landed meanwhile even when it was drawn in a full render\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: highlightUnreadIds names the others' messages above the mark, never mine or deleted ones\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: opening a conversation with others' messages above the read mark tints exactly those rows\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: the highlight is per conversation: a confirmed read in another one touches nothing here\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-44: the tint and the fade use theme tokens; reduced motion disables the transition\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r3 F1: Wiki chosen from Activity opens the chat with the Wiki place and its tree\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r3 F2: reopening the current page through a non-route entry selects Wiki again; a plain redraw keeps Home\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r3 F3: a route that completes after a newer place was chosen does not take the place back\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r3: placeAfterNavigation - a wiki page selects Wiki; a conversation (channel or DM) leaves Wiki for Home; the rest moves nothing\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r3: the rule has ONE home - view-sidebar.js derives the place; no navigation tracking, no settle-on-completion, no follow-on-navigation\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r4 F4: reopening the same conversation from the Wiki place returns to Home with its channels\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r4 F5: back from Search to the page on screen lights Wiki again (on and aria-current)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r4 F6: a conversation's late address cleanup does not hide the tree of a newer wiki page\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r4 F7: another actor's edit of the page on screen refreshes it without moving the reader's place\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r4: a page that fails to load falls back to the chat without a late jump of the place\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r4: opening another conversation (Cmd+K, a link) from the Wiki place in the chat view returns to Home; a redraw does not\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38-r4: the conversation on screen archived by somebody else opens the next one without moving the reader's place\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: #/wiki with no slug is the Wiki place's own route; #/wiki/<slug> still opens a page\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: collapsed-section storage keeps working for the wiki and leases sections in their new place\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: every new English string of the Wiki place has a Polish translation\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: setSidebarPlace keeps \\\"wiki\\\" as a third place; nonsense still falls back to Home\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: the Wiki place renders the tree and the leases, no channels, no people; Home renders no wiki\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: the Wiki place shows exactly the wiki tree and the claimed resources; Home shows neither\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T38: the rail has #rail-wiki (iconDoc) between Activity and Admin, for every signed-in actor\",1]",
       "file": "",
       "skipped": false
     },
@@ -5550,6 +5345,51 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"wake tools (T-MG-45 F1): mixed sizes, default limit - following the printed cursor reaches every id exactly once\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (T-MG-45 F2): a 60 000-char message is reachable whole through the printed continuation, in read_conversation and read_thread\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (T-MG-45 r2): newline-free 60 000-char bodies - read_conversation (latest, backwards) stays within the total budget\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (T-MG-45 r2): newline-free bodies - read_conversation (after, forwards) stays within the total budget\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (T-MG-45 r2): newline-free bodies - read_thread stays within the total budget\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (T-MG-45): read_conversation of 50 x 60 000-char messages stays within the budget; the cursor walk reaches every message exactly once\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (T-MG-45): read_conversation with after pages forward by the cursor, within the budget, every message once\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (T-MG-45): read_thread of 50 long replies stays within the budget; the cursor walk reaches every message exactly once\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (T-MG-45): the version is 0.3.1 in the plugin manifest, channel and wake tools\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"wake tools (a): the generated config is removed also when the run cannot start (ENOENT) or the runner throws\",1]",
       "file": "",
       "skipped": false
@@ -5726,5 +5566,5 @@
     }
   ],
   "failing": [],
-  "sha256": "8d2ba136d556e8c802e49259e1a53c8c51d19cdea7a00156c30525d86830c966"
+  "sha256": "5cf6cfad55695dd5915ce3bf2c3bfc55e6f9a9912e75ea4ce7b78663895c4480"
 }

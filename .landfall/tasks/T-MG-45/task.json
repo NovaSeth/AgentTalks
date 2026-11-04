@@ -13,8 +13,8 @@
       "at": "2026-11-04T20:27:19.445Z"
     }
   ],
-  "status": "dispatched",
-  "round": 1,
+  "status": "done",
+  "round": 2,
   "events": [
     {
       "at": "2026-11-04T19:58:13.142Z",
@@ -118,8 +118,121 @@
         "base": "78da1151863e",
         "note": "scoped re-review r2"
       }
+    },
+    {
+      "at": "2026-11-04T20:45:32.262Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:45:39.717Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 2,
+        "open": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:45:40.087Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "78da1151863e",
+        "note": "fix round 2: test fixtures (F3)"
+      }
+    },
+    {
+      "at": "2026-11-04T20:54:35.127Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:54:35.388Z",
+      "by": "MG",
+      "event": "self-verified",
+      "data": {
+        "round": 2,
+        "note": "test-only round (REV-20): mutation evidence in the report, 3 new tests fail with budgeted() bypassed"
+      }
+    },
+    {
+      "at": "2026-11-04T20:54:36.035Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T20:54:36.035Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "c4b78e5439774ea31dcafcc8dea11a3cb146083b",
+        "class": "standard",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:56:23.969Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "c4b78e5439774ea31dcafcc8dea11a3cb146083b",
+        "class": "standard",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:57:25.494Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "c4b78e5439774ea31dcafcc8dea11a3cb146083b",
+        "class": "standard",
+        "attempt": 3
+      }
+    },
+    {
+      "at": "2026-11-04T20:57:26.548Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "c4b78e5439774ea31dcafcc8dea11a3cb146083b"
+      }
+    },
+    {
+      "at": "2026-11-04T20:57:27.609Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "e9258ff5e5047feceae9e82c0a1504b713f1b59e",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "6e785079d3c5fdafa17bdcdb84477dcb5d78785c"
+      }
     }
   ],
   "base": "78da1151863ea73908e931cea58efc5947444482",
-  "branch": "task/T-MG-45-wake-tools-budget"
+  "branch": "task/T-MG-45-wake-tools-budget",
+  "mergedAt": "2026-11-04T20:57:27.609Z"
 }

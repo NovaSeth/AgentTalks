@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-123",
-  "status": "taken",
+  "status": "fixed",
   "task": "T-MG-44",
   "round": 3,
   "reviewer": {
@@ -17,7 +17,7 @@
   "filedAt": "2026-11-04T20:40:21.945Z",
   "filedBy": "MG",
   "takenBy": "T-MG-47",
-  "closedAt": null,
-  "closedBy": null,
-  "reason": null
+  "closedAt": "2026-11-04T20:53:04.080Z",
+  "closedBy": "T-MG-47",
+  "reason": "Fixed by T-MG-47"
 }
