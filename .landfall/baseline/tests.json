@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "32416d492bfeceb4289a0f52294d619e28376f1e",
-  "collectedAt": "2026-11-04T20:25:35.147Z",
+  "head": "7bcf3369b8eff311f4a50a48bfd610828c7d312f",
+  "collectedAt": "2026-11-04T20:30:15.057Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -710,32 +710,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"F1 race: the page changes after a whole read: the write is refused by the delivered revision\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F1 race: the page grows between the outline and the full read: not delivered, not writable\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"F1 the channel's beat survives stream reconnects: a stream recycled faster than the interval still beats\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F1/F3: a large page or section is readable in parts with offset, each part within the budget\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F1: a page that fits is delivered whole (its last line included) and then writable\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F1: a page whose framed result exceeds the budget is not delivered, and cannot be written\",1]",
       "file": "",
       "skipped": false
     },
@@ -810,11 +785,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"F2: an outline-only or section-only read never unlocks a write, with or without base_revision\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"F2: sign-out clears only the signing-out account's keys (drafts, wiki, navigation, unsent)\",1]",
       "file": "",
       "skipped": false
@@ -846,21 +816,6 @@
     },
     {
       "id": "[\"\",\"F3: another account never sees the unsent message\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F3: read_conversation stays in budget, latest pages back with before, after pages forward\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F3: read_thread of 50 messages of 60 000 characters stays in budget and pages with after\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F3: search, mentions, open_questions, channels, who and leases stay within the budget with a cursor\",1]",
       "file": "",
       "skipped": false
     },
@@ -1756,6 +1711,121 @@
     },
     {
       "id": "[\"\",\"T-MG-41: with only the old atalk on PATH the hook falls back to it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3 F1: Wiki chosen from Activity opens the chat with the Wiki place and its tree\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3 F2: reopening the current page through a non-route entry selects Wiki again; a plain redraw keeps Home\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3 F3: a route that completes after a newer place was chosen does not take the place back\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3: placeAfterNavigation - a wiki page selects Wiki; a conversation (channel or DM) leaves Wiki for Home; the rest moves nothing\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3: the rule has ONE home - view-sidebar.js derives the place; no navigation tracking, no settle-on-completion, no follow-on-navigation\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4 F4: reopening the same conversation from the Wiki place returns to Home with its channels\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4 F5: back from Search to the page on screen lights Wiki again (on and aria-current)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4 F6: a conversation's late address cleanup does not hide the tree of a newer wiki page\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4 F7: another actor's edit of the page on screen refreshes it without moving the reader's place\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4: a page that fails to load falls back to the chat without a late jump of the place\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4: opening another conversation (Cmd+K, a link) from the Wiki place in the chat view returns to Home; a redraw does not\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4: the conversation on screen archived by somebody else opens the next one without moving the reader's place\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: #/wiki with no slug is the Wiki place's own route; #/wiki/<slug> still opens a page\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: collapsed-section storage keeps working for the wiki and leases sections in their new place\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: every new English string of the Wiki place has a Polish translation\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: setSidebarPlace keeps \\\"wiki\\\" as a third place; nonsense still falls back to Home\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: the Wiki place renders the tree and the leases, no channels, no people; Home renders no wiki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: the Wiki place shows exactly the wiki tree and the claimed resources; Home shows neither\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: the rail has #rail-wiki (iconDoc) between Activity and Admin, for every signed-in actor\",1]",
       "file": "",
       "skipped": false
     },
@@ -2845,11 +2915,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"ask, open_questions, answer, react: round trip; bad ids and empty text are errors\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"at_dev is revoked by a password change, a disable and a logout-everywhere (epoch bump) (B-MG-96)\",1]",
       "file": "",
       "skipped": false
@@ -2986,16 +3051,6 @@
     },
     {
       "id": "[\"\",\"channel: woken for nestor on A, plugin options for bob on B -> no request to B, no reply sent, one line (codex T-MG-14 r1 F1)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"channels and who: listed with ids, topics and doing quoted\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"claim, release, leases: granted, held by another (holder named), notes quoted\",1]",
       "file": "",
       "skipped": false
     },
@@ -3211,11 +3266,6 @@
     },
     {
       "id": "[\"\",\"every API error code has a translated UI message or an explained agent-only exception\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"every API tool refuses without the principal, and without an api\",1]",
       "file": "",
       "skipped": false
     },
@@ -3630,22 +3680,22 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"integrations/claude-code-plugin/skills/agenttalks/SKILL.md documents every legacy error code with its English replacement\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"integrations/claude-code-plugin/skills/agenttalks/SKILL.md explains the tag, JSON field and compatibility migration\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"integrations/claude-code/skills/agenttalks/SKILL.md documents every legacy error code with its English replacement\",1]",
       "file": "",
       "skipped": false
     },
     {
       "id": "[\"\",\"integrations/claude-code/skills/agenttalks/SKILL.md explains the tag, JSON field and compatibility migration\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"integrations/claude-skill/SKILL.md documents every legacy error code with its English replacement\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"integrations/claude-skill/SKILL.md explains the tag, JSON field and compatibility migration\",1]",
       "file": "",
       "skipped": false
     },
@@ -4455,11 +4505,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"read_conversation and read_thread: messages framed, bad ids are errors\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"recipientsOf returns members rather than all actors\",1]",
       "file": "",
       "skipped": false
@@ -4560,16 +4605,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"search and mentions: results framed; empty q and bad limits are errors\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"search beforeId pages past the cap: more than 200 matches in one second, each id once (D-MG-42)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"search does not return content from inaccessible channels\",1]",
       "file": "",
       "skipped": false
@@ -4581,26 +4616,6 @@
     },
     {
       "id": "[\"\",\"search omits deleted messages\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"search: 20 matches then 190 in the next second, limit 30, none lost (codex r3 F7)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"search: 201 matches in one second are all reached once (codex r3 F6)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"search: following the cursor reaches every match exactly once, newest first, even as new matches arrive (T-MG-40 fix 2)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"search: matches arriving between pages add no duplicate and do not loop\",1]",
       "file": "",
       "skipped": false
     },
@@ -4621,11 +4636,6 @@
     },
     {
       "id": "[\"\",\"security lines never contain the handle string a user typed (item 2)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"send: #slug, @handle and an id; bad addresses and empty text are errors\",1]",
       "file": "",
       "skipped": false
     },
@@ -4835,11 +4845,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"the budget is exported and is the spec's 50 000 characters\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"the channel creator is its admin\",1]",
       "file": "",
       "skipped": false
@@ -4871,11 +4876,6 @@
     },
     {
       "id": "[\"\",\"the first connection serves guidelines with a prompt; the second does not\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"the full API skill is bundled in the plugin and is the only copy; /skill.md serves it\",1]",
       "file": "",
       "skipped": false
     },
@@ -5036,11 +5036,6 @@
     },
     {
       "id": "[\"\",\"token use is recorded in last_used_at\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"tool names: the API tools are the spec's 17, and the woken run's set is unchanged\",1]",
       "file": "",
       "skipped": false
     },
@@ -5435,11 +5430,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"wiki_search, wiki_read, wiki_write: framed, a read unlocks a write, a big page asks for a section\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"without authentication the API returns 401 rather than 500\",1]",
       "file": "",
       "skipped": false
@@ -5451,5 +5441,5 @@
     }
   ],
   "failing": [],
-  "sha256": "d5d0143536aaadc526cdd612db3df806aef505ab2ffa16174c120211e3a17788"
+  "sha256": "f6b308dfb6b49c47b82454834b828a0885ad99394a2ee6013a13b1884d7b962a"
 }

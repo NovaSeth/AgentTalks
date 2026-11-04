@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F7",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 63,
+      "rule": "REV-2",
+      "text": "Acceptance 1/4: subsequent renders ignore the server read watermark. Node DOM-harness reproduction: setup(520); await open(); cancelMarkRead(); append others' messages 512/514; renderMessages() yields highlighted=[512,514], expected [] (base commit yields []). The cached list ends at 510, so floor=510 while read remains 0. Initialize and maintain the confirmed watermark from server state, independently of the displayed list."
+    },
+    {
+      "id": "F8",
+      "severity": "blocking",
+      "path": "test/ui-t44-unread-highlight.test.ts",
+      "line": 424,
+      "rule": "COD-2",
+      "text": "Acceptance 7: the account-change test masks missing cleanup. An in-memory Node mutation replacing hlMap's `if (gen !== hlGeneration)` with `if (hlGeneration === -1)` still passes all 17 tests. setup(504) calls resetUnreadHighlights(), hiding account leakage; tick(400) also never reaches A's 3000 ms fade timer. Initialize B without the test-only reset, advance past A's timer, and require the cleanup mutation to fail."
+    }
+  ],
+  "run": "codex-T-MG-44-reviewer-2",
+  "sha256": "e2f5c3f782cf7630146a3b46218671a384ca080ea85b59ff2804da307476de7d"
+}

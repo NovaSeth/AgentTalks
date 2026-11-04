@@ -51,6 +51,24 @@
         "executor": "landfall:implementer",
         "base": "78da1151863e"
       }
+    },
+    {
+      "at": "2026-11-04T20:31:49.753Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
+      }
+    },
+    {
+      "at": "2026-11-04T20:31:50.001Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "78da1151863e",
+        "note": "cross-provider review r1"
+      }
     }
   ],
   "base": "78da1151863ea73908e931cea58efc5947444482",

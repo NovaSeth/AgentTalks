@@ -19,7 +19,7 @@
     }
   ],
   "status": "dispatched",
-  "round": 2,
+  "round": 3,
   "events": [
     {
       "at": "2026-11-04T19:40:09.407Z",
@@ -185,6 +185,36 @@
         "executor": "codex:reviewer",
         "base": "550d269269d0",
         "note": "scoped re-review r2"
+      }
+    },
+    {
+      "at": "2026-11-04T20:32:04.721Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:32:24.014Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 3,
+        "addressed": 5,
+        "open": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:32:24.245Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "550d269269d0",
+        "note": "fix round 3, fresh agent"
       }
     }
   ],
