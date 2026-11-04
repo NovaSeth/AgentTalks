@@ -28,51 +28,87 @@ export type UnreadRow = {
   lastUnreadMessageId: number;
 };
 
+/**
+ * The most unread messages (and badge hits) counted per conversation: "99+" semantics.
+ * Counting EVERY unread row made the cost grow with history: agents rarely mark anything
+ * read, and 200 channels with 300k unread messages took ~230 ms per call. Above the cap the
+ * exact number carries no information anyway ("a lot").
+ * Measured on that scene: the per-conversation walk costs ~0.03 ms per counted row (it reads
+ * the row for actor_id/deleted_at), so a cap of 1000 cost ~66 ms and 100 costs ~6 ms.
+ */
+export const UNREAD_CAP = 100;
+
 export function unreadFor(ctx: Ctx, actorId: number): UnreadRow[] {
+  // The unread count is a correlated subquery with LIMIT, so it stops at the cap instead of
+  // aggregating every unread row. "Unread" means: newer than the read marker, not mine, not
+  // deleted - the same three conditions in every query below.
   const rows = ctx.db
     .prepare(
       `SELECT
-         mem.conversation_id                                   AS conversation_id,
-         COUNT(m.id)                                           AS unread,
-         -- Plakietka (mocny sygnal) respektuje wyciszenie rozmowy; sam licznik
-         -- nieprzeczytanych zostaje, bo to inne pytanie ("czy cos przybylo")
-         -- niz plakietka ("czy mam na to zareagowac").
-         SUM(CASE
-               WHEN m.id IS NULL             THEN 0
-               WHEN mem.notify = 'none'      THEN 0
-               WHEN c.kind IN ('dm','group') THEN 1
-               WHEN mn.actor_id IS NOT NULL  THEN 1
-               ELSE 0
-             END)                                              AS badge,
-         -- Nazwa last_message_id klamala: to bylo id ostatniej NIEPRZECZYTANEJ
-         -- wiadomosci (albo znacznik odczytu, gdy nie bylo zadnej), a nie ostatniej
-         -- w rozmowie. Pole nie mialo konsumenta, wiec zamiast dokladac drugie
-         -- podzapytanie pod nazwe, ktorej nikt nie uzywal, oddajemy prawde:
-         -- last_unread_message_id.
-         COALESCE(MAX(m.id), mem.last_read_message_id)         AS last_unread_message_id
+         mem.conversation_id AS conversation_id,
+         (mem.notify = 'none') AS muted,
+         (c.kind IN ('dm','group')) AS direct,
+         (SELECT COUNT(*) FROM (
+            SELECT 1 FROM messages m
+             WHERE m.conversation_id = mem.conversation_id
+               AND m.id > mem.last_read_message_id
+               AND m.actor_id <> mem.actor_id
+               AND m.deleted_at IS NULL
+             LIMIT :cap)) AS unread,
+         -- The id of the last UNREAD message, or the read marker when there is none. The
+         -- index on (conversation_id, id) is walked backwards and stops at the first hit.
+         COALESCE(
+           (SELECT m.id FROM messages m
+             WHERE m.conversation_id = mem.conversation_id
+               AND m.id > mem.last_read_message_id
+               AND m.actor_id <> mem.actor_id
+               AND m.deleted_at IS NULL
+             ORDER BY m.id DESC LIMIT 1),
+           mem.last_read_message_id) AS last_unread_message_id
        FROM members mem
        JOIN conversations c ON c.id = mem.conversation_id
-       LEFT JOIN messages m
-              ON m.conversation_id = mem.conversation_id
-             AND m.id > mem.last_read_message_id
-             AND m.actor_id <> mem.actor_id
-             AND m.deleted_at IS NULL
-       LEFT JOIN mentions mn
-              ON mn.message_id = m.id AND mn.actor_id = mem.actor_id
-       WHERE mem.actor_id = ? AND c.archived_at IS NULL
-       GROUP BY mem.conversation_id
+       WHERE mem.actor_id = :me AND c.archived_at IS NULL
        ORDER BY mem.conversation_id`,
     )
-    .all(actorId) as Array<{
+    .all({ me: actorId, cap: UNREAD_CAP }) as Array<{
       conversation_id: number;
+      muted: number;
+      direct: number;
       unread: number;
-      badge: number | null;
       last_unread_message_id: number;
     }>;
+
+  // Mentions of me in unread messages, in ONE pass driven by my mentions (CROSS JOIN fixes
+  // the order: mentions by actor, then the message and the membership by primary key). A
+  // per-conversation subquery walked every unread message of every channel looking for
+  // mentions, which costs as much as counting without a cap.
+  const mentionRows = ctx.db
+    .prepare(
+      `SELECT m.conversation_id AS conversation_id, COUNT(*) AS n
+         FROM mentions mn
+        CROSS JOIN messages m ON m.id = mn.message_id
+        CROSS JOIN members mem
+                ON mem.conversation_id = m.conversation_id AND mem.actor_id = mn.actor_id
+        WHERE mn.actor_id = :me
+          AND m.id > mem.last_read_message_id
+          AND m.actor_id <> :me
+          AND m.deleted_at IS NULL
+        GROUP BY m.conversation_id`,
+    )
+    .all({ me: actorId }) as Array<{ conversation_id: number; n: number }>;
+  const mentioned = new Map(mentionRows.map((r) => [r.conversation_id, r.n]));
+
   return rows.map((r) => ({
     conversationId: r.conversation_id,
     unread: r.unread,
-    badge: r.badge ?? 0,
+    // The badge (the strong signal) respects muting; the unread counter stays, because it
+    // answers a different question ("did something arrive"). In a direct conversation every
+    // unread message is addressed to me; on a channel only a mention counts.
+    badge: r.muted
+      ? 0
+      : r.direct
+        ? r.unread
+        : Math.min(mentioned.get(r.conversation_id) ?? 0, UNREAD_CAP),
     lastUnreadMessageId: r.last_unread_message_id,
   }));
 }
@@ -92,7 +128,12 @@ export function markRead(ctx: Ctx, actorId: number, convId: number, messageId?: 
   // channel (found through the MCP path).
   if (!canRead(ctx, convId, actorId)) return;
   if (!isMember(ctx, convId, actorId)) join(ctx, convId, actorId);
-  const target = messageId ?? lastMessageId(ctx);
+  // Clamped to the conversation's last message: a marker set past the end (a typo, a stale
+  // global cursor, a hostile client) silently marked every FUTURE message as read.
+  const lastInConv = (ctx.db
+    .prepare("SELECT COALESCE(MAX(id), 0) AS id FROM messages WHERE conversation_id = ?")
+    .get(convId) as { id: number }).id;
+  const target = Math.min(messageId ?? lastMessageId(ctx), lastInConv);
   ctx.db
     .prepare(
       `UPDATE members

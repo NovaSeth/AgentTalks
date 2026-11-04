@@ -134,7 +134,14 @@ export function postMessage(
   // The client's sessionId is a claim: a foreign one is dropped (the post still goes through),
   // otherwise the message carries somebody else's session and clears THEIR typing bubble.
   const sessionId = ownSessionOrNull(ctx, input.sessionId, input.actorId);
-  const dedupKey = input.clientMsgId ? `${input.actorId}:${input.clientMsgId}` : null;
+  // The key includes the conversation: keyed per actor only, the same clientMsgId reused in
+  // another channel returned the first message and posted nothing. The "v2:" prefix keeps
+  // the new format disjoint from the old "<actor>:<clientMsgId>" (which starts with a digit),
+  // so a new key can never hit the unique index on a legacy row from another conversation.
+  const dedupKey = input.clientMsgId
+    ? `v2:${input.conversationId}:${input.actorId}:${input.clientMsgId}`
+    : null;
+  const legacyDedupKey = input.clientMsgId ? `${input.actorId}:${input.clientMsgId}` : null;
 
   let created = true;
   let notified: number[] = [];
@@ -142,9 +149,15 @@ export function postMessage(
     // Idempotency: on a retry (SSE/long-poll/webhook can each deliver twice) a repeated
     // clientMsgId must not duplicate a message. SELECT-then-INSERT is safe here, because the
     // outer transaction is BEGIN IMMEDIATE - the processes serialise.
+    // A row written with the old key still counts, but only in its own conversation.
     if (dedupKey) {
-      const dup = ctx.db.prepare("SELECT * FROM messages WHERE dedup_key = ?")
-        .get(dedupKey) as MsgRow | undefined;
+      const dup = ctx.db
+        .prepare(
+          `SELECT * FROM messages
+            WHERE dedup_key = ? OR (dedup_key = ? AND conversation_id = ?)
+            LIMIT 1`,
+        )
+        .get(dedupKey, legacyDedupKey, input.conversationId) as MsgRow | undefined;
       if (dup) {
         created = false;
         return messageFromRow(dup);

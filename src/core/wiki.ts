@@ -200,6 +200,10 @@ function assertNoClobber(
   existing: PageRow | null,
   input: { actorId: number; baseRevision?: number | null; force?: boolean },
 ): void {
+  // force FIRST: the conflict message below tells the agent "a deliberate overwrite:
+  // force=true", and an agent that follows it still sends its (stale) baseRevision. Checking
+  // the base before force turned that hint into a loop of identical 409s.
+  if (input.force) return;
   const base = input.baseRevision;
   const current = existing ? lastRevisionId(ctx, existing.id) : 0;
 
@@ -224,7 +228,7 @@ function assertNoClobber(
     );
   }
 
-  if (input.force || current === 0 || !existing) return;
+  if (current === 0 || !existing) return;
   if (seenRevisionId(ctx, existing.id, input.actorId) >= current) return;
 
   throw conflict(
