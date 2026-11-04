@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-122",
+  "status": "taken",
+  "task": "T-MG-43",
+  "round": 3,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F4",
+  "severity": "blocking",
+  "path": "src/http/ui/js/data.js",
+  "line": 157,
+  "rule": "REV-2",
+  "text": "Acceptance 4: the three-round cap discards unresolved overlaps. In-memory ui-t18 repro: three times, delay reconciliation before its cut, hold a later reaction refresh after its cut, edit/react to message 1, then deliver reconciliation followed by refresh. Append 3..32 and reconnect: body/reaction remain 'round2', expected 'round3'. Allowing a fourth round in memory passes. Retain owed ranges when yielding at the cap and schedule further repair; add this regression.",
+  "filedAt": "2026-11-04T20:19:38.277Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-46",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

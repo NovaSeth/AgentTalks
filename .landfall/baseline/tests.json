@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c",
-  "collectedAt": "2026-11-04T19:34:54.127Z",
+  "head": "7bcf3369b8eff311f4a50a48bfd610828c7d312f",
+  "collectedAt": "2026-11-04T20:30:15.057Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -1711,6 +1711,121 @@
     },
     {
       "id": "[\"\",\"T-MG-41: with only the old atalk on PATH the hook falls back to it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3 F1: Wiki chosen from Activity opens the chat with the Wiki place and its tree\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3 F2: reopening the current page through a non-route entry selects Wiki again; a plain redraw keeps Home\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3 F3: a route that completes after a newer place was chosen does not take the place back\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3: placeAfterNavigation - a wiki page selects Wiki; a conversation (channel or DM) leaves Wiki for Home; the rest moves nothing\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r3: the rule has ONE home - view-sidebar.js derives the place; no navigation tracking, no settle-on-completion, no follow-on-navigation\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4 F4: reopening the same conversation from the Wiki place returns to Home with its channels\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4 F5: back from Search to the page on screen lights Wiki again (on and aria-current)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4 F6: a conversation's late address cleanup does not hide the tree of a newer wiki page\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4 F7: another actor's edit of the page on screen refreshes it without moving the reader's place\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4: a page that fails to load falls back to the chat without a late jump of the place\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4: opening another conversation (Cmd+K, a link) from the Wiki place in the chat view returns to Home; a redraw does not\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38-r4: the conversation on screen archived by somebody else opens the next one without moving the reader's place\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: #/wiki with no slug is the Wiki place's own route; #/wiki/<slug> still opens a page\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: collapsed-section storage keeps working for the wiki and leases sections in their new place\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: every new English string of the Wiki place has a Polish translation\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: setSidebarPlace keeps \\\"wiki\\\" as a third place; nonsense still falls back to Home\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: the Wiki place renders the tree and the leases, no channels, no people; Home renders no wiki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: the Wiki place shows exactly the wiki tree and the claimed resources; Home shows neither\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T38: the rail has #rail-wiki (iconDoc) between Activity and Admin, for every signed-in actor\",1]",
       "file": "",
       "skipped": false
     },
@@ -5326,5 +5441,5 @@
     }
   ],
   "failing": [],
-  "sha256": "4c8e159673d6eaa2d957e6bdcb94e54f841f628664f3a46e2c2ba3f06395ef18"
+  "sha256": "f6b308dfb6b49c47b82454834b828a0885ad99394a2ee6013a13b1884d7b962a"
 }

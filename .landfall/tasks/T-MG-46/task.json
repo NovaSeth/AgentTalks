@@ -1,0 +1,58 @@
+{
+  "schema": 2,
+  "id": "T-MG-46",
+  "kind": "task",
+  "title": "UI catch-up reconcile: keep owed ranges after a failed read and past the round cap (B-MG-121, B-MG-122)",
+  "lane": null,
+  "owner": "MG",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 60 LOC > 30",
+      "at": "2026-11-04T20:23:15.309Z"
+    }
+  ],
+  "status": "dispatched",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T20:23:11.766Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T20:23:15.309Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T20:23:15.904Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-46-reconcile-owed-ranges",
+        "base": "56aeb7a22d25b4f78c54343252b24b7ace765b13",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-46"
+      }
+    },
+    {
+      "at": "2026-11-04T20:23:35.651Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:designer",
+        "base": "56aeb7a22d25"
+      }
+    }
+  ],
+  "base": "56aeb7a22d25b4f78c54343252b24b7ace765b13",
+  "branch": "task/T-MG-46-reconcile-owed-ranges"
+}

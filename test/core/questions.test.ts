@@ -134,3 +134,23 @@ test("digest and search do not leak content from another actor's private channel
   const hits = search(ctx, { actorId: outsider.id, text: "kanaru" });
   assert.equal(hits.length, 0, "search leaked content from a private channel");
 });
+
+test("search beforeId pages past the cap: more than 200 matches in one second, each id once (D-MG-42)", () => {
+  const ctx = testCtx();
+  const a = mkActor(ctx, "ala");
+  const g = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
+  const ids: number[] = [];
+  for (let i = 0; i < 450; i++) ids.push(postMessage(ctx, { conversationId: g.id, actorId: a.id, body: `needle ${i}` }).id);
+  const seen: number[] = [];
+  let before: number | undefined;
+  for (let page = 0; page < 10; page++) {
+    const hits = search(ctx, { actorId: a.id, text: "needle", limit: 200, beforeId: before });
+    if (hits.length === 0) break;
+    seen.push(...hits.map((m) => m.id).reverse());
+    before = Math.min(...hits.map((m) => m.id));
+  }
+  assert.deepEqual(seen, [...ids].reverse());
+  // Without it nothing changes: the newest page, ascending.
+  const plain = search(ctx, { actorId: a.id, text: "needle", limit: 3 });
+  assert.deepEqual(plain.map((m) => m.id), ids.slice(-3));
+});

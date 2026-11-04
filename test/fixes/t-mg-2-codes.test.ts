@@ -46,14 +46,14 @@ function polishCodeLiterals(source: string): string[] {
 
 // Required migration tables document old codes; all other uses remain checked.
 function withoutMigrationRows(path: string, source: string): string {
-  if (!["integrations/claude-skill/SKILL.md", "integrations/claude-code/skills/agenttalks/SKILL.md"]
+  if (!["integrations/claude-code-plugin/skills/agenttalks/SKILL.md", "integrations/claude-code/skills/agenttalks/SKILL.md"]
     .includes(path)) return source;
   const rows = new Set(Object.entries(LEGACY).map(([code, oldCode]) => `| \`${oldCode}\` | \`${code}\` |`));
   return source.split("\n").filter((line) => !rows.has(line.trim())).join("\n");
 }
 
 test("migration row exceptions retain checks on incorrect mappings and old code usage", () => {
-  const path = "integrations/claude-skill/SKILL.md";
+  const path = "integrations/claude-code-plugin/skills/agenttalks/SKILL.md";
   const row = `| \`${LEGACY.token_expired}\` | \`token_expired\` |`;
   const use = `Match code: "${LEGACY.token_expired}"`;
   const incorrect = `| \`${LEGACY.token_expired}\` | \`token_revoked\` |`;

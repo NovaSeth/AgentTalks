@@ -16,7 +16,7 @@ import {
 import { sessionGeneration } from "./api.js";
 import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, repinIfPinned, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
-import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
+import { iconBell, iconChat, iconDoc, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
 import { dmOthers, lastConvId, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { startDirect } from "./actions.js";
 import { buildRoute, consumeOwnPush, hashOfEvent, parseRoute, syncRoute } from "./router.js";
@@ -29,13 +29,13 @@ import { openThreadsView, renderThreadsMain } from "./view-threads.js";
 import { findInConversation, renderSearchMain } from "./view-search.js";
 import { openUsersView, renderUsersMain, resetUsersError } from "./view-admin.js";
 import {
-  bindMessageEvents, closeThread, fadeUnreadHighlights, noteTabVisible, openConversation, openThread, refreshDetailsData, renderComposer,
+  bindMessageEvents, closeThread, fadeUnreadHighlights, noteTabVisible, openConversation, openConversationInBackground, openThread, refreshDetailsData, renderComposer,
   renderDetails, renderMain, renderMessages, renderPresenceBar, renderThread, renderTopbar,
   toggleSidePanel, typingFacesHtml, updateOfflineBar, upsertMessageNode,
 } from "./view-chat.js";
 import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./view-login.js";
 import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./view-notifications.js";
-import { getSidebarPlace, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
+import { getSidebarPlace, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, settlePlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { connectSSE, ensureSSE } from "./sse-events.js";
 
@@ -51,6 +51,9 @@ function renderShell() {
   // ("where we talk"), users ("who has access"). The badge on the bell is the one
   // counter visible without entering anything.
   const adminHuman = state.actor?.isAdmin && state.actor?.kind === "human";
+  // T-MG-38 (fix round 4): a view transition derives the place BEFORE the rail is drawn, so the
+  // rail markup below is (place, view) of this very render.
+  settlePlace();
   const withSidebar = hasSidebar();
   const inConv = inConversations();
   // The DMs place counts every unread message in a direct or group conversation I belong to
@@ -61,11 +64,12 @@ function renderShell() {
     <div class="shell with-rail ${withSidebar ? "" : "without-sidebar"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
       <div class="scrim" id="scrim"></div>
       <nav class="rail" id="rail" aria-label="${t("Main navigation")}">
-        ${railButton("rail-chats", t("Home"), t("Conversations and wiki"), iconChat(), inConv && getSidebarPlace() === "home")}
+        ${railButton("rail-chats", t("Home"), t("Channels and conversations"), iconChat(), inConv && getSidebarPlace() === "home")}
         ${railButton("rail-dms", t("DMs"), t("Direct messages"), iconSend(), inConv && getSidebarPlace() === "dms",
           { id: "rail-dm-badge", count: dmUnread, label: t("{n} unread", { n: dmUnread }) }, t("Direct messages"))}
         ${railButton("rail-notif", t("Activity"), t("Notifications: mentions, direct messages, reactions, changes to your wiki pages"), iconBell(), state.view === "notifications",
           { id: "rail-badge", count: state.notifUnread, label: t("{n} new", { n: state.notifUnread }) })}
+        ${railButton("rail-wiki", t("Wiki"), t("Wiki and claimed resources"), iconDoc(), inConv && getSidebarPlace() === "wiki")}
         ${adminHuman ? railButton("rail-users", t("Admin"), t("Accounts and access"), iconUsers(), state.view === "users") : ""}
         ${railButton("rail-search", t("Search"), t("Search conversations, people and messages"), iconSearch(), false, undefined, t("Search"), "rail-phone")}
       </nav>
@@ -76,6 +80,7 @@ function renderShell() {
   document.getElementById("rail-notif").addEventListener("click", () => { syncRoute("#/activity"); openNotificationsView(); });
   document.getElementById("rail-chats").addEventListener("click", () => goPlace("home"));
   document.getElementById("rail-dms").addEventListener("click", () => { syncRoute("#/dms"); goPlace("dms"); });
+  document.getElementById("rail-wiki").addEventListener("click", () => { syncRoute("#/wiki"); goPlace("wiki"); });
   // W5-S10-A gave the Threads view two entries; U16 (decision) keeps ONE: the sidebar row under
   // the workspace header (view-sidebar.js), the top section of the list. No rail or tab button.
   const ru = document.getElementById("rail-users");
@@ -160,13 +165,16 @@ function railButton(id, label, title, icon, on, badge, ariaName = label, extraCl
         </button>`;
 }
 
-/** Home and DMs are two PLACES of the same sidebar: Home shows every section, DMs narrows it to
- *  direct conversations and people. Picking a place from another view returns to the chat. */
+/** Home, DMs and Wiki are three PLACES of the same sidebar: Home shows the conversations, DMs
+ *  narrows it to direct conversations and people, Wiki holds the tree and the claimed resources
+ *  (T-MG-38). Picking a place from another view returns to the chat. The place is the reader's
+ *  explicit choice: set AFTER the view moves to the chat, so the render that follows sees no
+ *  transition to derive a place from (view-sidebar.js: setSidebarPlace, settlePlace). */
 function goPlace(place) {
   resetUsersError();
   const samePlace = getSidebarPlace() === place;
+  if (!inConversations()) { state.view = "chat"; setSidebarPlace(place); renderShell(); return; }
   setSidebarPlace(place);
-  if (!inConversations()) { state.view = "chat"; renderShell(); return; }
   if (window.matchMedia("(max-width:760px)").matches) {
     // On a phone the drawer is the only route to the list: the same place toggles it,
     // another place opens it with the new filter.
@@ -183,10 +191,13 @@ function goPlace(place) {
   renderSidebarList();
 }
 
-/** The `on` state of the two places without redrawing the whole shell. */
+/** The `on` state of the three places, from (place, view), without redrawing the whole shell.
+ *  T-MG-38 (fix round 4): called after EVERY sidebar refresh (views.sidebar below), not only
+ *  when the place moves - returning from Search to the page on screen keeps the place and must
+ *  still light Wiki (review r2 F5). */
 function paintRail() {
   const inConv = inConversations();
-  for (const [id, place] of [["rail-chats", "home"], ["rail-dms", "dms"]]) {
+  for (const [id, place] of [["rail-chats", "home"], ["rail-dms", "dms"], ["rail-wiki", "wiki"]]) {
     const b = document.getElementById(id);
     if (!b) continue;
     const on = inConv && getSidebarPlace() === place;
@@ -205,7 +216,7 @@ registerViews({
   main: renderMain,
   // T-MG-44: the unread highlight fades only once the server confirmed the read mark (data.js).
   readConfirmed: fadeUnreadHighlights,
-  sidebar: renderSidebarList,
+  sidebar: () => { renderSidebarList(); paintRail(); },
   conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
   // refreshPresence does not have to know where the dots, the bar, the topbar and
@@ -238,6 +249,7 @@ registerViews({
   typing: typingFacesHtml,
   detailsData: refreshDetailsData,
   openConversation: openConversation,
+  openConversationInBackground: openConversationInBackground,
   openWiki: openWikiPage,
   afterLogin: afterLogin,
 });
@@ -389,6 +401,7 @@ async function applyRoute(route) {
     case "wiki": await openWikiPage(route.slug); return;
     case "activity": await openNotificationsView(); return;
     case "dms": goPlace("dms"); return;
+    case "wikiPlace": goPlace("wiki"); return;
     case "admin":
       if (state.actor?.isAdmin && state.actor?.kind === "human") await openUsersView();
       else renderNoAccess(route);

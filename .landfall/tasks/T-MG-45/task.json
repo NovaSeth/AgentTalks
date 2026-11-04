@@ -5,9 +5,15 @@
   "title": "Plugin wake tools: a total framed-output budget with a cursor, like the T-MG-40 channel tools",
   "lane": null,
   "owner": "MG",
-  "class": null,
-  "classHistory": [],
-  "status": "new",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 80 LOC > 30",
+      "at": "2026-11-04T20:27:19.445Z"
+    }
+  ],
+  "status": "dispatched",
   "round": 0,
   "events": [
     {
@@ -15,8 +21,56 @@
       "by": "MG",
       "event": "created",
       "data": {}
+    },
+    {
+      "at": "2026-11-04T20:27:19.445Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T20:27:19.832Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-45-wake-tools-budget",
+        "base": "78da1151863ea73908e931cea58efc5947444482",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-45"
+      }
+    },
+    {
+      "at": "2026-11-04T20:27:36.817Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "78da1151863e"
+      }
+    },
+    {
+      "at": "2026-11-04T20:31:49.753Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
+      }
+    },
+    {
+      "at": "2026-11-04T20:31:50.001Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "78da1151863e",
+        "note": "cross-provider review r1"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "78da1151863ea73908e931cea58efc5947444482",
+  "branch": "task/T-MG-45-wake-tools-budget"
 }

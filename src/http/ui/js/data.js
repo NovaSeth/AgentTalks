@@ -44,31 +44,162 @@ export function reactionsOf(msgs, reactions) {
   return Object.fromEntries(msgs.filter((m) => reactions && m.id in reactions).map((m) => [m.id, reactions[m.id]]));
 }
 
+// T-MG-43 (codex T-MG-18 r4 F5, F6; review-r1 F1; review-r2 F2): every REST read of a conversation's
+// messages is a FLIGHT (beginRead .. endRead) with a stamp from one monotonic counter taken when it
+// is sent; a live SSE write takes one when it arrives. Two rules:
+// 1. Stamps order writes that did NOT overlap: a read sent after another one LANDED is cut on the
+//    server after that one, so a higher stamp is newer data. A page writes only over state with a
+//    lower stamp (pageMayReplace for bodies, mergePageReactions for reactions); a write by a writer
+//    without stamps (view code) is kept when it happened while the page was in flight.
+// 2. Two flights of one conversation that were in the air at the same time have NO known cut order
+//    (r2 F2: a request can reach the server after a later-sent one). The stamp rule applies as a first
+//    guess, and each of them owes a re-read of the id range it carried, as does a page that met an
+//    unstamped write; once no flight of that conversation is in the air, the owed ranges are read
+//    again one at a time (reconcile). A re-read starts after every owed flight landed, so it is cut
+//    after all of them and its stamp is above theirs: rule 1 makes it the answer.
+let seq = 0;
+export function currentSeq() { return seq; }
+export function nextSeq() { return ++seq; }
+/** message object -> { seq, live } of the write that put it in state. Every writer replaces the
+ *  object, so an unstamped writer (view code) leaves an object without an entry. */
+const rowStamps = new WeakMap();
+export function stampRow(m, s, live = false) { rowStamps.set(m, { seq: s, live }); }
+/** messageId -> the stamp of the request whose reactions are held for it, and the reaction object it
+ *  left in state (a different object there now = an unstamped writer changed it since). */
+const reactionStamps = new Map();
+const reactionRefs = new Map();
+
+/** convId -> the flights in the air; convId -> the [lo, hi] id ranges owed a re-read. */
+const flights = new Map();
+const owed = new Map();
+const reconciling = new Set();
+const reconcileRounds = new Map();
+const MAX_RECONCILE_ROUNDS = 3;
+const RECONCILE_PAGE = 200;
+
+/** Opens a flight just before its request is sent: the stamp, and what was held at that moment. */
+export function beginRead(convId) {
+  const list = state.msgs[convId] || [];
+  const f = {
+    sent: nextSeq(),
+    rows: new Map(list.map((m) => [m.id, m])),
+    rx: new Map(list.map((m) => [m.id, state.reactions[m.id]])),
+    dirty: false,
+  };
+  const air = flights.get(convId) || new Set();
+  flights.set(convId, air);
+  if (air.size) { f.dirty = true; for (const o of air) o.dirty = true; }
+  air.add(f);
+  return f;
+}
+
+/** Closes a flight after its answer was applied (`msgs` = what it carried; null when it failed). */
+export function endRead(convId, f, msgs) {
+  const air = flights.get(convId);
+  air?.delete(f);
+  if (f.dirty && msgs && msgs.length) {
+    const idsOf = msgs.map((m) => m.id).filter((id) => typeof id === "number");
+    if (idsOf.length) (owed.get(convId) || owed.set(convId, []).get(convId)).push([Math.min(...idsOf), Math.max(...idsOf)]);
+  }
+  if (!air?.size && owed.get(convId)?.length) queueMicrotask(() => { reconcile(convId); });
+}
+
+/** Whether the page of flight `f` may replace the held object `held` of message `id`. `liveMark`: a live
+ *  write stamped above it is kept as well (the catch-up passes the stamp taken when it began). */
+export function pageMayReplace(held, f, id, liveMark = f.sent) {
+  if (held === undefined) return true;
+  const st = rowStamps.get(held);
+  if (st === undefined) {
+    // An unstamped writer: its order is unknown. Kept when it wrote while the page was in flight,
+    // and that range is re-read.
+    if (held === f.rows.get(id)) return true;
+    f.dirty = true;
+    return false;
+  }
+  if (st.live && st.seq > liveMark) return false;
+  return st.seq < f.sent;
+}
+
+/** The reaction merge of flight `f`'s page, independent of which bodies it was allowed to replace
+ *  (B-MG-118: an SSE message carries no reactions, so its REST reactions are still needed), except
+ *  for reactions from a later-sent request, or written by an unstamped writer while it was in flight. */
+export function mergePageReactions(msgs, reactions, f) {
+  const rx = msgs.filter((m) => {
+    if ((reactionStamps.get(m.id) ?? 0) >= f.sent) return false;
+    const cur = state.reactions[m.id];
+    if (cur !== reactionRefs.get(m.id) && cur !== f.rx.get(m.id)) { f.dirty = true; return false; }
+    return true;
+  });
+  mergeReactions(rx, reactionsOf(rx, reactions));
+  for (const m of rx) { reactionStamps.set(m.id, f.sent); reactionRefs.set(m.id, state.reactions[m.id]); }
+}
+
+/** A catch-up or re-read page: bodies by pageMayReplace, reactions by mergePageReactions. */
+export function applyPage(convId, data, f, liveMark = f.sent) {
+  const now = new Map((state.msgs[convId] || []).map((m) => [m.id, m]));
+  for (const m of data.messages) {
+    if (!pageMayReplace(now.get(m.id), f, m.id, liveMark)) continue;
+    upsertMessage(convId, m); stampRow(m, f.sent);
+  }
+  mergeActors(data.actors);
+  mergePageReactions(data.messages, data.reactions, f);
+}
+
+/** Rule 2: the owed ranges of a conversation, read again one page at a time once nothing is in the
+ *  air. A re-read that overlaps a new flight owes its range again; MAX_RECONCILE_ROUNDS bounds a
+ *  conversation whose reads never stop overlapping (then rule 1 alone stands). */
+async function reconcile(convId) {
+  if (reconciling.has(convId) || flights.get(convId)?.size || !owed.get(convId)?.length) return;
+  const ranges = owed.get(convId).sort((a, b) => a[0] - b[0]);
+  owed.delete(convId);
+  if (!state.loaded[convId]) return;
+  const round = (reconcileRounds.get(convId) ?? 0) + 1;
+  if (round > MAX_RECONCILE_ROUNDS) { reconcileRounds.delete(convId); return; }
+  reconcileRounds.set(convId, round);
+  const merged = [];
+  for (const [lo, hi] of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && lo <= last[1] + 1) last[1] = Math.max(last[1], hi); else merged.push([lo, hi]);
+  }
+  const gen = sessionGeneration();
+  reconciling.add(convId);
+  try {
+    for (const [lo, hi] of merged) {
+      let after = lo - 1;
+      while (after < hi) {
+        // Ids are global and rising, so (after, hi] holds at most hi - after messages of this conversation.
+        const f = beginRead(convId);
+        let data = null;
+        try {
+          data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${Math.min(RECONCILE_PAGE, hi - after)}`);
+          if (gen !== sessionGeneration()) return;
+          applyPage(convId, data, f);
+        } catch { return; }
+        finally { endRead(convId, f, data && data.messages); }
+        const top = data.messages.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), after);
+        if (top <= after) break;
+        after = top;
+      }
+    }
+    if (state.view === "chat" && state.activeId === convId) views.messages?.();
+  } finally {
+    reconciling.delete(convId);
+    if (!owed.get(convId)?.length) reconcileRounds.delete(convId);
+    else queueMicrotask(() => { reconcile(convId); });
+  }
+}
+
 export async function loadMessages(convId, { keepTouched = false } = {}) {
   const firstLoad = !state.loaded[convId];
-  // keepTouched (resume refresh, codex r3 F4): a message whose held object changed while the request
-  // was in flight was replaced by a live event or a newer action, so the answer (cut earlier on the
-  // server) must not put the older revision back. A reference comparison: every writer replaces the object.
-  const before = keepTouched ? new Map((state.msgs[convId] || []).map((m) => [m.id, m])) : null;
-  const data = await api("GET", `/api/conversations/${convId}/messages?limit=${INITIAL_BATCH_SIZE}`);
-  // We MERGE rather than replace the array: assigning `state.msgs[id] = ...` erased everything
-  // the user had loaded by scrolling up.
-  // History enters without animation - the "slide in" is played only by a message that arrived
-  // live (SSE), not by every opening of a channel.
-  const touched = (m) => {
-    const held = state.msgs[convId]?.find((h) => h.id === m.id);
-    return before !== null && held !== undefined && held !== before.get(m.id);
-  };
-  const fresh = data.messages.filter((m) => !touched(m));
-  for (const m of fresh) { upsertMessage(convId, m); animatedMsgs.add(m.id); }
-  // The "history FETCHED" marker (not "there are some messages"): a single message from SSE
-  // must not pretend to be a loaded conversation.
-  state.loaded[convId] = true;
-  // A full batch = there is probably older history to load. When refreshing an already loaded
-  // conversation, a new batch says nothing about what lies ABOVE our list.
-  if (firstLoad) state.hasMore[convId] = data.messages.length >= INITIAL_BATCH_SIZE;
-  mergeActors(data.actors);
-  mergeReactions(fresh, reactionsOf(fresh, data.reactions));
+  // keepTouched (resume refresh, codex r3 F4; T-MG-43 r1): the answer replaces a held message only
+  // when pageMayReplace allows it: never over a write from a later-sent request or a later live
+  // event (an older revision must not come back), always over one from an earlier-sent request.
+  const f = beginRead(convId);
+  let data = null;
+  try {
+    data = await api("GET", `/api/conversations/${convId}/messages?limit=${INITIAL_BATCH_SIZE}`);
+    applyNewest(convId, data, f, { keepTouched, firstLoad });
+  } finally { endRead(convId, f, data && data.messages); }
   // Thread replies do not stand in the main list, so a batch of 30 messages can produce a
   // screen with three. We fetch more until there is something to scroll - without that, lazy
   // loading would never start, because there simply is no scrollbar.
@@ -82,6 +213,27 @@ export async function loadMessages(convId, { keepTouched = false } = {}) {
   }
 }
 
+function applyNewest(convId, data, f, { keepTouched, firstLoad }) {
+  // We MERGE rather than replace the array: assigning `state.msgs[id] = ...` erased everything
+  // the user had loaded by scrolling up.
+  // History enters without animation - the "slide in" is played only by a message that arrived
+  // live (SSE), not by every opening of a channel.
+  const may = (m) => !keepTouched
+    || pageMayReplace(state.msgs[convId]?.find((h) => h.id === m.id), f, m.id);
+  const fresh = data.messages.filter(may);
+  for (const m of fresh) { upsertMessage(convId, m); stampRow(m, f.sent); animatedMsgs.add(m.id); }
+  // The "history FETCHED" marker (not "there are some messages"): a single message from SSE
+  // must not pretend to be a loaded conversation.
+  state.loaded[convId] = true;
+  // A full batch = there is probably older history to load. When refreshing an already loaded
+  // conversation, a new batch says nothing about what lies ABOVE our list.
+  if (firstLoad) state.hasMore[convId] = data.messages.length >= INITIAL_BATCH_SIZE;
+  mergeActors(data.actors);
+  // B-MG-118: a kept message keeps its body, not the reactions it had before (none for an SSE
+  // arrival); only reactions from a later-sent request (or an unstamped write in flight) stay.
+  mergePageReactions(data.messages, data.reactions, f);
+}
+
 /** Loading older history above what we already have - keeping the scroll position (the content
 /**  must not run away from your eyes when older messages slide in above it). */
 let loadingOlder = false;
@@ -92,10 +244,13 @@ export async function loadOlderMessages(convId) {
   if (!oldest || loadingOlder || !state.hasMore[convId]) return;
   loadingOlder = true;
   try {
-    const data = await api("GET", `/api/conversations/${convId}/messages?before=${oldest.id}&limit=${OLDER_BATCH_SIZE}`);
-    for (const m of data.messages) { upsertMessage(convId, m); animatedMsgs.add(m.id); }
-    mergeActors(data.actors);
-    mergeReactions(data.messages, data.reactions);
+    const f = beginRead(convId);
+    let data = null;
+    try {
+      data = await api("GET", `/api/conversations/${convId}/messages?before=${oldest.id}&limit=${OLDER_BATCH_SIZE}`);
+      applyPage(convId, data, f);
+      for (const m of data.messages) animatedMsgs.add(m.id);
+    } finally { endRead(convId, f, data && data.messages); }
     state.hasMore[convId] = data.messages.length >= OLDER_BATCH_SIZE;
     const el = document.getElementById("messages");
     const beforeH = el ? el.scrollHeight : 0, beforeTop = el ? el.scrollTop : 0;
@@ -154,10 +309,15 @@ export async function refreshDigestAndLeases(force) {
 export async function loadReactionsForMessage(convId, messageId) {
   if (!convId || !messageId) return;
   try {
-    const data = await api("GET", `/api/conversations/${convId}/messages?before=${messageId + 1}&limit=1`);
-    mergeReactions(data.messages, data.reactions);
-    mergeActors(data.actors);
-    if (state.loaded[convId]) for (const m of data.messages) upsertMessage(convId, m);
+    // T-MG-43: a flight like every REST read; it writes only by the rules above, and a failed
+    // refresh writes no stamp, so it keeps no page's reactions out.
+    const f = beginRead(convId);
+    let data = null;
+    try {
+      data = await api("GET", `/api/conversations/${convId}/messages?before=${messageId + 1}&limit=1`);
+      if (state.loaded[convId]) applyPage(convId, data, f);
+      else { mergeActors(data.actors); mergePageReactions(data.messages, data.reactions, f); }
+    } finally { endRead(convId, f, data && data.messages); }
   } catch { /* best effort */ }
 }
 

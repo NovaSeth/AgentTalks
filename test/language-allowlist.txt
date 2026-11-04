@@ -382,8 +382,8 @@ markdown	docs/superpowers/specs/2026-11-04-ui-slack-parity.md	"widok-powiadomien
 markdown	docs/superpowers/specs/2026-11-04-ui-slack-parity.md	"widok-sidebar.js"	Historical filename in the explicit old-to-new vocabulary mapping.
 markdown	docs/superpowers/specs/2026-11-04-ui-slack-parity.md	"zdarzenia-sse.js"	Historical filename in the explicit old-to-new vocabulary mapping.
 
-# markdown: integrations/claude-skill/SKILL.md
-markdown	integrations/claude-skill/SKILL.md	"`@wszyscy`"	Documents the retained Polish broadcast alias for @all.
+# markdown: integrations/claude-code-plugin/skills/agenttalks/SKILL.md
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"`@wszyscy`"	Documents the retained Polish broadcast alias for @all.
 
 # strings: src/core/error-codes.ts
 strings	src/core/error-codes.ts	"aktor"	Legacy API error code retained through 0.3.x for existing clients (D-MG-15).
@@ -512,104 +512,104 @@ strings	src/http/ui/js/state.js	"wszyscy"	Backward-compatible Polish broadcast a
 # strings: src/http/ui/js/view-chat.js
 strings	src/http/ui/js/view-chat.js	"wszyscy"	Backward-compatible Polish broadcast alias @wszyscy for @all (D-MG-16).
 
-# markdown: integrations/claude-skill/SKILL.md migration tables
-markdown	integrations/claude-skill/SKILL.md	"| `aktor` | `actor_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `aktor_wylaczony` | `actor_disabled` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `awatar` | `avatar_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `awatar_za_duzy` | `avatar_too_large` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `bez_slug` | `slug_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `bez_zmian` | `no_changes` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_adresu` | `url_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_aktora` | `actor_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_base_url` | `base_url_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_czlonkow` | `members_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_dostepu` | `no_access` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_nazwy` | `name_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_pliku` | `file_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_rewizji` | `revision_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_sessionid` | `session_id_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_target` | `target_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_tytulu` | `title_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `brak_uprawnien` | `not_permitted` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `cialo_za_dlugie` | `message_too_long` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `cialo_za_duze` | `body_too_large` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `cykl_wiki` | `wiki_cycle` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `dm_nie_znika` | `dm_cannot_be_deleted` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `dm_staly` | `dm_members_fixed` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `handle_zajety` | `handle_taken` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `haslo_za_krotkie` | `password_too_short` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `juz_zamkniete` | `already_closed` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `kanal_istnieje` | `channel_exists` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `konflikt_wiki` | `wiki_conflict` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `konto_wylaczone` | `account_disabled` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `konwersacja` | `conversation_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `mcp_niedostepny` | `mcp_unavailable` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `multipart_niewspierany` | `multipart_unsupported` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nie_admin` | `not_admin` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nie_autor` | `not_author` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nie_dla_rozmow` | `not_for_conversations` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nie_mozna_wyjsc` | `cannot_leave` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nie_siebie` | `not_self` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nie_twoja_sesja` | `not_your_session` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nie_twoja_strona` | `not_your_page` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nie_znaleziono` | `not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nieuwierzytelniony` | `unauthenticated` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `nieznane_narzedzie` | `unknown_tool` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `obcy_watek` | `foreign_thread` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `plik` | `file_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `plik_za_duzy` | `file_too_large` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `poswiadczenie` | `credential_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `publiczny_sam` | `public_channel_open` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `puste_cialo` | `empty_body` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `pusty_awatar` | `empty_avatar` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `pusty_plik` | `empty_file` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `pytanie` | `question_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `rewizja` | `revision_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `sekcja` | `section_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `sesja` | `session_invalid` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `sesja` | `session_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `skasowana` | `message_deleted` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `slug_zarezerwowany` | `slug_reserved` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `strona` | `page_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `token_odwolany` | `token_revoked` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `token_wygasl` | `token_expired` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `tresc_za_dluga` | `body_too_long` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `ttl_za_krotki` | `ttl_too_short` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `tylko_admin_czlowiek` | `human_admin_only` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `tylko_ludzie` | `humans_only` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `tylko_post` | `post_only` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `tytul_za_dlugi` | `title_too_long` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `webauthn_licznik` | `webauthn_counter` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `webauthn_podpis` | `webauthn_signature` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `wewnetrzny` | `internal` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `wiadomosc` | `message_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `za_duzo_prob` | `too_many_attempts` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `za_duzo_strumieni` | `too_many_streams` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `za_malo_uczestnikow` | `too_few_members` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zaproszenie` | `invite_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zarchiwizowana` | `conversation_archived` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zla_nazwa` | `invalid_name` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zle_dane` | `invalid_data` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zle_haslo` | `wrong_password` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zle_id` | `invalid_id` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zle_zaproszenie` | `invalid_invite` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zly_adres` | `invalid_address` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zly_format` | `invalid_format` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zly_json` | `invalid_json` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zly_notify` | `invalid_notify` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zly_rodzaj` | `invalid_kind` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zly_sygnal` | `invalid_signal` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zly_target` | `invalid_target` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `zly_zasob` | `invalid_resource` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `<handle:czlowiek>` | `<handle:human>` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `PYTANIE` | `QUESTION` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `odpowiedz` | `answer` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `plik` | `file` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `watek:<id>` | `thread:<id>` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `skasowana` | `deleted` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `rozmowa prywatna` | `private conversation` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `limity` | `limits` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
-markdown	integrations/claude-skill/SKILL.md	"| `uwaga` | `note` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+# markdown: integrations/claude-code-plugin/skills/agenttalks/SKILL.md migration tables
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `aktor` | `actor_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `aktor_wylaczony` | `actor_disabled` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `awatar` | `avatar_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `awatar_za_duzy` | `avatar_too_large` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `bez_slug` | `slug_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `bez_zmian` | `no_changes` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_adresu` | `url_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_aktora` | `actor_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_base_url` | `base_url_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_czlonkow` | `members_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_dostepu` | `no_access` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_nazwy` | `name_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_pliku` | `file_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_rewizji` | `revision_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_sessionid` | `session_id_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_target` | `target_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_tytulu` | `title_required` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `brak_uprawnien` | `not_permitted` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `cialo_za_dlugie` | `message_too_long` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `cialo_za_duze` | `body_too_large` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `cykl_wiki` | `wiki_cycle` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `dm_nie_znika` | `dm_cannot_be_deleted` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `dm_staly` | `dm_members_fixed` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `handle_zajety` | `handle_taken` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `haslo_za_krotkie` | `password_too_short` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `juz_zamkniete` | `already_closed` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `kanal_istnieje` | `channel_exists` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `konflikt_wiki` | `wiki_conflict` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `konto_wylaczone` | `account_disabled` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `konwersacja` | `conversation_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `mcp_niedostepny` | `mcp_unavailable` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `multipart_niewspierany` | `multipart_unsupported` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nie_admin` | `not_admin` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nie_autor` | `not_author` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nie_dla_rozmow` | `not_for_conversations` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nie_mozna_wyjsc` | `cannot_leave` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nie_siebie` | `not_self` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nie_twoja_sesja` | `not_your_session` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nie_twoja_strona` | `not_your_page` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nie_znaleziono` | `not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nieuwierzytelniony` | `unauthenticated` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `nieznane_narzedzie` | `unknown_tool` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `obcy_watek` | `foreign_thread` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `plik` | `file_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `plik_za_duzy` | `file_too_large` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `poswiadczenie` | `credential_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `publiczny_sam` | `public_channel_open` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `puste_cialo` | `empty_body` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `pusty_awatar` | `empty_avatar` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `pusty_plik` | `empty_file` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `pytanie` | `question_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `rewizja` | `revision_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `sekcja` | `section_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `sesja` | `session_invalid` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `sesja` | `session_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `skasowana` | `message_deleted` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `slug_zarezerwowany` | `slug_reserved` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `strona` | `page_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `token_odwolany` | `token_revoked` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `token_wygasl` | `token_expired` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `tresc_za_dluga` | `body_too_long` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `ttl_za_krotki` | `ttl_too_short` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `tylko_admin_czlowiek` | `human_admin_only` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `tylko_ludzie` | `humans_only` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `tylko_post` | `post_only` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `tytul_za_dlugi` | `title_too_long` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `webauthn_licznik` | `webauthn_counter` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `webauthn_podpis` | `webauthn_signature` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `wewnetrzny` | `internal` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `wiadomosc` | `message_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `za_duzo_prob` | `too_many_attempts` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `za_duzo_strumieni` | `too_many_streams` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `za_malo_uczestnikow` | `too_few_members` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zaproszenie` | `invite_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zarchiwizowana` | `conversation_archived` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zla_nazwa` | `invalid_name` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zle_dane` | `invalid_data` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zle_haslo` | `wrong_password` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zle_id` | `invalid_id` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zle_zaproszenie` | `invalid_invite` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zly_adres` | `invalid_address` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zly_format` | `invalid_format` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zly_json` | `invalid_json` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zly_notify` | `invalid_notify` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zly_rodzaj` | `invalid_kind` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zly_sygnal` | `invalid_signal` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zly_target` | `invalid_target` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `zly_zasob` | `invalid_resource` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `<handle:czlowiek>` | `<handle:human>` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `PYTANIE` | `QUESTION` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `odpowiedz` | `answer` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `plik` | `file` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `watek:<id>` | `thread:<id>` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `skasowana` | `deleted` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `rozmowa prywatna` | `private conversation` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `limity` | `limits` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
+markdown	integrations/claude-code-plugin/skills/agenttalks/SKILL.md	"| `uwaga` | `note` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).
 
 # markdown: integrations/claude-code/skills/agenttalks/SKILL.md migration tables
 markdown	integrations/claude-code/skills/agenttalks/SKILL.md	"| `aktor` | `actor_not_found` |"	Migration table quotes an exact old-to-new contract mapping (D-MG-15).

@@ -83,7 +83,12 @@ test("channel server: MCP handshake, tools/list, a pushed DM arrives framed, rep
 
   const list = await rpc.request("tools/list");
   const names = list.result.tools.map((x: any) => x.name).sort();
-  assert.deepEqual(names, ["mark_read", "reply", "typing"]);
+  // T-MG-40: the three answering tools plus the common-action tools of lib/tools.mjs.
+  assert.deepEqual(names, [
+    "answer", "ask", "channels", "claim", "leases", "mark_read", "mentions", "open_questions",
+    "react", "read_conversation", "read_thread", "release", "reply", "search", "send", "typing",
+    "who", "wiki_read", "wiki_search", "wiki_write",
+  ]);
   const reply = list.result.tools.find((x: any) => x.name === "reply");
   assert.deepEqual(reply.inputSchema.required.sort(), ["conversation_id", "text"]);
 

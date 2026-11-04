@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/app.js",
+      "line": 204,
+      "rule": "REV-2",
+      "text": "Acceptance 4: reopening the same conversation from Wiki leaves channels hidden. In bootApp, go('#/c/general'), go('#/wiki'), go('#/c/general') produced {view:'chat',place:'wiki',channels:false}; the base produces home/true. lastConversation suppresses this explicit navigation. Distinguish user navigation from address cleanup rather than deduplicating solely by conversation."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "src/http/ui/js/app.js",
+      "line": 211,
+      "rule": "REV-2",
+      "text": "Acceptance 3: returning from Search to Wiki can leave its rail button inactive. In bootApp with rendered rail attributes, openWikiPage('nowosci'); state.view='search'; views.render(); await openWikiPage('nowosci') produced {view:'wiki',place:'wiki',on:false,aria:null}; the base produces on:true and aria:'page'. Repaint the rail when the view changes even if the selected place is unchanged."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "src/http/ui/js/app.js",
+      "line": 206,
+      "rule": "REV-2",
+      "text": "Acceptance 3/4: delayed conversation cleanup can hide a newer wiki page's tree. In bootApp, hold messages, start openConversation(1,9999), await openWikiPage('nowosci'), then release messages: {view:'wiki',place:'wiki'} becomes {view:'wiki',place:'home',wikiTree:false}; the base retains Wiki. The late syncRoute cleanup is treated as navigation after lastConversation resets. Guard stale cleanup and exclude address maintenance from navigation events."
+    },
+    {
+      "id": "F7",
+      "severity": "blocking",
+      "path": "src/http/ui/js/router.js",
+      "line": 115,
+      "rule": "REV-2",
+      "text": "Background wiki refreshes now override an explicit sidebar choice. In bootApp, openWikiPage('nowosci'), select Home, then dispatch the captured SSE wiki callback with {slug:'nowosci'}: place changes home→wiki; the base preserves home. SSE refresh calls openWikiPage, whose syncRoute now announces user navigation. Separate background refreshes from explicit page-opening actions so another actor's edit cannot switch the reader's sidebar."
+    },
+    {
+      "id": "F8",
+      "severity": "blocking",
+      "path": "test/ui-t38-wiki-place.test.ts",
+      "line": 204,
+      "rule": "COD-3",
+      "text": "Acceptance 8: three T38-r1 tests were removed without an authorizing decision. Reproduction: git diff -U0 b01c47f e7bc363 -- test/ui-t38-wiki-place.test.ts shows three deleted -test(\"T38-r1: ...\") declarations; the report confirms removal. The in-range decisions do not authorize these deletions. Preserve/adapt the existing tests and their behavioral coverage, or obtain the required decision before removing them."
+    }
+  ],
+  "run": "codex-T-MG-38-reviewer-2",
+  "sha256": "1a75a9a5a06583b7a951b442f5ef43b306a94f909bf8fb9acce5a7df08d1800a"
+}

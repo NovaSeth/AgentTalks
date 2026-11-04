@@ -16,6 +16,7 @@ import { showError, showToast } from "./toasts.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { conversationRoute, permalink, syncRoute, unreadFrom } from "./router.js";
 import { bindProfileClicks, closeProfile, ensureHeaderMembers, headerFacesHtml, mountPeoplePicker, profileFacts, renderProfile, visibleMembers } from "./view-people.js";
+import { keepPlace, placeOnOpen } from "./view-sidebar.js";
 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
@@ -142,6 +143,17 @@ function noteListDrawn(convId, list, mark) {
 }
 
 // ------------------------------------------------- entering a conversation
+// T-MG-38: set only for the synchronous start of an open that is not the reader's (see below).
+let backgroundOpen = false;
+
+/** The conversation on screen went away (archived by somebody else, sse-events.js): open the
+ *  next one without moving the reader's rail place. The flag is read in openConversation's
+ *  synchronous start, before its first await, so it cannot leak into another open. */
+export function openConversationInBackground(id) {
+  backgroundOpen = true;
+  try { return openConversation(id); } finally { backgroundOpen = false; }
+}
+
 export async function openConversation(id, focusMessageId) {
   // F1: an open that resumes after the account changed must not draw, fetch or mark read.
   const gen = sessionGeneration();
@@ -158,6 +170,10 @@ export async function openConversation(id, focusMessageId) {
   // re-fetches them for this conversation and shows nothing in the meantime.
   if (previousConversation !== id) { state.convMembersFor = null; state.convMembers = []; }
   state.view = "chat";
+  // T-MG-38: a conversation the reader opens from the Wiki place returns the rail to Home, the
+  // one on screen included (review r2 F4); a background open (openConversationInBackground)
+  // moves the view but leaves the reader's place alone.
+  if (backgroundOpen) keepPlace(); else placeOnOpen("chat");
   state.activeId = id;
   rememberLastConv(id);              // per account (F2 r3)
   pushRecent(id);
@@ -1367,6 +1383,7 @@ export function bindMessageEvents(scope) {
       if (state.wiki.pages.some((p) => p.slug === slug)) { openWikiPage(slug); return; }
       // A red link: the page does not exist - we open the editor for a new one under that slug.
       state.view = "wiki";
+      placeOnOpen("wiki");   // T-MG-38: a page the reader opens, even a new one, selects Wiki
       state.wiki.slug = slug;
       state.wiki.page = null;
       state.wiki.files = [];

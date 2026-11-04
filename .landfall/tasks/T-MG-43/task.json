@@ -5,16 +5,21 @@
   "title": "UI SSE catch-up: keep REST reactions and newer revisions of held messages (B-MG-118, B-MG-119)",
   "lane": null,
   "owner": "MG",
-  "class": "standard",
+  "class": "critical",
   "classHistory": [
     {
       "class": "standard",
       "reason": "standard: 60 LOC > 30",
       "at": "2026-11-04T19:17:47.489Z"
+    },
+    {
+      "class": "critical",
+      "reason": "critical: 539 LOC > 400",
+      "at": "2026-11-04T20:19:40.973Z"
     }
   ],
-  "status": "implemented",
-  "round": 1,
+  "status": "done",
+  "round": 2,
   "events": [
     {
       "at": "2026-11-04T19:17:43.629Z",
@@ -98,8 +103,132 @@
         "report": "done",
         "round": 1
       }
+    },
+    {
+      "at": "2026-11-04T19:58:19.270Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "a85b76d43d96",
+        "note": "scoped re-review r2"
+      }
+    },
+    {
+      "at": "2026-11-04T20:04:43.663Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:05:09.086Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 1,
+        "open": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:05:09.390Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:designer",
+        "base": "a85b76d43d96",
+        "note": "fix round 2"
+      }
+    },
+    {
+      "at": "2026-11-04T20:16:17.210Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:16:17.435Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "a85b76d43d96",
+        "note": "scoped re-review r3"
+      }
+    },
+    {
+      "at": "2026-11-04T20:19:28.107Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:19:40.973Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "loc-over",
+          "files-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T20:19:40.973Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "route-escalated",
+        "head": "6e7a5d0901363df7c5b6d6b0acfcb7204592ec9f",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:20:26.881Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "6e7a5d0901363df7c5b6d6b0acfcb7204592ec9f",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:22:05.988Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "6e7a5d0901363df7c5b6d6b0acfcb7204592ec9f"
+      }
+    },
+    {
+      "at": "2026-11-04T20:22:10.624Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "56aeb7a22d25b4f78c54343252b24b7ace765b13",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "6fb5fde94bb93d03a35d8fa852b0d7f2106ef11c"
+      }
     }
   ],
   "base": "a85b76d43d9603b341c401f465604f5219275749",
-  "branch": "task/T-MG-43-sse-catchup-merge"
+  "branch": "task/T-MG-43-sse-catchup-merge",
+  "mergedAt": "2026-11-04T20:22:10.624Z"
 }

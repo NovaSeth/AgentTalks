@@ -221,7 +221,9 @@ test("W6-S14-C: the sidebar wiki tree carries tree, treeitem, group and aria-exp
     { slug: "deploy", title: "Deploy checklist", parentSlug: "runbook" },
     { slug: "notes", title: "Notes" },
   ];
+  sidebar.setSidebarPlace("wiki");   // T-MG-38: the tree lives in the Wiki place now
   sidebar.renderSidebarList();
+  sidebar.setSidebarPlace("home");
   const html = String(sbScroll.innerHTML);
   assert.match(html, /<div class="wiki-tree" role="tree" aria-label="Wiki">/);
   assert.match(html, /data-wikipage="runbook"[^>]*role="treeitem"[^>]*aria-expanded="true"[^>]*aria-level="1"/);

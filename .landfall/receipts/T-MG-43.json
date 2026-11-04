@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "task": "T-MG-43",
+  "class": "critical",
+  "tier": null,
+  "startedAt": "2026-11-04T19:17:58.373Z",
+  "endedAt": "2026-11-04T20:22:05.452Z",
+  "wallMs": 3847079,
+  "tokens": {
+    "input": 225963,
+    "output": 160016,
+    "cacheRead": 22369533,
+    "cacheWrite": 588889
+  },
+  "costMicroUsd": 9946252,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 28,
+        "output": 7602,
+        "cacheRead": 4752839,
+        "cacheWrite": 12271
+      },
+      "costMicroUsd": 1200887
+    },
+    {
+      "agentType": "landfall:designer",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 236,
+        "output": 132947,
+        "cacheRead": 16011958,
+        "cacheWrite": 576618
+      },
+      "costMicroUsd": 8745365
+    }
+  ],
+  "external": [
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-43-reviewer-1",
+      "model": null,
+      "tokens": {
+        "input": 69406,
+        "output": 6697,
+        "cacheRead": 503552,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 210262,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-43-reviewer-2",
+      "model": null,
+      "tokens": {
+        "input": 85551,
+        "output": 6530,
+        "cacheRead": 576000,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 202403,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-43-reviewer-3",
+      "model": null,
+      "tokens": {
+        "input": 70742,
+        "output": 6240,
+        "cacheRead": 525184,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 172325,
+      "exit": 0
+    }
+  ],
+  "rounds": 2,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": true
+}
