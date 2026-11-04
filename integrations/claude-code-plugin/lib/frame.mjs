@@ -40,12 +40,14 @@ function neutralise(s) {
   return s.replace(CONTROLS, "").replace(/<(\/?)(channel)/gi, "\u2039$1$2");
 }
 
-/** @param {unknown} body @param {number} max @returns {string[]} */
-function bodyLines(body, max) {
+/** @param {unknown} body @param {number} max @param {string} [readWith] what can read the
+ *  whole message (atalk, or a tool name in a woken run, which has no atalk)
+ *  @returns {string[]} */
+function bodyLines(body, max, readWith = "atalk") {
   let text = String(body ?? "");
   let note = "";
   if (text.length > max) {
-    note = `[truncated: ${text.length - max} more characters; read the full message with atalk]`;
+    note = `[truncated: ${text.length - max} more characters; read the full message with ${readWith}]`;
     text = text.slice(0, max);
   }
   const lines = text.split(LINE_BREAKS).map(neutralise);
@@ -53,9 +55,10 @@ function bodyLines(body, max) {
   return lines;
 }
 
-/** Every body line quoted, one per line. @param {unknown} body @param {number} [max] */
-export function quoteBody(body, max = MAX_BODY_CHARS) {
-  return bodyLines(body, max).map((l) => `> ${l}`).join("\n");
+/** Every body line quoted, one per line.
+ *  @param {unknown} body @param {number} [max] @param {string} [readWith] */
+export function quoteBody(body, max = MAX_BODY_CHARS, readWith = "atalk") {
+  return bodyLines(body, max, readWith).map((l) => `> ${l}`).join("\n");
 }
 
 /**
