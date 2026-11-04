@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 150,
+      "rule": "REV-2",
+      "text": "Item 2; F4 ADDRESSED: both delayed-response repros pass; mutations fail. New in-memory ui-t18-catchup repro: start with message/cursor 1; server has 1..32 and a reaction on 2; deliver SSE message(2) during the newest-30 refresh, then finish catch-up. Output: reactions[2]=undefined; base retains it. SSE messages carry no reactions, so excluding held IDs discards needed REST reaction state. Merge reactions independently with protection against newer reaction updates; add this regression."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 147,
+      "rule": "REV-2",
+      "text": "Item 2: in-memory ui-t18-catchup repro: resume an empty history with server [m1], fail after=0, disconnect, edit m1 and append 2..31, then reconnect. Output: body(1)='m1'; base returns 'edited during outage'. The retry retains floor 0 but the newest-30 refresh excludes 1, and the held-ID filter prevents its newer revision from merging. Refresh held gap messages unless changed during the request (or track revisions), and add this retry regression while retaining F4."
+    }
+  ],
+  "run": "codex-T-MG-18-reviewer-4",
+  "sha256": "610061e94680df92966587a15e8196576fe4a69ab72f9075d4873020eff0054a"
+}

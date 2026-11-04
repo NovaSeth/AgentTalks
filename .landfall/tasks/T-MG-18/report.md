@@ -18,3 +18,8 @@ sse-events.js: captureReplayFloor records each loaded conversation's floor once 
 ## Fix round 2 (codex review-r2 F2-F3)
 Status: DONE
 sse-events.js: captureGapFloors() runs at every break and first connect and sets a pending floor for each loaded conversation that has none (an unresolved older floor is never overwritten; gapFloors is no longer reset with replayFloor). The catch-up runs on every resume and pages each conversation from its own pending floor regardless of sseCursor; a floor is cleared only after that conversation's full paged catch-up succeeded. Tests: codex's F2 (second break after a successful catch-up delivers 32) and F3 (retained floor retried after the cursor advanced) reproductions, red before, green after; the three F1 tests stay green.
+
+## Fix round 3 (D-MG-31, codex review-r3 F4)
+Status: DONE
+Commits: f5b1f4b (tests), 61adbcd (fix).
+loadGapAfter (sse-events.js) inserts only ids not already held for the conversation and never replaces a held message; the paging cursor still advances by every id on the page; reactions merged only for inserted messages. The resume loadMessages refresh had the same race: loadMessages(convId, { keepTouched: true }) (data.js) snapshots the held objects before the request and skips any message whose held object changed while in flight (writers replace objects, so the reference comparison is exact; editedAt is not a reliable revision); untouched messages are still refreshed so edits made during the break arrive. Tests: codex's delayed-page repro and the same race on the resume refresh, red before and green after; earlier catch-up tests stay green.

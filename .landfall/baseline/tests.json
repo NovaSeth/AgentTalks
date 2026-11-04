@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "7da54b6bec81346e0ec315525091a035cbaf9d2b",
-  "collectedAt": "2026-11-04T11:43:43.358Z",
+  "head": "8e776cdc0d128d37f993680815fbc5efbfe12695",
+  "collectedAt": "2026-11-04T12:03:49.439Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -10,12 +10,12 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"(a) A and B entries in one key: each account restores only its own\",1]",
+      "id": "[\"\",\"(a) D-MG-30: a shared list holding A and B entries is deleted; neither account restores from it\",1]",
       "file": "",
       "skipped": false
     },
     {
-      "id": "[\"\",\"(b) B persists after A wrote: A's entry stays, is not re-owned, is not shown to B\",1]",
+      "id": "[\"\",\"(b) B persists after A wrote its own key: A's entry stays A's, is not shown to B\",1]",
       "file": "",
       "skipped": false
     },
@@ -25,7 +25,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"(c) a legacy entry without ownerId goes to the marker's account once, never to another\",1]",
+      "id": "[\"\",\"(c) D-MG-30: a legacy entry without ownerId is deleted, whoever the marker names\",1]",
       "file": "",
       "skipped": false
     },
@@ -50,7 +50,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"9: a pre-r4 browser-wide seen map migrates to the old marker's actor and sign-out clears only that actor's\",1]",
+      "id": "[\"\",\"9 (D-MG-30): a pre-r4 browser-wide seen map is deleted, and sign-out clears only the leaving actor's marks\",1]",
       "file": "",
       "skipped": false
     },
@@ -145,7 +145,52 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"B-MG-107: a 401 from /api/me prints ONE sanitized stderr line across all four handlers, and stays final\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-107: a 403 is final too, with its own status in the line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-107: a 503 then a success is retried: one notice, then the tool works\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-107: repeated 503s print once; a network failure is its own kind with its own line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"B-MG-10: a page whose single line exceeds the budget is NOT recorded as read; blind write gets 409\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-116 (codex repro): a loaded empty conversation catches up all 31 messages of the gap, message 1 included\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-116: a gap longer than one page is paged until a short page, merged in order\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-116: an answer that arrives under another session generation is not merged\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-117 (codex repro): the SSE redraw before the PATCH answer still ends with the focus in th-input\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-117: the user focusing something else after the submit (a focusin) keeps that focus\",1]",
       "file": "",
       "skipped": false
     },
@@ -585,6 +630,41 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"D-MG-30: a sign-in deletes every legacy key and imports nothing from them\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"D-MG-30: a sign-out deletes every legacy key as well\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"D-MG-30: a sign-out removes the leaving actor's namespaced keys, including per-message unsent keys\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"D-MG-30: another account's namespaced data stays invisible and untouched across claim and sign-out\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"D-MG-30: key formats are told apart exactly (a per-message key has a clientMsgId segment)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"D-MG-30: persistUnsent writes per-message keys only and a finished message's key is removed\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"D-MG-30: the current actor's live namespaced data is untouched by a claim\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"DM read markers are transferred\",1]",
       "file": "",
       "skipped": false
@@ -596,6 +676,21 @@
     },
     {
       "id": "[\"\",\"EVERY declared MCP tool can be called and returns content, not a protocol error\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F1 (codex 1): an SSE message delivered while another conversation catches up does not move the floor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F1 (codex 2): a refresh of the history during the gap does not move the floor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F1 (codex 3): a failed page followed by a reconnect keeps the floor\",1]",
       "file": "",
       "skipped": false
     },
@@ -655,7 +750,17 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"F2 (D-MG-30): legacy un-namespaced keys are deleted, never moved to the actor the old marker names\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"F2 (codex repro): tab A's draft is never loaded by tab B signed in as another account\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F2 (codex): a second break after a successful catch-up recaptures the floor\",1]",
       "file": "",
       "skipped": false
     },
@@ -671,11 +776,6 @@
     },
     {
       "id": "[\"\",\"F2: a session loss closes the secret dialog, menus, pickers and old toasts, with their listeners\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F2: legacy un-namespaced keys go once to the actor the old marker names, and the marker goes\",1]",
       "file": "",
       "skipped": false
     },
@@ -700,6 +800,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"F3 (codex): a retained floor is retried although an SSE event advanced the live cursor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"F3: a 401 during a send keeps the message for the same account after sign-in\",1]",
       "file": "",
       "skipped": false
@@ -715,7 +820,22 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"F4 (D-MG-30): on the first run the marker's actor gets nothing either: legacy data is deleted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"F4 (codex repro): an old unreloaded tab's wiki draft written after the upgrade is not B's\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F4 (codex): a delayed after= page does not replace a message edited live meanwhile\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F4: a delayed newest-30 refresh does not replace a message edited live meanwhile\",1]",
       "file": "",
       "skipped": false
     },
@@ -735,22 +855,17 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"F4: on the first run the marker's actor gets the legacy data once, and only that actor\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"F4: sign-out runs the same sweep (a late legacy key does not survive it)\",1]",
       "file": "",
       "skipped": false
     },
     {
-      "id": "[\"\",\"F5 (codex repro): A's sign-out paused mid-way cannot drop B's newer unsent message\",1]",
+      "id": "[\"\",\"F5 (D-MG-30): a shared pre-r5 list is deleted, not split: nobody gets its entries\",1]",
       "file": "",
       "skipped": false
     },
     {
-      "id": "[\"\",\"F5: a shared pre-r5 list is split once into the per-actor keys by each entry's ownerId\",1]",
+      "id": "[\"\",\"F5 (codex repro): A's sign-out paused mid-way cannot drop B's newer unsent message\",1]",
       "file": "",
       "skipped": false
     },
@@ -805,42 +920,12 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"F7 (codex repro): an old tab's attributable unsent write after the upgrade survives A's sign-out\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F7: every sweep moves tagged entries to their owners and still drops the unattributed ones\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F8 (codex repro): A paused after reading B's unsent storage cannot overwrite B's newer b2\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"F8: a full storage refusing one write still removes the sent message and writes the others\",1]",
       "file": "",
       "skipped": false
     },
     {
-      "id": "[\"\",\"F8: a message B sent while A's migration was paused is not written back by A\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"F8: a sign-out removes only this account's message keys\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F8: an r5 per-conversation list (atalks_unsent_<actor>_<conv>) is split into message keys on any sweep\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"F8: at EVERY storage call of A's migration, B's concurrent migration and write keep [b1, b2]\",1]",
       "file": "",
       "skipped": false
     },
@@ -990,26 +1075,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"R1 F1 (codex repro): an old tab's write while A's sign-out sweep reads the shared list keeps [b1, b2]\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1 F1: an old tab's write after EVERY storage call of A's sign-out sweep keeps [b1, b2]\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1 F2 (codex repro): a paused migration cannot resurrect a message B already sent\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1 F2: B's claim and send after EVERY storage call of A's migration never resurrect b1\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"R1 F3 (codex repro): a first stream that drops while CONNECTING is retried by the client, after the newest loaded id\",1]",
       "file": "",
       "skipped": false
@@ -1036,21 +1101,6 @@
     },
     {
       "id": "[\"\",\"R1 F5: Enter saves a main-list edit; the focus lands in the composer that is in the document after the update\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1 sign-out: a shared list holding only A's entries is deleted\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1 sign-out: an old tab of B writing the shared list at any point of A's sign-out is lost only inside A's read-to-write-back step\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1 sign-out: no storage value holds A's text afterwards; B's entries in the same shared list survive\",1]",
       "file": "",
       "skipped": false
     },
@@ -1111,36 +1161,6 @@
     },
     {
       "id": "[\"\",\"R1-F6: caller-supplied values are echoed on one line; typing sec is clamped in the echo\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1: a sent or discarded message leaves a tombstone, bounded to the 500 newest ids\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1: a sign-out does not let the kept legacy lists hand the account's entries back\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1: a tombstone write that fails (quota) leaves nothing restorable: the copies in the old lists go\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1: an old tab's list is imported for each entry's owner only; unattributed entries are never shown\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1: legacy lists are collected 7 days after the new layout was first seen, after a last copy\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"R1: the legacy lists are only read: a sweep neither deletes nor rewrites them\",1]",
       "file": "",
       "skipped": false
     },
@@ -5031,5 +5051,5 @@
     }
   ],
   "failing": [],
-  "sha256": "9a5afd3dec704243541a487c1b18c48c1a6c3247aa6511bc66c9b0e574f5f07e"
+  "sha256": "9665294b4b1001a168e2d964b1972bec1784a23c80800e81dc3bb2781babadbf"
 }

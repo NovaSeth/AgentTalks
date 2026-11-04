@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-119",
+  "status": "open",
+  "task": "T-MG-18",
+  "round": 4,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F6",
+  "severity": "blocking",
+  "path": "src/http/ui/js/sse-events.js",
+  "line": 147,
+  "rule": "REV-2",
+  "text": "Item 2: in-memory ui-t18-catchup repro: resume an empty history with server [m1], fail after=0, disconnect, edit m1 and append 2..31, then reconnect. Output: body(1)='m1'; base returns 'edited during outage'. The retry retains floor 0 but the newest-30 refresh excludes 1, and the held-ID filter prevents its newer revision from merging. Refresh held gap messages unless changed during the request (or track revisions), and add this retry regression while retaining F4.",
+  "filedAt": "2026-11-04T12:03:00.771Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}
