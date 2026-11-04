@@ -445,7 +445,7 @@ window.addEventListener("hashchange", (e) => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !state.actor) return;
   ensureSSE();
-  // T-MG-44: what landed while the tab was hidden is tinted as unread (Slack's highlight).
+  // T-MG-44: what landed while the tab was hidden is tinted as unread (the unread highlight).
   noteTabVisible();
   // Returning to the tab = only now is what the user is looking at "read" (and
   // only when they really see the newest messages, i.e. are at the bottom).

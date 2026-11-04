@@ -22,7 +22,7 @@ import { bindProfileClicks, closeProfile, ensureHeaderMembers, headerFacesHtml, 
 const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "👏", "✅", "🤔", "😢", "💯", "🙏", "👋", "⭐", "🙌"];
 
 // ------------------------------------------------- unread highlight (T-MG-44)
-// Slack's model: a message by somebody else that the user did NOT see arrive gets a soft tint,
+// The chat-app model: a message by somebody else that the user did NOT see arrive gets a soft tint,
 // next to the "New messages" divider. "Did not see" = it was above the divider when the
 // conversation was entered, or it landed while the tab was hidden. The tint fades once the read
 // mark is posted and never comes back for that message. Per conversation; own messages never.
@@ -50,6 +50,9 @@ export function noteTabVisible() {
   const convId = state.view === "chat" ? state.activeId : null;
   if (!convId) return;
   const h = hlOf(convId);
+  // No watermark yet (the entry render has not drawn the list): nothing to compare against; the
+  // entry render takes the divider's ids itself.
+  if (highlightEntryPending === convId || !h.seen) return;
   for (const id of highlightUnreadIds(visibleMessages(convId), h.seen, state.actor?.id)) {
     if (!h.fading.has(id)) h.ids.add(id);
   }

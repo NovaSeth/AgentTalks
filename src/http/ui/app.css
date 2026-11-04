@@ -1451,7 +1451,7 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .msg.mine-mention{background:var(--bgColor-attention-muted);box-shadow:inset var(--borderWidth-thicker) 0 0 var(--borderColor-attention-emphasis)}
 .msg.mine-mention:hover{background:var(--bgColor-attention-muted)}
 .msg .text .me-mention{background:var(--bgColor-attention-muted);color:var(--fgColor-attention);font-weight:700}
-/* T-MG-44: Slack's unread highlight. A message by somebody else the user did not see arrive (above
+/* T-MG-44: the unread highlight. A message by somebody else the user did not see arrive (above
    the "New messages" divider on entry, or landed behind a hidden tab) sits on a soft accent tint
    (Primer's accent-muted, readable in both themes). Once the read mark is posted the row takes the
    fade class instead: the background transitions to nothing over ~2.5 s, then the class leaves.
