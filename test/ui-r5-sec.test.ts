@@ -286,7 +286,6 @@ function loadApplyRoute() {
       globals.location.hash = `#/c/${c?.slug ?? id}`;        // what syncRoute writes
     },
     openThread: async (id: number) => { log.threads.push(id); },
-    settleRoutePlace: () => {},   // T-MG-38: the rail place after a route landed; no place here
   };
   const names = Object.keys(deps);
   const applyRoute = new Function(...names, `"use strict";\n${source}\nreturn applyRoute;`)(...names.map((n) => deps[n]));

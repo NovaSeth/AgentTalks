@@ -19,7 +19,7 @@ import { onLangChange, t } from "./i18n.js";
 import { iconBell, iconChat, iconDoc, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
 import { dmOthers, lastConvId, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { startDirect } from "./actions.js";
-import { buildRoute, consumeOwnPush, hashOfEvent, parseRoute, syncRoute } from "./router.js";
+import { buildRoute, consumeOwnPush, hashOfEvent, onNavigate, parseRoute, syncRoute } from "./router.js";
 import { showToast } from "./toasts.js";
 import { openSearchPalette, openSearchRoute } from "./search.js";
 import { matchShortcut, openShortcutHelp, stepConversation, stepUnread } from "./shortcuts.js";
@@ -35,7 +35,7 @@ import {
 } from "./view-chat.js";
 import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./view-login.js";
 import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./view-notifications.js";
-import { followPlace, getSidebarPlace, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
+import { getSidebarPlace, placeAfterNavigation, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { connectSSE, ensureSSE } from "./sse-events.js";
 
@@ -53,9 +53,6 @@ function renderShell() {
   const adminHuman = state.actor?.isAdmin && state.actor?.kind === "human";
   const withSidebar = hasSidebar();
   const inConv = inConversations();
-  // T-MG-38: a conversation or a wiki page opened through a full render (openConversation calls
-  // views.render) settles the rail place BEFORE the rail is drawn from it.
-  followPlace();
   // The DMs place counts every unread message in a direct or group conversation I belong to
   // (W2-S1-C: derived in one place, repainted by paintDmBadge when a row's unread changes;
   // W5-S8-B: that place is counters.railBadges, the one source of both rail badges).
@@ -189,6 +186,34 @@ function goPlace(place) {
   renderSidebarList();
 }
 
+// T-MG-38 (fix round 3): the ONE place the rail place moves by itself. router.js reports every
+// navigation at its START (syncRoute: openWikiPage, openConversation, the rail, a search call
+// it before they await anything), so a wiki page lights Wiki and a conversation opened from the
+// Wiki place returns to Home at once - whatever the reader came from, and nothing moves later:
+// not when a slow route completes, not on a redraw. A newer choice (another route, a rail
+// click) therefore always wins. A conversation's own address rewrites (a dead `/m/<id>` link
+// dropped after the load) report the same conversation and move nothing: only a navigation to
+// ANOTHER conversation than the one last reported counts, while a wiki page counts every time
+// (a [[link]] to the page on screen must still show its tree, review F2).
+let lastConversation = null;
+onNavigate((hash) => {
+  const route = parseRoute(hash);
+  const kind = route.view;
+  if (kind === "chat" || kind === "dm") {
+    const key = kind === "chat" ? `c:${route.slug}` : `dm:${(route.handles || []).join(",")}`;
+    if (key === lastConversation) return;
+    lastConversation = key;
+  } else if (kind === "wiki") {
+    lastConversation = null;   // coming back to the same conversation from a page is a navigation
+  }
+  const place = getSidebarPlace();
+  const next = placeAfterNavigation(place, kind);
+  if (next === place) return;
+  setSidebarPlace(next);
+  paintRail();
+  renderSidebarList();
+});
+
 /** The `on` state of the three places without redrawing the whole shell. */
 function paintRail() {
   const inConv = inConversations();
@@ -209,10 +234,7 @@ registerViews({
   render,
   shell: renderShell,
   main: renderMain,
-  // T-MG-38: a sidebar refresh may move the rail place (view-sidebar's followPlace: a wiki page
-  // opened by any path lights Wiki, a conversation opened from Wiki returns to Home), so the
-  // rail is repainted with it. paintRail is three class toggles; cheap on a presence tick.
-  sidebar: () => { renderSidebarList(); paintRail(); },
+  sidebar: renderSidebarList,
   conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
   // refreshPresence does not have to know where the dots, the bar, the topbar and
@@ -353,21 +375,6 @@ async function openPeopleDirectory() {
 }
 
 // ------------------------------------------------------------------- routes (S3)
-/** T-MG-38 (fix round 2): a route that showed a page or a conversation settles the rail place
- *  itself, whatever the reader came from: a wiki page on screen -> Wiki; a conversation on
- *  screen while the place is Wiki -> Home (the Wiki place lists no conversations). The same
- *  rule as view-sidebar's followPlace, applied here without its transition memory, because a
- *  route is always a navigation. A no-op when the route did not land (no access, another
- *  route applied meanwhile). */
-function settleRoutePlace() {
-  const place = getSidebarPlace();
-  const next = state.view === "wiki" ? "wiki" : state.view === "chat" && place === "wiki" ? "home" : place;
-  if (next === place) return;
-  setSidebarPlace(next);
-  paintRail();
-  renderSidebarList();
-}
-
 /** Open what a parsed route points at. Every branch ends on a screen: a place the user can read,
  *  or the in-column "no access" message with a way back - never a dead screen. */
 async function applyRoute(route) {
@@ -390,7 +397,6 @@ async function applyRoute(route) {
       if (!current() || location.hash !== hash) return;
       if (!c) { renderNoAccess(route); return; }
       await openConversation(c.id, route.messageId);
-      settleRoutePlace();
       if (route.threadId && current() && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
       return;
     }
@@ -400,17 +406,16 @@ async function applyRoute(route) {
         && dmOthers(x).map((o) => o.handle).sort().join(",") === want);
       if (c) {
         await openConversation(c.id, route.messageId);
-        settleRoutePlace();
         if (route.threadId && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
         return;
       }
       // A link to people I have not written to yet starts the conversation: one handle opens a DM,
       // several open a group (U19: nothing forbids it, so no lock screen; startDirect takes both).
-      if (route.handles.length >= 1) { await startDirect(route.handles); settleRoutePlace(); return; }
+      if (route.handles.length >= 1) { await startDirect(route.handles); return; }
       renderNoAccess(route);
       return;
     }
-    case "wiki": await openWikiPage(route.slug); settleRoutePlace(); return;
+    case "wiki": await openWikiPage(route.slug); return;
     case "activity": await openNotificationsView(); return;
     case "dms": goPlace("dms"); return;
     case "wikiPlace": goPlace("wiki"); return;
