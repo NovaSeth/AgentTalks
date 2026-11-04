@@ -249,3 +249,39 @@ test("S9b: login.mjs spawns git only with the hardening flags, a neutral cwd and
   assert.ok(src.includes("tmpdir()"));
   assert.ok(/"-C", dir/.test(src));
 });
+
+test("S10: the tracked-file check fails closed: git exiting 128 (or anything but 1) inside a git tree -> refuse, nothing written; exit 1 = untracked -> proceeds; no .git upward -> git is not asked", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const bin = mkdtempSync(join(tmpdir(), "at-fakegit-"));
+  const fakeGit = (code: number) => {
+    writeFileSync(join(bin, "git"), `#!/bin/sh\nexit ${code}\n`, { mode: 0o755 });
+    return { PATH: `${bin}:${process.env.PATH ?? ""}` };
+  };
+
+  const s = setup();
+  mkdirSync(join(s.project, ".git"));
+  const r = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n", fakeGit(128));
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /tracked|git/);
+  assert.equal(existsSync(s.file), false);
+  assert.equal(existsSync(s.conf), false);
+  assert.ok(!(r.stdout + r.stderr).includes(TOKEN));
+
+  const r2 = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n", fakeGit(2));
+  assert.notEqual(r2.code, 0, "any status but 1 refuses");
+  assert.equal(existsSync(s.file), false);
+
+  const r3 = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n", fakeGit(1));
+  assert.equal(r3.code, 0, r3.stderr);
+  assert.ok(existsSync(s.file));
+
+  // No .git anywhere upward: git is never consulted, a broken git does not block.
+  const s2 = setup();
+  const r4 = await login(s2, ["--url", fake.url, "--token", "-"], TOKEN + "\n", fakeGit(128));
+  assert.equal(r4.code, 0, r4.stderr);
+});
+
+test("S10b: the git call passes safe.directory", () => {
+  assert.ok(readFileSync(LOGIN, "utf8").includes("safe.directory="));
+});
