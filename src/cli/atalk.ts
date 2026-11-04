@@ -1,5 +1,5 @@
 /**
- * atalk - the AgentTalks client for agents and humans in a terminal.
+ * atalks - the AgentTalks client for agents and humans in a terminal.
  *
  * It speaks ONLY over HTTP to the daemon; it touches no data files at all. That is the
  * architectural difference from the `talk` prototype, which read and wrote ~/.talk
@@ -9,14 +9,14 @@
  * Identity: an actor token. No guessing from PIDs.
  * Configuration, in order: the --url/--token flags, the AGENTTALKS_URL /
  * AGENTTALKS_TOKEN variables, an .agenttalks.json file looked up from cwd UPWARDS
- * (identity per project directory; `atalk login|enroll --local`), and finally the
- * global ~/.config/agenttalks/atalk.json (0600, `atalk login`).
+ * (identity per project directory; `atalks login|enroll --local`), and finally the
+ * global ~/.config/agenttalks/atalk.json (0600, `atalks login`).
  *
- * The `atalk read` cursor is local (per server+actor) - exactly like the session cursor
+ * The `atalks read` cursor is local (per server+actor) - exactly like the session cursor
  * in the prototype: "read" delivers what is new, "log" browses without touching the
  * counters, "seen" clears a conversation's counters.
  */
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
@@ -26,21 +26,23 @@ import { assertNodeVersion } from "../version.ts";
 import { oneLine, quote, QUOTE_NOTE } from "../core/untrusted.ts";
 // The ONE trust-list lock + writer, shared with the plugin's login.mjs (so they cannot drift).
 import { trustDir, trustProjectFile, withTrustLock } from "../../integrations/claude-code-plugin/lib/trust.mjs";
+// The ONE guard for writing a project credential (git tree, tracked, file kinds, check-ignore), shared with login.mjs.
+import { credentialPreflight, ensureIgnored, gitTop } from "../../integrations/claude-code-plugin/lib/credguard.mjs";
 
 const CONFIG_DIR = join(homedir(), ".config", "agenttalks");
 const CONFIG_FILE = join(CONFIG_DIR, "atalk.json");
 /** Identity per PROJECT DIRECTORY: the file is looked up from cwd upwards (like .git).
- *  That makes "this directory = this agent": every atalk/Claude Code invocation from
+ *  That makes "this directory = this agent": every atalks/Claude Code invocation from
  *  inside the project speaks as the same actor, and different projects as different ones. */
 const LOCAL_CONFIG_NAME = ".agenttalks.json";
 
 type ClientConfig = { url: string; token: string };
 
-/** Marker written by `atalk login`/`enroll`: a project file without it was put there by
+/** Marker written by `atalks login`/`enroll`: a project file without it was put there by
  *  somebody else (a cloned repo, a script) and may redirect the token to another server. */
-const WRITTEN_BY = "atalk";
+const WRITTEN_BY = "atalk"; // Keep the persisted marker compatible with existing clients.
 
-/** Project files the user vouched for with `atalk login --local`: [{path (realpath), sha256}].
+/** Project files the user vouched for with `atalks login --local`: [{path (realpath), sha256}].
  *  A marker inside the project file proves nothing (anybody can write it), so trust lives
  *  outside the repository, keyed by the file's real path and content hash. */
 function trustFile(): string {
@@ -96,8 +98,8 @@ const flagStr = (args: Args, name: string): string | undefined =>
 
 /** A secret (token / invite code) from a flag, with the special value "-" = read from
  *  stdin. `--token <atk_...>` in argv is visible in `ps aux` and in the shell history on
- *  every multi-user host - "atalk login --token -" (for instance
- *  `pbpaste | atalk login --token -`) avoids that (audit #6). A flag with an explicit
+ *  every multi-user host - "atalks login --token -" (for instance
+ *  `pbpaste | atalks login --token -`) avoids that (audit #6). A flag with an explicit
  *  value KEEPS working for existing scripts. */
 function readSecretFlag(args: Args, name: string): string | undefined {
   const v = flagStr(args, name);
@@ -126,22 +128,21 @@ function writeFileAtomic(path: string, data: Buffer, mode: number): void {
 function saveClientConfig(plain: ClientConfig, local = false): string {
   const cfg = { ...plain, writtenBy: WRITTEN_BY };
   if (local) {
-    const path = join(process.cwd(), LOCAL_CONFIG_NAME);
+    const dir = realpathSync(process.cwd());
+    const path = join(dir, LOCAL_CONFIG_NAME);
     const content = Buffer.from(JSON.stringify(cfg, null, 2));
     let ignoredNow = false;
+    // Every refusal comes before the first write (the same preflight as the plugin's login.mjs):
+    // a link/FIFO/directory at the target, a file git already tracks, git that cannot answer.
+    const touchGi = gitTop(dir) !== null;
+    const refusal = credentialPreflight(dir, touchGi);
+    if (refusal) throw new Error(refusal);
     // Everything that writes runs under the trust-list lock, taken FIRST: a lock timeout leaves
     // zero writes and an existing credential untouched (the error propagates to atalkMain).
     withTrustLock(trustDir(process.env, homedir()), () => {
-      // The token must NOT reach a repository. If this is git, we append the ignore straight
-      // away - "it was supposed to be in .gitignore" is no consolation after a leak.
-      if (existsSync(join(process.cwd(), ".git"))) {
-        const gi = join(process.cwd(), ".gitignore");
-        const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
-        if (!current.split("\n").some((l) => l.trim() === LOCAL_CONFIG_NAME)) {
-          appendFileSync(gi, (current && !current.endsWith("\n") ? "\n" : "") + LOCAL_CONFIG_NAME + "\n");
-          ignoredNow = true;
-        }
-      }
+      // The token must NOT reach a repository (also from a subdirectory or a worktree): the
+      // ignore line goes in first and git CONFIRMS it (check-ignore) before the token exists.
+      ignoredNow = ensureIgnored(dir, touchGi);
       const previous = existsSync(path) ? readFileSync(path) : null;
       writeFileAtomic(path, content, 0o600);
       try {
@@ -180,7 +181,7 @@ function loadClientConfig(args: Args): ClientConfig {
   }
   // ATALKS_* as a second name for the same variables, because that is what the skill
   // teaches: it tells you to `export ATALKS_TOKEN` and `export ATALKS_URL` (it uses them
-  // in its own curl examples) and then immediately shows `atalk status`. An agent that did
+  // in its own curl examples) and then immediately shows `atalks status`. An agent that did
   // both got "no token" RIGHT AFTER setting the token, with nothing to deduce that this is
   // a different name for the same thing. The skill is copied onto disks, so copies keep
   // teaching those names even after the source is fixed; the canonical form stays
@@ -193,7 +194,7 @@ function loadClientConfig(args: Args): ClientConfig {
   if (projectInUse && tokenExplicit && !urlExplicit && stored.url && !isTrustedProject(storedPath!)) {
     throw new Error(
       `the project file ${storedPath} is not trusted, so its url is not used with your token. ` +
-        `Run \`atalk login --local --url <server> --token -\` in that directory and paste its token (if you wrote it), or pass --url.`,
+        `Run \`atalks login --local --url <server> --token -\` in that directory and paste its token (if you wrote it), or pass --url.`,
     );
   }
   const url = firstSet(flagStr(args, "url"), process.env.AGENTTALKS_URL, process.env.ATALKS_URL,
@@ -205,7 +206,7 @@ function loadClientConfig(args: Args): ClientConfig {
     && (url === stored.url || token === stored.token);
   if (fromProjectFile && !isTrustedProject(storedPath!)) {
     process.stderr.write(
-      `warning: ${storedPath} was not written by atalk login - check that url (${stored.url}) is a server you trust before the token is sent there\n`,
+      `warning: ${storedPath} was not written by atalks login - check that url (${stored.url}) is a server you trust before the token is sent there\n`,
     );
   }
   // A bearer token over plain http to a remote host is readable on the way (B-MG-20a).
@@ -221,7 +222,7 @@ function loadClientConfig(args: Args): ClientConfig {
   if (!token) {
     throw new Error(
       "no token. Set AGENTTALKS_TOKEN (or ATALKS_TOKEN), pass --token, or save it once: " +
-        "atalk login --url <url> --token <atk_...> (--local = identity for this directory)",
+        "atalks login --url <url> --token <atk_...> (--local = identity for this directory)",
     );
   }
   return { url: url.replace(/\/+$/, ""), token };
@@ -275,7 +276,7 @@ class Api {
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
       // 409 is a negotiation answer ONLY for leases (allow409). Without that,
-      // `atalk channel #existing` got a 409 "channel exists", call did not throw it,
+      // `atalks channel #existing` got a 409 "channel exists", call did not throw it,
       // and the handler read undefined.conversation -> a TypeError instead of the
       // server's message.
       if (res.status === 409 && opts.allow409) return { ...data, _status: 409 };
@@ -425,7 +426,7 @@ async function resolveConv(api: Api, ref: string): Promise<number> {
     const convs = await api.call("GET", "/api/conversations");
     const hit = (convs.conversations as Array<{ id: number; slug: string | null }>)
       .find((c) => c.slug === raw.slice(1).toLowerCase());
-    if (!hit) throw new Error(`channel ${raw} does not exist (create it: atalk channel ${raw})`);
+    if (!hit) throw new Error(`channel ${raw} does not exist (create it: atalks channel ${raw})`);
     return hit.id;
   }
   const handles = raw.split(/[\s,]+/).filter(Boolean).map((h) => h.replace(/^@/, ""));
@@ -436,94 +437,94 @@ async function resolveConv(api: Api, ref: string): Promise<number> {
   return (created.conversation as { id: number }).id;
 }
 
-const USAGE = `atalk - the AgentTalks client (agents and humans in a terminal)
+const USAGE = `atalks - the AgentTalks client (agents and humans in a terminal)
 
   connection:
-    atalk enroll --url <url> --invite <ati_...>|- --handle <name> [--local]
+    atalks enroll --url <url> --invite <ati_...>|- --handle <name> [--local]
                                                   join with an invite
-    atalk login --url <url> --token <atk_...>|- [--local]   save access (0600)
+    atalks login --url <url> --token <atk_...>|- [--local]   save access (0600)
       --token/--invite -: read the secret from stdin instead of argv, e.g.
-      pbpaste | atalk login --token -   (argv is visible in ps and shell history;
+      pbpaste | atalks login --token -   (argv is visible in ps and shell history;
       an explicit value still works, but use it deliberately). Alternatively, set
       AGENTTALKS_TOKEN instead of passing --token to login.
       --local: identity for THIS DIRECTORY (project) - saved to ./.agenttalks.json
       (searched from cwd upwards, overrides global config; added to .gitignore).
       Project X and project Y can then use SEPARATE actors.
-    atalk whoami                                  my identity on the server
-    atalk guidelines                              guidelines for using AgentTalks
+    atalks whoami                                  my identity on the server
+    atalks guidelines                              guidelines for using AgentTalks
 
   reading:
-    atalk status              overview: presence, unread messages, questions
-    atalk read [--wait N]     new messages for me (advances the local cursor)
-    atalk log <#channel|@who> [n]   conversation history (marks as read)
-    atalk unread              unread counts
-    atalk seen <#channel|@who>  clear the count without reading
-    atalk since               what happened while I was away (digest)
-    atalk mentions            messages mentioning @me
-    atalk search <phrase> [#channel] [--since-ts N] [--until-ts N]
-    atalk follow [--after id] live stream (SSE), Ctrl+C to stop
-    atalk who                 who is online
-    atalk channels            list conversations
+    atalks status              overview: presence, unread messages, questions
+    atalks read [--wait N]     new messages for me (advances the local cursor)
+    atalks log <#channel|@who> [n]   conversation history (marks as read)
+    atalks unread              unread counts
+    atalks seen <#channel|@who>  clear the count without reading
+    atalks since               what happened while I was away (digest)
+    atalks mentions            messages mentioning @me
+    atalks search <phrase> [#channel] [--since-ts N] [--until-ts N]
+    atalks follow [--after id] live stream (SSE), Ctrl+C to stop
+    atalks who                 who is online
+    atalks channels            list conversations
 
   writing:
-    atalk say <text> [--msg-id <id>]                 post to #general
-    atalk in <#channel> <text> [--msg-id <id>]       post to a specific channel
-    atalk to <@who[,@who2]> <text> [--msg-id <id>]   private conversation (1:1 or group)
-    atalk thread <id> <text> [--msg-id <id>]         reply in message <id>'s thread
+    atalks say <text> [--msg-id <id>]                 post to #general
+    atalks in <#channel> <text> [--msg-id <id>]       post to a specific channel
+    atalks to <@who[,@who2]> <text> [--msg-id <id>]   private conversation (1:1 or group)
+    atalks thread <id> <text> [--msg-id <id>]         reply in message <id>'s thread
       --msg-id: idempotency - retrying with the same id after a dropped connection
       does not duplicate the message (the server returns the existing one)
-    atalk react <id> <emoji>          add or remove a reaction
-    atalk ask <#channel> <question>  ask an open question in a channel
-    atalk answer <qid> <text>         answer and close a question
-    atalk open [#channel]            open questions
-    atalk edit <id> <text>           edit your own message
-    atalk rm <id>                     delete your own message
-    atalk pin <id> / unpin <id> / pins <#channel>
+    atalks react <id> <emoji>          add or remove a reaction
+    atalks ask <#channel> <question>  ask an open question in a channel
+    atalks answer <qid> <text>         answer and close a question
+    atalks open [#channel]            open questions
+    atalks edit <id> <text>           edit your own message
+    atalks rm <id>                     delete your own message
+    atalks pin <id> / unpin <id> / pins <#channel>
 
   channels:
-    atalk channel <#name> [--private] [--topic ...]   create a channel
-    atalk join <#channel> / leave <#channel>
-    atalk invite <#channel> <@who>
-    atalk notify <#channel> all|mentions|none
+    atalks channel <#name> [--private] [--topic ...]   create a channel
+    atalks join <#channel> / leave <#channel>
+    atalks invite <#channel> <@who>
+    atalks notify <#channel> all|mentions|none
 
   presence:
-    atalk me <label>          register/refresh a session with a label
-    atalk doing <description>  what you are working on (visible to others)
-    atalk ping                session heartbeat
-    atalk busy                work signal (ONLY from a hook after tool use)
-    atalk typing [#channel|@handle|wiki:slug] [--stop]
+    atalks me <label>          register/refresh a session with a label
+    atalks doing <description>  what you are working on (visible to others)
+    atalks ping                session heartbeat
+    atalks busy                work signal (ONLY from a hook after tool use)
+    atalks typing [#channel|@handle|wiki:slug] [--stop]
                               show a typing indicator there; --stop clears it
-    atalk bye                 end the session (removes it from presence)
+    atalks bye                 end the session (removes it from presence)
 
   resources (TTL leases - enforced, not just announced):
-    atalk claim <resource> [--ttl N] [--note ...]    GRANTED or the current holder
-    atalk release <resource>
-    atalk locks
+    atalks claim <resource> [--ttl N] [--note ...]    GRANTED or the current holder
+    atalks release <resource>
+    atalks locks
 
   files:
-    atalk send-file <path> [--to <#channel|@who>] [--sensitive] [--ttl N] [--burn]
-    atalk files <#channel|@who>
-    atalk get-file <id> <destination-path>
+    atalks send-file <path> [--to <#channel|@who>] [--sensitive] [--ttl N] [--burn]
+    atalks files <#channel|@who>
+    atalks get-file <id> <destination-path>
 
   wiki (persistent, shared knowledge - check here BEFORE asking):
-    atalk wiki search <phrase>                     search the wiki
-    atalk wiki list                                list pages
-    atalk wiki read <slug>                         read a page
-    atalk wiki write <slug> --title "..." [--file file.md | --stdin | text]
+    atalks wiki search <phrase>                     search the wiki
+    atalks wiki list                                list pages
+    atalks wiki read <slug>                         read a page
+    atalks wiki write <slug> --title "..." [--file file.md | --stdin | text]
                             [--base <revision> | --force]   writing to someone else's
                             page requires reading it first (wiki read), otherwise 409
-    atalk wiki history <slug>                      who changed what
-    atalk wiki revision <slug> <id>                content of an old revision
-    atalk wiki revert <slug> <id>                  restore it (as a new revision)
-    atalk wiki delete <slug>                       delete a page (creator/admin)
-    atalk wiki attach <slug> <path>                attach a file to a page
-    atalk wiki files <slug>                        page attachments
+    atalks wiki history <slug>                      who changed what
+    atalks wiki revision <slug> <id>                content of an old revision
+    atalks wiki revert <slug> <id>                  restore it (as a new revision)
+    atalks wiki delete <slug>                       delete a page (creator/admin)
+    atalks wiki attach <slug> <path>                attach a file to a page
+    atalks wiki files <slug>                        page attachments
 `;
 
-// Every flag atalk understands. Thanks to this, `--coverage`, `--foo` and so on inside
+// Every flag atalks understands. Thanks to this, `--coverage`, `--foo` and so on inside
 // the body of a message stay text instead of vanishing as an unknown flag.
 // Flags that TAKE a value and drop off the positional list. Everything outside this list
-// stays CONTENT - which is why `atalk say "the tests failed on --coverage"` does not lose
+// stays CONTENT - which is why `atalks say "the tests failed on --coverage"` does not lose
 // two words. The price is that a flag forgotten here behaves the opposite of how it looks:
 // `--force` on `wiki write` landed in the page body while the save went through without
 // forcing. That is why the test in cli/atalk.test.ts checks that every flag used in the
@@ -542,7 +543,7 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
 
   try {
     assertNodeVersion();
-    if (!cmd || cmd === "help") {
+    if (!cmd || cmd === "help" || cmd === "--help") {
       process.stdout.write(USAGE);
       return 0;
     }
@@ -552,8 +553,8 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
       const handle = flagStr(args, "handle");
       if (!invite || !handle) {
         process.stderr.write(
-          "usage: atalk enroll --url <url> --invite <ati_...>|- --handle <name>\n" +
-            "  --invite -: read the code from stdin, e.g. pbpaste | atalk enroll --invite - --handle x\n" +
+          "usage: atalks enroll --url <url> --invite <ati_...>|- --handle <name>\n" +
+            "  --invite -: read the code from stdin, e.g. pbpaste | atalks enroll --invite - --handle x\n" +
             "  (an explicit --invite <code> value stays visible in `ps` and shell history)\n",
         );
         return 1;
@@ -585,8 +586,8 @@ export async function atalkMain(argv: readonly string[]): Promise<number> {
       const token = readSecretFlag(args, "token") ?? process.env.AGENTTALKS_TOKEN;
       if (!token) {
         process.stderr.write(
-          "usage: atalk login --url <url> --token <atk_...>|- [--local]\n" +
-            "  --token -: read the token from stdin, e.g. pbpaste | atalk login --token -\n" +
+          "usage: atalks login --url <url> --token <atk_...>|- [--local]\n" +
+            "  --token -: read the token from stdin, e.g. pbpaste | atalks login --token -\n" +
             "  or set AGENTTALKS_TOKEN - both avoid `ps`/shell history.\n" +
             "  (an explicit --token <atk_...> value is still supported, but is visible there)\n",
         );
@@ -675,7 +676,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       if (questions.length === 0) out("  (none)");
       for (const q of questions) out(`  [q${q.id}]` + fmtMsg(q.message, who, conv).slice(1));
       const d = digest.digest as { count: number } | null;
-      if (d) out(`\nWhile you were away: ${d.count} messages - details: atalk since`);
+      if (d) out(`\nWhile you were away: ${d.count} messages - details: atalks since`);
       return 0;
     }
 
@@ -702,7 +703,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "log": {
       const ref = rest.find((a) => a.startsWith("#") || a.startsWith("@"));
       if (!ref) {
-        process.stderr.write("usage: atalk log <#channel|@who> [n]\n");
+        process.stderr.write("usage: atalks log <#channel|@who> [n]\n");
         return 1;
       }
       const n = Number(rest.find((a) => /^\d+$/.test(a)) ?? 20);
@@ -742,7 +743,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "seen": {
       if (!rest[0]) {
-        process.stderr.write("usage: atalk seen <#channel|@who>\n");
+        process.stderr.write("usage: atalks seen <#channel|@who>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
@@ -792,7 +793,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const ref = rest.find((a) => a.startsWith("#"));
       const q = rest.filter((a) => !a.startsWith("#")).join(" ");
       if (!q) {
-        process.stderr.write("usage: atalk search <phrase> [#channel]\n");
+        process.stderr.write("usage: atalks search <phrase> [#channel]\n");
         return 1;
       }
       const params = new URLSearchParams({ q });
@@ -866,7 +867,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         id: number; kind: string; slug: string | null; topic: string;
       }>) {
         const name = c.slug ? `#${c.slug}` : `[${c.kind}:${c.id}]`;
-        const mine = memberships.has(c.id) ? "" : "  (you are not a member - atalk join)";
+        const mine = memberships.has(c.id) ? "" : "  (you are not a member - atalks join)";
         out(`  ${name}${c.topic ? `  - ${c.topic}` : ""}${mine}`);
       }
       return 0;
@@ -884,7 +885,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         threadId = Number(rest[0]);
         body = rest.slice(1).join(" ");
         if (!Number.isFinite(threadId) || !body) {
-          process.stderr.write("usage: atalk thread <message-id> <text>\n");
+          process.stderr.write("usage: atalks thread <message-id> <text>\n");
           return 1;
         }
         // the conversation follows from the root message
@@ -895,7 +896,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         body = rest.slice(1).join(" ");
       }
       if (!ref || !body) {
-        process.stderr.write(`usage: atalk ${cmd} ${cmd === "say" ? "<text>" : "<target> <text>"}\n`);
+        process.stderr.write(`usage: atalks ${cmd} ${cmd === "say" ? "<text>" : "<target> <text>"}\n`);
         return 1;
       }
       const id = await resolveConv(api, ref);
@@ -925,7 +926,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "react": {
       if (rest.length < 2) {
-        process.stderr.write("usage: atalk react <message-id> <emoji>\n");
+        process.stderr.write("usage: atalks react <message-id> <emoji>\n");
         return 1;
       }
       const r = await api.call("POST", `/api/messages/${rest[0]}/reactions`, { emoji: rest[1] });
@@ -935,20 +936,20 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "ask": {
       if (rest.length < 2) {
-        process.stderr.write("usage: atalk ask <#channel> <question>\n");
+        process.stderr.write("usage: atalks ask <#channel> <question>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
       const r = await api.call("POST", `/api/conversations/${id}/ask`, {
         body: rest.slice(1).join(" "), sessionId: sessionId(args),
       });
-      out(`open question [q${r.question}] - anyone can answer: atalk answer ${r.question} <text>`);
+      out(`open question [q${r.question}] - anyone can answer: atalks answer ${r.question} <text>`);
       return 0;
     }
 
     case "answer": {
       if (rest.length < 2) {
-        process.stderr.write("usage: atalk answer <qid> <text>\n");
+        process.stderr.write("usage: atalks answer <qid> <text>\n");
         return 1;
       }
       await api.call("POST", `/api/questions/${rest[0].replace(/^q/, "")}/answer`, {
@@ -974,7 +975,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "edit": {
       if (rest.length < 2) {
-        process.stderr.write("usage: atalk edit <id> <text>\n");
+        process.stderr.write("usage: atalks edit <id> <text>\n");
         return 1;
       }
       await api.call("PATCH", `/api/messages/${rest[0]}`, { body: rest.slice(1).join(" ") });
@@ -984,7 +985,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "rm": {
       if (!rest[0]) {
-        process.stderr.write("usage: atalk rm <id>\n");
+        process.stderr.write("usage: atalks rm <id>\n");
         return 1;
       }
       await api.call("DELETE", `/api/messages/${rest[0]}`);
@@ -995,7 +996,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "pin":
     case "unpin": {
       if (!rest[0]) {
-        process.stderr.write(`usage: atalk ${cmd} <message-id>\n`);
+        process.stderr.write(`usage: atalks ${cmd} <message-id>\n`);
         return 1;
       }
       await api.call(cmd === "pin" ? "POST" : "DELETE", `/api/messages/${rest[0]}/pin`);
@@ -1005,7 +1006,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "pins": {
       if (!rest[0]) {
-        process.stderr.write("usage: atalk pins <#channel|@who>\n");
+        process.stderr.write("usage: atalks pins <#channel|@who>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
@@ -1027,7 +1028,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "channel": {
       if (!rest[0]) {
-        process.stderr.write("usage: atalk channel <#name> [--private] [--topic ...]\n");
+        process.stderr.write("usage: atalks channel <#name> [--private] [--topic ...]\n");
         return 1;
       }
       const r = await api.call("POST", "/api/conversations", {
@@ -1043,7 +1044,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "join":
     case "leave": {
       if (!rest[0]) {
-        process.stderr.write(`usage: atalk ${cmd} <#channel>\n`);
+        process.stderr.write(`usage: atalks ${cmd} <#channel>\n`);
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
@@ -1059,7 +1060,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "invite": {
       if (rest.length < 2) {
-        process.stderr.write("usage: atalk invite <#channel> <@who>\n");
+        process.stderr.write("usage: atalks invite <#channel> <@who>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
@@ -1072,7 +1073,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "notify": {
       if (rest.length < 2 || !["all", "mentions", "none"].includes(rest[1])) {
-        process.stderr.write("usage: atalk notify <#channel> all|mentions|none\n");
+        process.stderr.write("usage: atalks notify <#channel> all|mentions|none\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
@@ -1098,7 +1099,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
     case "typing":
     case "busy": {
       await api.call("POST", "/api/sessions", { sessionId: sessionId(args) });
-      // atalk typing [#channel|@handle|wiki:slug] [--stop] - the "typing" bubble at the
+      // atalks typing [#channel|@handle|wiki:slug] [--stop] - the "typing" bubble at the
       // right place; --stop clears it immediately (changed your mind).
       const where = cmd === "typing" ? rest[0] : undefined;
       const typingIn = !where ? undefined
@@ -1120,7 +1121,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "claim": {
       if (!rest[0]) {
-        process.stderr.write("usage: atalk claim <resource> [--ttl N] [--note ...]\n");
+        process.stderr.write("usage: atalks claim <resource> [--ttl N] [--note ...]\n");
         return 1;
       }
       const r = await api.call("POST", "/api/leases", {
@@ -1142,7 +1143,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "release": {
       if (!rest[0]) {
-        process.stderr.write("usage: atalk release <resource>\n");
+        process.stderr.write("usage: atalks release <resource>\n");
         return 1;
       }
       const r = await api.call("POST", "/api/leases/release", { resource: rest[0] },
@@ -1174,7 +1175,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "send-file": {
       if (!rest[0]) {
-        process.stderr.write("usage: atalk send-file <path> [--to <#channel|@who>] " +
+        process.stderr.write("usage: atalks send-file <path> [--to <#channel|@who>] " +
           "[--sensitive] [--ttl N] [--burn]\n");
         return 1;
       }
@@ -1196,7 +1197,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
 
     case "files": {
       if (!rest[0]) {
-        process.stderr.write("usage: atalk files <#channel|@who>\n");
+        process.stderr.write("usage: atalks files <#channel|@who>\n");
         return 1;
       }
       const id = await resolveConv(api, rest[0]);
@@ -1214,13 +1215,13 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
           (f.sensitive ? " [sensitive]" : "") +
           (f.expiresAt ? ` expires in ${Math.max(0, f.expiresAt - now)}s` : ""));
       }
-      out("\nDownload: atalk get-file <id> <path>");
+      out("\nDownload: atalks get-file <id> <path>");
       return 0;
     }
 
     case "get-file": {
       if (rest.length < 2) {
-        process.stderr.write("usage: atalk get-file <id> <destination-path>\n");
+        process.stderr.write("usage: atalks get-file <id> <destination-path>\n");
         return 1;
       }
       const data = await api.download(`/api/files/${rest[0]}`);
@@ -1246,10 +1247,10 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
   switch (sub) {
     case "search": {
       const q = rrest.join(" ");
-      if (!q) { process.stderr.write("usage: atalk wiki search <phrase>\n"); return 1; }
+      if (!q) { process.stderr.write("usage: atalks wiki search <phrase>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/search?q=${enc(q)}`);
       const hits = r.hits as Array<{ slug: string; title: string; snippet: string }>;
-      if (hits.length === 0) { out("No matches. Create a page: atalk wiki write <slug> --title ..."); return 0; }
+      if (hits.length === 0) { out("No matches. Create a page: atalks wiki write <slug> --title ..."); return 0; }
       noteOnce();
       for (const h of hits) out(`  [${h.slug}] ${oneLine(h.title)}\n${quote(h.snippet)}`);
       return 0;
@@ -1262,7 +1263,7 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     case "read": {
-      if (!rrest[0]) { process.stderr.write("usage: atalk wiki read <slug>\n"); return 1; }
+      if (!rrest[0]) { process.stderr.write("usage: atalks wiki read <slug>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}`);
       const p = r.page as { title: string; slug: string; body: string; updatedBy: string | null; revisions: number };
       noteOnce();
@@ -1275,7 +1276,7 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
     }
     case "write": {
       const slugIdx = rrest.findIndex((a) => !a.startsWith("-"));
-      if (slugIdx === -1) { process.stderr.write("usage: atalk wiki write <slug> --title \"...\" [--file file | --stdin | text]\n"); return 1; }
+      if (slugIdx === -1) { process.stderr.write("usage: atalks wiki write <slug> --title \"...\" [--file file | --stdin | text]\n"); return 1; }
       const slug = rrest[slugIdx];
       // We build the body from the POSITION after the slug, not from filter(a => a !== slug) -
       // the latter removed EVERY occurrence of the slug as a word, so a body containing the
@@ -1314,7 +1315,7 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
     case "revision": {
       // The content of an old revision - this is the answer to "I overwrote somebody else's
       // page, how do I get back what was there": history lists them, this route returns the body.
-      if (rrest.length < 2) { process.stderr.write("usage: atalk wiki revision <slug> <id>\n"); return 1; }
+      if (rrest.length < 2) { process.stderr.write("usage: atalks wiki revision <slug> <id>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/revisions/${enc(rrest[1])}`);
       const rev = r.revision as { id: number; actor: string | null; title: string; body: string };
       noteOnce();
@@ -1323,7 +1324,7 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     case "delete": case "rm": {
-      if (!rrest[0]) { process.stderr.write("usage: atalk wiki delete <slug>\n"); return 1; }
+      if (!rrest[0]) { process.stderr.write("usage: atalks wiki delete <slug>\n"); return 1; }
       const r = await api.call("DELETE", `/api/wiki/${enc(rrest[0])}`);
       const d = r.deleted as { slug: string; title: string; movedChildren: number };
       out(`deleted: [${d.slug}] "${d.title}"` +
@@ -1331,14 +1332,14 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     case "revert": {
-      if (rrest.length < 2) { process.stderr.write("usage: atalk wiki revert <slug> <revision-id>\n"); return 1; }
+      if (rrest.length < 2) { process.stderr.write("usage: atalks wiki revert <slug> <revision-id>\n"); return 1; }
       const r = await api.call("POST", `/api/wiki/${enc(rrest[0])}/revert`, { revisionId: Number(rrest[1]) });
       const p2 = r.page as { slug: string; title: string; lastRevisionId: number };
       out(`restored: [${p2.slug}] "${p2.title}" (as new revision ${p2.lastRevisionId})`);
       return 0;
     }
     case "history": {
-      if (!rrest[0]) { process.stderr.write("usage: atalk wiki history <slug>\n"); return 1; }
+      if (!rrest[0]) { process.stderr.write("usage: atalks wiki history <slug>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/history`);
       const revs = r.revisions as Array<{ id: number; actor: string | null; note: string | null; createdAt: number }>;
       for (const rv of revs) {
@@ -1348,7 +1349,7 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     case "attach": {
-      if (rrest.length < 2) { process.stderr.write("usage: atalk wiki attach <slug> <path>\n"); return 1; }
+      if (rrest.length < 2) { process.stderr.write("usage: atalks wiki attach <slug> <path>\n"); return 1; }
       const data = readFileSync(rrest[1]);
       const r = await api.upload(`/api/wiki/${enc(rrest[0])}/files`, data, {
         "x-file-name": encodeURIComponent(basename(rrest[1])),
@@ -1358,16 +1359,16 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       return 0;
     }
     case "files": {
-      if (!rrest[0]) { process.stderr.write("usage: atalk wiki files <slug>\n"); return 1; }
+      if (!rrest[0]) { process.stderr.write("usage: atalks wiki files <slug>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/files`);
       const files = r.files as Array<{ id: string; name: string; size: number }>;
       if (files.length === 0) { out("No attachments."); return 0; }
       for (const f of files) out(`  [${f.id}] ${f.name} (${f.size} B)`);
-      out("\nDownload: atalk get-file <id> <path>");
+      out("\nDownload: atalks get-file <id> <path>");
       return 0;
     }
     default:
-      process.stderr.write("usage: atalk wiki search|list|read|write|history|revision|revert|delete|attach|files\n");
+      process.stderr.write("usage: atalks wiki search|list|read|write|history|revision|revert|delete|attach|files\n");
       return 1;
   }
 }

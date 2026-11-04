@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "task": "T-MG-37",
+  "class": "standard",
+  "tier": null,
+  "startedAt": "2026-11-04T16:32:56.966Z",
+  "endedAt": "2026-11-04T17:14:16.460Z",
+  "wallMs": 2479494,
+  "tokens": {
+    "input": 140,
+    "output": 38710,
+    "cacheRead": 6763276,
+    "cacheWrite": 153424
+  },
+  "costMicroUsd": 1990394,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 44,
+        "output": 7273,
+        "cacheRead": 3543989,
+        "cacheWrite": 21074
+      },
+      "costMicroUsd": 1023027
+    },
+    {
+      "agentType": "landfall:implementer",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+        "input": 82,
+        "output": 27631,
+        "cacheRead": 2935710,
+        "cacheWrite": 88820
+      },
+      "costMicroUsd": 792096
+    },
+    {
+      "agentType": "landfall:security-reviewer",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+        "input": 14,
+        "output": 3806,
+        "cacheRead": 283577,
+        "cacheWrite": 43530
+      },
+      "costMicroUsd": 175271
+    }
+  ],
+  "external": [],
+  "rounds": 0,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": true
+}

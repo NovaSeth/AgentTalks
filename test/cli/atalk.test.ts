@@ -216,3 +216,82 @@ test("atalk accepts ATALKS_* alongside AGENTTALKS_*, the canonical name wins", a
     await s.close();
   }
 });
+
+// ---- `atalk login --local` writes a bearer token into a project: the same guard as login.mjs ----
+
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+
+async function localLogin(setup: (project: string) => void) {
+  const s = await startTestServer();
+  try {
+    const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
+    const token = mintToken(s.ctx, ala.id, "test").token;
+    const root = mkdtempSync(path(tmpdir(), "atalk-local-"));
+    const HOME = path(root, "home");
+    const project = path(root, "repo", "sub");
+    mkdirSync(HOME, { recursive: true });
+    mkdirSync(project, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: path(root, "repo"), stdio: "pipe" });
+    setup(project);
+    const bin = fileURLToPath(new URL("../../bin/atalk.js", import.meta.url));
+    let code = 0;
+    let stderr = "";
+    try {
+      await execute(process.execPath, [bin, "login", "--url", s.url, "--token", token, "--local"],
+        { cwd: project, env: { PATH: process.env.PATH ?? "", HOME } });
+    } catch (e) {
+      code = (e as { code?: number }).code ?? 1;
+      stderr = String((e as { stderr?: string }).stderr ?? "");
+    }
+    return { code, stderr, root, HOME, project, token, file: path(project, ".agenttalks.json") };
+  } finally {
+    await s.close();
+  }
+}
+
+test("atalk login --local in a SUBDIRECTORY of a git repo: the token file is ignored by git (or the login refuses), never an un-ignored token", async () => {
+  const r = await localLogin(() => {});
+  if (existsSync(r.file)) {
+    // git check-ignore exits 0 only when the file is ignored
+    execFileSync("git", ["check-ignore", "-q", "--", ".agenttalks.json"], { cwd: r.project, stdio: "pipe" });
+  } else {
+    assert.notEqual(r.code, 0);
+  }
+});
+
+test("atalk login --local refuses when .agenttalks.json is already tracked by git: nothing written", async () => {
+  const shipped = '{"url":"https://foreign.example","token":"x"}';
+  const r = await localLogin((project) => {
+    writeFileSync(path(project, ".agenttalks.json"), shipped);
+    const g = (...a: string[]) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: project, stdio: "pipe" });
+    g("add", ".agenttalks.json");
+    g("commit", "-qm", "ships a token file");
+  });
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /tracked by git/);
+  assert.equal(readFileSync(r.file, "utf8"), shipped);
+  assert.equal(existsSync(path(r.project, ".gitignore")), false);
+  assert.ok(!r.stderr.includes(r.token));
+});
+
+test("atalk login --local refuses a symlinked .agenttalks.json: the link target is untouched", async () => {
+  let victim = "";
+  const r = await localLogin((project) => {
+    victim = path(project, "..", "victim.txt");
+    writeFileSync(victim, "precious\n");
+    symlinkSync(victim, path(project, ".agenttalks.json"));
+  });
+  assert.notEqual(r.code, 0);
+  assert.equal(readFileSync(victim, "utf8"), "precious\n");
+  assert.equal(existsSync(path(r.HOME, ".config")), false, "nothing trusted");
+});
+
+test("atalk login --local: an ignore line git does not honour (a later negation) -> refuse, nothing written", async () => {
+  const body = ".agenttalks.json\n!.agenttalks.json\n";
+  const r = await localLogin((project) => writeFileSync(path(project, ".gitignore"), body));
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /nothing was written/);
+  assert.equal(existsSync(r.file), false);
+  assert.equal(readFileSync(path(r.project, ".gitignore"), "utf8"), body);
+});

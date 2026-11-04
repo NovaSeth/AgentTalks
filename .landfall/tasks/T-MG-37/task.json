@@ -5,9 +5,15 @@
   "title": "Credential write: confirm with git check-ignore; atalk login --local uses login.mjs preflight",
   "lane": null,
   "owner": "MG",
-  "class": null,
-  "classHistory": [],
-  "status": "new",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 4 files > 2; 120 LOC > 30",
+      "at": "2026-11-04T16:32:49.008Z"
+    }
+  ],
+  "status": "done",
   "round": 0,
   "events": [
     {
@@ -15,8 +21,99 @@
       "by": "MG",
       "event": "created",
       "data": {}
+    },
+    {
+      "at": "2026-11-04T16:32:49.008Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T16:32:53.567Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-37-credential-check-ignore",
+        "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-37"
+      }
+    },
+    {
+      "at": "2026-11-04T16:33:27.096Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "3b666b9eda33"
+      }
+    },
+    {
+      "at": "2026-11-04T17:11:36.722Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T17:12:07.463Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:security-reviewer",
+        "base": "3b666b9eda33",
+        "note": "security review r1"
+      }
+    },
+    {
+      "at": "2026-11-04T17:12:59.485Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "approved",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T17:13:01.866Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "3462642df667518a5ee4de8ee650f9287d9f9fbe",
+        "class": "standard",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T17:15:24.653Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "3462642df667518a5ee4de8ee650f9287d9f9fbe"
+      }
+    },
+    {
+      "at": "2026-11-04T17:21:49.538Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "70d6510d700d81ce4d8d550b568d0bf09fd21aa3",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "4bbdb927a7e2e53619730659028ca766dedf2dd8"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+  "branch": "task/T-MG-37-credential-check-ignore",
+  "mergedAt": "2026-11-04T17:21:49.538Z"
 }

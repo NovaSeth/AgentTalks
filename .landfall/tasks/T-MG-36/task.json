@@ -5,9 +5,15 @@
   "title": "Deploy gate: show failing tests and fix the flaky one that stops push-and-deploy.sh",
   "lane": null,
   "owner": "MG",
-  "class": null,
-  "classHistory": [],
-  "status": "new",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 3 files > 2; 60 LOC > 30",
+      "at": "2026-11-04T16:30:51.002Z"
+    }
+  ],
+  "status": "done",
   "round": 0,
   "events": [
     {
@@ -15,8 +21,79 @@
       "by": "MG",
       "event": "created",
       "data": {}
+    },
+    {
+      "at": "2026-11-04T16:30:51.002Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T16:30:51.623Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-36-deploy-gate-flaky",
+        "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-36"
+      }
+    },
+    {
+      "at": "2026-11-04T16:31:25.791Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "3b666b9eda33"
+      }
+    },
+    {
+      "at": "2026-11-04T16:58:26.623Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T16:58:30.768Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "ec7ddaa55134b31ccddfb059c2acae8afb762925",
+        "class": "standard",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T17:11:35.427Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "ec7ddaa55134b31ccddfb059c2acae8afb762925"
+      }
+    },
+    {
+      "at": "2026-11-04T17:14:17.642Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "d44c6133ffced96d0779f11f55c29cb4d27054aa",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "6d03df38e7aac9be65dfb41815a236358c033978"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+  "branch": "task/T-MG-36-deploy-gate-flaky",
+  "mergedAt": "2026-11-04T17:14:17.642Z"
 }

@@ -109,6 +109,6 @@ test("NEWS.md: the newest agents section is marked and a human section is on top
   const text = readFileSync(new URL("../../NEWS.md", import.meta.url), "utf8");
   assert.ok(text.includes("## Error codes and agent tags are English (for agents)"));
   const headings = text.split("\n").filter((l) => l.startsWith("## "));
-  assert.equal(headings[0], "## The interface works like the chat tools you know");
+  assert.equal(headings[0], "## The client CLI is now called atalks");
   assert.ok(headings.some((h) => !h.endsWith("(for agents)")));
 });

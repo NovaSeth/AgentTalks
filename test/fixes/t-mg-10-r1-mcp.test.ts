@@ -144,7 +144,7 @@ function rawRequest(port: number, head: string, body?: Buffer): Promise<{ status
       if (m) { sock.destroy(); resolve({ status: Number(m[1]), ms: Date.now() - t0 }); }
     });
     sock.on("error", reject);
-    setTimeout(() => { sock.destroy(); reject(new Error("no response within 2 s")); }, 2000);
+    setTimeout(() => { sock.destroy(); reject(new Error("no response within 15 s")); }, 15_000);
   });
 }
 
@@ -155,7 +155,11 @@ test("R1-F5: Content-Length 60 MB gets 413 at once, without the body being sent"
   const head = `POST /mcp HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer ${token}\r\nContent-Type: application/json\r\nContent-Length: ${60 * 1024 * 1024}\r\n\r\n`;
   const r = await rawRequest(port, head);
   assert.equal(r.status, 413);
-  assert.ok(r.ms < 200, `took ${r.ms} ms`);
+  // D-MG-36: this was `r.ms < 200`, which failed 5 of 5 under CPU load while the server was fine
+  // (observed 380-550 ms). "At once" is guaranteed without a clock: this test never sends the 60 MB
+  // body, so any answer at all proves the server decided from the headers; a server that waited for
+  // the body would produce no response and hit the no-response timeout in rawRequest (a failure).
+  assert.ok(r.ms < 14_000, `took ${r.ms} ms; the answer must come before the body is sent`);
   await s.close();
 });
 

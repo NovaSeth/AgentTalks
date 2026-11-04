@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "task": "T-MG-36",
+  "class": "standard",
+  "tier": null,
+  "startedAt": "2026-11-04T16:30:54.821Z",
+  "endedAt": "2026-11-04T17:07:38.778Z",
+  "wallMs": 2203957,
+  "tokens": {
+    "input": 184,
+    "output": 45663,
+    "cacheRead": 8402548,
+    "cacheWrite": 231001
+  },
+  "costMicroUsd": 2248744,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 22,
+        "output": 6687,
+        "cacheRead": 2054268,
+        "cacheWrite": 18481
+      },
+      "costMicroUsd": 692530
+    },
+    {
+      "agentType": "landfall:implementer",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+        "input": 162,
+        "output": 38976,
+        "cacheRead": 6348280,
+        "cacheWrite": 212520
+      },
+      "costMicroUsd": 1556214
+    }
+  ],
+  "external": [],
+  "rounds": 0,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": true
+}

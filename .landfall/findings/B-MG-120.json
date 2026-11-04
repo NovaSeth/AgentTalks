@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-120",
-  "status": "open",
+  "status": "dropped",
   "task": "T-MG-24",
   "round": 2,
   "reviewer": {
@@ -17,7 +17,7 @@
   "filedAt": "2026-11-04T14:39:24.408Z",
   "filedBy": "MG",
   "takenBy": null,
-  "closedAt": null,
-  "closedBy": null,
-  "reason": null
+  "closedAt": "2026-11-04T19:27:21.679Z",
+  "closedBy": "D-MG-38",
+  "reason": "Scope-coordination finding of T-MG-24 r2 (shared fake-at.ts reserved for T-MG-21 while both ran). Both tasks are merged on main and the full suite is green, so the conflict it guarded against cannot happen any more; the 6 added lines are a test helper, not product code."
 }
