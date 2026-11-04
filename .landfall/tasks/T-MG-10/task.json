@@ -182,8 +182,21 @@
       "data": {
         "head": "a0599f0c296273c406e0c11629fff771c004fef8"
       }
+    },
+    {
+      "at": "2026-11-04T00:35:44.172Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "4ea7666fca3c9210a28f80a9bac2e34cc99cea64",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "268109c56538ba99fc196f0033a2445d354b48cf"
+      }
     }
   ],
   "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce",
-  "branch": "task/T-MG-10-fix-b-mcp-agent-surface"
+  "branch": "task/T-MG-10-fix-b-mcp-agent-surface",
+  "mergedAt": "2026-11-04T00:35:44.172Z"
 }
