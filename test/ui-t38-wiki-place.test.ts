@@ -20,6 +20,7 @@ const stored = new Map<string, string>();
 // listener app.js installs is captured, so a test can drive the real route handler.
 const elements = new Map<string, any>();
 const listeners: Record<string, Function> = {};
+const sseListeners: Record<string, Function> = {};
 function makeEl(id = ""): any {
   const classes = new Set<string>();
   const attrs = new Map<string, string>();
@@ -48,7 +49,8 @@ function el(id: string) {
       let html = "";
       Object.defineProperty(node, "innerHTML", {
         get: () => html,
-        set: (v: string) => { html = v; for (const [k, n] of elements) if (k.startsWith("rail-")) n.classList.remove("on"); },
+        // Fix round 4: aria-current too - a browser replaces the whole button.
+        set: (v: string) => { html = v; for (const [k, n] of elements) if (k.startsWith("rail-")) { n.classList.remove("on"); n.removeAttribute("aria-current"); } },
       });
     }
     elements.set(id, node);
@@ -80,7 +82,9 @@ async function loadUi() {
     removeItem: (k: string) => { stored.delete(k); },
   };
   g.HTMLImageElement = class {};
-  g.EventSource = class { close() {} addEventListener() {} };
+  // Fix round 4: the SSE stream's listeners are captured, so a test can deliver a server event
+  // (the `wiki` refresh of review r2 F7) through the real handler of sse-events.js.
+  g.EventSource = class { close() {} addEventListener(name: string, fn: Function) { sseListeners[name] = fn; } };
   g.history = { back() {}, forward() {}, replaceState() {}, pushState() {} };
   const sidebar = await import(UI + "view-sidebar.js");
   const router = await import(UI + "router.js");
@@ -201,6 +205,77 @@ test("T38: every new English string of the Wiki place has a Polish translation",
   }
 });
 
+// ------------------------------------------------------------------ fix round 1
+// The orchestrator's browser check: `#/wiki/<slug>` left the rail on Home, and `#/c/general`
+// from the Wiki place left a sidebar without channels. Restored in fix round 4 (review r2 F8,
+// COD-3) and adapted to the rule of that round: the place is derived on a VIEW TRANSITION in the
+// render path (the view being rendered against the view last rendered), so the same view
+// rendered again never moves the place.
+
+test("T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched", async () => {
+  const { sidebar } = await loadUi();
+  assert.equal(sidebar.placeAfterNavigation("home", "wiki"), "wiki");
+  assert.equal(sidebar.placeAfterNavigation("dms", "wiki"), "wiki");
+  assert.equal(sidebar.placeAfterNavigation("wiki", "chat"), "home");
+  assert.equal(sidebar.placeAfterNavigation("dms", "chat"), "dms", "a conversation from DMs keeps DMs, as today");
+  assert.equal(sidebar.placeAfterNavigation("home", "chat"), "home");
+  assert.equal(sidebar.placeAfterNavigation("wiki", "notifications"), "wiki", "other views move nothing");
+});
+
+test("T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing", async (t) => {
+  const { sidebar, state } = await loadUi();
+  seedState(state);
+  stored.clear();
+  sidebar.setSidebarPlace("home");
+  state.view = "chat"; state.activeId = 1;
+  renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "home");
+
+  // #/wiki/runbook (or a row, a [[link]], a search result): openWikiPage sets the view and asks for the sidebar.
+  state.view = "wiki"; state.wiki.slug = "runbook";
+  let html = renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "wiki", "the page's tree is visible");
+  assert.ok(html.includes('data-section="wiki"'));
+
+  // The reader picks Home from the rail while on the page; a presence tick redraws the sidebar.
+  sidebar.setSidebarPlace("home");
+  renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "home", "the same page seen again does not drag the reader back");
+
+  // Back to the Wiki place, then #/c/general: a conversation from Wiki returns to Home.
+  sidebar.setSidebarPlace("wiki");
+  state.view = "chat"; state.activeId = 1;
+  html = renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "home", "no sidebar without channels");
+  assert.ok(html.includes('data-section="channels"'));
+
+  // In a conversation, the rail's Wiki place is a choice that survives redraws of the same conversation.
+  sidebar.setSidebarPlace("wiki");
+  renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  // Fix round 4: a RENDER with another active conversation is not a view transition (chat stays
+  // chat), so it moves nothing; the move to Home belongs to the explicit opening (openConversation,
+  // which Cmd+K, a link and the route call) - asserted by "T38-r4: opening another conversation".
+  state.activeId = 3;
+  renderWith(sidebar, t);
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  sidebar.setSidebarPlace("home");
+});
+
+test("T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh", () => {
+  const app = readFileSync(UI + "app.js", "utf8");
+  const sb = readFileSync(UI + "view-sidebar.js", "utf8");
+  const shell = app.indexOf("function renderShell()");
+  const settle = app.indexOf("settlePlace()", shell);
+  const rail = app.indexOf('railButton("rail-chats"', shell);
+  assert.ok(settle > shell && settle < rail, "renderShell settles the place before the rail markup");
+  // Fix round 4: the repaint sits in renderSidebarList itself, so views.sidebar AND every direct
+  // call of it (goPlace, a section toggle, a route's list refresh) paint the rail.
+  const list = sb.indexOf("export function renderSidebarList()");
+  const body = sb.slice(list, sb.indexOf("\n}\n", list));
+  assert.match(body, /settlePlace\(\);\s*paintRail\(\);/, "every sidebar refresh settles the place and repaints the rail");
+});
+
 // ------------------------------------------------------------------ fix round 2
 // The orchestrator's second browser check: `#/c/general` from a wiki page kept the Wiki place,
 // `#/wiki/<slug>` from DMs kept DMs. This test drives the REAL route handler (the hashchange
@@ -218,14 +293,20 @@ async function bootApp() {
     holds.set(key, new Promise<void>((r) => { release = () => { holds.delete(key); r(); }; }));
     return release;
   };
+  const fetched: string[] = [];
   g.fetch = async (path: string) => {
+    fetched.push(path);
     for (const [key, p] of holds) if (path.includes(key)) await p;
     const json = /\/api\/wiki\/[^/]+\/history/.test(path) ? { revisions: [] }
       : /\/api\/wiki\/[^/]+$/.test(path) ? { page: { slug: path.split("/").pop(), title: "Page", revisions: 1, updatedBy: "nestor", updatedAt: 0, createdBy: "nestor" }, files: [] }
+      : /\/api\/wiki$/.test(path) ? { pages: [{ slug: "nowosci", title: "Nowosci" }, { slug: "slow", title: "Slow" }] }
       : /\/messages/.test(path) ? { messages: [] }
       : {};
     return { ok: true, status: 200, json: async () => json, text: async () => "", headers: { get: () => null } };
   };
+  // The first import boots the app and renders whatever view an earlier test left in the shared
+  // state; a half-seeded wiki view would throw in that render (fix round 4: test isolation).
+  ui.state.view = "chat";
   await import(UI + "app.js");
   await new Promise((r) => setTimeout(r, 30));
   const { state, sidebar, views } = ui;
@@ -242,7 +323,7 @@ async function bootApp() {
   };
   const railOn = () => ["rail-chats", "rail-dms", "rail-wiki"].filter((id) => el(id).classList.contains("on")
     || new RegExp('id="' + id + '" aria-current="page"').test(el("app").innerHTML));
-  return { state, sidebar, views, go, goNoWait, holdWiki, railOn };
+  return { state, sidebar, views, go, goNoWait, holdWiki, railOn, fetched };
 }
 
 test("T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki", async () => {
@@ -344,12 +425,102 @@ test("T38-r3 F3: a route that completes after a newer place was chosen does not 
   assert.equal(state.view, "chat");
 });
 
-test("T38-r3: the rule has ONE home - router.js reports navigations, app.js applies them; no settle-on-completion, no follow-on-render", () => {
+// Fix round 4: the "one home" is view-sidebar.js now (settlePlace on a view transition, placeOnOpen
+// for an explicit opening); the navigation report of round 3 is gone, so the expectation on
+// onNavigate is inverted - the intent (one rule, nothing applied on a route's completion) stays.
+test("T38-r3: the rule has ONE home - view-sidebar.js derives the place; no navigation tracking, no settle-on-completion, no follow-on-navigation", () => {
   const app = readFileSync(UI + "app.js", "utf8");
   const router = readFileSync(UI + "router.js", "utf8");
   const sidebar = readFileSync(UI + "view-sidebar.js", "utf8");
-  assert.match(router, /export function onNavigate\(/, "router.js exports onNavigate");
-  assert.match(app, /onNavigate\(/, "app.js listens");
+  assert.doesNotMatch(router, /onNavigate/, "router.js reports no navigations");
+  assert.doesNotMatch(app, /onNavigate|lastConversation/, "app.js tracks no navigations");
   assert.doesNotMatch(app, /settleRoutePlace|followPlace/, "no second rule in app.js");
-  assert.doesNotMatch(sidebar, /function followPlace/, "no follow-on-render in view-sidebar.js");
+  assert.doesNotMatch(sidebar, /function followPlace/, "no follow-on-navigation in view-sidebar.js");
+  assert.match(sidebar, /export function settlePlace\(/, "the transition rule lives in view-sidebar.js");
+  assert.match(sidebar, /export function placeOnOpen\(/, "the explicit-opening rule lives in view-sidebar.js");
+});
+
+// ------------------------------------------------------------------ fix round 4 (Codex review r2)
+// The rule (decided by the orchestrator): a rail click sets the place; a VIEW TRANSITION seen by
+// the render path derives it (into the wiki view -> Wiki; into the chat view from the Wiki place
+// -> Home); an explicit opening by the user (a page, a conversation) applies the same derivation
+// even when the view does not change; a background refresh never moves it; the rail is repainted
+// from (place, view) on every render. Nothing listens to routes and no completion sets the place.
+const tick = (ms = 10) => new Promise((r) => setTimeout(r, ms));
+
+test("T38-r4 F4: reopening the same conversation from the Wiki place returns to Home with its channels", async () => {
+  const { state, sidebar, go } = await bootApp();
+  sidebar.setSidebarPlace("home");
+  await go("#/c/general");
+  assert.equal(state.view, "chat");
+  await go("#/wiki");
+  assert.equal(state.view, "chat");
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  await go("#/c/general");
+  assert.equal(state.view, "chat");
+  assert.equal(sidebar.getSidebarPlace(), "home");
+  assert.ok(String(el("sb-scroll").innerHTML).includes('data-section="channels"'), "the channels are drawn");
+});
+
+test("T38-r4 F5: back from Search to the page on screen lights Wiki again (on and aria-current)", async () => {
+  const { state, sidebar, views } = await bootApp();
+  const { openWikiPage } = await import(UI + "view-wiki.js");
+  await openWikiPage("nowosci");
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  state.view = "search";
+  views.render();
+  assert.ok(!el("rail-wiki").classList.contains("on"), "Search is a view of its own");
+  await openWikiPage("nowosci");
+  assert.equal(state.view, "wiki");
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  assert.ok(el("rail-wiki").classList.contains("on"), "rail-wiki is on");
+  assert.equal(el("rail-wiki").getAttribute("aria-current"), "page");
+});
+
+test("T38-r4 F6: a conversation's late address cleanup does not hide the tree of a newer wiki page", async () => {
+  const { state, sidebar, holdWiki } = await bootApp();
+  const { openWikiPage } = await import(UI + "view-wiki.js");
+  const { openConversation } = await import(UI + "view-chat.js");
+  state.loaded = {}; state.msgs = {};
+  const release = holdWiki("messages");
+  const pending = openConversation(1, 9999);   // a dead /m/<id> link: rewritten once the batch lands
+  await openWikiPage("nowosci");
+  assert.equal(state.view, "wiki");
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  release();
+  await pending;
+  await tick();
+  assert.equal(state.view, "wiki");
+  assert.equal(sidebar.getSidebarPlace(), "wiki", "the late completion moves nothing");
+  assert.ok(String(el("sb-scroll").innerHTML).includes('data-section="wiki"'), "the tree stays drawn");
+});
+
+test("T38-r4 F7: another actor's edit of the page on screen refreshes it without moving the reader's place", async () => {
+  const { state, sidebar, fetched } = await bootApp();
+  const { openWikiPage } = await import(UI + "view-wiki.js");
+  const { connectSSE } = await import(UI + "sse-events.js");
+  connectSSE();
+  await openWikiPage("nowosci");
+  assert.equal(sidebar.getSidebarPlace(), "wiki");
+  sidebar.setSidebarPlace("home");   // the reader picks Home from the rail while on the page
+  const before = fetched.length;
+  sseListeners.wiki({ data: JSON.stringify({ slug: "nowosci" }) });
+  await tick(20);
+  assert.ok(fetched.slice(before).some((p) => /\/api\/wiki\/nowosci$/.test(p)), "the page was refreshed");
+  assert.equal(state.view, "wiki");
+  assert.equal(sidebar.getSidebarPlace(), "home", "a background refresh keeps the reader's place");
+});
+
+test("T38-r4: opening another conversation (Cmd+K, a link) from the Wiki place in the chat view returns to Home; a redraw does not", async () => {
+  const { state, sidebar, views, go } = await bootApp();
+  const { openConversation } = await import(UI + "view-chat.js");
+  await go("#/c/general");
+  sidebar.setSidebarPlace("wiki");   // the rail's Wiki chosen while in the conversation
+  views.render();
+  views.sidebar();
+  assert.equal(state.view, "chat");
+  assert.equal(sidebar.getSidebarPlace(), "wiki", "redraws keep the choice");
+  await openConversation(3);
+  assert.equal(state.activeId, 3);
+  assert.equal(sidebar.getSidebarPlace(), "home");
 });
