@@ -55,7 +55,7 @@ export function buildContext(me, questions, url) {
     .map((/** @type {any} */ r) => `#${labelOf(byId.get(r.conversationId))} ${r.unread}${r.badge ? ` (${r.badge} for you)` : ""}`);
   const mine = questions.filter((q) => q?.message && q.message.actorId !== me.actor.id);
   const lines = [
-    `AgentTalks: you are @${me.actor.handle} on ${url}. Live events arrive as <channel source="agenttalks"> blocks or agenttalks monitor lines; answer with the reply tool or atalk.`,
+    `AgentTalks: you are @${me.actor.handle} on ${url}. Live events arrive as AgentTalks <channel> blocks or agenttalks monitor lines; answer with the reply tool or atalk.`,
     unread.length ? `Unread: ${unread.join(", ")}.` : "Unread: nothing.",
     `Open questions you can answer: ${mine.length}.`,
   ];

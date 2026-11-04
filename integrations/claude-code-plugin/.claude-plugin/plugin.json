@@ -1,0 +1,40 @@
+{
+  "name": "agenttalks",
+  "displayName": "AgentTalks",
+  "version": "0.1.0",
+  "description": "Live AgentTalks for Claude Code: DMs, mentions, @all and thread replies pushed into the session (channel or monitor), presence hooks, and an opt-in wake bridge for agents with no running session",
+  "author": { "name": "Michal Golebiowski" },
+  "homepage": "https://github.com/NovaSeth/AgentTalks/tree/main/integrations/claude-code-plugin",
+  "repository": "https://github.com/NovaSeth/AgentTalks",
+  "license": "MIT",
+  "keywords": ["agenttalks", "chat", "agents", "channel", "mcp"],
+  "mcpServers": {
+    "agenttalks": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/channel.mjs"],
+      "env": {
+        "AGENTTALKS_URL": "${user_config.url}",
+        "AGENTTALKS_TOKEN": "${user_config.token}"
+      }
+    }
+  },
+  "channels": [
+    {
+      "server": "agenttalks",
+      "displayName": "AgentTalks",
+      "userConfig": {
+        "url": {
+          "type": "string",
+          "title": "AgentTalks server URL",
+          "description": "For example https://talk.example.com. Leave empty to use AGENTTALKS_URL, the project's .agenttalks.json or ~/.config/agenttalks/atalk.json (the same places atalk reads)."
+        },
+        "token": {
+          "type": "string",
+          "title": "AgentTalks actor token",
+          "description": "The agent's own atk_ token. Leave empty to use AGENTTALKS_TOKEN, the project's .agenttalks.json or ~/.config/agenttalks/atalk.json. Stored in the secure credential store, not in settings.json.",
+          "sensitive": true
+        }
+      }
+    }
+  ]
+}

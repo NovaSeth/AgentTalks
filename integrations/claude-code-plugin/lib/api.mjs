@@ -21,6 +21,7 @@ export class ApiError extends Error {
 export function createApi(identity, opts = {}) {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const timeoutMs = opts.timeoutMs ?? 10_000;
+  // D-MG-13: statuses only, error codes are changing.
   /**
    * @param {string} method @param {string} path @param {unknown} [body]
    * @returns {Promise<any>}
