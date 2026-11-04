@@ -18,12 +18,11 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createApi } from "../lib/api.mjs";
 import { trustDir, trustProjectFile, withTrustLock } from "../lib/trust.mjs";
-
-const NAME = ".agenttalks.json";
+import { NAME, credentialPreflight, ensureIgnored, gitTop, kindOf } from "../lib/credguard.mjs";
 
 /** Undoes the credential write when a later step fails (set once the credential is written).
  *  @type {(() => void) | null} */
@@ -71,54 +70,7 @@ function cleanUrl(s) {
   return u.origin + u.pathname.replace(/\/+$/, "");
 }
 
-/** The kind of p without following a final link: "none" | "file" | "dir" | "link" | "other".
- *  @param {string} p */
-function kindOf(p) {
-  let st;
-  try { st = lstatSync(p); } catch { return "none"; }
-  return st.isSymbolicLink() ? "link" : st.isFile() ? "file" : st.isDirectory() ? "dir" : "other";
-}
-
-/** The top of the git work tree `dir` is in (the nearest ancestor with a .git), or null.
- *  @param {string} dir @returns {string | null} */
-function gitTop(dir) {
-  for (let d = dir; ; d = dirname(d)) {
-    if (existsSync(join(d, ".git"))) return d;
-    if (dirname(d) === d) return null;
-  }
-}
 const inGitTree = (/** @type {string} */ dir) => gitTop(dir) !== null;
-
-/** @param {string} p */
-function isLink(p) {
-  try { return lstatSync(p).isSymbolicLink(); } catch { return false; }
-}
-
-/** Whether git tracks .agenttalks.json in `dir`: "tracked", "untracked" (git answered with
- *  exit status 1 = not in the index) or "unknown" (git absent, status 128, timeout, anything
- *  else) - the caller fails closed on "unknown". Only a directory with no .git upward is
- *  "untracked" without asking git.
- *  @param {string} dir @returns {"tracked" | "untracked" | "unknown"} */
-function trackedState(dir) {
-  const top = gitTop(dir);
-  if (top === null) return "untracked";
-  try {
-    // The repository is untrusted input: no program its config names may run (fsmonitor,
-    // hooks), the config of the cwd is not consulted, and the env is minimal.
-    execFileSync("git", [
-      "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", `safe.directory=${top}`,
-      "-C", dir, "ls-files", "--error-unmatch", "--", NAME,
-    ], {
-      cwd: tmpdir(),
-      env: { PATH: process.env.PATH ?? "", HOME: tmpdir(), GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" },
-      stdio: "ignore",
-      timeout: 5000,
-    });
-    return "tracked";
-  } catch (err) {
-    return /** @type {any} */ (err)?.status === 1 ? "untracked" : "unknown";
-  }
-}
 
 /** A new file under a fresh name (flag wx: never follows or reuses an existing path), then a
  *  rename over the target, so a link planted at the target is replaced, not written through.
@@ -178,19 +130,10 @@ const tfile = join(tdir, "trusted-projects.json");
 // it should be: a regular file (the trust directory: a real directory), never a link, FIFO,
 // device or directory.
 const willTouchGi = inGitTree(dir) || existsSync(gi);
-if (kindOf(file) !== "none" && kindOf(file) !== "file") fail(`${NAME} in the target directory is not a regular file (link, directory or special file); refusing to write; nothing was written`);
-if (willTouchGi && kindOf(gi) !== "none" && kindOf(gi) !== "file") fail(".gitignore in the target directory is not a regular file (link, directory or special file); refusing to write; nothing was written");
+const refusal = credentialPreflight(dir, willTouchGi);
+if (refusal) fail(refusal);
 if (kindOf(tdir) !== "none" && kindOf(tdir) !== "dir") fail("the trust directory is not a real directory; refusing to write; nothing was written");
 if (kindOf(tfile) !== "none" && kindOf(tfile) !== "file") fail("the trust list is not a regular file (link or special file); refusing to write; nothing was written");
-const tracked = trackedState(dir);
-if (tracked === "tracked") {
-  fail(`${NAME} is tracked by git here: writing the token into it would put the token in the repository. `
-    + "Remove it from the index (git rm --cached) first; nothing was written");
-}
-if (tracked === "unknown") {
-  fail(`could not tell whether git tracks ${NAME} here (git is missing, failed or timed out); `
-    + "refusing to write a token into a possible repository; nothing was written");
-}
 
 // Everything that writes runs under the trust-list lock, taken FIRST: a lock timeout leaves
 // zero writes and an existing credential untouched.
@@ -199,15 +142,10 @@ const content = Buffer.from(JSON.stringify({ url, token, writtenBy: "agenttalks-
 try {
   withTrustLock(tdir, () => {
     try {
-      // 1. The ignore line first, so the credential is never unignored.
-      if (willTouchGi) {
-        const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
-        if (!current.split("\n").some((l) => l.trim() === NAME)) {
-          writeAtomic(gi, current + (current && !current.endsWith("\n") ? "\n" : "") + NAME + "\n",
-            existsSync(gi) ? lstatSync(gi).mode & 0o777 : 0o644);
-          ignored = true;
-        }
-      }
+      // 1. The ignore line first, so the credential is never unignored - and git CONFIRMS it
+      //    (check-ignore) before the credential exists: a negation or another rule can defeat
+      //    an exact line. Not ignored: the .gitignore is restored and nothing is written.
+      try { ignored = ensureIgnored(dir, willTouchGi); } catch (err) { throw new Refusal(err instanceof Error ? err.message : "could not confirm the ignore; nothing was written"); }
 
       // 2. The credential. A failure from here on restores the previous bytes or removes it.
       const previous = kindOf(file) === "file" ? readFileSync(file) : null;

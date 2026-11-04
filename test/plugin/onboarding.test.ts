@@ -254,7 +254,7 @@ test("S11: an ignore line that git does not honour (a later negation in the same
   assert.match(r.stderr, /nothing was written$/m);
   assert.equal(existsSync(s.file), false, "no credential on disk");
   assert.equal(readFileSync(gi, "utf8"), body);
-  assert.equal(existsSync(s.conf), false, "nothing trusted");
+  assert.equal(existsSync(s.trustFile), false, "nothing trusted");
   assert.ok(!(r.stdout + r.stderr).includes(TOKEN));
 });
 
