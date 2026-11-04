@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:security-reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 47,
+      "rule": "SPC-13",
+      "text": "High: DEFAULT_ALLOWED_TOOLS is still \"mcp__agenttalks__*\" (also the README and bin default), but active decision D-MG-17 requires mcp__plugin_agenttalks_agenttalks__* and mcp__agenttalks__* by default. The plugin's own reply/mark_read tools are therefore denied under dontAsk, so a woken agent cannot answer. Repro: node -e 'import(\"./lib/wake.mjs\").then(m=>console.log(m.DEFAULT_ALLOWED_TOOLS))' prints mcp__agenttalks__*. Fix: default both patterns, update README, bin, tests."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/README.md",
+      "line": null,
+      "rule": "AGT-3",
+      "text": "Medium: README and wake.mjs claim a woken session cannot run shell or edit files. dontAsk only denies tools not pre-approved; permissions.allow rules in the resumed session's user/project settings (e.g. Bash) still apply, so injected preview text could reach them. Not run (needs the claude CLI). Fix: also pass --tools/--disallowedTools restricting built-ins, or reword the claim and tell users to check their allow rules."
+    },
+    {
+      "id": "F3",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 36,
+      "rule": "OWA-2",
+      "text": "Medium: listenHost() blocks only literal 0.0.0.0, ::, [::], *. Reproduced: listenHost(\"0\",false) returns \"0\" and net.listen(port,\"0\") binds 0.0.0.0; \"0:0:0:0:0:0:0:0\" binds ::, and ::0, [::0], 0.0.0.00, 0x0 pass too. The no-public-bind guard is bypassed by a typo-level value. Fix: resolve the host (net.isIP / dns) and refuse unspecified addresses."
+    },
+    {
+      "id": "F4",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 104,
+      "rule": "OWA-8",
+      "text": "Low: replay cache is in memory, so a captured valid knock can be replayed after a bridge restart while exp (up to 1 h ahead) or ts (10 min) is still fresh, and wakes the agent again with the old preview. Also the oversize branch keeps reading the unauthenticated body until Node's request timeout instead of destroying the socket. Fix: persist keys (0600) or shorten exp window; req.destroy() on 413."
+    },
+    {
+      "id": "F5",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 80,
+      "rule": "SEC-8",
+      "text": "Low: spawnRunner passes no env, so the claude child inherits the bridge's environment including AGENTTALKS_WAKE_SECRET (the env-var mode) and any token. Hooks, MCP servers and the woken model's allowed tools run under that env. Fix: pass a filtered env without AGENTTALKS_WAKE_*."
+    },
+    {
+      "id": "F6",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/scripts/session-hook.mjs",
+      "line": 99,
+      "rule": "AGT-5",
+      "text": "Low: SessionStart makes up to four sequential calls (4 s timeout each, 16 s) against a 15 s hook timeout, so a hanging server can delay session start by the full 15 s before the kill. The wake record is written only after presence succeeds, so a failed POST also means no wake record. Fix: overall deadline (~8 s), Promise.all for the reads, record the session first."
+    },
+    {
+      "id": "F7",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/lib/sessions.mjs",
+      "line": 55,
+      "rule": "PRI-6",
+      "text": "Low: recordSession does read-modify-write with no lock; two sessions starting together can lose a record (last rename wins), so the bridge may resume the wrong session or none. Fix: lock file or per-session record files."
+    },
+    {
+      "id": "F8",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/lib/launch.mjs",
+      "line": 49,
+      "rule": "AGT-8",
+      "text": "Low: the monitor stands down when the claude command line has the channel flag, but Claude Code ignores a channel not allowlisted or disabled by org policy; then neither path delivers and nothing says so. Also .agenttalks.json is read from the opened project, so an untrusted repo can point URL/token at another server and feed the session (still framed as data). Fix: document, warn when the channel gets no initialized/channel capability ack."
+    },
+    {
+      "id": "F9",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/scripts/session-hook.mjs",
+      "line": 61,
+      "rule": "LLM-1",
+      "text": "Low: the trusted Unread line and handle use labelOf() without safeLabel, unlike header(). Server regexes limit slug and handle to [a-z0-9._-], so not exploitable today. Also lib/mcp.mjs tools/call with name \"constructor\" or \"__proto__\" hits Object.prototype and returns 'tool.handler is not a function' (repro: harmless isError, no crash). Fix: safeLabel, Object.hasOwn."
+    }
+  ]
+}

@@ -13,7 +13,7 @@
       "at": "2026-11-04T00:46:02.751Z"
     }
   ],
-  "status": "new",
+  "status": "done",
   "round": 0,
   "events": [
     {
@@ -34,8 +34,64 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T00:46:03.231Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-13-gate-r5-fixes",
+        "base": "76515ba38c574d623f9d297c5c48b37c1c9c3b34",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-13"
+      }
+    },
+    {
+      "at": "2026-11-04T00:46:18.461Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "76515ba38c574d623f9d297c5c48b37c1c9c3b34"
+      }
+    },
+    {
+      "at": "2026-11-04T00:49:18.081Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
+      }
+    },
+    {
+      "at": "2026-11-04T00:51:53.871Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:51:54.119Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "b23191fec7ac07c69742a7652c8c56f289e7c523",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:52:09.024Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "b23191fec7ac07c69742a7652c8c56f289e7c523"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "76515ba38c574d623f9d297c5c48b37c1c9c3b34",
+  "branch": "task/T-MG-13-gate-r5-fixes"
 }
