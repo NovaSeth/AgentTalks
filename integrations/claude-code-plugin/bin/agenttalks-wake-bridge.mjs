@@ -5,7 +5,7 @@
  *
  *   agenttalks-wake-bridge.mjs [--port 8790] [--host 127.0.0.1] [--allow-public]
  *                              [--secrets-file ~/.config/agenttalks/wake-bridge.json]
- *                              [--allowed-tools "mcp__plugin_agenttalks_agenttalks__reply,mcp__plugin_agenttalks_agenttalks__mark_read"]
+ *                              [--allowed-tools "mcp__atwake__read_conversation,mcp__atwake__read_thread,mcp__atwake__reply,mcp__atwake__mark_read"]
  *                              [--claude claude]
  *                              [--server-url https://your-server]   (for the env pair)
  *
