@@ -759,3 +759,42 @@ test("T-MG-46: a range owed under a session that has ended is not re-read by its
   await settle();
   assert.equal(rereads(), 1);
 });
+
+// ---- T-MG-46 fix round 1 (codex review-r1 F1): the cleanup of a stale re-read drops only its own session's debt
+test("r1 F1 (codex repro): a re-read of an ended session that lands late keeps the new session's owed range", async (t) => {
+  await heldResume(t, /never/);
+  hold = null;
+  await settle();
+  general();
+  // Two reaction refreshes of message 1 overlap; their re-read is held before its cut.
+  let deliver0!: () => void;
+  preHolds = [{ match: /before=2&limit=1/, gate: new Promise<void>((r) => { deliver0 = r; }) }];
+  reacted(1);
+  reacted(1);
+  await settle();
+  const releaseOld = holdReread();
+  deliver0();
+  await settle();
+  assert.equal(cappedReads(), 1, requests.join(" "));
+  api.newSessionGeneration();         // the session changes while that re-read is in the air
+  // The new session: A (sent first, cut after the edit) and B (sent second, cut before it) for message 1.
+  let deliverA!: () => void;
+  let deliverB!: () => void;
+  preHolds.push({ match: /before=2&limit=1$/, gate: new Promise<void>((r) => { deliverA = r; }) });
+  onceHolds = [{ match: /before=2&limit=1$/, gate: new Promise<void>((r) => { deliverB = r; }) }];
+  reacted(1);
+  reacted(1);
+  await settle();
+  server5[0] = edited(1, "new-session-latest");
+  reactions5 = { 1: thumbs("nestor") };
+  deliverA();
+  await settle();
+  deliverB();
+  await settle();
+  releaseOld();
+  await settle();
+  t.mock.timers.tick(60000);
+  await settle();
+  assert.equal(bodyOf(1), "new-session-latest");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+});
