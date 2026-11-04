@@ -21,6 +21,7 @@ import { frameMany } from "../lib/frame.mjs";
 import { createStdioServer } from "../lib/mcp.mjs";
 import { deriveSessionId } from "../lib/sessions.mjs";
 import { HEARTBEAT_REFRESH_MS, claudeAncestor, heartbeatFile, heartbeatFor, writeHeartbeat } from "../lib/launch.mjs";
+import { heartbeatMs, presenceBody, processAlive, startHeartbeat } from "../lib/heartbeat.mjs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -194,6 +195,22 @@ function heartbeat(state) {
   }
   // "pause" (reconnecting): not refreshed, so it goes stale unless the stream comes back.
 }
+// Presence heartbeat (lib/heartbeat.mjs): this server delivers while its stream is open, so it
+// keeps the session fresh then; a reconnecting or stopped stream stops the beat (the monitor,
+// if it takes over, starts its own).
+/** @type {ReturnType<typeof startHeartbeat> | null} */
+let presenceTimer = null;
+/** @param {boolean} on */
+function presenceBeat(on) {
+  if (!on) { presenceTimer?.stop(); presenceTimer = null; return; }
+  if (presenceTimer || !api || !sessionId || !claude) return;
+  const pid = claude.pid;
+  presenceTimer = startHeartbeat({
+    api, sessionId, body: presenceBody({ sessionId, cwd }), intervalMs: heartbeatMs(process.env),
+    alive: () => processAlive(pid), log,
+  });
+}
+process.on("exit", () => presenceBeat(false));
 // At a stop, messages still held by the rate limit are NOT flushed: they stay uncommitted (the
 // heartbeat carries the delivered cursor only), and the monitor that takes over replays them.
 process.on("exit", () => beat("closed"));
@@ -247,6 +264,7 @@ async function startFeed() {
       // The heartbeat says "this channel delivers": only while the stream is open. During a
       // reconnect it is not refreshed and goes stale; a dead token closes it at once.
       heartbeat(heartbeatFor(state));
+      presenceBeat(state === "open");
     },
   });
   // The first contact can fail (server down while the session starts): retry with backoff

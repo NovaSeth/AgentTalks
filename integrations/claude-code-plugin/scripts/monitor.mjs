@@ -23,6 +23,8 @@ import { resolveIdentity, describeIdentity, expectedPrincipal, principalProblem 
 import { createFeed } from "../lib/feed.mjs";
 import { createApi } from "../lib/api.mjs";
 import { frameLine } from "../lib/frame.mjs";
+import { heartbeatMs, presenceBody, processAlive, startHeartbeat } from "../lib/heartbeat.mjs";
+import { deriveSessionId } from "../lib/sessions.mjs";
 import {
   channelAlive, claudeAncestor, heartbeatFile, monitorMode, readHeartbeat, removeHeartbeat,
 } from "../lib/launch.mjs";
@@ -174,11 +176,28 @@ const feed = createFeed({
   },
 });
 
+// From here on this process delivers (run mode, or a takeover from the channel): it also keeps
+// the presence fresh, while the Claude Code process it belongs to lives and the session id is
+// known. Stopped first thing at a stop, so a beat cannot revive a session SessionEnd closed.
+const claudeProc = claudeAncestor();
+const claudeSession = process.env.CLAUDE_CODE_SESSION_ID;
+const presenceBeat = claudeProc && claudeSession
+  ? startHeartbeat({
+    api: createApi(identity, { timeoutMs: 5000 }),
+    sessionId: deriveSessionId(claudeSession),
+    body: presenceBody({ sessionId: deriveSessionId(claudeSession), cwd }),
+    intervalMs: heartbeatMs(env),
+    alive: () => processAlive(claudeProc.pid),
+    log,
+  })
+  : null;
+
 let finishing = false;
 /** @param {number} code @param {string} [notice] */
 async function finish(code, notice) {
   if (finishing) return;
   finishing = true;
+  presenceBeat?.stop();
   feed.stop();
   // Let events already received be printed, then save. Both cursors are DELIVERED cursors
   // (lib/feed.mjs): when the wait runs out with events still undecided (a lookup that hangs)
