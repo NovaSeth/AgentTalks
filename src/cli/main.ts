@@ -22,7 +22,7 @@ import {
   type ActorKind,
 } from "../core/actors.ts";
 import { createChannel, getBySlug, join as joinConversation } from "../core/conversations.ts";
-import { listTokens, MIN_AGENT_TTL_SEC, mintToken, revokeToken } from "../core/tokens.ts";
+import { listTokens, MIN_AGENT_TTL_SEC, mintToken, revokeToken, securityLog } from "../core/tokens.ts";
 import { createInvite, listInvites, revokeInvite } from "../core/invites.ts";
 import { importTalkHome } from "../importer/talk.ts";
 import { registerWake } from "../core/wake.ts";
@@ -417,6 +417,7 @@ function cmdInvite(rest: string[], args: Args): number {
       makeAdmin: args.flags.admin === true,
       note: flagStr(args, "note"),
     });
+    securityLog("invite_minted", { inviteId: info.id, by: "cli" });
     process.stdout.write(`${code}\n`);
     const lim = [
       info.usesLeft === null ? "bez limitu uzyc" : `${info.usesLeft} uzyc`,
