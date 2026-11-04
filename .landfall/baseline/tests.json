@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "b3dfe425e4516f0c60020731b120c18fbb9a69de",
-  "collectedAt": "2026-11-04T10:23:34.706Z",
+  "head": "7da54b6bec81346e0ec315525091a035cbaf9d2b",
+  "collectedAt": "2026-11-04T11:43:43.358Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -26,6 +26,11 @@
     },
     {
       "id": "[\"\",\"(c) a legacy entry without ownerId goes to the marker's account once, never to another\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"--no-ui is a boolean flag and does not eat the next argument\",1]",
       "file": "",
       "skipped": false
     },
@@ -96,6 +101,11 @@
     },
     {
       "id": "[\"\",\"AGENTTALKS_DATA selects the data directory\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"AGENTTALKS_UI parsing: default on; 0/false/no/off turn it off; 1/true/yes/on keep it on\",1]",
       "file": "",
       "skipped": false
     },
@@ -1751,6 +1761,26 @@
     },
     {
       "id": "[\"\",\"UI modules: every import has a corresponding export\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"UI off: the site gate does not apply (there is no UI to gate), the API stays open to tokens\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"UI off: the web UI paths answer 404 ui_disabled; API, MCP and onboarding keep working\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"UI off: with a valid agent token MCP lists tools and SSE delivers a posted message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"UI on (default): the shell, assets and health work as before\",1]",
       "file": "",
       "skipped": false
     },
@@ -5001,5 +5031,5 @@
     }
   ],
   "failing": [],
-  "sha256": "e07bdd16e685407a12c149a124c3b37dc68ea242db6a2782a9e84078060c4a2a"
+  "sha256": "9a5afd3dec704243541a487c1b18c48c1a6c3247aa6511bc66c9b0e574f5f07e"
 }

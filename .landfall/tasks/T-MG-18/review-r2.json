@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 121,
+      "rule": "REV-2",
+      "text": "Item 2: previous F1 ADDRESSED (all three reproductions pass), but successful catch-up deletes floors that this guard prevents recapturing. In-memory ui-t18-catchup test: catch up 1..31, drop again, add 32..62 and refresh 33..62 before reconnect. Output: count=61, missing32=true, /5/messages?after=62. Capture floors for each new break without overwriting unresolved floors; add this regression. An in-memory recapture change makes it pass."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 177,
+      "rule": "REV-2",
+      "text": "Item 2: retained gapFloors are ignored after SSE advances sseCursor. In-memory ui-t18-catchup test (FakeEventSource.CLOSED=2): load empty 4/5, add 1..31 to 5, deliver SSE 31 during 4's catch-up, fail 5's after page, then reconnect. Output: count=30, first=2, stream=/api/events?after=31, pages=[]. Retry pending floors independently of the live cursor and add this regression. An in-memory catch-up condition change restores all 31 messages."
+    }
+  ],
+  "run": "codex-T-MG-18-reviewer-2",
+  "sha256": "4fc2c86e99e7ce7b56bb97817bc11b0df74bb434e22cd79130f0044c8d9325fe"
+}

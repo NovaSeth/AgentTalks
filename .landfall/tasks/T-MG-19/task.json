@@ -13,8 +13,8 @@
       "at": "2026-11-04T11:11:52.947Z"
     }
   ],
-  "status": "new",
-  "round": 0,
+  "status": "done",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-04T11:11:32.371Z",
@@ -33,8 +33,104 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T11:11:53.891Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-19-install-guide",
+        "base": "b8bae5e4697a970c5d43f201a88b62c57198bdd9",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-19"
+      }
+    },
+    {
+      "at": "2026-11-04T11:12:50.580Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "b8bae5e4697a970c5d43f201a88b62c57198bdd9",
+        "note": "install guide + API-only switch"
+      }
+    },
+    {
+      "at": "2026-11-04T11:26:00.897Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
+      }
+    },
+    {
+      "at": "2026-11-04T11:32:19.817Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T11:32:20.076Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 2
+      }
+    },
+    {
+      "at": "2026-11-04T11:38:54.810Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T11:38:55.091Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 2,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T11:43:42.975Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T11:43:43.358Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "7da54b6bec81346e0ec315525091a035cbaf9d2b",
+        "class": "standard",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T11:50:38.552Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "7da54b6bec81346e0ec315525091a035cbaf9d2b"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "b8bae5e4697a970c5d43f201a88b62c57198bdd9",
+  "branch": "task/T-MG-19-install-guide"
 }

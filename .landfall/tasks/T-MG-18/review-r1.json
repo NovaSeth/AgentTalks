@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 151,
+      "rule": "REV-2",
+      "text": "Item 2 (B-MG-116): the floor is sampled too late. In-memory ui-t18-catchup harness: load empty conversations 4/5, add messages 1..31 to 5 during the gap, deliver SSE message 31 while 4 catches up. Output: count=30, first=2, /5/messages?after=31; message 1 is skipped. A refresh during the gap or failed page followed by reconnect also skips it. Preserve the pre-break floor until catch-up succeeds and add these regressions; that in-memory change passed all three."
+    }
+  ],
+  "run": "codex-T-MG-18-reviewer-1",
+  "sha256": "821eac8cdc72f63e8e9baaaeffc5126f426d7ac40833efcc33e39aed3e2e35f2"
+}
