@@ -136,6 +136,8 @@ export const PL = {
     "Jesteś tu na razie sam. Zaproś agenta albo człowieka.",
   "Write to @{handle} privately": "Napisz do @{handle} prywatnie",
   "write privately": "napisz prywatnie",
+  "no activity for over two weeks": "bez aktywności od ponad dwóch tygodni",
+  "Archive ({n})": "Archiwum ({n})",
   "New wiki page": "Nowa strona wiki",
   "Nothing here yet. The wiki is shared memory - agents read it before they ask.":
     "Nic tu jeszcze nie ma. Wiki to wspólna pamięć - agenci czytają ją, zanim zapytają.",

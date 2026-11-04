@@ -41,16 +41,18 @@ export function showNewsModal(news, poZamknieciu) {
       <div class="row"><button class="btn" id="news-ok">${t("Got it, thanks")}</button></div>`,
   { modalClass: "wide news-modal" });
   let zamkniete = false;
-  const koniec = () => { if (zamkniete) return; zamkniete = true; poZamknieciu?.(); };
+  const koniec = () => {
+    if (zamkniete) return;
+    zamkniete = true;
+    document.removeEventListener("keydown", onEscape, true);
+    poZamknieciu?.();
+  };
+  const onEscape = (e) => { if (e.key === "Escape") koniec(); };
   modal.querySelector("#news-ok").addEventListener("click", () => { close(); koniec(); });
   // Escape and a backdrop click close the window without going through our
   // button - without this the greeting queue would stall forever.
   modal.closest(".overlay").addEventListener("click", (e) => { if (e.target === e.currentTarget) koniec(); });
-  document.addEventListener("keydown", function esc(e) {
-    if (e.key !== "Escape") return;
-    document.removeEventListener("keydown", esc, true);
-    koniec();
-  }, true);
+  document.addEventListener("keydown", onEscape, true);
 }
 
 export async function openNotificationsView() {

@@ -25,6 +25,12 @@ export type Actor = {
    *  it (`/api/actors/<id>/avatar?v=<avatar>`) - the fingerprint in the URL makes an avatar
    *  change visible immediately despite long caching. */
   avatar: string | null;
+  /** Unix seconds of the actor's most recent trace: last visible public message, last session heartbeat,
+   *  last token use or account creation, whichever is newest. Computed, not stored so the UI can
+   *  fade actors idle for weeks and fold months-idle ones into an archive, and the state
+   *  reverses itself the moment the actor does anything. Only listActors() fills it in;
+   *  single-actor reads do not pay for the aggregate. */
+  lastActiveAt?: number;
 };
 
 type ActorRow = {
@@ -105,10 +111,23 @@ export function actorsByIds(
 }
 
 export function listActors(ctx: Ctx): Actor[] {
+  // created_at is the floor: a freshly invited actor has no message and no session yet, and
+  // without the floor they would be born "idle for years" and start life in the archive.
+  // The directory is shared by all viewers, so message activity must be public and undeleted.
+  // Correlated lookups use actor indexes instead of materializing the complete history.
   const rows = ctx.db
-    .prepare("SELECT * FROM actors WHERE disabled_at IS NULL ORDER BY handle")
-    .all() as ActorRow[];
-  return rows.map(toActor);
+    .prepare(`
+      SELECT a.*, MAX(a.created_at,
+        COALESCE((SELECT MAX(m.ts) FROM messages m
+          JOIN conversations c ON c.id = m.conversation_id
+          WHERE m.actor_id = a.id AND m.deleted_at IS NULL AND c.kind = 'public'), 0),
+        COALESCE((SELECT MAX(last_seen_at) FROM sessions WHERE actor_id = a.id), 0),
+        COALESCE((SELECT MAX(last_used_at) FROM tokens WHERE actor_id = a.id), 0)) AS last_active_at
+      FROM actors a
+      WHERE a.disabled_at IS NULL ORDER BY a.handle
+    `)
+    .all() as Array<ActorRow & { last_active_at: number }>;
+  return rows.map((r) => ({ ...toActor(r), lastActiveAt: r.last_active_at }));
 }
 
 /** Disabling an account: the actor stops passing authentication (token, password, passkey),

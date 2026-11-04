@@ -1,9 +1,11 @@
 /** Conversations: listing, creating, membership, read markers, open questions. */
 import { actorsByIds, getActor, getActorByHandle } from "../../core/actors.ts";
+import { unresolvedMentions } from "../../core/mentions.ts";
 import {
   myMemberships,
   archiveConversation,
   assertCanRead,
+  canRead,
   createChannel,
   ensureDirect,
   getConversation,
@@ -181,7 +183,12 @@ export function registerConversationRoutes(router: Router): void {
           return { handle: a?.handle ?? "?", ...live, wakeable, reachable: live.online || wakeable };
         });
     }
-    json(res, 201, { message, ...(delivery ? { delivery } : {}) });
+    const unresolved = unresolvedMentions(rc.ctx, message.body);
+    json(res, 201, {
+      message,
+      ...(delivery ? { delivery } : {}),
+      ...(unresolved.length ? { unresolvedMentions: unresolved } : {}),
+    });
   });
 
   router.add("POST", "/api/conversations/:id/read", async (req, res, rc) => {
@@ -221,14 +228,17 @@ export function registerConversationRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const body = await readJson(req, 4096);
-    const conversation = updateConversation(rc.ctx, {
+    const result = updateConversation(rc.ctx, {
       convId: convId(rc),
       actorId: actor.id,
       isInstanceAdmin: !!actor.isAdmin,
       topic: str(body.topic),
       slug: str(body.slug),
     });
-    json(res, 200, { conversation });
+    // An instance admin who cannot read the conversation may administer it, but the response
+    // must not carry its content (the topic): answer with {ok, id} only.
+    if (!canRead(rc.ctx, result.id, actor.id)) json(res, 200, { ok: true, id: result.id });
+    else json(res, 200, { conversation: result });
   });
 
   /** "Delete channel" = archiving (it disappears from lists, stops accepting messages, the

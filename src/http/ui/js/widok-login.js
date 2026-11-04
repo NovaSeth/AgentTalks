@@ -6,7 +6,7 @@ import { mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./dane.js";
 import { $app, escapeHtml, openModal } from "./dom.js";
 import { LANGS, lang, setLang, t } from "./i18n.js";
 import { iconChat, iconFingerprint } from "./ikony.js";
-import { applyUnreadRows, rebuildMentionRe, resetMentionRe, state, widok } from "./stan.js";
+import { applyUnreadRows, rebuildMentionRe, resetState, state, widok } from "./stan.js";
 import { showToast } from "./toasty.js";
 import { disconnectSSE } from "./zdarzenia-sse.js";
 
@@ -56,9 +56,16 @@ export async function doLogout() {
   stopPresenceHeartbeat();
   stopDigestTimer();
   disconnectSSE();
-  resetMentionRe();
-  state.actor = null;
-  state.memberships = {};
+  resetState();
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key === "atalks_last_conv" || key === "atalks_recent"
+          || key?.startsWith("atalks_draft_") || key?.startsWith("atalks_wiki_draft_")) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch { /* Storage may be unavailable in private browsing. */ }
   document.title = "AgentTalks";
   widok.render();
 }

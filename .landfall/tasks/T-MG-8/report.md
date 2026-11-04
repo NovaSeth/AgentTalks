@@ -140,3 +140,51 @@ Pełny raport przekazano w odpowiedzi końcowej.
 
 ## Orchestrator gate re-run (outside the codex sandbox)
 npm test: 339 pass, 0 fail. npm run typecheck: clean. Committed as 1f1754b. B-MG-43 showNewsModal part continues in brief amendment 1 (scope extended to widok-powiadomienia.js).
+
+## Fix round 1
+
+## Amendment 1
+
+Status: DONE_WITH_CONCERNS
+
+Worktree: `/Users/michal/Documents/Code/AgentTalks-wt/T-MG-8`  
+Branch: `task/T-MG-8-fix-c-ui`  
+Commits: none; changes left uncommitted for the orchestrator. HEAD remains `1f1754b`. No push.
+
+| Finding | Fix and regression evidence |
+|---|---|
+| **B-MG-43** | News-modal cleanup removes its document keydown listener on button, backdrop and Escape closure. Three tests repeat each closure three times and verify listener baseline and exactly one queue callback. RED reproduced leaks; GREEN: 3/3. |
+| **B-MG-58 / UX-F3** | Successful PATCH removes the editor before applying the message update. Escape, unchanged text and empty text close editing. Failed saves and unrelated redraws preserve drafts. Tests include a save completing after a redraw. RED reproduced stuck editors; GREEN: 7/7. |
+| **B-MG-59 / UX-F4** | Shared conversation navigation opens the target reply’s thread, loads uncached roots, scrolls and flashes the reply. Initial refreshes finish before highlighting. Guards reject stale navigation responses. Tests exercise notification and search clicks, top-level targets and delayed responses. RED reproduced missing destinations and races; GREEN: 8/8. |
+
+Files changed:
+
+- `src/http/ui/js/widok-powiadomienia.js`
+- `src/http/ui/js/akcje.js`
+- `src/http/ui/js/widok-czat.js`
+- New `test/fixes/t-mg-8-ui-2.test.ts`
+
+Both entry points use the shared navigation fix; `szukaj.js` required no edit. No dependencies added or existing tests changed.
+
+| Gate | Result | Exit |
+|---|---|---:|
+| Amendment tests | 18 passed | 0 |
+| Combined UI regression, parsing and startup checks | 39 passed | 0 |
+| `npm test` | 357 total: 250 passed, 107 failed | 1 |
+| `npm run typecheck` | Passed | 0 |
+| Secrets range `0561f866f0737576cc087c30a3cdaff79a1ed8b3..HEAD` | Clean | 0 |
+| Secrets artifact scans of all four changed files | Clean, including uncommitted changes | 0 |
+| `git diff --check` | Passed | 0 |
+
+All eight mutation checks failed as expected; fixes were restored and tests rerun.
+
+The full-suite failures are unchanged from baseline: **339 total, 232 passed, 107 failed** before this amendment. Every failure reports `listen EPERM: operation not permitted 127.0.0.1`. Affected files: `test/cli/atalk.test.ts` (3), `test/dokumentacja.test.ts` (1), `test/e2e/rozmowa.test.ts` (2), `test/http/api.test.ts` (71), `test/http/sse.test.ts` (12), `test/http/ui-moduly.test.ts` (2), and `test/mcp/mcp.test.ts` (16). No new failing tests.
+
+Validation runs real UI modules with DOM/HTTP boundary doubles; no live-browser run was performed. The orchestrator must rerun the full suite outside this restricted sandbox before accepting the gate.
+
+Rules applied: COD-1, COD-2, COD-3, ORC-17, REV-9, PRI-15.  
+DISPUTED: none. Shared scope gaps: none.
+
+## Orchestrator gate re-run
+npm test 357 pass / 0 fail; typecheck clean; committed as the commit above (amendment 1).
+Status: DONE

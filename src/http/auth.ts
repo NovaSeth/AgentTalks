@@ -5,12 +5,12 @@
  * `execFile(TALK_BIN, args, { env: { TALK_SID: asSid } })` let the server (and any process
  * with access to the directory) write on somebody else's behalf.
  */
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Ctx } from "../core/ctx.ts";
 import type { Config } from "../config.ts";
 import type { Actor } from "../core/actors.ts";
 import { getActor, sessionEpoch } from "../core/actors.ts";
-import { tokenTrouble, verifyToken } from "../core/tokens.ts";
+import { securityLog, tokenTrouble, verifyToken } from "../core/tokens.ts";
 import { forbidden, unauthorized } from "../core/errors.ts";
 import type { Req, RouteCtx } from "./router.ts";
 
@@ -50,8 +50,62 @@ export function makeCookie(
     "SameSite=Lax",
     `Max-Age=${Math.max(ttlSec, 0)}`,
   ];
-  if (secure || config.trustProxy) attrs.push("Secure");
+  if (cookieIsSecure(config, secure)) attrs.push("Secure");
   return attrs.join("; ");
+}
+
+export const DEVICE_COOKIE = "at_dev";
+const DEVICE_TTL_SEC = 180 * 24 * 3600;
+
+function deviceMac(
+  config: Config, actorId: number, nonce: string, issuedAt: number, epoch: number,
+): string {
+  return createHmac("sha256", config.secret)
+    .update(`dev|${actorId}|${nonce}|${issuedAt}|${epoch}`).digest("hex");
+}
+
+/**
+ * The device cookie (D-MG-14, OWASP Authentication Cheat Sheet):
+ * "<hmac>.<nonce>.<actorId>.<issuedAt>.<epoch>", set after a successful login. It grants no
+ * session, only an exemption from the per-account failure cap for THIS actor. Path is limited
+ * to the password login endpoint. The issue time and the actor's session epoch are inside the
+ * signed value: the 180-day expiry is enforced on the server, and a password change, a
+ * disable or a logout-everywhere (all bump the epoch) revoke every device cookie of the actor.
+ */
+export function makeDeviceCookie(
+  ctx: Ctx, config: Config, actorId: number, secure: boolean,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): string {
+  const nonce = randomBytes(16).toString("hex");
+  const epoch = sessionEpoch(ctx, actorId);
+  const mac = deviceMac(config, actorId, nonce, nowSec, epoch);
+  const attrs = [
+    `${DEVICE_COOKIE}=${mac}.${nonce}.${actorId}.${nowSec}.${epoch}`,
+    "Path=/api/login", "HttpOnly", "SameSite=Lax", `Max-Age=${DEVICE_TTL_SEC}`,
+  ];
+  if (cookieIsSecure(config, secure)) attrs.push("Secure");
+  return attrs.join("; ");
+}
+
+/** Whether the request carries a valid, unexpired device cookie issued for exactly this actor
+ *  under the actor's CURRENT session epoch. */
+export function hasDeviceCookie(
+  ctx: Ctx, config: Config, req: Req, actorId: number,
+  nowSec: number = Math.floor(Date.now() / 1000),
+): boolean {
+  const raw = parseCookies(req.headers.cookie)[DEVICE_COOKIE];
+  if (!raw) return false;
+  const parts = raw.split(".");
+  if (parts.length !== 5) return false;
+  const [mac, nonce, idPart, issuedPart, epochPart] = parts;
+  if (!mac || !nonce || Number(idPart) !== actorId) return false;
+  if (!/^\d+$/.test(issuedPart) || !/^\d+$/.test(epochPart)) return false;
+  const issuedAt = Number(issuedPart), epoch = Number(epochPart);
+  if (issuedAt > nowSec + 60 || nowSec - issuedAt > DEVICE_TTL_SEC) return false;
+  const a = Buffer.from(mac, "utf8");
+  const b = Buffer.from(deviceMac(config, actorId, nonce, issuedAt, epoch), "utf8");
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
+  return epoch === sessionEpoch(ctx, actorId);
 }
 
 /** Whether this request arrived over HTTPS. Behind a proxy the truth is in X-Forwarded-Proto;
@@ -142,8 +196,33 @@ export function requireAuth(rc: RouteCtx): Auth {
 
 export function requireAdmin(rc: RouteCtx): Auth {
   const auth = requireAuth(rc);
-  if (!auth.actor.isAdmin) throw forbidden("nie_admin", "ta operacja wymaga uprawnien admina");
+  if (!auth.actor.isAdmin) {
+    securityLog("admin_denied", { actorId: auth.actor.id, guard: "admin" });
+    throw forbidden("nie_admin", "ta operacja wymaga uprawnien admina");
+  }
   return auth;
+}
+
+/** Admin operations that create or change HUMAN accounts: an admin flag on an agent is not
+ *  enough, the caller has to be a human admin (the same guard as /api/admin). */
+export function requireHumanAdmin(rc: RouteCtx): Auth {
+  const auth = requireAuth(rc);
+  if (!auth.actor.isAdmin || auth.actor.kind !== "human") {
+    securityLog("admin_denied", { actorId: auth.actor.id, guard: "human_admin" });
+    throw forbidden("tylko_admin_czlowiek", "ta operacja jest dla zalogowanego czlowieka-admina");
+  }
+  return auth;
+}
+
+/**
+ * Re-checks, right before something private is delivered, that the credential which started a
+ * long wait still holds: the same check SSE does on every ping. Returns null when the request
+ * no longer authenticates, or authenticates as somebody else. The long-poll uses it, and so
+ * can the MCP talk_read wait.
+ */
+export function stillAuthenticated(ctx: Ctx, config: Config, req: Req, actorId: number): Auth | null {
+  const now = authenticate(ctx, config, req);
+  return now && now.actor.id === actorId ? now : null;
 }
 
 /**
@@ -167,4 +246,10 @@ export function assertCsrf(rc: RouteCtx, req: Req): void {
 /**  own frontend knows it from login. One secret is enough, because the input is already secret. */
 export function csrfFor(sessionCookieValue: string): string {
   return createHmac("sha256", "at-csrf").update(sessionCookieValue).digest("hex").slice(0, 32);
+}
+
+/** A cookie is Secure when the request is secure, behind a trusted proxy, or when the
+ *  deployment's public address is https (so it never travels over plain http). */
+function cookieIsSecure(config: Config, secure: boolean): boolean {
+  return secure || config.trustProxy || /^https:\/\//i.test(config.baseUrl ?? "");
 }

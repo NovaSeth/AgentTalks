@@ -1,0 +1,2593 @@
+{
+  "schema": 1,
+  "task": "T-MG-13",
+  "head": "b23191fec7ac07c69742a7652c8c56f289e7c523",
+  "gatesSha": "6748d3280c3d894aeee546d52b4cfeb374b94c2a6e123f58cb1ba32d325757c9",
+  "baselineSha": "75d3af9db0fc538ffc489584e3c310c4578996d3e20d5b2cf2306ab9080558ff",
+  "class": "critical",
+  "startedAt": "2026-11-04T00:51:54.119Z",
+  "durationMs": 14645,
+  "gates": [
+    {
+      "name": "test",
+      "cmd": "NODE_OPTIONS=\"$NODE_OPTIONS --test-reporter=tap\" npm run test",
+      "exit": 0,
+      "durationMs": 10655,
+      "result": "pass"
+    },
+    {
+      "name": "typecheck",
+      "cmd": "npm run typecheck",
+      "exit": 0,
+      "durationMs": 3470,
+      "result": "pass"
+    }
+  ],
+  "inventory": {
+    "collector": "node-test",
+    "total": 492,
+    "added": [
+      "[\"\",\"A2A-F1: every POST/PUT route named in the skill exists in the router\",1]",
+      "[\"\",\"A2A-F1: the skill documents reply, ask, answer, leases, join and wake\",1]",
+      "[\"\",\"A2A-F2: talk_typing declares sec (1..300) in its schema and applies it as the TTL\",1]",
+      "[\"\",\"A2A-F5: a fresh actor's first talk_status is under 10 KB and points at the full news history\",1]",
+      "[\"\",\"A2A-F5: leadingSections keeps the first section always and whole sections only\",1]",
+      "[\"\",\"A2A-F6/F7: bare 'general' gets an address hint; '@@ghost' is reported once\",1]",
+      "[\"\",\"A2A-F7: unresolvedMentions in POST messages 201 and in talk_send\",1]",
+      "[\"\",\"A2A-F8: a missing atalk prints exactly one line on stderr and nothing on stdout\",1]",
+      "[\"\",\"B-MG-100: a non-member admin PATCH response carries no topic, a channel admin gets the conversation\",1]",
+      "[\"\",\"B-MG-101: a thread reply resolving after switching threads is not inserted into the new thread\",1]",
+      "[\"\",\"B-MG-101: a thread reply resolving while the same thread is open is shown\",1]",
+      "[\"\",\"B-MG-101: closing the panel during a thread send neither throws nor inserts anything\",1]",
+      "[\"\",\"B-MG-10: a page whose single line exceeds the budget is NOT recorded as read; blind write gets 409\",1]",
+      "[\"\",\"B-MG-11: talk_read enforces the budget on the final output and the cursor continues\",1]",
+      "[\"\",\"B-MG-14: a 2 MB POST /mcp body gets 413 with an actionable JSON error\",1]",
+      "[\"\",\"B-MG-14: a 51-call JSON-RPC batch gets 400, 50 calls and single calls still work\",1]",
+      "[\"\",\"B-MG-14: malformed JSON is a 400, not a crash\",1]",
+      "[\"\",\"B-MG-15: the 4th concurrent talk_read wait of one actor returns at once with a hint\",1]",
+      "[\"\",\"B-MG-18: an evil Host header is HTML-escaped in /install and /skill.md\",1]",
+      "[\"\",\"B-MG-20a: a token over plain http to a non-loopback host warns on stderr; loopback does not\",1]",
+      "[\"\",\"B-MG-20b: a project .agenttalks.json not written by atalk warns; login writes the marker\",1]",
+      "[\"\",\"B-MG-20c: an EMPTY AGENTTALKS_URL / AGENTTALKS_TOKEN does not shadow the other names\",1]",
+      "[\"\",\"B-MG-21: talk_send description says @a creates the conversation and may wake the addressee\",1]",
+      "[\"\",\"B-MG-35: edits, deletes and replayed updates replace messages without new-message effects\",1]",
+      "[\"\",\"B-MG-36: a thread send response upserts the reply already received over SSE\",1]",
+      "[\"\",\"B-MG-37: Enter then further typing keeps the composer, focus and new draft after send\",1]",
+      "[\"\",\"B-MG-37: a response after switching conversations preserves both new drafts\",1]",
+      "[\"\",\"B-MG-37: a successful send only clears unchanged sent text\",1]",
+      "[\"\",\"B-MG-37: sending a main-composer thread reply does not rebuild the composer\",1]",
+      "[\"\",\"B-MG-37: typing the same message again during a send preserves the new text\",1]",
+      "[\"\",\"B-MG-38: REST upserts do not advance the cursor used to reconnect SSE\",1]",
+      "[\"\",\"B-MG-39: a wiki title cannot inject an internal inline placeholder\",1]",
+      "[\"\",\"B-MG-39: markdown still escapes hostile HTML, URLs and wiki titles\",1]",
+      "[\"\",\"B-MG-39: mentions never rewrite link destinations or code\",1]",
+      "[\"\",\"B-MG-39: user NUL placeholders remain text instead of referencing code blocks\",1]",
+      "[\"\",\"B-MG-4/13: a newline in a body cannot forge a human's row; it stays a quoted line\",1]",
+      "[\"\",\"B-MG-4/13: session label/doing and topics are single-lined and capped at 120\",1]",
+      "[\"\",\"B-MG-4/13: talk_read, talk_log, talk_thread, wiki_read quote every body line and open with the note\",1]",
+      "[\"\",\"B-MG-41: logout clears all account state and drafts while preserving browser preferences\",1]",
+      "[\"\",\"B-MG-43: confirmation closed by Escape releases every keydown listener\",1]",
+      "[\"\",\"B-MG-43: confirmation closed by backdrop releases every keydown listener\",1]",
+      "[\"\",\"B-MG-43: confirmation closed by cf-no releases every keydown listener\",1]",
+      "[\"\",\"B-MG-43: confirmation closed by cf-yes releases every keydown listener\",1]",
+      "[\"\",\"B-MG-43: news closed by Escape releases listeners and advances the queue once\",1]",
+      "[\"\",\"B-MG-43: news closed by backdrop releases listeners and advances the queue once\",1]",
+      "[\"\",\"B-MG-43: news closed by button releases listeners and advances the queue once\",1]",
+      "[\"\",\"B-MG-49: a plain http instance advertises http://; forwarded headers only with trustProxy\",1]",
+      "[\"\",\"B-MG-4: both skills carry the quoting paragraph; A2A-F8: neither claims npm i -g agenttalks\",1]",
+      "[\"\",\"B-MG-4: the hook quotes every line of other actors' text and opens with the standing note\",1]",
+      "[\"\",\"B-MG-58: Enter saves an inline edit and replaces the editor with the new text\",1]",
+      "[\"\",\"B-MG-58: Enter with empty text closes the editor without saving\",1]",
+      "[\"\",\"B-MG-58: Enter with unchanged text closes the editor without saving\",1]",
+      "[\"\",\"B-MG-58: Escape cancels an inline edit without restoring it on redraw\",1]",
+      "[\"\",\"B-MG-58: a failed save preserves the editor and its draft\",1]",
+      "[\"\",\"B-MG-58: a live update and a full redraw preserve an unfinished edit\",1]",
+      "[\"\",\"B-MG-58: a save completing after a list redraw closes the restored editor\",1]",
+      "[\"\",\"B-MG-59: a delayed destination refresh cannot open a thread after leaving its conversation\",1]",
+      "[\"\",\"B-MG-59: a delayed thread response cannot replace a newer thread destination\",1]",
+      "[\"\",\"B-MG-59: notification highlights a thread reply in its panel with an uncached root\",1]",
+      "[\"\",\"B-MG-59: notification highlights a thread reply in its panel\",1]",
+      "[\"\",\"B-MG-59: notification highlights a top-level message in the main list\",1]",
+      "[\"\",\"B-MG-59: search highlights a thread reply in its panel with an uncached root\",1]",
+      "[\"\",\"B-MG-59: search highlights a thread reply in its panel\",1]",
+      "[\"\",\"B-MG-59: search highlights a top-level message in the main list\",1]",
+      "[\"\",\"B-MG-99: a removed uploader gets 404 on download and info, a member gets 200\",1]",
+      "[\"\",\"B-MG-99: the owner of a conversation-less, wiki-less file still reads it; wiki files stay public\",1]",
+      "[\"\",\"R1-7a: a private typing location is invisible to a viewer who cannot read it\",1]",
+      "[\"\",\"R1-7b: a token revoked during a talk_read wait delivers nothing\",1]",
+      "[\"\",\"R1-7b: an unrevoked wait still delivers\",1]",
+      "[\"\",\"R1-F1: wiki_read budgets the QUOTED text; many short lines stay near the budget\",1]",
+      "[\"\",\"R1-F2: C0 separators U+001C..U+001E never start an unquoted line in any tool\",1]",
+      "[\"\",\"R1-F2: every C0 control except tab splits lines in the quoting helper\",1]",
+      "[\"\",\"R1-F3: atalk log quotes every body line and opens with the note\",1]",
+      "[\"\",\"R1-F4: a planted project file with an evil url does not receive the env token; login --local trusts it\",1]",
+      "[\"\",\"R1-F4: the hook surfaces the CLI warning line in additionalContext\",1]",
+      "[\"\",\"R1-F5: Content-Length 60 MB gets 413 at once, without the body being sent\",1]",
+      "[\"\",\"R1-F5: a chunked body over the cap gets 413 and the request is destroyed\",1]",
+      "[\"\",\"R1-F6: caller-supplied values are echoed on one line; typing sec is clamped in the echo\",1]",
+      "[\"\",\"hook: a failed mktemp never makes the EXIT trap remove /dev/null (review F7)\",1]",
+      "[\"\",\"scan finding: typing location with a line break never forges a line; talk_typing rejects it\",1]"
+    ],
+    "removed": [],
+    "newlySkipped": [],
+    "allowedBy": [],
+    "weak": false,
+    "tests": [
+      {
+        "id": "[\"\",\"/api/me pokazuje, kto pisze - bez pytania o liste obecnych\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F1: every POST/PUT route named in the skill exists in the router\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F1: the skill documents reply, ask, answer, leases, join and wake\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F2: talk_typing declares sec (1..300) in its schema and applies it as the TTL\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F5: a fresh actor's first talk_status is under 10 KB and points at the full news history\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F5: leadingSections keeps the first section always and whole sections only\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F6/F7: bare 'general' gets an address hint; '@@ghost' is reported once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F7: unresolvedMentions in POST messages 201 and in talk_send\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F8: a missing atalk prints exactly one line on stderr and nothing on stdout\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"AGENTTALKS_DATA wskazuje katalog danych\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-100: a non-member admin PATCH response carries no topic, a channel admin gets the conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-101: a thread reply resolving after switching threads is not inserted into the new thread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-101: a thread reply resolving while the same thread is open is shown\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-101: closing the panel during a thread send neither throws nor inserts anything\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-10: a page whose single line exceeds the budget is NOT recorded as read; blind write gets 409\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-11: talk_read enforces the budget on the final output and the cursor continues\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-14: a 2 MB POST /mcp body gets 413 with an actionable JSON error\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-14: a 51-call JSON-RPC batch gets 400, 50 calls and single calls still work\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-14: malformed JSON is a 400, not a crash\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-15: the 4th concurrent talk_read wait of one actor returns at once with a hint\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-18: an evil Host header is HTML-escaped in /install and /skill.md\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-1: notifications from a private channel disappear after removal, public ones stay\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-20a: a token over plain http to a non-loopback host warns on stderr; loopback does not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-20b: a project .agenttalks.json not written by atalk warns; login writes the marker\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-20c: an EMPTY AGENTTALKS_URL / AGENTTALKS_TOKEN does not shadow the other names\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-21: talk_send description says @a creates the conversation and may wake the addressee\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-23: an ex-member cannot edit or delete in a private channel; no event, no notification\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-23: editing in an archived channel is refused\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-24: force=true wins over a stale baseRevision\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-25: six processes opening the same NEW file at once all succeed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-26: a database from a newer schema is refused with an actionable error\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-28: the notification sweep runs at most once per 60 s\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-30: markRead past the end is clamped, so a later message is unread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-31: a row with the old key format still deduplicates in its own conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-31: the same clientMsgId in two channels creates two messages, a retry still dedups\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-32: unread counts are exact under the cap and capped above it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-32: unreadFor over 200 channels and 300k unread messages stays under 50 ms\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-35: edits, deletes and replayed updates replace messages without new-message effects\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-36: a thread send response upserts the reply already received over SSE\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: Enter then further typing keeps the composer, focus and new draft after send\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: a response after switching conversations preserves both new drafts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: a successful send only clears unchanged sent text\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: sending a main-composer thread reply does not rebuild the composer\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: typing the same message again during a send preserves the new text\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-38: REST upserts do not advance the cursor used to reconnect SSE\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-39: a wiki title cannot inject an internal inline placeholder\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-39: markdown still escapes hostile HTML, URLs and wiki titles\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-39: mentions never rewrite link destinations or code\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-39: user NUL placeholders remain text instead of referencing code blocks\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4/13: a newline in a body cannot forge a human's row; it stays a quoted line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4/13: session label/doing and topics are single-lined and capped at 120\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4/13: talk_read, talk_log, talk_thread, wiki_read quote every body line and open with the note\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-41: logout clears all account state and drafts while preserving browser preferences\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: confirmation closed by Escape releases every keydown listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: confirmation closed by backdrop releases every keydown listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: confirmation closed by cf-no releases every keydown listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: confirmation closed by cf-yes releases every keydown listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: news closed by Escape releases listeners and advances the queue once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: news closed by backdrop releases listeners and advances the queue once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: news closed by button releases listeners and advances the queue once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-47: a bad %-sequence in a wiki X-File-Name is a 400, not a 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-48: a lease does not record a foreign sessionId\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-49: a plain http instance advertises http://; forwarded headers only with trustProxy\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4: both skills carry the quoting paragraph; A2A-F8: neither claims npm i -g agenttalks\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4: the hook quotes every line of other actors' text and opens with the standing note\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-53: GET /api/presence is filtered for the caller\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-53: presenceFor hides private typing and foreign session details\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: Enter saves an inline edit and replaces the editor with the new text\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: Enter with empty text closes the editor without saving\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: Enter with unchanged text closes the editor without saving\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: Escape cancels an inline edit without restoring it on redraw\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: a failed save preserves the editor and its draft\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: a live update and a full redraw preserve an unfinished edit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: a save completing after a list redraw closes the restored editor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: a delayed destination refresh cannot open a thread after leaving its conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: a delayed thread response cannot replace a newer thread destination\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: notification highlights a thread reply in its panel with an uncached root\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: notification highlights a thread reply in its panel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: notification highlights a top-level message in the main list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: search highlights a thread reply in its panel with an uncached root\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: search highlights a thread reply in its panel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: search highlights a top-level message in the main list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-6: whoIsTyping hides a typing location the viewer cannot read\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-7: a foreign sessionId is dropped from a post and does not clear the owner's typing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-99: a removed uploader gets 404 on download and info, a member gets 200\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-99: the owner of a conversation-less, wiki-less file still reads it; wiki files stay public\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-9: a released (successful) savepoint keeps its callbacks\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-9: callbacks of a rolled-back savepoint do not fire, the outer ones do\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"CI: every action is pinned to a full commit SHA (B-MG-12, B-MG-16)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"CI: the pin check can fire (a tag reference is reported)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"CI: the workflow token is read-only by default (B-MG-16)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"DM budzi nieobecnego adresata podpisanym ladunkiem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"Docker: the base image is pinned by digest and only /data is owned by the runtime user (B-MG-17)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"FTS5 jest dostepny i synchronizuje sie triggerem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"GET /api/guidelines zwraca tekst zasad na zadanie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"HEAD na trasie GET odpowiada jak GET, bez ciala (monitoring)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"KAZDE zadeklarowane narzedzie MCP da sie wywolac i zwraca tresc, nie blad protokolu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"MCP bez tokenu daje 401, z tokenem odpowiada na initialize\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"MCP mowi, gdy dostal parametr, ktorego narzedzie nie zna\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"MCP: zdania czytane maszynowo maja staly ksztalt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"NEWS.md ląduje na wiki jako strona z historią, ale nie dokłada rewizji bez zmian\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"POST /api/actors: agent admin 403, non-admin human 403, human admin 201 (B-MG-88)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"PUT /api/wiki/:slug answers 429 after 60 saves in an hour (B-MG-33)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-7a: a private typing location is invisible to a viewer who cannot read it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-7b: a token revoked during a talk_read wait delivers nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-7b: an unrevoked wait still delivers\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F1: wiki_read budgets the QUOTED text; many short lines stay near the budget\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F2: C0 separators U+001C..U+001E never start an unquoted line in any tool\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F2: every C0 control except tab splits lines in the quoting helper\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F3: atalk log quotes every body line and opens with the note\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F4: a planted project file with an evil url does not receive the env token; login --local trusts it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F4: the hook surfaces the CLI warning line in additionalContext\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F5: Content-Length 60 MB gets 413 at once, without the body being sent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F5: a chunked body over the cap gets 413 and the request is destroyed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F6: caller-supplied values are echoed on one line; typing sec is clamped in the echo\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE bez kursora NIE dosyla historii - tylko to, co nadejdzie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE dostarcza wiadomosc do czlonka konwersacji\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE nie dostarcza z konwersacji, ktorej nie jestem czlonkiem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE wznawia sie od kursora i dosyla zaleglosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE wznawia z Last-Event-ID i dosyla backlog wiekszy niz jedna strona\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"Set-Cookie: HttpOnly + SameSite=Lax always; Secure only over https or with trustProxy (B-MG-91)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"UI nie sklada atrybutow zdarzen z danych\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"X-File-Name ze zlym %-kodowaniem daje 400 z instrukcja, nie 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a disabled actor is not woken and is not wakeable (B-MG-3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a failed login writes exactly one security: line without the password (B-MG-51)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a forged or other-actor at_dev does not exempt (item 1c)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a high handle-wide failure count refuses a browser without at_dev (item 3, D-MG-14)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a known browser (valid at_dev) logs in despite the account cap (item 1b)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a message immediately restores an actor silent for 14 days without fetching\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a message immediately restores an actor silent for 90 days without fetching\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a non-member mentioned in a private channel gets no text through notifications or mentions (B-MG-87)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a valid at_dev also skips the IP+handle cap, the plain IP cap stays (item 2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a well-formed 4-part cookie with a wrong MAC for an admin id is 401 on /api/me (B-MG-86)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"actorLiveness: zywa sesja -> online, zakonczona -> nieobecny\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"admin panel routes answer 403 to a non-admin human and 200 to a human admin (B-MG-88)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"adres e-mail nie jest wzmianka\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"adresat znany tylko z katalogu obecnosci daje sie rozwiazac\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"agent wysyla wiadomosc, a drugi ja czyta\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"agenttalks invite create writes an invite_minted line with by cli (item 3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"aktor bez hasla nie zaloguje sie pustym haslem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"aktor i token przechodza przez CLI\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"aktor z zywym SSE nie jest budzony - push juz dotarl\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an '@' prefix does not open fresh limiter buckets (item 1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an actor may save one page at most 60 times per hour; then 429 with an English hint (B-MG-33)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an agent admin cannot create actors, a human admin can (B-MG-8)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an open SSE stream closes shortly after its actor is disabled (B-MG-89)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an open SSE stream closes shortly after its token is revoked (B-MG-89)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"archiveConversation: znika z list, nie przyjmuje wiadomosci, dm nietykalny\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ask i answer odtwarzaja pytanie razem z watkiem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ask publikuje zdarzenie dopiero, gdy pytanie JUZ istnieje (drugie polaczenie)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"at_dev is revoked by a password change, a disable and a logout-everywhere (epoch bump) (B-MG-96)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"at_dev with issuedAt changed to another in-window value and the old MAC is not exempt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"at_dev with the epoch field changed to the current epoch and the old MAC is not exempt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"at_dev: fresh exempts; a validly signed cookie older than 180 days or from the future does not (B-MG-96)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk bez tokenu konczy sie kodem bledu, a nie wyjatkiem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk mowi do zywego serwera: whoami, say, read\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk przyjmuje ATALKS_* obok AGENTTALKS_*, kanoniczne wygrywa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk wiki write --force dziala jako FLAGA, a nie jako tresc strony\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"bez uwierzytelnienia API zwraca 401, nie 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"bind na petli zwrotnej zawsze przechodzi\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"blad domenowy mapuje sie na kod HTTP, nie na 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"both cookies are Secure when baseUrl is https, even on plain http without trustProxy\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"bramka skladni POTRAFI zawiesc - probka celowo zepsuta\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"bramka wylaczona (brak hasla) nie blokuje niczego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"bramka: strona zamknieta bez ciasteczka, wlasciwe haslo wpuszcza, zle nie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"burn: plik znika po pobraniu przez nie-autora, autor nie spala\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clientKey: przy proxy bierze PRAWY czlon XFF (nie spoofowalny lewy)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clientMsgId jest per aktor - dwoch aktorow moze uzyc tego samego id\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clientMsgId przez API: powtorzony POST zwraca to samo id, bez drugiej wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clientMsgId: retry nie dubluje wiadomosci ani zdarzenia\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clone robi spojna kopie z wlasnym sekretem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"concurrent migrations of one file end at one user_version with no duplicated work (B-MG-92)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"cookie sesji jest ODWOLYWALNE: zmiana hasla uniewaznia wydane wczesniej\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"czlowiek i dwoch agentow rozmawiaja przez zywy serwer\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"czlowiek loguje sie i dostaje cookie oraz token CSRF\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"deploy: the site password becomes valid JSON even with quotes and backslashes (B-MG-22)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"deploy: without python3 the helper fails loudly instead of sending an empty body (T-MG-9 review F1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktora\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digest counts exactly under the cap and stops counting at UNREAD_CAP per conversation (B-MG-94)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digest i search nie wyciekaja tresci z cudzego kanalu prywatnego (ACL)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digest streszcza od kotwicy odczytu i wskazuje wzmianki\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digest zwraca null, gdy nic sie nie dzialo\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digestFor on 300k unread rows is fast (B-MG-94)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"displayName domyslnie rowna sie handle i daje sie zmienic bez ruszania handle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"distributed guesser: 25th IP with the right password and no at_dev gets 429, unverified (item 1a)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dlawienie: druga wiadomosc w oknie nie strzela drugi raz\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dluga tresc przechodzi pelny obieg bez obciecia (zgloszenie [71])\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"doing widac w obecnosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"drugi przebieg nie dubluje reakcji, pytan ani znacznikow\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dwie ROZNE etykiety zderzone w jeden handle nie sa zlewane w jednego aktora\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dwie sesje tego samego aktora to jeden rozmowca, bez sufiksow\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dzierzawa przez API: 200 przy zajeciu, 409 z wlascicielem przy odmowie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dzierzawa wygasa po TTL i daje sie przejac\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dzierzawa: jeden bierze, drugi dostaje odmowe z danymi wlasciciela\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"edycja i kasowanie cudzej wiadomosci daje 403\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"edycja przelicza wzmianki od nowa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"edycja wiadomosci aktualizuje indeks wyszukiwania\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"edytowac i kasowac moze tylko autor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"efemeryda znika z obecnosci szybciej niz sesja trwala\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"enroll: zaproszenie zaklada aktora, token dziala; zly kod = 403\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ensureDirect dla dwoch daje dm i jest idempotentne niezaleznie od kolejnosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ensureDirect dla trzech daje grupe i nie miesza sie z dm-em pary\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ensureDirect odrzuca liste krotsza niz dwa i duplikaty\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"firstConnectGuidelines: raz zwraca zasady, potem null\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"flaga logiczna nie polyka nastepnego slowa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"formy mnogie pokrywaja kategorie, o ktore pyta polski Intl.PluralRules\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"getActorByHandle nie rzuca na smieciach, tylko zwraca null\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"handle jest normalizowany i walidowany\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"haslo bramki z pliku: wartosc z pliku wygrywa, pusty/brakujacy plik nie wpuszcza cicho\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"haslo weryfikuje sie przez scrypt i nie jest przechowywane jawnie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"health dziala bez uwierzytelnienia\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"health robi realna sonde DB (liczby, nie tylko ok)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"healthcheck zwraca 1, gdy serwer nie odpowiada\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"heartbeat odswieza, sesja przestaje byc stale\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"heartbeat sesji NIE budzi wszystkich - rozgloszenie tylko przy realnej zmianie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"hook: a failed mktemp never makes the EXIT trap remove /dev/null (review F7)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"import jest idempotentny - drugi przebieg nie dubluje\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"import odtwarza kanaly, aktorow i kolejnosc wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"import przyrostowy: reakcja z drugiego pliku trafia w wiadomosc z pierwszego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"inboxAfter zwraca cudze wiadomosci z moich konwersacji, bez wlasnych\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"init nie nadpisuje sekretu istniejacej instancji\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"init tworzy katalog danych, baze i sekret o dlugosci 64 znakow\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"interleaved successful logins do not reset the guess counter on a victim (B-MG-44)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"invite minted and actor disabled are logged, enroll limit is logged (item 5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"isBlockedIp blocks NAT64 and 6to4 ranges (B-MG-19)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"isBlockedIp: prywatne blokowane, publiczne przepuszczane, loopback za zgoda\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"isWakeable: rozroznia zarejestrowany webhook od jego braku\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"join i leave sa pomijane jako szum\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kanal prywatny jest niewidoczny dla obcego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kanal publiczny jest czytelny bez czlonkostwa, pisanie dolacza\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazda flaga CLI z dokumentacji istnieje w parserze\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazda flaga uzywana w kodzie jest wymieniona w KNOWN_FLAGS\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazde pole, ktore skill kaze wyslac, jest czytane przez trase\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazde zdanie interfejsu ma tlumaczenie, a kazde tlumaczenie jest uzywane\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazdy import miedzy modulami UI wskazuje na plik, ktory serwer odda\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazdy modul UI parsuje sie jako modul ES\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazdy modul UI wykonuje sie przy ladowaniu, nie tylko parsuje\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazdy modul UI z katalogu jest serwowany pod /js/\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazdy udokumentowany ksztalt odpowiedzi zgadza sie z serwerem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kazdy zadeklarowany parametr narzedzia MCP jest czytany przez obsluge\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kind=ask przemycone przez POST /messages nie tworzy pytania-sieroty\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"klient nie moze podszyc sie pod innego aktora polem w ciele\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"klucze obce sa egzekwowane\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"komenda init jest idempotentna\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"komenda init zaklada kanal general i aktora systemowego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"komendy na nieistniejacej instancji mowia, co zrobic\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"komentarze w kodzie sa po angielsku (dwa rozlaczne kryteria)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"licznik nieprzeczytanych zeruje sie po oznaczeniu widoku\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"liczniki nie wyciekaja z konwersacji, ktorych nie jestem czlonkiem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"limit prob logowania: 429 po serii, a udane wejscie zwalnia licznik\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors does not expose the timestamp of a deleted public message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors does not expose the timestamp of a dm message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors does not expose the timestamp of a group message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors does not expose the timestamp of a private message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors looks up activity by actor without scanning message or session history\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors sortuje po handle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses account creation when an actor has no activity\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses the newest created timestamp for lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses the newest message timestamp for lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses the newest session timestamp for lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses the newest token timestamp for lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listForActor pokazuje DM-y, ktorych jestem uczestnikiem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listForActor zwraca kanaly publiczne i wlasne prywatne, bez cudzych\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listMessages stronicuje po id, nie po czasie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"lista dzierzaw sprzata wygasle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"lista konwersacji rozroznia kanal moj od kanalu, ktory tylko widze\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"logout invalidates the cookie server-side and requires CSRF (B-MG-45)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"logout with a bad CSRF clears the cookie, keeps the epoch and answers 403 (item 4)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll answers 401 after the actor was disabled mid-wait (B-MG-2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll answers 401 after the token was revoked mid-wait (B-MG-2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll bez uwierzytelnienia daje 401\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll budzi sie na wiadomosc NATYCHMIAST, nie przez timeout\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll konczy sie pusta lista po uplywie wait\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll nie zwraca wlasnych wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll of a cookie session answers 401 after a password change (B-MG-50)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll wraca natychmiast, gdy sa zalegle wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markRead bez argumentu zeruje do najnowszej\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markRead by a member still works (control for B-MG-90)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markRead nie cofa sie do starszej wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"marking all notifications read leaves the ones the actor can no longer read untouched (B-MG-95)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"migracja jest idempotentna: drugie otwarcie nie robi nic i nie psuje danych\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"migracja wielokrokowa: stara baza dochodzi do biezacej wersji, z danymi\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"moduly UI: kazdy import ma odpowiadajacy eksport\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej koperty\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"mutacja z cookie bez naglowka CSRF jest odrzucona\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"na zamkniete pytanie nie da sie odpowiedziec drugi raz\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nazwa pliku nie moze byc sciezka\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nazwa zasobu ze spacja jest odrzucona\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"news: aktor dostaje nowosci dokladnie raz na wersje tresci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nie da sie czytac cudzego kanalu prywatnego przez API\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nie da sie dolaczyc do kanalu prywatnego przez join\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nie da sie przymusowo dopisac kogos do kanalu publicznego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nie da sie przypiac wiadomosci z kanalu bez dostepu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nie da sie utworzyc dwoch aktorow o tym samym handle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nie da sie zalozyc dwoch kanalow o tej samej nazwie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nie da sie zareagowac na wiadomosc z kanalu bez dostepu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nieistniejaca konwersacja i zabroniona daja ten sam blad\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nierozwiazywalny adresat trafia do raportu, nie ginie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nieznana sciezka daje 404 z kodem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"oba kryteria POTRAFIA zaswiecic - probka negatywna dla kazdego z osobna\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"obcy agent nie widzi cudzej rozmowy grupowej\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"obecnosc pokazuje zarejestrowana sesje z sygnalem busy\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"odpowiedz laduje w watku pytania\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"odpowiedz na odpowiedz splaszcza sie do korzenia watku\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"odpowiedz z wiadomosciami niesie mape aktorow z kind (egzekwowanie human)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"odsubskrybowanie przestaje dostarczac i zwalnia licznik\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"odwolane zaproszenie nie dziala\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"odwolany token przestaje dzialac, pozostale zyja dalej\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"onCommitted w transakcji odklada wywolanie do commita; blad = brak wywolania\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"online presence wins over old activity\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"openDb jest idempotentne na TYM SAMYM pliku\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"openDb tworzy schemat i ustawia wersje\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"otwarte pytania nie wyciekaja z kanalu prywatnego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"otwarte pytanie zamyka odpowiedz od kogokolwiek\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"over HTTP login with an https baseUrl sets Secure on both cookies\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"panel admina: czlowiek-admin wchodzi, agent (nawet adminowski) nie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"panel admina: wylaczenie konta gasi token, wlaczenie przywraca\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"panel admina: zaproszenie z UI dziala w enrollu, odwolane przestaje\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseArgs bez listy nadal parsuje znane flagi\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseArgs rozdziela pozycyjne i flagi, w tym flagi bez wartosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseArgs terminator -- przenosi reszte do positional\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseArgs z lista znanych flag nie zjada tresci z --\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseMentions wyciaga handle bez duplikatow i bez wielkosci liter\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parser argumentow: nieznana flaga zostaje trescia, terminator konczy flagi\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey counter: 5->0 and 5->5 rejected, 5->6 ok, never lowered (B-MG-5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey counter: an always-zero authenticator stays allowed (B-MG-52)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey: cofniety licznik podpisow jest odrzucany (klon klucza)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey: rejestracja i logowanie przechodza pelna petle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey: zly origin, powtorzony challenge i zepsuty podpis sa odrzucane\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"pierwsze polaczenie serwuje zasady z promptem, drugie juz nie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"pin and markRead by a non-member of a private channel are refused (B-MG-90)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"pin i unpin dzialaja w obrebie konwersacji, z autorem przypiecia\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"plik konfiguracji ma prawa 600\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"plik laduje w konwersacji jako wiadomosc i daje sie pobrac czlonkowi\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"plik sensitive z ttl=0 dostaje domyslny TTL, nie staje sie wieczny\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"plik z aktywnym MIME (text/html) jest serwowany inertnie (anty stored-XSS)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"plik z cudzej konwersacji jest niewidoczny i niepobieralny\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"po serii porazek wake gasnie i wlasciciel dostaje systemowy DM\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ponowna rejestracja tej samej sesji aktualizuje, a nie dubluje\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ponowne wziecie wlasnej dzierzawy przedluza, nie resetuje acquired_at\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"postMessage do cudzego kanalu prywatnego jest odrzucone\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"postMessage nadaje rosnace id i zapisuje wzmianki\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"postMessage odrzuca puste cialo i cialo ponad limit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"postMessage publikuje zdarzenie do czlonkow konwersacji\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"powiadomienia wiki: zmiana strony wola tych, ktorzy juz na niej pisali\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeruje licznik\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"poza kontenerem bind na 0.0.0.0 jest zablokowany\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"presence rozglasza sie przy zmianie, a nie przy kazdym heartbeacie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"publish trafia tylko do subskrybentow z listy odbiorcow\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"punkt wejscia (app.js) startuje bez wyjatku, takze gdy serwer nie odpowiada\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"pytanie jest otwarte, dopoki ktokolwiek nie odpowie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"readJson odrzuca cialo ponad limit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"readJson odrzuca niepoprawny JSON\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"reakcja jest przelacznikiem i nie duplikuje sie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"reakcja pokazuje KTO zareagowal, nie tylko ile\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"reakcje nie staja sie wiadomosciami\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"recipientsOf zwraca czlonkow, a nie wszystkich aktorow\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"rejestracja sesji nieistniejacego aktora jest odrzucona\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"requestIsSecure and makeCookie honour a TLS socket (B-MG-91)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"revokeInvite: nieistniejace/juz-odwolane id zwraca false (bez falszywego sukcesu)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"rodzaj sesji jest deklarowany, nie zgadywany z ksztaltu nazwy\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"router dopasowuje parametry sciezki\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"rozmowa bezposrednia dochodzi w calosci, nie tylko przy wzmiance\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"rozmowa grupowa powstaje z listy handle i zawiera nadawce\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"rozmowa z nieistniejacym aktorem daje 404 z nazwa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"saving an identical title and body creates no new revision and answers with the current one (B-MG-33)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"scan finding: typing location with a line break never forges a line; talk_typing rejects it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"security lines never contain the handle string a user typed (item 2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sensitive bez TTL dostaje domyslny TTL i wygasa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sesja trwala bez heartbeatu znika po oknie retencji, wczesniej jest stale\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"setNotify dolacza aktora, jesli jeszcze nie byl czlonkiem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sfalszowane i wygasle cookie sesji daje 401 przez API\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sidebar classifies 13 silent days as active\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sidebar classifies 14 silent days as faded\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sidebar classifies 90 silent days as archived\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"skasowana wiadomosc nie utrzymuje licznika\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"skasowana wiadomosc traci tresc, ale zostaje w kolejnosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"skasowane pytanie znika z otwartych\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzica\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"skill nie kaze juz wklejac tokenu do pliku, ktory idzie do repozytorium\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"skladnia FTS w zapytaniu uzytkownika nie wywraca wyszukiwania\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"slug kanalu gubi krzyzyk\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"smieciowy kod jest odrzucany bez tworzenia aktora\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sufiksy (N) scalaja sie w jednego aktora\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sweep kasuje wygasle wpisy i bajty z dysku\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sygnal 'pisze' moze niesc wlasny czas zycia, domyslnie 7 s\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"t() tlumaczy, wybiera forme i wraca do angielskiego przy braku wpisu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_claim i talk_release przechodza pelny cykl dzierzawy\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_log numerem cudzej prywatnej konwersacji jest odrzucone\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read nie odpytuje bazy raz na kazda linie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read niesie schemat narzedzia - takze gdy nie ma nowych wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read: limit obowiazuje takze na sciezce long-poll\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_send przez MCP pisze jako aktor z tokenu i wraca z id wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_status wypisuje pola narzedzi z TOOLS, nie z reki\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the actor directory cache retains uploaded avatars\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the michal, @michal, @@michal, @@@michal sequence is limited from the 9th (item 1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"token bez TTL nie wygasa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"token dla nieistniejacego aktora konczy sie kodem 1, nie wyjatkiem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"token mint and revoke and a denied admin action are logged without secrets (B-MG-51)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"token weryfikuje sie i zwraca aktora\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"token wylaczonego aktora nie dziala\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"token z TTL wygasa i przestaje uwierzytelniac\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"tools/list zwraca komplet narzedzi talk_*\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"totalBadge sumuje plakietki ze wszystkich konwersacji\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"tworca kanalu jest jego adminem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"tx wycofuje wszystko przy bledzie w srodku\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"tx zagniezdzone: wewnetrzny rollback nie zabija zewnetrznej transakcji\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"typing gasnie po 7 s, busy trzyma 30 s\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"updateConversation: admin kanalu zmienia temat i slug, zwykly czlonek nie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"updateConversation: slug zajety przez inny kanal jest odrzucany, dm bez sluga\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"upload pliku przez API, pobranie przez czlonka, odmowa dla obcego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"uszkodzona linia JSON nie przerywa importu i jest policzona\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"uzycie tokenu odklada sie w last_used_at\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"w DM kazda wiadomosc jest plakietka, bez wzmianki\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"w bazie lezy hash, nie token\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"w grupie kazda wiadomosc jest plakietka\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"w kanale budzi wzmianka, a nie kazda wiadomosc\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"w kanale plakietka liczy tylko wzmianki, licznik liczy wszystko\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"w kontenerze bind na 0.0.0.0 jest dozwolony\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake body carries a signed exp (now+300) and a random nonce (B-MG-19)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake httpDeliver ODMAWIA polaczenia na adres prywatny przy strzale (SSRF rebinding)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake odrzuca adresy lokalne i prywatne (SSRF)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake pozwala na loopback tylko za jawna zgoda\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake: rejestracja zwraca sekret raz, GET pokazuje konfiguracje bez sekretu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"watek grupuje odpowiedzi pod korzeniem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"watek nieistniejacy i watek bez dostepu daja te sama odpowiedz\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"watek z innej konwersacji jest odrzucony\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiadomosc z to staje sie DM-em, nie wiadomoscia kanalowa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiadomosci niosa actorHandle, nie tylko actorId do mapy o kluczach string\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki attach: plik podpiety, pobieralny przez innego zalogowanego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki drzewo: cykl (pod soba / pod potomkiem) jest odrzucany\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki drzewo: podstrona, przenoszenie, undefined nie rusza polozenia\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki przez API: zapis, odczyt, szukanie, historia, revert\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: baseRevision - zgodny przechodzi, rozjechany daje 409, 0 = tylko zaloz\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: kasowanie strony - tylko zalozyciel albo admin; dzieci nie gina\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: kazdy zalogowany moze edytowac (wspolna wiedza), ale nie na slepo\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: podglad pojedynczej rewizji zwraca pelna tresc; cudza/nieistniejaca -> 404\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: revert przywraca tresc jako nowa rewizje\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: slepy zapis na cudza strone -> 409 z numerem rewizji, po przeczytaniu -> 200\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: slug kolidujacy z trasa (search) jest odrzucany\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: strona jest wspolna - inny aktor tez ja edytuje (po przeczytaniu)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: wyszukiwarka znajduje po tresci i tytule\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: zalacznik jest publiczny dla kazdego zalogowanego\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki_read: przycieta strona NIE odblokowuje zapisu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wlasne wiadomosci nie licza sie jako nieprzeczytane\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wyjatek jednego subskrybenta nie blokuje pozostalych\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wylaczenie konta uniewaznia otwarta sesje na cookie, nie tylko nastepne logowanie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wymagana wersja Node jest sprawdzana z majora\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wyszukiwanie dopasowuje przedrostek\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wyszukiwanie nie zwraca tresci z kanalow bez dostepu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wyszukiwanie pomija skasowane\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wyszukiwanie przez API respektuje dostep\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wzmianka na poczatku i po nawiasie jest lapana, interpunkcja odcieta\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wzmianka w cudzym kanale prywatnym nie wycieka przez mentionsOf\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wzmianka w kanale publicznym jest widoczna bez czlonkostwa\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wzmianki sa odtworzone po handle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wznowienie SSE dosyla message_updated dla edycji sprzed kursora\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"z rozmowy bezposredniej nie da sie wyjsc, z kanalu tak\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"za krotkie haslo jest odrzucone\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zadanie z bearerem nie wymaga CSRF\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zaden plik UI nie przykrywa importowanego t() wlasnym `t`\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zajeta nazwa NIE zuzywa zaproszenia\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zakonczona sesja znika z obecnosci, tozsamosc zostaje w rosterze\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zaproszenie --admin nadaje aktorowi uprawnienia admina\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zaproszenie wygasa po TTL\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zaproszenie z limitem uzyc wyczerpuje sie\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zaproszenie: agent zaklada nim aktora i dziala token\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zdarzenie widzi wiadomosc juz zapisana w bazie (odczyt DRUGIM polaczeniem)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zerwany klient SSE zwalnia subskrypcje\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/admin\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zle haslo i nieistniejacy uzytkownik daja ten sam komunikat\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zle procent-kodowanie w sciezce daje 404, nie 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zly URL webhooka jest odrzucany przy rejestracji\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zly kanal w jednym rekordzie nie wywala calego importu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zly token nie rzuca, tylko zwraca null\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"znacznik odczytu przelicza sie z czasu na id wiadomosci\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"znaczniki odczytu DM-ow sa przenoszone\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zwolnic moze wlasciciel; cudza zywa dzierzawa daje odmowe\",1]",
+        "file": "",
+        "skipped": false
+      }
+    ]
+  },
+  "failures": {
+    "preexisting": [],
+    "new": []
+  },
+  "route": {
+    "declared": "critical",
+    "actual": "critical",
+    "escalated": false,
+    "missingSteps": []
+  },
+  "artifacts": {
+    "report": true,
+    "review": "approved"
+  },
+  "result": "pass"
+}

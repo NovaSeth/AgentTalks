@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "path": "src/http/ui/js/zdarzenia-sse.js",
+      "line": 60,
+      "rule": null,
+      "text": "Side effect of B-MG-38 (cursor only from SSE): until the first SSE event arrives, sseCursor is 0 and connectSSE() reconnects with no ?after, which the server reads as 'future only'. A drop before the first event loses messages posted in the gap for loaded conversations; onopen refreshes only the list and unread counts. Not reproduced live. Consider a reload of the active conversation on resume."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "path": "src/http/ui/js/widok-czat.js",
+      "line": null,
+      "rule": null,
+      "text": "Live: after saving an inline edit with Enter, focus is not returned to the composer. An immediate ArrowUp did nothing (editors=0), and I had to click the composer first. Escape and save both closed the editor correctly. Cosmetic."
+    }
+  ]
+}

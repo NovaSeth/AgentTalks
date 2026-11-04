@@ -55,14 +55,23 @@ export async function openConversation(id, focusMessageId) {
     } catch { /* best effort */ }
   }
   renderMain();
-  refreshQuestions(id);
+  const questionsReady = refreshQuestions(id);
   // Pins are needed straight away: without them the message menu does not know whether to offer
   // "Pin" or "Unpin". Previously only the details panel fetched them.
   // "Przypnij" czy "Odepnij". Wczesniej pobieral je wylacznie panel szczegolow.
   state.convPins = [];
-  loadPins(id);
+  const pinsReady = loadPins(id);
   if (focusMessageId) {
-    const el = document.querySelector(`#messages [data-msg="${focusMessageId}"]`);
+    // These refreshes can redraw the list, so highlight only after they finish.
+    await Promise.all([questionsReady, pinsReady]);
+    if (state.view !== "chat" || state.activeId !== id) return;
+    const target = (state.msgs[id] || []).find((m) => m.id === focusMessageId);
+    if (target?.threadId) {
+      await openThread(target.threadId);
+      if (state.view !== "chat" || state.activeId !== id || state.threadOpen !== target.threadId) return;
+    }
+    const list = target?.threadId ? "#th-msgs" : "#messages";
+    const el = document.querySelector(`${list} [data-msg="${focusMessageId}"]`);
     if (el) {
       el.scrollIntoView({ block: "center", behavior: zachowanieScrolla(false) });
       el.classList.add("flash");
@@ -84,16 +93,29 @@ export async function openConversation(id, focusMessageId) {
 }
 
 export async function openThread(rootId) {
+  const conversationId = state.activeId;
   state.threadOpen = rootId;
-  renderMain();
+  state.threadMsgs = [];
+  const isCurrent = () => state.view === "chat" && state.activeId === conversationId && state.threadOpen === rootId;
+  // Opening the panel must not replace the main composer while a send is completing.
+  if (!document.getElementById("thread-slot")) {
+    const host = document.createElement("div");
+    host.id = "thread-slot";
+    document.getElementById("main")?.appendChild(host);
+  }
+  renderThread();
   try {
     const data = await api("GET", `/api/messages/${rootId}/thread`);
+    if (!isCurrent()) return;
     state.threadMsgs = data.messages;
-    for (const m of data.messages) animatedMsgs.add(m.id);
+    for (const m of data.messages) {
+      upsertMessage(conversationId, m);
+      animatedMsgs.add(m.id);
+    }
     mergeActors(data.actors);
     mergeReactions(data.messages, data.reactions);
-  } catch (e) { showError(e); }
-  renderThread();
+  } catch (e) { if (isCurrent()) showError(e); }
+  if (isCurrent()) renderThread();
 }
 
 /** A broken event stream as a BAR ABOVE THE CONVERSATION, not as fine print under the whole
@@ -959,16 +981,21 @@ function startInlineEdit(messageId, scope) {
     </div>`;
   const ta = holder.querySelector("textarea");
   ta.value = msg.body;
+  const finishEdit = () => {
+    // A list redraw may have restored this editor in a new holder while saving.
+    const current = (scope || document).querySelector(`[data-text="${messageId}"]`);
+    if (current) current.innerHTML = renderBody((findMsgById(messageId) || msg).body, state.actor.handle);
+  };
   const autos = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 300) + "px"; };
   ta.addEventListener("input", autos);
   ta.addEventListener("keydown", async (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const v = ta.value.trim();
-      if (!v || v === msg.body) { renderMessages(); return; }
-      try { await saveEditedMsg(messageId, v); } catch (err) { showError(err); }
+      if (!v || v === msg.body) { finishEdit(); return; }
+      try { await saveEditedMsg(messageId, v, finishEdit); } catch (err) { showError(err); }
     }
-    if (e.key === "Escape") renderMessages();
+    if (e.key === "Escape") { e.preventDefault(); finishEdit(); }
   });
   autos(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
 }
@@ -1453,13 +1480,25 @@ export function renderThread() {
   async function submit() {
     const v = ta.value.trim(); if (!v) return;
     ta.value = ""; autosize();
-    const msg = await sendMessage(v, { threadId: state.threadOpen });
+    // Capture the target before awaiting: the user may switch threads or close the panel.
+    const convId = state.activeId, rootId = state.threadOpen;
+    const msg = await sendMessage(v, { threadId: rootId, conversationId: convId });
+    const stillHere = state.view === "chat" && state.activeId === convId && state.threadOpen === rootId;
     // A failed send returns the text to the field - exactly as in the main composer.
-    if (!msg) { ta.value = v; autosize(); ta.focus(); return; }
-    state.threadMsgs.push(msg);
+    if (!msg) {
+      if (stillHere && document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
+      return;
+    }
+    // sendMessage already stored the reply for its root; never insert it into another thread.
+    if (!stillHere) return;
+    const index = state.threadMsgs.findIndex((entry) => entry.id === msg.id);
+    if (index >= 0) state.threadMsgs[index] = msg;
+    else { state.threadMsgs.push(msg); state.threadMsgs.sort((a, b) => a.id - b.id); }
     renderThread();
-    upsertMessageNode(findMsgById(state.threadOpen));   // the thread bar on the main list
-    document.getElementById("th-msgs").scrollTop = 999999;
+    const root = findMsgById(rootId);
+    if (root) upsertMessageNode(root);   // the thread bar on the main list
+    const list = document.getElementById("th-msgs");
+    if (list) list.scrollTop = 999999;
   }
   document.getElementById("th-msgs").scrollTop = 999999;
 }

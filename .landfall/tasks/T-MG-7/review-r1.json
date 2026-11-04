@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:security-reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "path": "src/mcp/server.ts",
+      "line": 585,
+      "rule": "SCD-19",
+      "text": "Low: MCP renderStatus (585) and talk_who (893) still call unfiltered presence(ctx). Repro: private channel, alice types there, bob calls presence(ctx): typingIn 'c:1' present, so bob sees 'PISZE' for alice though he cannot read it (no channel name, only the state). Already listed as a shared gap; switch both to presenceFor(ctx, actor.id) (also drops sessionId/cwd from the rows)."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "path": "src/core/unread.ts",
+      "line": null,
+      "rule": "PRI-6",
+      "text": "Low: UNREAD_CAP=100 changes unread/badge semantics for every consumer (MCP status/talk_channels print '100 nieprzeczytanych'; digest.ts still counts all rows). Clients must render 99+/100+; consider returning a capped flag so callers can tell 'exactly 100' from 'more'."
+    },
+    {
+      "id": "F3",
+      "severity": "minor",
+      "path": "src/core/notifications.ts",
+      "line": null,
+      "rule": "PRI-6",
+      "text": "Low: markNotificationsRead without ids updates all unread rows including ones READABLE_NOW hides (ex-member's), and 'changed' counts them while the listed unread count does not. No leak; harmless but the returned count can exceed what the user saw."
+    }
+  ]
+}

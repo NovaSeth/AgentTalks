@@ -58,6 +58,17 @@ export function resolveMentions(ctx: Ctx, body: string, conversationId?: number)
   return [...ids];
 }
 
+/** Mentioned handles that match no actor (collective aliases excluded), so a sender learns
+ *  that a typo did not notify anybody. */
+export function unresolvedMentions(ctx: Ctx, body: string): string[] {
+  const named = parseMentions(body).filter((h) => !ALL_ALIASES.has(h));
+  if (named.length === 0) return [];
+  const marks = named.map(() => "?").join(",");
+  const found = new Set((ctx.db.prepare(`SELECT handle FROM actors WHERE handle IN (${marks})`)
+    .all(...named) as Array<{ handle: string }>).map((r) => r.handle));
+  return named.filter((h) => !found.has(h));
+}
+
 /**
  * Messages mentioning an actor - the equivalent of `talk mentions`.
  * Limited to conversations the actor is allowed to read (public or its own): a mention in

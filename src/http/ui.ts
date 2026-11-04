@@ -52,9 +52,15 @@ const TYPES: Record<string, string> = {
 /**  from the configuration; failing that it assembles one from proxy headers (Host + proto). */
 function baseUrlFrom(req: IncomingMessage, config: Config): string {
   if (config.baseUrl) return config.baseUrl;
-  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost").split(",")[0].trim();
-  const proto = String(req.headers["x-forwarded-proto"] ?? "https").split(",")[0].trim();
-  return `${proto}://${host}`;
+  const first = (v: unknown): string => String(v ?? "").split(",")[0].trim();
+  // Forwarded headers are believed only behind a proxy we were told to trust; the scheme is
+  // http unless that proxy says https (B-MG-49). The result goes into served documents, so it
+  // is HTML-escaped (B-MG-18).
+  const host = (config.trustProxy ? first(req.headers["x-forwarded-host"]) : "")
+    || first(req.headers.host) || "localhost";
+  const proto = config.trustProxy && first(req.headers["x-forwarded-proto"]) === "https" ? "https" : "http";
+  return `${proto}://${host}`.replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
 // The interface modules. The browser pulls the dependencies itself through `import`, so a

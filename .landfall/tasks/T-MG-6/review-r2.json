@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "src/http/routes/auth.ts",
+      "line": 252,
+      "rule": "OWA-7",
+      "text": "High, acceptance 6: the handle-wide cap no longer limits password guessing. In-process /api/login reproduction with distinct source IPs: guesses 1-20=401, 21-24=429, but all 24 execute scrypt; correct guess 25=200 with a session cookie. Verification precedes the cap, and correct guesses bypass it entirely. Enforce an account-wide delay/challenge before verification; bind any exemption to a previously trusted client."
+    },
+    {
+      "id": "F3",
+      "severity": "minor",
+      "path": "src/http/routes/auth.ts",
+      "line": 169,
+      "rule": "OWA-7",
+      "text": "F3 NOT ADDRESSED for shared-IP users: repeating 12 bad logins gives 8x401,4x429, then the correct password=429; a fresh IP succeeds. Consider a proven-client exemption. F1/F2/F4 ADDRESSED on repeated reproductions: four aliases share the eight-failure cap; raw handle is absent from failure/limit logs; bad-CSRF logout clears the cookie without changing epoch, and valid logout invalidates both device cookies."
+    },
+    {
+      "id": "F5",
+      "severity": "minor",
+      "path": "src/http/routes/admin.ts",
+      "line": 74,
+      "rule": "OWA-9",
+      "text": "F5 NOT ADDRESSED fully (acceptance 8): HTTP invite/disable/enable and enroll/WebAuthn limit logs pass, but direct createInvite/setDisabled calls emit zero security lines; CLI invite creation uses that path (src/cli/main.ts:413). Log at shared entry points or cover CLI separately. Verification: 19/19 targeted tests and typecheck passed; secrets scan could not run because temporary-directory creation was denied (EPERM)."
+    }
+  ],
+  "run": "codex-T-MG-6-reviewer-1",
+  "sha256": "466fd3e95c10243e4933ce065342d084a72646526c3ac941bbe00a8da0845c5b"
+}

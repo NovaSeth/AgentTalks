@@ -19,7 +19,7 @@ import type { Ctx } from "./ctx.ts";
 import { assertCanPost, assertCanRead, canRead, getMember, recipientsOf } from "./conversations.ts";
 import { badRequest, forbidden, notFound, tooLarge } from "./errors.ts";
 import { resolveMentions } from "./mentions.ts";
-import { clearTyping } from "./presence.ts";
+import { clearTyping, ownSessionOrNull } from "./presence.ts";
 import { excerptOf, notify } from "./notifications.ts";
 import { deleteFilesOfMessage } from "./files.ts";
 
@@ -131,7 +131,17 @@ export function postMessage(
 ): Message {
   const body = validateBody(input.body, input.maxBytes ?? MAX_BODY_BYTES);
   assertCanPost(ctx, input.conversationId, input.actorId);
-  const dedupKey = input.clientMsgId ? `${input.actorId}:${input.clientMsgId}` : null;
+  // The client's sessionId is a claim: a foreign one is dropped (the post still goes through),
+  // otherwise the message carries somebody else's session and clears THEIR typing bubble.
+  const sessionId = ownSessionOrNull(ctx, input.sessionId, input.actorId);
+  // The key includes the conversation: keyed per actor only, the same clientMsgId reused in
+  // another channel returned the first message and posted nothing. The "v2:" prefix keeps
+  // the new format disjoint from the old "<actor>:<clientMsgId>" (which starts with a digit),
+  // so a new key can never hit the unique index on a legacy row from another conversation.
+  const dedupKey = input.clientMsgId
+    ? `v2:${input.conversationId}:${input.actorId}:${input.clientMsgId}`
+    : null;
+  const legacyDedupKey = input.clientMsgId ? `${input.actorId}:${input.clientMsgId}` : null;
 
   let created = true;
   let notified: number[] = [];
@@ -139,9 +149,15 @@ export function postMessage(
     // Idempotency: on a retry (SSE/long-poll/webhook can each deliver twice) a repeated
     // clientMsgId must not duplicate a message. SELECT-then-INSERT is safe here, because the
     // outer transaction is BEGIN IMMEDIATE - the processes serialise.
+    // A row written with the old key still counts, but only in its own conversation.
     if (dedupKey) {
-      const dup = ctx.db.prepare("SELECT * FROM messages WHERE dedup_key = ?")
-        .get(dedupKey) as MsgRow | undefined;
+      const dup = ctx.db
+        .prepare(
+          `SELECT * FROM messages
+            WHERE dedup_key = ? OR (dedup_key = ? AND conversation_id = ?)
+            LIMIT 1`,
+        )
+        .get(dedupKey, legacyDedupKey, input.conversationId) as MsgRow | undefined;
       if (dup) {
         created = false;
         return messageFromRow(dup);
@@ -158,7 +174,7 @@ export function postMessage(
       .run(
         input.conversationId,
         input.actorId,
-        input.sessionId ?? null,
+        sessionId,
         ts,
         input.kind ?? "text",
         body,
@@ -221,7 +237,7 @@ export function postMessage(
   // supposed to prevent.
   if (created) {
     // A sent message ends typing - the "typing" bubble disappears immediately.
-    if (input.sessionId) clearTyping(ctx, input.sessionId);
+    if (sessionId) clearTyping(ctx, sessionId);
     onCommitted(ctx.db, () => {
       ctx.bus.publish(recipientsOf(ctx, input.conversationId), {
         type: "message",
@@ -291,7 +307,11 @@ export function listThread(ctx: Ctx, threadId: number): Message[] {
 export function editMessage(ctx: Ctx, id: number, actorId: number, body: string): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow | undefined;
   if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${id}`);
+  // CURRENT access, not only authorship: an author removed from a private channel must not
+  // keep rewriting it (and notifying its current members).
+  const conv = assertCanRead(ctx, row.conversation_id, actorId);
   if (row.actor_id !== actorId) throw forbidden("nie_autor", "nie jestes autorem tej wiadomosci");
+  if (conv.archivedAt) throw forbidden("zarchiwizowana", "ta konwersacja jest zarchiwizowana");
   if (row.deleted_at) throw badRequest("skasowana", "nie da sie edytowac skasowanej wiadomosci");
   const text = validateBody(body, MAX_BODY_BYTES);
 
@@ -344,6 +364,8 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
 export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow | undefined;
   if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${id}`);
+  // As in editMessage: deleting needs current read access to the conversation.
+  assertCanRead(ctx, row.conversation_id, actorId);
   if (row.actor_id !== actorId) throw forbidden("nie_autor", "nie jestes autorem tej wiadomosci");
 
   const message = tx(ctx.db, () => {

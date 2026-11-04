@@ -9,12 +9,17 @@
  */
 import type { Event } from "../core/events.ts";
 import { inboxAfter, updatedBefore } from "../core/messages.ts";
-import { authenticate, requireAuth } from "./auth.ts";
+import { authFailureNote, authenticate, requireAuth, stillAuthenticated } from "./auth.ts";
 import { json } from "./respond.ts";
-import { tooMany } from "../core/errors.ts";
+import { tooMany, unauthorized } from "../core/errors.ts";
 import type { Req, Res, RouteCtx } from "./router.ts";
 
-const PING_MS = 20_000;
+const DEFAULT_PING_MS = 20_000;
+let PING_MS = DEFAULT_PING_MS;
+/** Tests only: shortens (or with null restores) the ping / re-validation interval. */
+export function setSsePingMsForTests(ms: number | null): void {
+  PING_MS = ms ?? DEFAULT_PING_MS;
+}
 const MAX_WAIT_SEC = 300;
 const RESUME_PAGE = 200;
 // The replay window for edits/deletions on resumption. An id cursor carries no changes to
@@ -175,7 +180,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
  * for the first new message. This is the path for the CLI and for agents in a loop - they
  * need no SSE client and still do not poll for nothing.
  */
-export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void> {
+export function longPollHandler(req: Req, res: Res, rc: RouteCtx): Promise<void> {
   const { actor } = requireAuth(rc);
   const after = Number(rc.query.get("after") ?? 0) || 0;
   const wait = Math.min(Math.max(Number(rc.query.get("wait") ?? 0) || 0, 0), MAX_WAIT_SEC);
@@ -195,15 +200,25 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
   }
   const releaseStream = rc.ctx.bus.openStream(actor.id);
 
-  return new Promise<void>((resolve) => {
+  return new Promise<void>((resolve, reject) => {
     let done = false;
     const finish = () => {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      clearInterval(recheck);
       unsubscribe();
       releaseStream();
       res.off("close", onClose);
+      // The credential was checked when the wait began, which may be minutes ago. Check it
+      // again right before anything is read: a token revoked, an actor disabled or a password
+      // changed in the meantime must not receive a single further message.
+      if (!stillAuthenticated(rc.ctx, rc.config, req, actor.id)) {
+        const note = authFailureNote(rc.ctx, req);
+        reject(unauthorized(note?.code ?? "nieuwierzytelniony",
+          note?.message ?? "sesja albo token przestaly obowiazywac - zaloguj sie ponownie"));
+        return;
+      }
       json(res, 200, { messages: inboxAfter(rc.ctx, actor.id, after) });
       resolve();
     };
@@ -211,6 +226,7 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
       if (done) return;
       done = true;
       clearTimeout(timer);
+      clearInterval(recheck);
       unsubscribe();
       releaseStream();
       resolve();
@@ -223,6 +239,12 @@ export function longPollHandler(_req: Req, res: Res, rc: RouteCtx): Promise<void
     });
     const timer = setTimeout(finish, wait * 1000);
     if (typeof timer.unref === "function") timer.unref();
+    // The same beat as the SSE ping: a revoked credential ends the wait with a 401 without
+    // waiting for the next message or the timeout.
+    const recheck = setInterval(() => {
+      if (!stillAuthenticated(rc.ctx, rc.config, req, actor.id)) finish();
+    }, PING_MS);
+    if (typeof recheck.unref === "function") recheck.unref();
     // A client that disconnected while waiting must not leave a subscription and a timer behind
     // forever.
     res.on("close", onClose);

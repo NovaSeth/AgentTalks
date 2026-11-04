@@ -13,8 +13,8 @@
       "at": "2026-11-03T23:54:02.236Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "done",
+  "round": 2,
   "events": [
     {
       "at": "2026-11-03T23:54:01.911Z",
@@ -56,8 +56,147 @@
         "executor": "claude:implementer",
         "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce"
       }
+    },
+    {
+      "at": "2026-11-04T00:09:30.438Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T00:10:48.375Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:security-reviewer",
+        "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce",
+        "note": "review r1"
+      }
+    },
+    {
+      "at": "2026-11-04T00:16:01.649Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T00:16:23.948Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce",
+        "note": "fix round 1 + item 13 (fresh agent, PRI-4)"
+      }
+    },
+    {
+      "at": "2026-11-04T00:27:14.376Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:27:14.591Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 7,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T00:33:51.634Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:49.867Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:50.105Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 1,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:50.359Z",
+      "by": "MG",
+      "event": "self-verified",
+      "data": {
+        "round": 2,
+        "note": "REV-20: mechanical shell trap fix in the hook, not data/auth/concurrency"
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:50.601Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:b3be0a31f9e13857",
+          "files-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:50.601Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "a0599f0c296273c406e0c11629fff771c004fef8",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:35:18.842Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "a0599f0c296273c406e0c11629fff771c004fef8"
+      }
+    },
+    {
+      "at": "2026-11-04T00:35:44.172Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "4ea7666fca3c9210a28f80a9bac2e34cc99cea64",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "268109c56538ba99fc196f0033a2445d354b48cf"
+      }
     }
   ],
   "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce",
-  "branch": "task/T-MG-10-fix-b-mcp-agent-surface"
+  "branch": "task/T-MG-10-fix-b-mcp-agent-surface",
+  "mergedAt": "2026-11-04T00:35:44.172Z"
 }

@@ -36,10 +36,13 @@ import {
   members,
   type Conversation,
 } from "../core/conversations.ts";
-import { AppError, badRequest, notFound } from "../core/errors.ts";
+import { AppError, badRequest, notFound, unauthorized } from "../core/errors.ts";
+import { verifyToken } from "../core/tokens.ts";
+import { LINE_BREAKS, oneLine, quote, QUOTE_NOTE } from "../core/untrusted.ts";
+export { oneLine, quote, QUOTE_NOTE };
 import { inboxAfter, lastMessageId, listMessages, listThread, postMessage, type Message }
   from "../core/messages.ts";
-import { actorLiveness, presence, registerSession, setDoing, signal, whoIsTyping, type SessionKind }
+import { actorLiveness, presenceFor, registerSession, setDoing, signal, TYPING_MAX, TYPING_TTL, whoIsTyping, type SessionKind }
   from "../core/presence.ts";
 import { isWakeable } from "../core/wake.ts";
 import { answer, ask, openQuestions } from "../core/questions.ts";
@@ -47,15 +50,19 @@ import { react } from "../core/reactions.ts";
 import { search } from "../core/search.ts";
 import { markRead, unreadFor } from "../core/unread.ts";
 import { digestFor } from "../core/digest.ts";
-import { mentionsOf } from "../core/mentions.ts";
+import { mentionsOf, unresolvedMentions } from "../core/mentions.ts";
 import { acquire, listLeases, release } from "../core/leases.ts";
 import { getFileInfo } from "../core/files.ts";
 import { firstConnectGuidelines, guidelinesText, GUIDELINES_PROMPT } from "../core/guidelines.ts";
-import { firstConnectNews } from "../core/news.ts";
+import { firstConnectNews, leadingSections } from "../core/news.ts";
 import { getPage, listPages, markPageSeen, pageHistory, pageOutline, pageSection, savePage, searchWiki, wikiPageCount } from "../core/wiki.ts";
 import type { Req, Res } from "../http/router.ts";
 
 const WAIT_MAX_SEC = 300;
+
+/** At most this many talk_read waits (waitSec > 0) open at once per actor. */
+const MAX_WAITS_PER_ACTOR = 3;
+const activeWaits = new Map<number, number>();
 
 /** How many messages talk_read returns without an explicit `limit`. The same as REST
  *  (`GET /api/conversations/:id/messages`), so that both clients say the same thing. */
@@ -99,7 +106,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "talk_send",
-    description: "Wyslij wiadomosc. Przy rozmowie prywatnej odpowiedz mowi, czy adresaci zyja.",
+    description:
+      "Wyslij wiadomosc. Przy rozmowie prywatnej odpowiedz mowi, czy adresaci zyja. " +
+      "Adres '@a' albo '@a,@b' creates the conversation on the fly and may wake the addressee " +
+      "(a real model run on their side): write to a person only when it is worth that. " +
+      "A mention of a handle that does not exist is reported back in the result.",
     inputSchema: S(
       {
         to: { type: "string", description: CONV_DESC },
@@ -121,7 +132,7 @@ export const TOOLS: ToolDef[] = [
     name: "talk_read",
     description:
       "Nowe wiadomosci dla Ciebie ze WSZYSTKICH Twoich rozmow, pogrupowane po rozmowie: " +
-      "najpierw te, ktore czekaja na Ciebie (DM, grupa, wzmianka - oznaczona '>'), potem reszta. " +
+      "najpierw te, ktore czekaja na Ciebie (DM, grupa, wzmianka - oznaczona '*'), potem reszta. " +
       "Podaj afterId z poprzedniego wywolania jako kursor. waitSec > 0 czeka na pierwsza nowa " +
       "wiadomosc (long-poll, max 300 s). Oddaje odcinek (domyslnie 50) i konczy kursorem - " +
       "przy zaleglosciach wolaj w petli, az napisze, ze nic nie zostalo.",
@@ -253,6 +264,10 @@ export const TOOLS: ToolDef[] = [
         sessionId: { type: "string", description: "Id Twojej sesji (jak w talk_register)." },
         to: { type: "string", description: "Gdzie piszesz: '#kanal', '@handle' albo 'wiki:slug'." },
         stop: { type: "boolean", description: "true = juz nie pisze, zgas kuleczke." },
+        sec: {
+          type: "number", minimum: 1, maximum: 300,
+          description: "How long the signal lives, in seconds (1-300; default 7).",
+        },
       },
       ["sessionId", "to"],
     ),
@@ -391,11 +406,14 @@ function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation 
     // of a private channel by name. assertCanRead with an impossible id gives one error.
     return assertCanRead(ctx, conv ? conv.id : -1, actor.id);
   }
+  if (!raw.startsWith("@")) {
+    throw badRequest("zly_adres", "address must be #channel, @handle or @a,@b (or a numeric conversation id)");
+  }
   // '@a' or '@a,@b' -> a direct conversation (dm/group), created on the fly.
   const handles = raw.split(/[\s,]+/).filter(Boolean);
   const ids = handles.map((h) => {
     const a = getActorByHandle(ctx, h);
-    if (!a) throw notFound("aktor", `nie ma aktora ${h}`);
+    if (!a) throw notFound("aktor", `nie ma aktora @${h.replace(/^@+/, "")}`);
     return a.id;
   });
   return ensureDirect(ctx, [actor.id, ...ids]);
@@ -432,10 +450,27 @@ function convName(ctx: Ctx, id: number): string {
  * `actor rename`), so a cache kept longer would show stale handles - and that is worse
  * than one query too many.
  */
-export type Nazwy = { aktorzy: Map<number, string>; rozmowy: Map<number, string> };
+export type Nazwy = {
+  aktorzy: Map<number, string>;
+  rozmowy: Map<number, string>;
+  /** Renderings already cut to the budget, by message id: the grouped list reuses them, so
+   *  the budget applies to what is finally returned (B-MG-11). */
+  linie: Map<number, string>;
+};
 
 function nowySlownik(): Nazwy {
-  return { aktorzy: new Map(), rozmowy: new Map() };
+  return { aktorzy: new Map(), rozmowy: new Map(), linie: new Map() };
+}
+
+// ---- untrusted text -------------------------------------------------------
+// Everything written by other actors (message bodies, wiki pages, labels, topics, question
+// text) is DATA. Trusted metadata sits on a header line; untrusted multi-line text never
+// starts a line of its own: each of its lines is quoted with "> ". Short untrusted fields
+// (labels, topics, names) are put on one line and capped.
+
+/** Prepends the standing note to a result that carries text from other actors. */
+function untrusted(result: string): string {
+  return `${QUOTE_NOTE}\n${result}`;
 }
 
 function nazwaAktora(ctx: Ctx, id: number, nazwy?: Nazwy): string {
@@ -444,7 +479,7 @@ function nazwaAktora(ctx: Ctx, id: number, nazwy?: Nazwy): string {
   const a = ctx.db.prepare("SELECT handle, kind FROM actors WHERE id = ?").get(id) as
     { handle: string; kind: string } | undefined;
   // The author's kind visible INLINE - see the comment at fmtMsg.
-  const nazwa = a ? (a.kind === "human" ? `${a.handle}:czlowiek` : a.handle) : "?";
+  const nazwa = a ? oneLine(a.kind === "human" ? `${a.handle}:czlowiek` : a.handle) : "?";
   nazwy?.aktorzy.set(id, nazwa);
   return nazwa;
 }
@@ -469,7 +504,10 @@ function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
   if (m.threadId) tags.push(`watek:${m.threadId}`);
   if (m.deletedAt) tags.push("skasowana");
   const tag = tags.length ? ` (${tags.join(", ")})` : "";
-  return `[${m.id}] ${fmtTs(m.ts)} ${nazwaRozmowy(ctx, m.conversationId, nazwy)} <${author}>${tag}: ${m.body}`;
+  // The header line carries only trusted metadata; the body follows as quoted lines, so a body
+  // can never open a line that looks like a header of somebody else's message.
+  return `[${m.id}] ${fmtTs(m.ts)} ${nazwaRozmowy(ctx, m.conversationId, nazwy)} <${author}>${tag}:\n` +
+    quote(m.body);
 }
 
 /**
@@ -488,8 +526,8 @@ function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
  *  machine; the agent reads this text, so it gets the name. */
 function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
   if (gdzie.startsWith("c:")) return convName(ctx, Number(gdzie.slice(2)));
-  if (gdzie.startsWith("w:")) return `wiki:${gdzie.slice(2)}`;
-  return gdzie;
+  if (gdzie.startsWith("w:")) return oneLine(`wiki:${gdzie.slice(2)}`);
+  return oneLine(gdzie);
 }
 
 /**
@@ -572,8 +610,10 @@ function pogrupujPoRozmowach(
     // The conversation name is already in the block header - repeating it on every line
     // costs context and adds nothing.
     for (const m of b.msgs) {
-      out.push((wzmianki.has(m.id) ? "> " : "  ") +
-        fmtMsg(ctx, m, nazwy).replace(` ${nazwaBloku} `, " "));
+      // The marker for "mentions you" is "* ", not "> ": the quote prefix is reserved for
+      // text written by other actors.
+      out.push((wzmianki.has(m.id) ? "* " : "  ") +
+        (nazwy.linie.get(m.id) ?? fmtMsg(ctx, m, nazwy)).replace(` ${nazwaBloku} `, " "));
     }
   }
   return out.join("\n");
@@ -582,14 +622,14 @@ function pogrupujPoRozmowach(
 function renderStatus(ctx: Ctx, actor: Actor): string {
   const nazwy = nowySlownik();
   const out: string[] = [`Jestes @${actor.handle}.`];
-  const rows = presence(ctx);
+  const rows = presenceFor(ctx, actor.id);
   out.push("", "=== KTO JEST ===");
   if (rows.length === 0) out.push("  (nikogo)");
   for (const p of rows) {
     const state = p.typing ? "PISZE" : p.busy ? "pracuje" : p.online ? "aktywna" : "cisza";
     out.push(
-      `  [${state}] @${p.handle} (${p.label})` +
-        (p.doing ? ` - robi: ${p.doing}` : ""),
+      `  [${state}] @${p.handle} (${oneLine(p.label)})` +
+        (p.doing ? ` - robi: ${oneLine(p.doing)}` : ""),
     );
   }
   const unread = unreadFor(ctx, actor.id).filter((r) => r.unread > 0);
@@ -686,26 +726,31 @@ function wBudzecie<T>(
   items: T[],
   fmt: (x: T) => string,
   od: "poczatku" | "konca" = "poczatku",
-): { linie: string[]; pokazane: T[]; pominiete: number } {
+): { linie: string[]; pokazane: T[]; pominiete: number; uciete: number } {
   const kolejnosc = od === "konca" ? [...items].reverse() : items;
   const linie: string[] = [];
   const pokazane: T[] = [];
   let uzyte = 0;
+  /** Characters cut INSIDE items (an item longer than the whole budget). */
+  let uciete = 0;
   for (const it of kolejnosc) {
     let l = fmt(it);
+    let tniete = 0;
     if (l.length > BUDZET_ZNAKOW) {
-      l = l.slice(0, BUDZET_ZNAKOW) + "\n    [...tresc przycieta - calosc przez REST]";
+      tniete = l.length - BUDZET_ZNAKOW;
+      l = l.slice(0, BUDZET_ZNAKOW) + `\n[...tresc przycieta: ${tniete} znakow - calosc przez REST]`;
     }
     if (pokazane.length > 0 && uzyte + l.length > BUDZET_ZNAKOW) break;
     linie.push(l);
     pokazane.push(it);
+    uciete += tniete;
     uzyte += l.length + 1;
   }
   if (od === "konca") {
     linie.reverse();
     pokazane.reverse();
   }
-  return { linie, pokazane, pominiete: items.length - pokazane.length };
+  return { linie, pokazane, pominiete: items.length - pokazane.length, uciete };
 }
 
 /**
@@ -761,6 +806,8 @@ async function callTool(
     /** Cancellation from the MCP client's side (notifications/cancelled or a dropped HTTP
      *  connection) - see waitForInbox, audit #11. */
     signal?: AbortSignal;
+    /** Whether the bearer that opened this request is still valid (R1-7b). */
+    stillValid?: () => boolean;
   },
 ): Promise<ToolResult> {
   const num = (v: unknown): number | undefined =>
@@ -778,10 +825,16 @@ async function callTool(
       const n = firstConnectNews(ctx, actor.id);
       const status = renderStatus(ctx, actor);
       const parts = [];
-      if (g) parts.push(`${GUIDELINES_PROMPT}\n\n${g.text}`);
+      if (g) {
+        // The first status must stay small (A2A-F5): the opening sections of the guidelines
+        // here, the rest through talk_guidelines.
+        const lead = leadingSections(g.text, 5000);
+        parts.push(`${GUIDELINES_PROMPT}\n\n${lead.text.trimEnd()}` +
+          (lead.cut ? "\n\n[Rest of the guidelines: call talk_guidelines.]" : ""));
+      }
       if (n) parts.push(`${n.prompt}\n\n${n.text}`);
       parts.push(status);
-      return text(parts.join("\n\n---\n\n"));
+      return text(untrusted(parts.join("\n\n---\n\n")));
     }
 
     case "talk_whoami":
@@ -822,7 +875,11 @@ async function callTool(
           })
           .join("\n");
       }
-      return text(`wyslane [${message.id}] do ${convName(ctx, conv.id)}${deliveryNote}`);
+      const nieznane = unresolvedMentions(ctx, message.body);
+      const mentionNote = nieznane.length
+        ? `\nMentions that did not resolve (no such actor, nobody was notified): ${nieznane.map((h) => "@" + h).join(", ")}`
+        : "";
+      return text(`wyslane [${message.id}] do ${convName(ctx, conv.id)}${deliveryNote}${mentionNote}`);
     }
 
     case "talk_read": {
@@ -831,7 +888,27 @@ async function callTool(
       const waitSec = Math.min(Math.max(num(args.waitSec) ?? 0, 0), WAIT_MAX_SEC);
       let messages = inboxAfter(ctx, actor.id, after, limit);
       if (messages.length === 0 && waitSec > 0) {
-        messages = await waitForInbox(ctx, actor.id, after, waitSec, limit, extra);
+        // A wait holds a subscription and a timer for up to 5 minutes; one actor must not be
+        // able to open them without bound (B-MG-15).
+        if ((activeWaits.get(actor.id) ?? 0) >= MAX_WAITS_PER_ACTOR) {
+          return text(
+            `Too many concurrent waits: at most ${MAX_WAITS_PER_ACTOR} concurrent waits per actor. ` +
+              `Finish or cancel one, or poll with waitSec=0.\nKursor: afterId=${after}`,
+          );
+        }
+        activeWaits.set(actor.id, (activeWaits.get(actor.id) ?? 0) + 1);
+        try {
+          messages = await waitForInbox(ctx, actor.id, after, waitSec, limit, extra);
+        } finally {
+          const left = (activeWaits.get(actor.id) ?? 1) - 1;
+          if (left <= 0) activeWaits.delete(actor.id);
+          else activeWaits.set(actor.id, left);
+        }
+        // The bearer may have been revoked, have expired or the actor been disabled while we
+        // waited: deliver nothing then (R1-7b).
+        if (extra.stillValid && !extra.stillValid()) {
+          throw unauthorized("token_invalid", "the token is no longer valid (revoked, expired or the actor disabled); nothing was delivered");
+        }
       }
       if (messages.length === 0) {
         return text(`Brak nowych wiadomosci. Kursor: afterId=${after}${stopkaSchematu("talk_read")}`);
@@ -843,6 +920,9 @@ async function callTool(
       // widziales".
       const nazwy = nowySlownik();
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy));
+      // The grouped list below must print THESE (already budgeted) renderings, not format the
+      // original messages a second time (B-MG-11).
+      okno.pokazane.forEach((m, i) => nazwy.linie.set(m.id, okno.linie[i]));
       const cursor = okno.pokazane[okno.pokazane.length - 1].id;
       const zostalo = okno.pominiete > 0 || messages.length === limit;
       // Who is writing RIGHT NOW. This is the moment an agent decides it will answer - and the
@@ -851,14 +931,14 @@ async function callTool(
       // #general [226]).
       const pisza = whoIsTyping(ctx, actor.id);
       const ktoPisze = pisza.length === 0 ? "" :
-        `\nTeraz pisza: ${pisza.map((p) => `@${p.handle}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
+        `\nTeraz pisza: ${pisza.map((p) => `@${oneLine(p.handle)}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
           .join(", ")} - rozwaz, czy Twoja odpowiedz nadal jest potrzebna.`;
-      return text(
+      return text(untrusted(
         pogrupujPoRozmowach(ctx, actor.id, okno.pokazane, nazwy) +
           `\n\nKursor: afterId=${cursor}` +
           (zostalo ? `\nTo nie wszystko - powtorz talk_read z afterId=${cursor}.` : "") +
           ktoPisze + stopkaSchematu("talk_read"),
-      );
+      ));
     }
 
     case "talk_log": {
@@ -880,27 +960,27 @@ async function callTool(
       const nazwy = nowySlownik();
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy), "konca");
       const glowa = okno.pokazane[0];
-      return text(
+      return text(untrusted(
         okno.linie.join("\n") +
           (okno.pominiete > 0
             ? `\n\n(${okno.pominiete} starszych pominieto, zeby zmiescic sie w limicie - ` +
               `doczytaj: talk_log {conversation, beforeId: ${glowa.id}})`
             : ""),
-      );
+      ));
     }
 
     case "talk_who": {
-      const rows = presence(ctx);
+      const rows = presenceFor(ctx, actor.id);
       if (rows.length === 0) return text("Nikogo nie ma.");
-      return text(rows.map((p) => {
+      return text(untrusted(rows.map((p) => {
         const state = p.typing ? "PISZE" : p.busy ? "pracuje" : p.online ? "aktywna" : "cisza";
         const age = Math.round((ctx.now() - p.lastSeenAt) / 60);
         const who = ctx.db.prepare("SELECT kind FROM actors WHERE id = ?").get(p.actorId) as
           { kind: string } | undefined;
         const kindTag = who?.kind === "human" ? " [czlowiek]" : "";
-        return `[${state}] @${p.handle}${kindTag} (${p.label}) ostatnio ${age} min temu` +
-          (p.doing ? ` - robi: ${p.doing}` : "");
-      }).join("\n"));
+        return `[${state}] @${p.handle}${kindTag} (${oneLine(p.label)}) ostatnio ${age} min temu` +
+          (p.doing ? ` - robi: ${oneLine(p.doing)}` : "");
+      }).join("\n")));
     }
 
     case "talk_channels": {
@@ -915,9 +995,9 @@ async function callTool(
           isMember(ctx, c.id, actor.id) ? null : "NIE jestes czlonkiem - talk_join",
           (unread.get(c.id) ?? 0) > 0 ? `${unread.get(c.id)} nieprzeczytanych` : null,
         ].filter(Boolean).join(", ");
-        return `  ${convName(ctx, c.id)}${c.topic ? `  - ${c.topic}` : ""}${flags ? `  (${flags})` : ""}`;
+        return `  ${convName(ctx, c.id)}${c.topic ? `  - ${oneLine(c.topic)}` : ""}${flags ? `  (${flags})` : ""}`;
       });
-      return text(lines.join("\n"));
+      return text(untrusted(lines.join("\n")));
     }
 
     case "talk_join": {
@@ -952,10 +1032,10 @@ async function callTool(
       if (items.length === 0) return text("Brak otwartych pytan.");
       const nazwy = nowySlownik();
       const okno = wBudzecie(items, (q) => `[q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
-      return text(
+      return text(untrusted(
         okno.linie.join("\n") +
           (okno.pominiete > 0 ? `\n\n(${okno.pominiete} dalszych pytan pominieto)` : ""),
-      );
+      ));
     }
 
     case "talk_react": {
@@ -978,13 +1058,13 @@ async function callTool(
       if (hits.length === 0) return text("Brak trafien.");
       const nazwy = nowySlownik();
       const okno = wBudzecie(hits, (m) => fmtMsg(ctx, m, nazwy));
-      return text(
+      return text(untrusted(
         okno.linie.join("\n") +
           (okno.pominiete > 0
             ? `\n\n(${okno.pominiete} dalszych trafien pominieto - zaweź zapytanie ` +
               `albo podaj limit/sinceTs)`
             : ""),
-      );
+      ));
     }
 
     case "talk_thread": {
@@ -1001,10 +1081,10 @@ async function callTool(
       const messages = listThread(ctx, first!.thread_id ?? root);
       const nazwy = nowySlownik();
       const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy), "konca");
-      return text(
+      return text(untrusted(
         okno.linie.join("\n") +
           (okno.pominiete > 0 ? `\n\n(${okno.pominiete} wczesniejszych w watku pominieto)` : ""),
-      );
+      ));
     }
 
     case "talk_file_get": {
@@ -1015,7 +1095,7 @@ async function callTool(
       const info = getFileInfo(ctx, fileId, actor.id);
       if (!info) throw notFound("plik", `nie ma pliku ${fileId} (albo brak dostepu, albo wygasl)`);
       return text(
-        `[${info.id}] ${info.name}  ${info.size} B  ${info.mime}\n` +
+        `${QUOTE_NOTE}\n[${info.id}] ${oneLine(info.name)}  ${info.size} B  ${oneLine(info.mime, 80)}\n` +
           `wyslany: ${fmtTs(info.createdAt)}` +
           `${info.sensitive ? "  [wrazliwy]" : ""}${info.burn ? "  [znika po pobraniu]" : ""}\n` +
           `Bajty przez REST: GET /api/files/${info.id}  (naglowek: Authorization: Bearer <Twoj token>)`,
@@ -1028,8 +1108,8 @@ async function callTool(
       const nazwy = nowySlownik();
       const out = [
         `Pod Twoja nieobecnosc: ${d.count} wiadomosci`,
-        "  kto:    " + d.byWho.map(([k, v]) => `${k} x${v}`).join(", "),
-        "  gdzie:  " + d.byConversation.map(([k, v]) => `${k} x${v}`).join(", "),
+        "  kto:    " + d.byWho.map(([k, v]) => `${oneLine(k)} x${v}`).join(", "),
+        "  gdzie:  " + d.byConversation.map(([k, v]) => `${oneLine(k)} x${v}`).join(", "),
       ];
       if (d.mentions.length) {
         out.push(`  DOTYCZY CIEBIE (${d.mentions.length}):`);
@@ -1039,7 +1119,7 @@ async function callTool(
         out.push(`  OTWARTE PYTANIA (${d.open.length}):`);
         for (const q of d.open) out.push(`    [q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
       }
-      return text(out.join("\n"));
+      return text(untrusted(out.join("\n")));
     }
 
     case "talk_mentions": {
@@ -1047,13 +1127,13 @@ async function callTool(
       if (ms.length === 0) return text("Brak wzmianek.");
       const nazwy = nowySlownik();
       const okno = wBudzecie(ms, (m) => fmtMsg(ctx, m, nazwy), "konca");
-      return text(
+      return text(untrusted(
         okno.linie.join("\n") +
           (okno.pominiete > 0
             ? `\n\n(${okno.pominiete} starszych wzmianek pominieto - podaj afterId, ` +
               `zeby przejsc po nich od poczatku)`
             : ""),
-      );
+      ));
     }
 
     case "talk_seen": {
@@ -1078,13 +1158,17 @@ async function callTool(
         signal(ctx, sessionId, "typing", { stop: true });
         return text("kuleczka zgaszona");
       }
+      if (to.startsWith("wiki:") && !/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,99}$/u.test(to.slice(5))) {
+        throw badRequest("bad_wiki_slug", "wiki target must be 'wiki:<slug>' (letters, digits, . _ -; no spaces or line breaks)");
+      }
       const typingIn = to.startsWith("wiki:")
         ? `w:${to.slice(5)}`
         : `c:${resolveConversation(ctx, actor, to).id}`;
       const sec = num(args.sec) ?? null;
       signal(ctx, sessionId, "typing", { typingIn, sec });
+      const shownSec = sec === null ? TYPING_TTL : Math.min(Math.max(sec, 1), TYPING_MAX);
       return text(
-        `inni widza, ze piszesz (${to}); gasnie po ${sec ?? 7} s albo po wyslaniu wiadomosci`,
+        `inni widza, ze piszesz (${oneLine(to)}); gasnie po ${shownSec} s albo po wyslaniu wiadomosci`,
       );
     }
 
@@ -1116,7 +1200,9 @@ async function callTool(
     case "wiki_search": {
       const hits = searchWiki(ctx, strv(args.q) ?? "", num(args.limit));
       if (hits.length === 0) return text("Brak trafien w wiki. (Mozesz zalozyc strone: wiki_write)");
-      return text(hits.map((h) => `[${h.slug}] ${h.title}\n    ${h.snippet}`).join("\n"));
+      return text(untrusted(
+        hits.map((h) => `[${oneLine(h.slug)}] ${oneLine(h.title)}\n${quote(h.snippet)}`).join("\n"),
+      ));
     }
 
     case "wiki_read": {
@@ -1131,13 +1217,14 @@ async function callTool(
         const spis = pageOutline(page.body);
         if (spis.length === 0) {
           return text(
-            `# ${page.title} (${page.slug}) - ${page.body.length} znakow, bez naglowkow.\n` +
+            `# ${oneLine(page.title)} (${page.slug}) - ${page.body.length} znakow, bez naglowkow.\n` +
               `Cala tresc: wiki_read {slug: "${page.slug}"}`,
           );
         }
         return text(
-          `# ${page.title}  (${page.slug})  ${page.body.length} znakow, rewizja ${page.lastRevisionId}\n` +
-            spis.map((x) => `${"  ".repeat(x.level - 1)}[${x.bytes} zn.] ${x.heading}`).join("\n") +
+          QUOTE_NOTE + "\n" +
+          `# ${oneLine(page.title)}  (${page.slug})  ${page.body.length} znakow, rewizja ${page.lastRevisionId}\n` +
+            spis.map((x) => `${"  ".repeat(x.level - 1)}[${x.bytes} zn.] ${oneLine(x.heading)}`).join("\n") +
             `\n\nFragment: wiki_read {slug: "${page.slug}", section: "<naglowek>"}` +
             `\nCALOSC (i tylko ona odblokowuje zapis): wiki_read {slug: "${page.slug}"}`,
         );
@@ -1156,8 +1243,8 @@ async function callTool(
         // We do NOT set the read marker - the same rule as for a truncated page: somebody who saw
         // a fragment would overwrite the rest without knowing it.
         return text(
-          `# ${page.title} (${page.slug}), fragment "${sekcja}", rewizja ${page.lastRevisionId}\n` +
-            `[to NIE jest cala strona - zapis wymaga wczesniejszego odczytu calosci]\n\n${tresc}`,
+          `${QUOTE_NOTE}\n# ${oneLine(page.title)} (${page.slug}), fragment "${oneLine(sekcja)}", rewizja ${page.lastRevisionId}\n` +
+            `[to NIE jest cala strona - zapis wymaga wczesniejszego odczytu calosci]\n${quote(tresc)}`,
         );
       }
 
@@ -1165,24 +1252,29 @@ async function callTool(
       // so this is the second place after talk_read where one call can exceed a client's output
       // limit. We cut by LINES, because a page is a document: a missing paragraph reads better
       // than a truncated sentence.
-      const linie = page.body.split("\n");
-      const okno = wBudzecie(linie, (l) => l);
+      const linie = page.body.split(LINE_BREAKS);
+      // Budget the QUOTED text: the "> " prefix adds 2 characters per line (R1-F1).
+      const okno = wBudzecie(linie, (l) => "> " + l);
       // The read marker ONLY for a whole page. A read unlocks a write, and a write replaces the
       // WHOLE content - an agent that saw 3/4 of a page and sent back "what I read plus my
       // paragraph" would delete the rest and never find out. Better not to let it into the write
       // and to say how to read the whole thing.
-      if (okno.pominiete === 0) markPageSeen(ctx, page.slug, actor.id);
+      // A single line longer than the budget is cut INSIDE the line and does not count as
+      // "omitted" - so the characters cut inside lines count too (B-MG-10).
+      const kompletna = okno.pominiete === 0 && okno.uciete === 0;
+      if (kompletna) markPageSeen(ctx, page.slug, actor.id);
       const naglowek =
-        `# ${page.title}  (${page.slug})\n` +
+        `${QUOTE_NOTE}\n# ${oneLine(page.title)}  (${page.slug})\n` +
         `ostatnia zmiana: @${page.updatedBy ?? "?"}, rewizji: ${page.revisions}` +
         `, biezaca rewizja: ${page.lastRevisionId} (oddaj ja w baseRevision przy zapisie)\n\n`;
       return text(
         naglowek + okno.linie.join("\n") +
-          (okno.pominiete > 0
+          (!kompletna
             ? `\n\n[...przycieto: ${okno.pominiete} z ${linie.length} linii nie zmiescilo sie ` +
-              `w limicie wyjscia narzedzia. NIE zapisuj tej strony na podstawie tego, co widzisz - ` +
-              `nadpisalbys brakujaca czesc. Calosc: GET /api/wiki/${page.slug} (ten odczyt tez ` +
-              `odblokowuje zapis).]`
+              `w limicie wyjscia narzedzia${okno.uciete > 0 ? `, a ${okno.uciete} znakow zostalo ucietych wewnatrz dlugich linii` : ""}. ` +
+              `Ten odczyt NIE odblokowuje zapisu. NIE zapisuj tej strony na podstawie tego, co widzisz - ` +
+              `nadpisalbys brakujaca czesc. Reszta: wiki_read {slug: "${page.slug}", outline: true} i ` +
+              `potem section, albo calosc przez REST: GET /api/wiki/${page.slug} (ten odczyt odblokowuje zapis).]`
             : ""),
       );
     }
@@ -1190,16 +1282,16 @@ async function callTool(
     case "wiki_list": {
       const pages = listPages(ctx, actor.id);
       if (pages.length === 0) return text("Wiki jest pusta. Zaloz pierwsza strone: wiki_write.");
-      return text(pages.map((p) => {
+      return text(untrusted(pages.map((p) => {
         const where = p.parentSlug ? `  (pod: ${p.parentSlug})` : "";
         const fresh = p.unseen > 0 ? `  [${p.unseen} zmian od Twojego wejscia]` : "";
         // A sentence and a SIZE next to every entry: that is the whole difference between
         // "choosing a page" and "fetching forty pages in order to choose".
-        const opis = p.summary ? `\n    ${p.summary}` : "";
+        const opis = p.summary ? `\n${quote(p.summary)}` : "";
         const koszt = p.bytes ? `  ${p.bytes} zn.` : "";
         const czytane = p.readers ? `  (czytali: ${p.readers})` : "  (nikt jeszcze nie czytal)";
-        return `[${p.slug}] ${p.title}${koszt}${czytane}${where}  (zmiana: @${p.updatedBy ?? "?"})${fresh}${opis}`;
-      }).join("\n"));
+        return `[${oneLine(p.slug)}] ${oneLine(p.title)}${koszt}${czytane}${where}  (zmiana: @${p.updatedBy ?? "?"})${fresh}${opis}`;
+      }).join("\n")));
     }
 
     case "wiki_write": {
@@ -1215,16 +1307,16 @@ async function callTool(
       });
       const where = page.parentSlug ? ` pod [${page.parentSlug}]` : "";
       return text(
-        `zapisane: [${page.slug}] "${page.title}"${where} ` +
+        `zapisane: [${oneLine(page.slug)}] "${oneLine(page.title)}"${where} ` +
           `(rewizja ${page.lastRevisionId}, ${page.revisions} w historii)`,
       );
     }
 
     case "wiki_history": {
       const revs = pageHistory(ctx, strv(args.slug) ?? "");
-      return text(revs.map((r) =>
-        `#${r.id}  ${fmtTs(r.createdAt)}  @${r.actor ?? "?"}${r.note ? `  - ${r.note}` : ""}`,
-      ).join("\n"));
+      return text(untrusted(revs.map((r) =>
+        `#${r.id}  ${fmtTs(r.createdAt)}  @${r.actor ?? "?"}${r.note ? `  - ${oneLine(r.note)}` : ""}`,
+      ).join("\n")));
     }
 
     case "talk_claim": {
@@ -1243,7 +1335,7 @@ async function callTool(
         content: [{
           type: "text",
           text: `HELD-BY @${r.heldBy.handle} jeszcze ${r.heldBy.expiresAt - ctx.now()} s` +
-            (r.heldBy.note ? ` (${r.heldBy.note})` : ""),
+            (r.heldBy.note ? ` (${oneLine(r.heldBy.note)})` : ""),
         }],
         isError: true,
       };
@@ -1261,10 +1353,10 @@ async function callTool(
     case "talk_leases": {
       const leases = listLeases(ctx);
       if (leases.length === 0) return text("Nic nie jest zajete.");
-      return text(leases.map((l) =>
-        `${l.resource}  @${l.handle}  jeszcze ${l.expiresAt - ctx.now()} s` +
-          (l.note ? `  (${l.note})` : ""),
-      ).join("\n"));
+      return text(untrusted(leases.map((l) =>
+        `${oneLine(l.resource)}  @${l.handle}  jeszcze ${l.expiresAt - ctx.now()} s` +
+          (l.note ? `  (${oneLine(l.note)})` : ""),
+      ).join("\n")));
     }
 
     default:
@@ -1346,7 +1438,7 @@ function waitForInbox(
 
 // ---- assembly -------------------------------------------------------------
 
-function buildServer(ctx: Ctx, config: Config, actor: Actor): Server {
+function buildServer(ctx: Ctx, config: Config, actor: Actor, stillValid?: () => boolean): Server {
   const server = new Server(
     { name: "agenttalks", version: "0.2.0" },
     { capabilities: { tools: {} } },
@@ -1359,12 +1451,16 @@ function buildServer(ctx: Ctx, config: Config, actor: Actor): Server {
         progressToken: request.params._meta?.progressToken,
         sendNotification: extra?.sendNotification as ((n: unknown) => Promise<void>) | undefined,
         signal: extra?.signal,
+        stillValid,
       });
       return dopiszNieznanePola(name, (args ?? {}) as Record<string, unknown>, wynik);
     } catch (err) {
       // A domain error comes back as a tool result (isError), not as a protocol error: the agent
       // is meant to read it and fix the call, not to see a broken session.
-      const msg = err instanceof AppError || err instanceof Error ? err.message : String(err);
+      // Errors echo caller-supplied values (slug, fileId, handle): keep them on one line so
+      // such a value cannot start a line of its own (R1-F6).
+      const raw = err instanceof AppError || err instanceof Error ? err.message : String(err);
+      const msg = raw.replace(new RegExp(LINE_BREAKS.source, "gu"), " ");
       return { content: [{ type: "text", text: `blad: ${msg}` }], isError: true };
     }
   });
@@ -1373,14 +1469,17 @@ function buildServer(ctx: Ctx, config: Config, actor: Actor): Server {
 
 /** Handling POST /mcp. Authentication was done by the caller (bearer); here we already
  *  receive a specific actor. */
-export async function handleMcp(ctx: Ctx, config: Config, actor: Actor, req: Req, res: Res):
-  Promise<void> {
-  const server = buildServer(ctx, config, actor);
+export async function handleMcp(ctx: Ctx, config: Config, actor: Actor, req: Req, res: Res,
+  parsedBody?: unknown): Promise<void> {
+  const auth = String(req.headers.authorization ?? "");
+  const bearer = /^Bearer\s+(.+)$/i.exec(auth)?.[1] ?? "";
+  const stillValid = () => verifyToken(ctx, bearer)?.id === actor.id;
+  const server = buildServer(ctx, config, actor, stillValid);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on("close", () => {
     void transport.close();
     void server.close();
   });
   await server.connect(transport);
-  await transport.handleRequest(req, res);
+  await transport.handleRequest(req, res, parsedBody);
 }

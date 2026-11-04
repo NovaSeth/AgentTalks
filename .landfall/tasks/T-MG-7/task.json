@@ -13,7 +13,7 @@
       "at": "2026-11-03T23:49:27.029Z"
     }
   ],
-  "status": "dispatched",
+  "status": "done",
   "round": 0,
   "events": [
     {
@@ -72,8 +72,61 @@
         "base": "0561f866f0737576cc087c30a3cdaff79a1ed8b3",
         "note": "review r1"
       }
+    },
+    {
+      "at": "2026-11-04T00:07:35.657Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "approved",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T00:07:36.139Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T00:07:36.139Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "b7036bb93272b40fd3253908269ef0f93abb8f6f",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:08:09.229Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "b7036bb93272b40fd3253908269ef0f93abb8f6f"
+      }
+    },
+    {
+      "at": "2026-11-04T00:12:56.080Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "7f0583a54235641b901db97701ab9a27bb699a6a",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "beed4e5d098d2909aaeee0416ec53af93b5b62ec"
+      }
     }
   ],
   "base": "0561f866f0737576cc087c30a3cdaff79a1ed8b3",
-  "branch": "task/T-MG-7-fix-a2-privacy-data"
+  "branch": "task/T-MG-7-fix-a2-privacy-data",
+  "mergedAt": "2026-11-04T00:12:56.080Z"
 }

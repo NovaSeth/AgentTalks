@@ -54,3 +54,14 @@ Status: DONE_WITH_CONCERNS
 
 Gate: tests 341 pass / 0 fail; typecheck clean; secrets clean for 0561f86..HEAD.
 Concerns: getActorByHandle lives in src/core/actors.ts (PR #1), so the unresolved-handle normalization is a local copy of the same regex. Item 3 weakens the handle-wide cap as the review asked: a guesser rotating IPs is limited by the per-IP and IP+handle caps and by 429 after 20 handle-wide failures.
+
+## Fix round 2 (findings-r2.md, D-MG-14)
+<!-- Stored by the orchestrator: the implementer's harness refused the write. -->
+Status: DONE_WITH_CONCERNS
+1 (blocking): D-MG-14 implemented. Successful password or passkey login sets at_dev (<hmac>.<nonce>.<actorId>, HttpOnly, SameSite=Lax, Path /api/login, Max-Age 180 d, Secure as the session cookie) via makeDeviceCookie/hasDeviceCookie in src/http/auth.ts. Before verification the per-account cap (20 / 15 min per resolved actor) answers 429 unless a valid at_dev for that actor is present. Tests: (a) 24 failures from 24 IPs then the right password from a 25th IP without at_dev -> 429, no Set-Cookie, no login_failed line (verification not run); (b) browser with at_dev -> 200 after 24 failures elsewhere, cookie attributes asserted; (c) other-actor, forged, and actor-id-swapped at_dev -> 429. Commit dcc38a7.
+2: a valid at_dev also skips the IP+handle cap; the plain per-IP cap (20) always applies. Test: shared IP, 8 failures -> 429 without at_dev, 200 with it. dcc38a7.
+3: securityLog("invite_minted", {inviteId, by: "cli"}) in src/cli/main.ts; the CLI has no disable/enable command. Test runs main(["init"]) then main(["invite","create"]). 0ceb6ef.
+4: logout behavior kept; comment `// D-MG-14: forced logout of one browser accepted (no epoch bump without CSRF).` dcc38a7.
+Test change: the round-1 test (added in this task, not in the main baseline) "a high handle-wide failure count does not lock out the right password elsewhere" asserted the behavior D-MG-14 reverses; renamed to "... refuses a browser without at_dev (item 3, D-MG-14)", first assertion 200 -> 429, comment cites D-MG-14.
+Gate: tests 346 pass / 0 fail; typecheck clean; secrets clean for 0561f86..HEAD.
+Concern: the per-account cap can lock a victim's OTHER (unknown) browsers for 15 minutes; accepted by D-MG-14.

@@ -16,6 +16,8 @@
  */
 import type { Ctx } from "./ctx.ts";
 import { notFound } from "./errors.ts";
+import { canRead } from "./conversations.ts";
+import { onCommitted } from "../store/db.ts";
 
 /**
  * How many seconds the "typing" signal lives without a refresh.
@@ -189,7 +191,9 @@ export function clearTyping(ctx: Ctx, sessionId: string): void {
   ctx.db
     .prepare("UPDATE sessions SET typing_at = NULL, typing_in = NULL WHERE id = ?")
     .run(sessionId);
-  ctx.bus.publish(allActorIds(ctx), { type: "presence" });
+  // Called from inside postMessage's transaction: the event waits for the commit, so a
+  // rolled-back post does not announce a presence change.
+  onCommitted(ctx.db, () => ctx.bus.publish(allActorIds(ctx), { type: "presence" }));
 }
 
 export function endSession(ctx: Ctx, sessionId: string): void {
@@ -307,8 +311,66 @@ export function whoIsTyping(
   const out: Array<{ handle: string; in: string | null }> = [];
   for (const p of presence(ctx)) {
     if (!p.typing || p.actorId === exceptActorId || widziani.has(p.handle)) continue;
+    // exceptActorId is the viewer (both callers pass the asking actor): a location it cannot
+    // read is dropped, otherwise the MCP layer resolves "c:<id>" into a private channel name.
+    if (!typingPlaceVisible(ctx, p.typingIn, exceptActorId)) continue;
     widziani.add(p.handle);
     out.push({ handle: p.handle, in: p.typingIn });
   }
   return out;
+}
+
+/** Presence as one viewer may see it. `sessionId` and `cwd` are null for sessions that are
+ *  not the viewer's own, unless the viewer is a human instance admin. */
+export type PresenceView = Omit<PresenceRow, "sessionId"> & { sessionId: string | null };
+
+/** Whether a typing location may be shown to the viewer. "c:<id>" names a conversation and
+ *  goes through canRead; a malformed "c:" location is treated as unreadable. Other
+ *  locations ("w:<slug>": the wiki is public) and a missing one are visible. */
+function typingPlaceVisible(ctx: Ctx, place: string | null, viewerId: number): boolean {
+  if (!place || !place.startsWith("c:")) return true;
+  const id = /^c:(\d+)$/.exec(place);
+  return id !== null && canRead(ctx, Number(id[1]), viewerId);
+}
+
+/**
+ * Presence filtered for one viewer. The unfiltered list leaked two things to every
+ * signed-in actor: WHERE somebody is typing ("c:<id>" of a private conversation the viewer
+ * cannot read) and the session details (id, working directory) of everybody else.
+ *
+ * An unreadable typing location turns the whole typing signal off for that viewer rather
+ * than only nulling the place: the UI treats a typing signal WITHOUT a place as "typing
+ * everywhere", so a nulled place would show the bubble in every conversation.
+ * `doing` is free text the session wrote about itself and stays as it is.
+ */
+export function presenceFor(ctx: Ctx, viewerId: number): PresenceView[] {
+  const viewer = ctx.db.prepare("SELECT kind, is_admin FROM actors WHERE id = ?")
+    .get(viewerId) as { kind: string; is_admin: number } | undefined;
+  const seesDetails = viewer?.kind === "human" && viewer.is_admin === 1;
+  return presence(ctx).map((p) => {
+    const own = p.actorId === viewerId;
+    const placeOk = own || typingPlaceVisible(ctx, p.typingIn, viewerId);
+    return {
+      ...p,
+      sessionId: own || seesDetails ? p.sessionId : null,
+      cwd: own || seesDetails ? p.cwd : null,
+      typing: placeOk ? p.typing : false,
+      typingIn: placeOk ? p.typingIn : null,
+    };
+  });
+}
+
+/** The session id if it exists and belongs to the actor, otherwise null. A client-supplied
+ *  sessionId is a claim: a foreign one would tag a message with somebody else's session and
+ *  clear THEIR typing bubble. Callers drop a foreign id rather than fail the operation. */
+export function ownSessionOrNull(
+  ctx: Ctx,
+  sessionId: string | null | undefined,
+  actorId: number,
+): string | null {
+  if (!sessionId) return null;
+  const row = ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?").get(sessionId) as
+    | { actor_id: number }
+    | undefined;
+  return row && row.actor_id === actorId ? sessionId : null;
 }

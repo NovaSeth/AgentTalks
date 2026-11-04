@@ -5,9 +5,15 @@
   "title": "Caly projekt po angielsku: nazwy plikow, identyfikatory, testy, kody bledow API, komunikaty CLI/HTTP, docs",
   "lane": null,
   "owner": "MG",
-  "class": null,
-  "classHistory": [],
-  "status": "new",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: matches risk glob **/SKILL.md; matches risk glob .github/workflows/**; flag public-api; flag security; 6000 LOC > 400",
+      "at": "2026-11-04T00:40:43.646Z"
+    }
+  ],
+  "status": "dispatched",
   "round": 0,
   "events": [
     {
@@ -19,8 +25,45 @@
           "T-MG-1"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T00:40:43.646Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:5445e7dd8e840133",
+          "risk-path:b803fcb7f17ed923",
+          "risk-flag:public-api",
+          "risk-flag:security",
+          "loc-over",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T00:40:44.171Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-2-english",
+        "base": "d89e721ef8bd4809aa9066030d2dd834632c996c",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-2"
+      }
+    },
+    {
+      "at": "2026-11-04T00:41:01.223Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:implementer",
+        "base": "d89e721ef8bd4809aa9066030d2dd834632c996c",
+        "note": "EN-1 error-code contract"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "d89e721ef8bd4809aa9066030d2dd834632c996c",
+  "branch": "task/T-MG-2-english"
 }

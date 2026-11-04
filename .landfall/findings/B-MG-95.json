@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-95",
+  "status": "fixed",
+  "task": "T-MG-7",
+  "round": 1,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:security-reviewer"
+  },
+  "finding": "F3",
+  "severity": "minor",
+  "path": "src/core/notifications.ts",
+  "line": null,
+  "rule": "PRI-6",
+  "text": "Low: markNotificationsRead without ids updates all unread rows including ones READABLE_NOW hides (ex-member's), and 'changed' counts them while the listed unread count does not. No leak; harmless but the returned count can exceed what the user saw.",
+  "filedAt": "2026-11-04T00:07:35.939Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": "2026-11-04T00:39:15.712Z",
+  "closedBy": "T-MG-11",
+  "reason": "Fixed by T-MG-11"
+}

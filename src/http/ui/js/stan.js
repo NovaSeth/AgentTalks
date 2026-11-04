@@ -39,7 +39,7 @@ export const state = {
   openQuestions: {},       // messageId -> questionId (otwarte, widoczne dla mnie)
   lastDelivery: null,      // {conversationId, messageId, delivery[]} z ostatniej wysylki
   pendingFiles: [],        // files waiting to be sent (previews in the composer)
-  sseCursor: 0,            // highest message id seen = the SSE replay cursor (?after=)
+  sseCursor: 0,            // highest message id delivered by SSE, never by REST
   newBelow: 0,             // how many new ones arrived while the list was scrolled up
   view: "chat",            // "chat" | "wiki" | "users" | "notifications"
   notifUnread: 0,          // licznik centrum powiadomien (dzwonek w sidebarze)
@@ -50,6 +50,17 @@ export const state = {
     editing: false, tab: "info", draft: null,
   },
 };
+
+const initialState = structuredClone(state);
+
+/** Drop account data without replacing the state object imported by every view. */
+export function resetState() {
+  Object.assign(state, structuredClone(initialState));
+  for (const id of Object.keys(dmMembersCache)) delete dmMembersCache[id];
+  animatedMsgs.clear();
+  zgloszenia.clear();
+  resetMentionRe();
+}
 
 /** The registry of drawing functions. The data and action layers do NOT import views - that
 /**  would close an import cycle (a view calls an action, the action redraws the view). Views
@@ -135,13 +146,11 @@ export function mentionsMe(text) {
   return mentionRe.test(String(text ?? ""));
 }
 
-/** The only place a message enters the state - and the only one where the SSE replay cursor
-/**  moves. */
+/** Merge messages from either REST or SSE. Only the SSE handler advances its replay cursor. */
 export function upsertMessage(convId, msg) {
   const list = state.msgs[convId] || (state.msgs[convId] = []);
   const i = list.findIndex((m) => m.id === msg.id);
   if (i >= 0) list[i] = msg; else { list.push(msg); list.sort((a, b) => a.id - b.id); }
-  if (msg.id > state.sseCursor) state.sseCursor = msg.id;
 }
 
 /** Unread rows from the server (fields: unread, badge) into two state maps.

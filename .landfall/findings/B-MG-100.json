@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-100",
+  "status": "fixed",
+  "task": "T-MG-1",
+  "round": 5,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F2",
+  "severity": "blocking",
+  "path": "src/core/conversations.ts",
+  "line": 336,
+  "rule": "SEC-8",
+  "text": "Acceptance 1/11 (GC5): an instance admin outside a private conversation can retrieve its topic through updateConversation. Route reproduction: authenticated non-member admin gets 403 from GET /api/conversations/1, but PATCH /api/conversations/1 with {} returns 200 containing topic PRIVATE_TOPIC_FIXTURE. Check canRead before returning conversation content, or return a content-free acknowledgement for administrative operations without membership.",
+  "filedAt": "2026-11-04T00:45:53.446Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-13",
+  "closedAt": "2026-11-04T00:52:09.024Z",
+  "closedBy": "T-MG-13",
+  "reason": "Fixed by T-MG-13"
+}
