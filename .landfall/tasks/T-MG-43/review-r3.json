@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/data.js",
+      "line": 177,
+      "rule": "REV-2",
+      "text": "Acceptance 4; previous F2 ADDRESSED (24/24 tests; exact repro fails on base). New in-memory ui-t18 repro: repeat F2 but return HTTP 500 once for after=0&limit=2. After reconnect, body(1)='m1' and reactions[1]=undefined instead of the outage edit and reaction. reconcile deletes owed ranges before reading and discards them on failure, so subsequent catch-up misses message 1. Retain unfinished ranges and retry after reconnect/backoff; add this regression."
+    },
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/data.js",
+      "line": 157,
+      "rule": "REV-2",
+      "text": "Acceptance 4: the three-round cap discards unresolved overlaps. In-memory ui-t18 repro: three times, delay reconciliation before its cut, hold a later reaction refresh after its cut, edit/react to message 1, then deliver reconciliation followed by refresh. Append 3..32 and reconnect: body/reaction remain 'round2', expected 'round3'. Allowing a fourth round in memory passes. Retain owed ranges when yielding at the cap and schedule further repair; add this regression."
+    }
+  ],
+  "run": "codex-T-MG-43-reviewer-3",
+  "sha256": "c8af11d2bac892277fb434e3edd0acf273839ad8d0e527bd5fb3c23d3bb31c0f"
+}

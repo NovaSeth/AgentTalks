@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c",
-  "collectedAt": "2026-11-04T19:34:54.127Z",
+  "head": "6e7a5d0901363df7c5b6d6b0acfcb7204592ec9f",
+  "collectedAt": "2026-11-04T20:20:26.881Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -95,7 +95,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"A2A-F8: a missing atalks prints exactly one line on stderr and nothing on stdout\",1]",
+      "id": "[\"\",\"A2A-F8: a missing atalk prints exactly one line on stderr and nothing on stdout\",1]",
       "file": "",
       "skipped": false
     },
@@ -191,6 +191,31 @@
     },
     {
       "id": "[\"\",\"B-MG-117: the user focusing something else after the submit (a focusin) keeps that focus\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-118 (codex repro): a message held from SSE during the newest-30 refresh keeps its REST reactions\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-118: a held message edited live during the newest-30 refresh still gets its REST reactions\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-118: a reaction refreshed by a live event during the after= page is not overwritten by the older page\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-118: a reaction removed by a live event during the after= page stays removed\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"B-MG-119 (codex repro): after a failed retry the reconnect refreshes a held gap message older than the newest 30\",1]",
       "file": "",
       "skipped": false
     },
@@ -826,6 +851,16 @@
     },
     {
       "id": "[\"\",\"F4 (D-MG-30): on the first run the marker's actor gets nothing either: legacy data is deleted\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F4 (T-MG-43): a held gap message edited by a live event during the after= request keeps the live body\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"F4 (T-MG-43): a message replaced by a REST reaction refresh during the after= page keeps that newer revision\",1]",
       "file": "",
       "skipped": false
     },
@@ -1706,11 +1741,6 @@
     },
     {
       "id": "[\"\",\"T-MG-29: scrollToBottom(true) still asks for behavior smooth when reduced motion is off\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"T-MG-41: with only the old atalk on PATH the hook falls back to it\",1]",
       "file": "",
       "skipped": false
     },
@@ -2860,11 +2890,6 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"atalks and the atalk compatibility alias resolve to the same installed implementation\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"avatar: bytes rather than a URL, format detected from content, SVG rejected\",1]",
       "file": "",
       "skipped": false
@@ -2881,11 +2906,6 @@
     },
     {
       "id": "[\"\",\"binding to loopback is always allowed\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"both client names print identical atalks help, usage and error hints\",1]",
       "file": "",
       "skipped": false
     },
@@ -4360,6 +4380,41 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"r1 F1 (codex repro): a superseded newest-30 page landing late keeps the newer catch-up's reactions and body\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r1 F1: a reaction refresh sent before a newer catch-up and landing after it does not undo that catch-up\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r1 F1: an unstamped write during the after= page (an own edit, applyMessageUpdate) is kept\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r1 F1: when the superseded page lands first, the newer catch-up's page still applies\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r2 F2 (codex repro): a read sent earlier but cut later is not erased by a read sent after it but cut before it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r2 F2: an unstamped reaction write while a page is in flight (a view loader) is kept, then re-read\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"r2 F2: while the re-read of an overlap is pending, a late superseded page does not show older state\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"railBadges derives the Activity badge from notifUnread and formats 99+\",1]",
       "file": "",
       "skipped": false
@@ -5326,5 +5381,5 @@
     }
   ],
   "failing": [],
-  "sha256": "4c8e159673d6eaa2d957e6bdcb94e54f841f628664f3a46e2c2ba3f06395ef18"
+  "sha256": "1f329c3ee10a82736c42003be805564f00f08b720f01f985489b929e538bc3e4"
 }

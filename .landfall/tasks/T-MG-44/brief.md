@@ -1,46 +1,36 @@
-# Web UI unread highlights like Slack (only after absence, fade after read) (T-MG-44)
-<!-- Task brief (ORC-4). Fill every <…>; "landfall" is the plugin's CLI. Every path is absolute (ORC-15). An authoring task says so in its first line. -->
+# Web UI unread highlights like Slack (only after absence, fade after read) (T-MG-44, recreated from T-MG-39)
+<!-- Task brief (ORC-4), hand-written by the orchestrator. Every path is absolute (ORC-15). This file replaces the unfilled template; the executor worked from an identical copy at scratchpad/T-MG-44-brief.md. -->
 
-Executor: landfall:implementer (class: standard — 5 files > 2; 150 LOC > 30; kind: task).
-Review: none
-Ignore skills, plugins and MCP tools you may have; never call an AI provider; this brief and the files it names are your only context (PRI-3).
-Worktree: <absolute path> (branch task/T-MG-44-unread-highlight from <base branch> at 550d269269d01a638a3eff95cc7c61d612c8025c; dependencies installed: <yes/no>). Update the branch only with `git merge origin/main`, never rebase.
-Budget: <minutes> minutes (default 15, more for more acceptance points); when it nears, stop at a green commit and list the rest under Follow-up in the report.
-Shared brief: <path of the shared brief for this kind of task, if one exists>.
-Rules: ORC-2 ORC-17 ORC-18 ORC-12 ORC-13 COD-1 COD-2 COD-3 COD-14 REV-10 REV-9 REV-18 ORC-7 PRI-2 PRI-15 SPC-13 SPC-14; read them with `landfall rule <ID…>`.
+Executor: landfall:implementer (class: standard, escalated to critical by verify; kind: task). Deliverable kind: a working feature in the shipped web UI.
+Review: cross-provider (Codex), then a scoped re-review.
+Worktree: /Users/michal/Documents/Code/AgentTalks-wt/T-MG-44 (branch task/T-MG-44-unread-highlight from main at 550d269269d0). Never rebase.
+Rules: ORC-2 ORC-17 ORC-18 ORC-12 ORC-13 COD-1 COD-2 COD-3 COD-14 REV-10 REV-9 REV-18 ORC-7 PRI-2 PRI-15 SPC-13 SPC-14. Decisions in force: D-MG-6 (English in code), D-MG-18 (Primer visual layer, Slack interaction model).
 
-## Problem (<who reported it, where>)
-<symptom> and the chain of causes as `file:line`.
+## Source (the owner's request, task title verbatim)
+"Web UI unread highlights like Slack (only after absence, fade after read)".
+
+## Today
+- `renderMessages()` in src/http/ui/js/view-chat.js draws the list with a "New messages" divider (`.newline`, positioned by `dividerAfter()` in src/http/ui/js/counters.js:53 from `state.readMark[convId]`); live events update single bubbles via `upsertMessageNode()`.
+- `markReadDebounced(convId, messageId)` in src/http/ui/js/data.js:262 posts the read mark (500 ms debounce) and clears `state.unread[convId]` after the server confirms.
+- app.js has a `visibilitychange` listener; app.css has the reduced-motion block.
 
 ## Scope
-Create: <files>. Modify: <files>. Tests: <test files>. Nothing else. Something missing in a shared part: stop with NEEDS_CONTEXT and name the gap (file, field, consumer) (ORC-17).
+Modify: src/http/ui/js/view-chat.js, src/http/ui/app.css, src/http/ui/js/counters.js, src/http/ui/js/app.js (visibility, view switching), and src/http/ui/js/data.js only for a read-confirmed hook. Create: test/ui-t44-unread-highlight.test.ts. Not: sse-events.js (T-MG-43), the plugin (T-MG-40), view-sidebar.js / router.js (T-MG-38).
 
 ## Contracts
-Consumes: <interfaces, files and fields this task reads, each with its owner>. Produces: <what it exposes, and for whom>.
+Consumes: state.readMark / state.unread / state.msgs / state.activeId / state.view (state.js), markReadDebounced (data.js), document visibility. Produces: CSS classes `.unread-hl` and `.unread-hl-fade` on message rows; no new public API.
 
 ## Acceptance
-1. <acceptance point: the reviewer cites its number>
-2. <…>
-<"Choose X or Y and justify it in the report"; "do not guess: describe what happens">
+1. Returning to a conversation that has messages from others newer than the user's read mark — by opening it from anywhere (route, sidebar, rail place switch such as Activity → Home, search) or by coming back to a hidden tab — highlights exactly those unread messages (soft accent tint, Primer tokens, both themes), in addition to the divider.
+2. A message that arrives while the chat view of THIS conversation is on screen and the tab is visible is not highlighted; one that arrives while the tab is hidden, another view is shown, or another conversation is open is highlighted on return — including messages recovered by an SSE reconnect catch-up after the return.
+3. The highlight fades out over ~2-3 s only after the read mark is CONFIRMED by the server for those messages; a failed or rescheduled read leaves them highlighted. With prefers-reduced-motion it disappears without animation.
+4. A message once read never regains the highlight (navigation away and back, re-render, panel open/close); the confirmed read watermark survives navigation.
+5. Own messages are never highlighted.
+6. Highlight state and timers are cleared on sign-out / account change / session generation change; nothing from one account leaks into another.
+7. Tests in the stubbed-DOM / pure-function style for 1-6; CSS uses theme tokens; no test removed, skipped or weakened (COD-3).
 
-## TDD
-<which tests must fail first, and why>
-
-## E2E
-<You run no devices or queues (the orchestrator does) | you run them through the queue: …>. List the existing flow assertions the change touches.
-
-## Gate (in order, no pipes, bounded test workers)
-```bash
-NODE_OPTIONS="$NODE_OPTIONS --test-reporter=tap" npm run test
-npm run typecheck
-landfall secrets
-```
-Exit 0 prints `secrets: clean`. One commit per step; no push. A full suite or build runs through the heavy queue: `landfall heavy` with the command after `--`.
-
-## Assignments (only when several agents share one worktree)
-<agent → its disjoint file list>. Agents run no git; the orchestrator commits. Shared vocabulary: <the names, headings and contract terms that must agree between the agents, as a table>.
+## Gate
+`landfall heavy -- npm run test`, `npm run typecheck`, `landfall secrets` (baseline D-MG-8 tolerated). One commit per step; no push.
 
 ## Report
-<absolute path>/report.md (template: <absolute path of the report template>): the `Status:` line, decisions per acceptance point, files, RED/GREEN, gate, shared gaps, open issues. When your harness refuses that write, put the whole report in your reply: the orchestrator stores it with `landfall report <id> --from <file>`.
-Final reply: exactly 5 lines: status, commits, tests, concerns, report path.
-<!-- rendered by `landfall brief`; sha256 c7267f306e7905b29b8a306220bfd7d8e6d304272b9a49b3645c7dd5f7c54f50: an edit makes this brief hand-written -->
+scratchpad/T-MG-44-report.md (frontmatter red/green, Status line, decisions per point, files, gate). Final reply: 5 lines.

@@ -1,0 +1,5448 @@
+{
+  "schema": 1,
+  "task": "T-MG-43",
+  "head": "6e7a5d0901363df7c5b6d6b0acfcb7204592ec9f",
+  "gatesSha": "6748d3280c3d894aeee546d52b4cfeb374b94c2a6e123f58cb1ba32d325757c9",
+  "baselineSha": "1f329c3ee10a82736c42003be805564f00f08b720f01f985489b929e538bc3e4",
+  "class": "critical",
+  "startedAt": "2026-11-04T20:20:26.881Z",
+  "durationMs": 95686,
+  "gates": [
+    {
+      "name": "test",
+      "cmd": "NODE_OPTIONS=\"$NODE_OPTIONS --test-reporter=tap\" npm run test",
+      "exit": 0,
+      "durationMs": 45069,
+      "result": "pass"
+    },
+    {
+      "name": "typecheck",
+      "cmd": "npm run typecheck",
+      "exit": 0,
+      "durationMs": 7177,
+      "result": "pass"
+    }
+  ],
+  "inventory": {
+    "collector": "node-test",
+    "total": 1075,
+    "added": [
+      "[\"\",\"B-MG-118 (codex repro): a message held from SSE during the newest-30 refresh keeps its REST reactions\",1]",
+      "[\"\",\"B-MG-118: a held message edited live during the newest-30 refresh still gets its REST reactions\",1]",
+      "[\"\",\"B-MG-118: a reaction refreshed by a live event during the after= page is not overwritten by the older page\",1]",
+      "[\"\",\"B-MG-118: a reaction removed by a live event during the after= page stays removed\",1]",
+      "[\"\",\"B-MG-119 (codex repro): after a failed retry the reconnect refreshes a held gap message older than the newest 30\",1]",
+      "[\"\",\"F4 (T-MG-43): a held gap message edited by a live event during the after= request keeps the live body\",1]",
+      "[\"\",\"F4 (T-MG-43): a message replaced by a REST reaction refresh during the after= page keeps that newer revision\",1]",
+      "[\"\",\"a failing test gate prints the failing test name and failure, keeps the log, stops with exit 1 (T-MG-36)\",1]",
+      "[\"\",\"a failing typecheck gate prints the tsc errors and stops with exit 1 (T-MG-36)\",1]",
+      "[\"\",\"a failing-tests section longer than 150 lines still ends with the log path and STOP, exit 1 (T-MG-36)\",1]",
+      "[\"\",\"a green gate stays quiet: one OK line, no test output (T-MG-36)\",1]",
+      "[\"\",\"monitor --max-seconds 0: ends when its Claude Code process is gone, stays while it lives\",1]",
+      "[\"\",\"monitor --max-seconds 0: ends when its stdout is closed, and a closed stdin alone does not end it\",1]",
+      "[\"\",\"r1 F1 (codex repro): a superseded newest-30 page landing late keeps the newer catch-up's reactions and body\",1]",
+      "[\"\",\"r1 F1: a reaction refresh sent before a newer catch-up and landing after it does not undo that catch-up\",1]",
+      "[\"\",\"r1 F1: an unstamped write during the after= page (an own edit, applyMessageUpdate) is kept\",1]",
+      "[\"\",\"r1 F1: when the superseded page lands first, the newer catch-up's page still applies\",1]",
+      "[\"\",\"r2 F2 (codex repro): a read sent earlier but cut later is not erased by a read sent after it but cut before it\",1]",
+      "[\"\",\"r2 F2: an unstamped reaction write while a page is in flight (a view loader) is kept, then re-read\",1]",
+      "[\"\",\"r2 F2: while the re-read of an overlap is pending, a late superseded page does not show older state\",1]"
+    ],
+    "removed": [],
+    "newlySkipped": [],
+    "allowedBy": [],
+    "weak": false,
+    "tests": [
+      {
+        "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"(a) D-MG-30: a shared list holding A and B entries is deleted; neither account restores from it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"(b) B persists after A wrote its own key: A's entry stays A's, is not shown to B\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"(b2) persistUnsent leaves the marker alone even when it was never set\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"(c) D-MG-30: a legacy entry without ownerId is deleted, whoever the marker names\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"--no-ui is a boolean flag and does not eat the next argument\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"/api/me shows who is typing without requesting the presence list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"10: an account change during the first send still makes no second send\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"10: the same account switching conversation after the reply still sends the channel copy, touches no state of the new place\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"9 (D-MG-30): a pre-r4 browser-wide seen map is deleted, and sign-out clears only the leaving actor's marks\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"9: the Threads view's seen marks are stored per actor (atalks_threads_seen_<actorId>)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F1: every POST/PUT route named in the skill exists in the router\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F1: the skill documents reply, ask, answer, leases, join and wake\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F2: talk_typing declares sec (1..300) in its schema and applies it as the TTL\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F5: a fresh actor's first talk_status is under 10 KB and points at the full news history\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F5: leadingSections keeps the first section always and whole sections only\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F6/F7: bare 'general' gets an address hint; '@@ghost' is reported once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F7: unresolvedMentions in POST messages 201 and in talk_send\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"A2A-F8: a missing atalk prints exactly one line on stderr and nothing on stdout\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"AGENTTALKS_DATA selects the data directory\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"AGENTTALKS_UI parsing: default on; 0/false/no/off turn it off; 1/true/yes/on keep it on\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"API file upload, download by a member, refusal for an outsider\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"API lease: 200 on acquisition, 409 with the owner on refusal\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"API search respects access permissions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-100: a non-member admin PATCH response carries no topic, a channel admin gets the conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-101: a thread reply resolving after switching threads is not inserted into the new thread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-101: a thread reply resolving while the same thread is open is shown\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-101: closing the panel during a thread send neither throws nor inserts anything\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-107: a 401 from /api/me prints ONE sanitized stderr line across all four handlers, and stays final\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-107: a 403 is final too, with its own status in the line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-107: a 503 then a success is retried: one notice, then the tool works\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-107: repeated 503s print once; a network failure is its own kind with its own line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-10: a page whose single line exceeds the budget is NOT recorded as read; blind write gets 409\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-116 (codex repro): a loaded empty conversation catches up all 31 messages of the gap, message 1 included\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-116: a gap longer than one page is paged until a short page, merged in order\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-116: an answer that arrives under another session generation is not merged\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-117 (codex repro): the SSE redraw before the PATCH answer still ends with the focus in th-input\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-117: the user focusing something else after the submit (a focusin) keeps that focus\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-118 (codex repro): a message held from SSE during the newest-30 refresh keeps its REST reactions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-118: a held message edited live during the newest-30 refresh still gets its REST reactions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-118: a reaction refreshed by a live event during the after= page is not overwritten by the older page\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-118: a reaction removed by a live event during the after= page stays removed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-119 (codex repro): after a failed retry the reconnect refreshes a held gap message older than the newest 30\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-11: talk_read enforces the budget on the final output and the cursor continues\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-14: a 2 MB POST /mcp body gets 413 with an actionable JSON error\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-14: a 51-call JSON-RPC batch gets 400, 50 calls and single calls still work\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-14: malformed JSON is a 400, not a crash\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-15: the 4th concurrent talk_read wait of one actor returns at once with a hint\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-18: an evil Host header is HTML-escaped in /install and /skill.md\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-1: notifications from a private channel disappear after removal, public ones stay\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-20a: a token over plain http to a non-loopback host warns on stderr; loopback does not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-20b: a project .agenttalks.json not written by atalk warns; login writes the marker\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-20c: an EMPTY AGENTTALKS_URL / AGENTTALKS_TOKEN does not shadow the other names\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-21: talk_send description says @a creates the conversation and may wake the addressee\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-23: an ex-member cannot edit or delete in a private channel; no event, no notification\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-23: editing in an archived channel is refused\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-24: force=true wins over a stale baseRevision\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-25: six processes opening the same NEW file at once all succeed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-26: a database from a newer schema is refused with an actionable error\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-28: the notification sweep runs at most once per 60 s\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-30: markRead past the end is clamped, so a later message is unread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-31: a row with the old key format still deduplicates in its own conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-31: the same clientMsgId in two channels creates two messages, a retry still dedups\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-32: unread counts are exact under the cap and capped above it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-32: unreadFor over 200 channels and 300k unread messages stays under 50 ms\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-35: edits, deletes and replayed updates replace messages without new-message effects\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-36: a thread send response upserts the reply already received over SSE\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: Enter then further typing keeps the composer, focus and new draft after send\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: a response after switching conversations preserves both new drafts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: a successful send only clears unchanged sent text\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: sending a main-composer thread reply does not rebuild the composer\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-37: typing the same message again during a send preserves the new text\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-38: REST upserts do not advance the cursor used to reconnect SSE\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-39: a wiki title cannot inject an internal inline placeholder\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-39: markdown still escapes hostile HTML, URLs and wiki titles\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-39: mentions never rewrite link destinations or code\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-39: user NUL placeholders remain text instead of referencing code blocks\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4/13: a newline in a body cannot forge a human's row; it stays a quoted line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4/13: session label/doing and topics are single-lined and capped at 120\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4/13: talk_read, talk_log, talk_thread, wiki_read quote every body line and open with the note\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-41: logout clears all account state and drafts while preserving browser preferences\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: confirmation closed by Escape releases every keydown listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: confirmation closed by backdrop releases every keydown listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: confirmation closed by cf-no releases every keydown listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: confirmation closed by cf-yes releases every keydown listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: news closed by Escape releases listeners and advances the queue once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: news closed by backdrop releases listeners and advances the queue once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-43: news closed by button releases listeners and advances the queue once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-47: a bad %-sequence in a wiki X-File-Name is a 400, not a 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-48: a lease does not record a foreign sessionId\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-49: a plain http instance advertises http://; forwarded headers only with trustProxy\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4: both skills carry the quoting paragraph; A2A-F8: neither claims npm i -g agenttalks\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-4: the hook quotes every line of other actors' text and opens with the standing note\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-53: GET /api/presence is filtered for the caller\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-53: presenceFor hides private typing and foreign session details\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: Enter saves an inline edit and replaces the editor with the new text\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: Enter with empty text closes the editor without saving\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: Enter with unchanged text closes the editor without saving\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: Escape cancels an inline edit without restoring it on redraw\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: a failed save preserves the editor and its draft\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: a live update and a full redraw preserve an unfinished edit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-58: a save completing after a list redraw closes the restored editor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: a delayed destination refresh cannot open a thread after leaving its conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: a delayed thread response cannot replace a newer thread destination\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: notification highlights a thread reply in its panel with an uncached root\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: notification highlights a thread reply in its panel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: notification highlights a top-level message in the main list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: search highlights a thread reply in its panel with an uncached root\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: search highlights a thread reply in its panel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-59: search highlights a top-level message in the main list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-6: whoIsTyping hides a typing location the viewer cannot read\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-7: a foreign sessionId is dropped from a post and does not clear the owner's typing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-97 (repro): an open stream that closes before its first event resumes after the newest loaded message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-97 controls: an event's id is the cursor; with nothing loaded the return asks for the future only\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-97: a conversation loaded while the stream is down does not move the pinned cursor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-97: a drop the browser would retry by itself (CONNECTING, no event id) is taken over with the cursor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-97: a history that is cached but not loaded (one SSE message) does not seed the cursor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-97: a stream that never opened resumes after the newest loaded message on its return\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-98: Enter saves the inline edit and the focus returns to the composer\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-98: Enter with an unchanged text closes the edit and returns the focus too\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-98: Escape cancels the edit and the focus returns to the composer\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-98: an edit in the thread panel returns the focus to the thread box\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-98: focus moved elsewhere while the save was in flight stays where the user put it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-99: a removed uploader gets 404 on download and info, a member gets 200\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-99: the owner of a conversation-less, wiki-less file still reads it; wiki files stay public\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-9: a released (successful) savepoint keeps its callbacks\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"B-MG-9: callbacks of a rolled-back savepoint do not fire, the outer ones do\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"CI: every action is pinned to a full commit SHA (B-MG-12, B-MG-16)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"CI: the pin check can fire (a tag reference is reported)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"CI: the workflow token is read-only by default (B-MG-16)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"D-MG-30: a sign-in deletes every legacy key and imports nothing from them\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"D-MG-30: a sign-out deletes every legacy key as well\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"D-MG-30: a sign-out removes the leaving actor's namespaced keys, including per-message unsent keys\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"D-MG-30: another account's namespaced data stays invisible and untouched across claim and sign-out\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"D-MG-30: key formats are told apart exactly (a per-message key has a clientMsgId segment)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"D-MG-30: persistUnsent writes per-message keys only and a finished message's key is removed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"D-MG-30: the current actor's live namespaced data is untouched by a claim\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"DM read markers are transferred\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"Docker: the base image is pinned by digest and only /data is owned by the runtime user (B-MG-17)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"EVERY declared MCP tool can be called and returns content, not a protocol error\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1 (codex 1): an SSE message delivered while another conversation catches up does not move the floor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1 (codex 2): a refresh of the history during the gap does not move the floor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1 (codex 3): a failed page followed by a reconnect keeps the floor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1 (codex repro): A's reply never lands in B's thread when the account changes during the second send\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1 audit: an answer to a question lands in the question's conversation, not the one open now\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1 audit: the @ list whose directory answer arrives after an account change does not open\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1 the channel's beat survives stream reconnects: a stream recycled faster than the interval still beats\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1: a stale 401 from account A's request does not sign account B out\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1: a thread switch after the first send (same account) still sends the channel copy to the original channel, no thread insert\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1: an account change during the first send makes no second send (no post under B's session)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1: an in-flight search answer from account A never reaches account B after a session loss\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1: main composer - a conversation switch during an upload sends nothing into the new conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1: main composer - an account change during an upload uploads nothing more and posts nothing under B\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1: the same account switching thread during the second send keeps the reply out of the new thread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F1: the thread box still does both sends and shows the reply when nothing changed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2 (D-MG-30): legacy un-namespaced keys are deleted, never moved to the actor the old marker names\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2 (codex repro): tab A's draft is never loaded by tab B signed in as another account\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2 (codex): a second break after a successful catch-up recaptures the floor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2/F4 (r5): legacy keys with no marker at all are quarantined, never claimed by a sign-in\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2: a confirmation open at teardown settles as 'no' and drops its Escape listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2: a session loss closes the secret dialog, menus, pickers and old toasts, with their listeners\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2: sign-out clears only the signing-out account's keys (drafts, wiki, navigation, unsent)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2: signing out closes overlays too\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F2: wiki drafts, the last conversation and the recent list are per account too\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F3 (codex repro): an empty first page of a filter-only listing keeps Show older\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F3 (codex): a retained floor is retried although an SSE event advanced the live cursor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F3: a 401 during a send keeps the message for the same account after sign-in\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F3: another account never sees the unsent message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F3: with no older messages the empty listing still says nothing matches, without a pager\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4 (D-MG-30): on the first run the marker's actor gets nothing either: legacy data is deleted\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4 (T-MG-43): a held gap message edited by a live event during the after= request keeps the live body\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4 (T-MG-43): a message replaced by a REST reaction refresh during the after= page keeps that newer revision\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4 (codex repro): an old unreloaded tab's wiki draft written after the upgrade is not B's\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4 (codex): a delayed after= page does not replace a message edited live meanwhile\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4: a delayed newest-30 refresh does not replace a message edited live meanwhile\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4: a marker that is not an actor id claims nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4: an old tab that rewrites the owner marker after the upgrade gets nothing claimed either\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4: on the first run legacy keys with no owner marker are deleted, never given to the first sign-in\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F4: sign-out runs the same sweep (a late legacy key does not survive it)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F5 (D-MG-30): a shared pre-r5 list is deleted, not split: nobody gets its entries\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F5 (codex repro): A's sign-out paused mid-way cannot drop B's newer unsent message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F5: the getItem/setItem interleaving of the review (A reads, B writes, A writes) keeps b2\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F5: the session-lost path stores the entries under the account that wrote them\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F5: two tabs of the SAME account keep each other's unsent entries in their shared key\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F5: unsent messages are stored per actor; nobody's list holds another account's entry\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F6 (codex repro): hold #fresh, navigate to #general, release: only #general is opened\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F6: a lookup that finds nothing after the user moved on renders no no-access screen\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F6: a session change during the lookup opens nothing and renders no no-access\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F6: a sidebar click (an open without a route) during the lookup wins too\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F6: an undisturbed lookup still opens the new channel (and its thread)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F6: an unknown slug with nobody navigating away still ends on no-access\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F8: a full storage refusing one write still removes the sent message and writes the others\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F8: a sign-out removes only this account's message keys\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F8: one key per message; a write never rewrites another message's key\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F8: two tabs of the same account, one persisting at every point of the other's write, lose nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F9 (codex repro): hold the POST in channel 5, open the wiki, reject with 503: one toast\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F9 control: the failed row visible in the open chat raises no toast\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F9: a failed row scrolled out of the list's visible box is not 'on screen': one toast\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"F9: the chat view of the conversation with the row missing from the list (not drawn): one toast\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"FTS syntax in a user query does not break search\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"FTS5 is available and synchronized by a trigger\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"GET /api/guidelines returns the guidelines text on request\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"HEAD on a GET route responds like GET without a body (monitoring)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"HTTP routes return English code and legacyCode for 403, 409 and 401\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"M16: Save and Cancel sit in one .we-actions group that never wraps\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"M17: renderLogin consults the flag before unhiding the button; enrol and passkey login set it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"M17: the passkey button is offered only after a passkey was enrolled or used in this browser\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"M18: a collapsed account row is a button named after the account, with labelled stats\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"M18: an open row offers a new token for the account and no longer sends the admin to the server\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"M18: the panel calls the existing admin token route and refreshes the list afterwards\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"M18: the token paste text names the server, the account and the token exactly once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"MCP reports parameters the tool does not recognize\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"MCP returns 401 without a token and answers initialize with a token\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"MCP: machine-parsed sentences have a stable format\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"NEWS.md becomes a wiki page with history, without adding revisions when unchanged\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"NEWS.md documents every legacy error code with its English replacement\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"NEWS.md: the newest agents section is marked and a human section is on top\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"POST /api/actors: agent admin 403, non-admin human 403, human admin 201 (B-MG-88)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"POST /api/sessions: `doing` and `workingOn` mean the same thing; `doing` wins\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"POST /unread: 200 shape, 400, 403, CSRF\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"PUT /api/wiki/:slug answers 429 after 60 saves in an hour (B-MG-33)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"Polish error code literals have no remaining producers or consumers\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1 F3 (codex repro): a first stream that drops while CONNECTING is retried by the client, after the newest loaded id\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1 F3: a never-opened stream (CLOSED) and a history loaded during the break still resume after 40, not 70\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1 F4 (codex repro): an empty loaded history is a cursor of zero: the return catches that conversation up\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1 F4 control: nothing loaded at all is no cursor: the return is future-only and fetches no history\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1 F5 (codex repro): Enter saves a thread edit, the real thread renderer redraws, the focus is in the new th-input\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1 F5: Enter saves a main-list edit; the focus lands in the composer that is in the document after the update\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-7a: a private typing location is invisible to a viewer who cannot read it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-7b: a token revoked during a talk_read wait delivers nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-7b: an unrevoked wait still delivers\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F1: a file swapped in between login's rename and the trust step -> exit 1, nothing trusted for the replacement\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F1: wiki_read budgets the QUOTED text; many short lines stay near the budget\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F2: C0 separators U+001C..U+001E never start an unquoted line in any tool\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F2: a fresh lock held by someone else -> login waits, then both the old and the new entry are present; a dead owner's lock is not cleared\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F2: atalk login --local waits for a held trust-list lock and keeps the other entries; a dead owner's lock is not cleared\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F2: every C0 control except tab splits lines in the quoting helper\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F3: atalk log quotes every body line and opens with the note\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F3: non-regular outputs are refused before any write; a failing trust step leaves no new credential\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F4: a planted project file with an evil url does not receive the env token; login --local trusts it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F4: http to a remote host and credentials in the URL are refused before any request; loopback http works\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F4: the hook surfaces the CLI warning line in additionalContext\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F5: Content-Length 60 MB gets 413 at once, without the body being sent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F5: a chunked body over the cap gets 413 and the request is destroyed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F5: login never echoes argument values\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R1-F6: caller-supplied values are echoed on one line; typing sec is clamped in the echo\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R2-F2 [atalk login --local]: a lock is never evicted: not by age, not for a LIVE owner, not for a DEAD pid (round 3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R2-F2 [plugin login.mjs]: a lock is never evicted: not by age, not for a LIVE owner, not for a DEAD pid (round 3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R2-F3 [atalk login --local]: a failing trust-list rename leaves no *.tmp and rolls the credential back\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R2-F3 [plugin login.mjs]: a failing trust-list rename leaves no *.tmp and rolls the credential back\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R2-F6 [atalk login --local]: a lock timeout in a git directory -> exit 1, zero writes, an existing credential untouched\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R2-F6 [plugin login.mjs]: a lock timeout in a git directory -> exit 1, zero writes, an existing credential untouched\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"R3-F2: two concurrent logins against a dead-owner lock both fail closed; after the human removes it both succeed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0: app.css ends with the slice section markers S1..S14 in order\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0: i18n-pl.js has a block per slice\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0: state carries route, sidePanel and sbCollapsed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0: the new modules exist and export their public names\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0: the server serves every new module and the stamp covers them\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0b-1: app.css has no raw hex/rgb/hsl color outside comments\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0b-2: theme.js maps Auto/Light/Dark onto the Primer attributes\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0b-3: every icon in icons.js is a vendored Octicon (16 px), decorative by default\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0b-4: the vendored files carry MIT licences and VERSIONS.md with matching sha256\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0b-4b: the server serves vendored CSS and SVG and nothing else under /vendor/\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S0b-6: brand guard - no GitHub or Slack name in UI code, copy or assets\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1 typing tool without CLAUDE_CODE_SESSION_ID: an error result, nothing sent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1 typing tool: one POST to the derived session's signal endpoint; stop; range; no session id\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1-visibleRows 1: an open section lists every row\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1-visibleRows 2: a collapsed section keeps only its unread rows\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1-visibleRows 3: a collapsed section keeps the active row next to the unread ones\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1-visibleRows 4: a collapsed section with nothing unread and nothing active shows nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S10: the tracked-file check fails closed: git exiting 128 (or anything but 1) inside a git tree -> refuse, nothing written; exit 1 = untracked -> proceeds; no .git upward -> git is not asked\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S10b: the git call passes safe.directory\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S11: an ignore line that git does not honour (a later negation in the same .gitignore) -> refuse, no credential on disk, .gitignore unchanged, nothing trusted\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S13 CSS block exists, styles the labelled stats and uses Primer tokens, not literal rem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1: a project file hand-written like the old skill says -> the monitor stays offline and names login.mjs; login.mjs with the token on stdin -> the monitor delivers a mention\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1: collapsed state round-trips through localStorage atalks_sb_collapsed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1: section headers are buttons whose aria-expanded matches state; collapsed Channels lists exactly #bugs\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1: the DMs place renders no channel rows, only direct conversations and people\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1: the rail offers Home, DMs, Activity and Admin and the sidebar header drops the duplicate sign-out\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S1: the rail places know which sections they show\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S2 monitor in run mode beats at the interval; standby monitor sends none\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S2: a token the server rejects (401) or a non-actor answer -> non-zero exit, no file written\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S2: app.css S2 block carries the 1280 px column query and the join-bar stacking fix (G20)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S2: renderMain writes exactly one #side-panel hosting the thread and details slots\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S2: sidePanelOf derives the panel vocabulary from the open flags (details wins over thread)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S2: the join bar keeps its place in the dock and the panel slot is still present for a preview\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3 no beat without a live Claude ancestor or without a session id\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3: a literal token on argv is refused, nothing is written; AGENTTALKS_TOKEN works without --token\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3: bad input parses to home, never to null\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3: buildRoute is the inverse of parseRoute\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3: conversationRoute picks the slug for a channel and the handles for a DM\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3: parseRoute reads every route of section 1\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3: permalink is origin + / + hash\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3: the More menu offers Copy link and Mark unread; openConversation syncs the hash\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S3: unreadFrom counts the others' messages from the marked one on\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4 + G4 + G6: login twice leaves one trust entry for the path, others survive, modes are 0600/0700, AGENTTALKS_CONFIG_DIR is honoured, --dir picks the directory\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4 the live skill: decide, typing, write, reply; stop when not answering\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: #slug renders as a link only for a conversation I can see\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: channelCandidates lists my channels first, then joinable ones, filtered by prefix\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: completeToken finds the @ or # token under the caret and nothing else\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: emoji.js is served (UI_MODULES) and the S4 blocks are filled\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: searchEmoji finds by English and Polish names, recent ones come first\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: sendMessage with an explicit threadId:null posts to the channel even while replying\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: the main composer carries the formatting bar, the emoji button and keeps its ids\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: the thread panel reuses the composer and offers 'Also send to channel'\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S4: wrapSelection wraps, unwraps and handles block markers\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5 the channel INSTRUCTIONS mention the typing tool\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: /ask posts a tracked question and returns the ask message (acceptance 1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: /fixed as a thread reply marks the root; without a target it explains\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: /who and /status render ephemeral cards from the API (acceptance 4)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: a refused /claim shows the holder inline and posts nothing (acceptance 3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: an unknown command is not sent, a toast asks first; plain text is not handled (acceptance 7)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: commandSuggestions lists every command for '/', filters by prefix, closes elsewhere\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: commands.js is served (UI_MODULES), composer.js hooks it, the S5 blocks are filled\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: in #bugs a report from somebody else carries 'Mark fixed' with no prior step (acceptance 5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: isReport follows the trace, the explicit mark and the channel rule\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: parseCommand reads the command, its arguments and leaves plain text alone\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: parseDuration accepts h, m, d and combinations; rejects nonsense\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: sendMessage runs a command instead of posting it; a plain text still posts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: the author sees 'Confirm fixed' once fixedAt is set (acceptance 5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: the guidelines no longer point at a question-mark button; they name /ask and the + menu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: the header pill counts open reports and the filter keeps only them (acceptance 6)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5: the served skill has no command that redirects into .agenttalks.json, and names the three routes in order\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S5b: the installer page does not tell agents to write a project file by hand\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S7: login.mjs never writes through a symlink (the project file, the temp name, .gitignore): refuses, the link target is untouched\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S8: login.mjs refuses when .agenttalks.json is tracked by git (the token would be committed)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S9: below 760 px the rail is a bottom tab bar with 44 px targets, labels and a safe area\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S9: login's git calls run no repository-configured program (core.fsmonitor in .git/config) and the repo's config is not consulted from the project cwd\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S9: the back arrow is hidden on the desktop\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S9: the chat topbar has a back arrow that returns to the list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S9: the rail carries a Search tab for the phone and it opens the switcher\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S9: the shell follows the visual viewport so the composer stays above the keyboard\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"S9b: login.mjs spawns git only with the hardening flags, a neutral cwd and a minimal env\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE delivers a message to a conversation member\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE does not deliver from a conversation the actor has not joined\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE resumes from Last-Event-ID and delivers a backlog larger than one page\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE resumes from a cursor and delivers the backlog\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SSE without a cursor does NOT deliver history, only new arrivals\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SessionStart against a server that never answers ends within its overall budget (Claude F6)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SessionStart registers presence, adds a quoted summary, records the session; SessionEnd ends it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SessionStart writes the wake record and the summary even when the presence POST fails (Claude F6)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"SessionStart: crafted handles and slugs cannot break out of the trusted summary lines (Claude F9)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"Set-Cookie: HttpOnly + SameSite=Lax always; Secure only over https or with trustProxy (B-MG-91)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T-MG-29: a DIFFERENT conversation does not inherit the old list's position\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T-MG-29: a re-render of the same conversation keeps a scrolled-up list at its scrollTop\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T-MG-29: an at-bottom list ends at the bottom after the re-render, with no smooth path involved\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T-MG-29: closing the side panel afterwards keeps the position too\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T-MG-29: scrollToBottom(true) still asks for behavior smooth when reduced motion is off\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U10: notifications, unreads, search, the palette and the digest preview use stripMd\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U10: stripMd turns markdown into the plain text a preview shows\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U11: a filter-only query with in: lists the conversation; without in: the hint suggests one\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U11: applyFilters runs from:/before:/after: on the client, newest first\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U12: a disabled primary button is visibly disabled in dark mode too\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U13: modals sit above every pane and the app behind them is inert\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U14 boot: an id above the newest message needs no focus fetch - the channel, the toast and the address come at once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U14 boot: an id below the newest draws the loaded batch BEFORE the focus fetch answers\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U14: a deep link to a missing message lands on the conversation with a toast and no skeleton\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U14: the toast sentence exists and is spoken by openConversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U15: the More menu carries Octicons, a separator before the own-message group and plain wording\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U16 (decision): the rail has no Threads button; the sidebar row keeps the entry\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U17 add-on: the header shows at most three faces and a +N chip for the rest, the count stays the total\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U17: on phones the header shows three faces and wide content scrolls with a fade\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U18: the '+' menu's claim row uses the tag Octicon, not the plus of its trigger\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U18: the profile's Message button icon takes the button's colour (S6 block)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U19: startDirect with several handles creates a group, with one a DM\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U1: a list at the bottom before a layout change is scrolled to the bottom after it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U1: a list the user scrolled up is never yanked\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U1: the dock observer writes --dock-h and re-pins a pinned list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U1: the list observer re-pins when the list itself is resized (panel open/close, viewport)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U1: the message list pads its bottom by the measured dock height (--dock-h)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U20: deleting a wiki page is a danger-coloured icon button with a tooltip and a confirm\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U2: the formatting bar is eight Octicons in 32 px targets, no text glyphs\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U30: a new private channel reaches no non-member\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U30: a new public channel is announced to every actor, members or not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U30: a slug the server does not know either resolves to null after one request\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U30: an unknown slug is looked up on the server once before it counts as missing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U31: the compact (thread) card hides the secondary tools behind a 'More formatting' toggle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U31: the toggle opens and closes the secondary group (class on the card, aria-expanded)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U32: the help dialog body keeps a bottom padding and a fade; the footnote sits under a divider\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U33: open-question cards strip markdown and say 'Go to the question'\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U34: the + menu items are icon, label, description below (ActionList), like the message menu\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U35: rail labels have side padding and an ellipsis; the Polish rail is wider on desktop\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U36: toasts are centred and never over the header's buttons (r5 U40: under the header, not over the dock)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U3: .empty centres its children as one block\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U40: a failed send with its 'not sent' row on screen raises no toast; the toast stack sits under the header\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U41: the wiki page header title and sub-line shrink with an ellipsis\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U42: the search query box keeps to the result column\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U43: the main composer card is as wide as the message column; the thread box is unchanged\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U4: section heads may wrap to a second line instead of truncating\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U4: the catch-up rows carry short labels that fit a 256px sidebar\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U5: the Activity header actions are icon buttons with names; the label hides on phones\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U6: headerFacesHtml renders nothing for an empty member list and carries the people Octicon otherwise\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U6: openConversation forgets the previous conversation's members and pins before drawing the next\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U6: the members mark is set only after the fetch succeeds, so an abandoned open retries\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U7: a send that fails while the offline bar is up adds no toast (the bar and the bubble already say it)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U8: replies already in the message cache are painted before the fetch returns\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U8: the thread panel says it is loading, then that there are no replies yet\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U9: the sidebar foot shows nothing unless the UI is older than the server's\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"U9: the stamp moved into the help popover as a version line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"UI compatibility map equals LEGACY and stale server codes retain behavior\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"UI modules: every import has a corresponding export\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"UI off: the site gate does not apply (there is no UI to gate), the API stays open to tokens\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"UI off: the web UI paths answer 404 ui_disabled; API, MCP and onboarding keep working\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"UI off: with a valid agent token MCP lists tools and SSE delivers a posted message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"UI on (default): the shell, assets and health work as before\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W1-A: base rules use Primer tokens for spacing and type, not literal rem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W1-B: the badge and the kind tag follow Primer Counter and Label metrics\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W1-C: only a message that mentions ME carries .mine-mention; @all does not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W1-C: the mention tint is Primer attention in the S12 block, not the danger/coral tint\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S1-A: refreshNotifications keeps the rail button named Activity\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S1-B: the rail column is 4rem and the caption is no longer scaled down\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S1-C: the DMs rail badge is derived (unreadDmCount) and repainted when a row's unread changes\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S2-A: closeThread records the thread as the last side panel so Mod+. reopens it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S2-B: the skeleton shows only for the conversation being loaded, not for another one that is ready\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S7-A add-on: the divider gets the newest unread id as the fifth argument of dividerAfter\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S7-A: applyUnreadRows keeps the server's last unread id per conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S7-A: dividerAfter with no read mark does not count hidden thread replies above the last unread id\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S7-A: markRead's frozen divider is bounded by the newest unread id the server sent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S7-B: the sidebar badge prints the weighted number the tab title counts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W2-S7-C: a 401 marks the error sessionLost and showError stays silent for it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W3-S4-A: Polish emoji names live in emoji-names-pl.js, served and allowlisted with a reason\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W3-S4-B: a send in one tab keeps another tab's unsent message in the shared storage\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W3-S4-B: offline, a send fails with a human sentence and the message survives F5\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W3-S4-C: the thread box has no attach button and says where files go (Primer tooltip)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W4-S5-A: one claim modal: view-sidebar.js exports it and commands.js imports it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W4-S6-A: author name and avatar are buttons that open the profile\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W4-S6-B: avatarHtml marks agent faces so they are square-cornered everywhere\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W4-S6-C: switching conversation closes the details and pinned panel of the previous one\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W4-S6-D: profileHandle and convMembersFor are part of the initial state\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S10-A (U16 decision: one entry): the sidebar row under the header opens the Threads view, the rail has none\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S10-B: view-threads.js has no hashchange listener of its own; app.js routes it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S10-C: loadPins repaints the topbar meta, so the pins pill appears on first open\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S10-D: consumeOwnPush is keyed on the hashchange event, so two pushes in one tick are both echoes\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S11-A: renderMain dispatches search, threads and unreads through the views registry\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S11-B: the sidebar stays for search, threads and unreads; Activity and admin have none\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S11-C: Mod+F is in the shortcut table and the help sheet; view-search.js has no key listener of its own\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S8-A: #/unreads is a route, applyRoute opens it and the view writes it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S8-B: railBadges carries dms from the unread of my direct and group conversations\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S8-B: the rail DMs badge comes from counters.railBadges, and view-unreads keeps no second body\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S8-C: Mod+. is run by runShortcut, not by view-chat's own listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W5-S9-A: the dead S1 caption scaling rule is gone\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W6-C2-A add-on: message action buttons carry Primer tooltips (aria-label + tooltipped), not bare title=\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W6-C2-A: Counter and Label tokens on the rail badge, kind tags, chips and soft counts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W6-C2-B: #/people is a route that opens the directory (Who is here)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W6-S14-A: a wiki change reads 'changed the page <title>' and opens the page\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W6-S14-B: on a phone the wiki editor caps its textarea so Save/Cancel stay on screen\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"W6-S14-C: the sidebar wiki tree carries tree, treeitem, group and aria-expanded\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"X-File-Name with invalid percent-encoding returns 400 with instructions rather than 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a DM wakes an absent recipient with a signed payload\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a bearer-authenticated request does not require CSRF\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a boolean flag does not swallow the next word\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a client cannot impersonate another actor through a body field\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a closed question cannot be answered again\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a conversation with a missing actor returns 404 with the name\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a cookie-authenticated mutation without a CSRF header is rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a deleted message does not keep the counter up\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a deleted message loses its body but keeps its position\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a deleted question disappears from open questions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a direct conversation cannot be left, but a channel can\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a direct conversation delivers every message, including those without mentions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a disabled actor is not woken and is not wakeable (B-MG-3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a disabled actor's token does not work\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a disabled gate with no password blocks nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a disconnected SSE client releases its subscription\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a domain error maps to an HTTP code rather than 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a durable session without a heartbeat disappears after retention; before then it is stale\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a failed login writes exactly one security: line without the password (B-MG-51)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a failing test gate prints the failing test name and failure, keeps the log, stops with exit 1 (T-MG-36)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a failing typecheck gate prints the tsc errors and stops with exit 1 (T-MG-36)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a failing-tests section longer than 150 lines still ends with the log path and STOP, exit 1 (T-MG-36)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a file appears in a conversation as a message and a member can download it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a file in another actor's conversation cannot be seen or downloaded\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a file with an active MIME type (text/html) is served inertly to prevent stored XSS\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a filename cannot be a path\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a forged or other-actor at_dev does not exempt (item 1c)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a garbage code is rejected without creating an actor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a green gate stays quiet: one OK line, no test output (T-MG-36)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a group conversation is created from handles and includes the sender\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a heartbeat refreshes the session so it is no longer stale\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a high handle-wide failure count refuses a browser without at_dev (item 3, D-MG-14)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a human and two agents converse through a live server\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a human logs in and receives a cookie and CSRF token\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a known browser (valid at_dev) logs in despite the account cap (item 1b)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a lease expires after its TTL and can be taken over\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a legacy draft without an owner marker is quarantined: no sign-in claims it (F4 r5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a long body completes the full round trip without truncation (report [71])\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a lost session saves the draft, returns to sign-in with a toast and keeps the draft for the next login\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a malformed JSON line does not stop the import and is counted\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a mention at the start or after a parenthesis is recognized, with punctuation removed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a mention in a public channel is visible without membership\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a mention in another actor's private channel does not leak through mentionsOf\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a message immediately restores an actor silent for 14 days without fetching\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a message immediately restores an actor silent for 90 days without fetching\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a message in an inaccessible channel cannot be pinned\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a message with to becomes a DM rather than a channel message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a missing conversation and a forbidden one return the same error\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a missing thread and an inaccessible thread return the same response\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a non-member mentioned in a private channel gets no text through notifications or mentions (B-MG-87)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a password that is too short is rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a private channel is invisible to an outsider\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a public channel is readable without membership; posting joins it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a question stays open until anyone answers\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a reaction shows WHO reacted, not just how many\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a reaction toggles without duplication\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a read marker is converted from a timestamp to a message id\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a recipient known only from the presence directory can be resolved\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a reply to a reply is flattened to the thread root\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a resource name containing a space is rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a revoked invite no longer works\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a revoked token stops working; other tokens remain valid\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a second pass does not duplicate reactions, questions or markers\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a sensitive file with ttl=0 receives the default TTL rather than becoming permanent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a series of failures disables wake and sends the owner a system DM\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a session heartbeat does NOT wake everyone; broadcast only on a real change\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a thread from another conversation is rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a thread groups replies under its root\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a token for a missing actor returns code 1 rather than throwing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a token verifies and returns the actor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a token with a TTL expires and stops authenticating\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a token without a TTL does not expire\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a typing signal may carry its own lifetime, defaulting to 7 s\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a valid at_dev also skips the IP+handle cap, the plain IP cap stays (item 2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"a well-formed 4-part cookie with a wrong MAC for an admin id is 401 on /api/me (B-MG-86)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"acceptDigest keeps the newest answer: a late older poll never overwrites it, an error keeps what we had\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"acceptance 4: a heartbeat answered with 500 logs one line and the monitor keeps running\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"acceptance 4: delivery continues while every heartbeat fails (an event after 2+ failed beats is printed once)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"account B signing in after A's lost session gets none of A's drafts or navigation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"actorLiveness: a live session means online; an ended session means absent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"admin panel routes answer 403 to a non-admin human and 200 to a human admin (B-MG-88)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"admin panel: a UI invite works for enrollment and stops working when revoked\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"admin panel: a human admin can enter; an agent cannot, even as admin\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"admin panel: disabling an account disables its token; enabling restores it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"agenttalks invite create writes an invite_minted line with by cli (item 3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an '@' prefix does not open fresh limiter buckets (item 1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an --admin invite gives the actor admin privileges\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an actor and token can be created through the CLI\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an actor may save one page at most 60 times per hour; then 429 with an English hint (B-MG-33)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an actor with a live SSE connection is not woken; push already arrived\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an actor without a password cannot log in with an empty password\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an agent admin cannot create actors, a human admin can (B-MG-8)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an agent sends a message and another reads it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an email address is not a mention\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an ended session disappears from presence; its identity remains in the roster\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an ephemeral session disappears from presence sooner than a durable session\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an exception cannot hide Polish text outside its quoted sample\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an inaccessible channel's message cannot receive a reaction\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an incorrect password and a missing user produce the same message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an invalid channel in one record does not crash the entire import\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an invalid token returns null rather than throwing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an invalid webhook URL is rejected during registration\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an invite expires after its TTL\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an invite with a usage limit runs out\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an occupied name does NOT consume the invite\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an open SSE stream closes shortly after its actor is disabled (B-MG-89)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an open SSE stream closes shortly after its token is revoked (B-MG-89)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an outside agent cannot see someone else's group conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an unknown path returns 404 with a code\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"an unresolvable recipient is reported rather than lost\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"anyone's answer closes an open question\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"api() errors carry a human sentence, the raw server text stays aside\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"api() reports a 401 to the session-lost handler, except for the sign-in and sign-out calls\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"archiveConversation: disappears from lists and refuses messages; DMs are protected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"argument parser: an unknown flag stays content, the terminator ends flags\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ask and answer restore the question and its thread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ask publishes an event only when the question ALREADY exists, checked through a second connection\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"at_dev is revoked by a password change, a disable and a logout-everywhere (epoch bump) (B-MG-96)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"at_dev with issuedAt changed to another in-window value and the old MAC is not exempt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"at_dev with the epoch field changed to the current epoch and the old MAC is not exempt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"at_dev: fresh exempts; a validly signed cookie older than 180 days or from the future does not (B-MG-96)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk accepts ATALKS_* alongside AGENTTALKS_*, the canonical name wins\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk login --local in a SUBDIRECTORY of a git repo: the token file is ignored by git (or the login refuses), never an un-ignored token\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk login --local refuses a symlinked .agenttalks.json: the link target is untouched\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk login --local refuses when .agenttalks.json is already tracked by git: nothing written\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk login --local: an ignore line git does not honour (a later negation) -> refuse, nothing written\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk talks to a live server: whoami, say, read\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk wiki write --force works as a FLAG rather than page content\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"atalk without a token returns an error code rather than throwing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"avatar: bytes rather than a URL, format detected from content, SVG rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"binding to 0.0.0.0 is allowed inside a container\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"binding to 0.0.0.0 is blocked outside a container\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"binding to loopback is always allowed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"both cookies are Secure when baseUrl is https, even on plain http without trustProxy\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"both criteria CAN fire, with a separate negative sample for each\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"burn: a file disappears after a non-author downloads it; the author does not burn it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"channel -> monitor handover: 51 pushed, 52 still held by the rate limit at SIGTERM; the heartbeat says 51 and the monitor delivers 52 exactly once (codex r3 F8)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"channel beats when it delivers: a session ended by the server is re-registered\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"channel server: MCP handshake, tools/list, a pushed DM arrives framed, reply posts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"channel slugs lose the hash prefix\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"channel: the expected principal matches -> it connects as usual (r1 F1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"channel: the right server but the token is another actor's -> no stream, no reply (r1 F1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"channel: woken for nestor on A, plugin options for bob on B -> no request to B, no reply sent, one line (codex T-MG-14 r1 F1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clientKey: behind a proxy, uses the RIGHT XFF entry, not the spoofable left one\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clientMsgId is per actor; two actors may use the same id\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clientMsgId through the API: a repeated POST returns the same id without a second message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clientMsgId: retry duplicates neither the message nor the event\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"clone makes a consistent copy with its own secret\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"code comments are English, checked by two disjoint criteria\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"commands on a missing instance explain what to do\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"comments are English (K1 diacritics and K2 words)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"concurrent migrations of one file end at one user_version with no duplicated work (B-MG-92)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"counters do not leak from conversations the actor has not joined\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dead token diagnosis: 401 says to request a token for THE SAME actor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"deleting a wiki page also deletes its revisions and moves its children to its parent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"deliveryHtml: the sentence right after a send, a small icon with the sentence as tooltip after 10 s\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"deploy selects the new env file, falls back only for a missing default, and reports the selection\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"deploy: the site password becomes valid JSON even with quotes and backslashes (B-MG-22)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"deploy: without python3 the helper fails loudly instead of sending an empty body (T-MG-9 review F1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digest and search do not leak content from another actor's private channel (ACL)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digest counts exactly under the cap and stops counting at UNREAD_CAP per conversation (B-MG-94)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digest returns null when nothing happened\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digest summarizes from the read marker and identifies mentions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"digestFor on 300k unread rows is fast (B-MG-94)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"disabling an account invalidates an open cookie session, not just the next login\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"displayName defaults to the handle and can change without changing the handle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"distributed guesser: 25th IP with the right password and no at_dev gets 429, unverified (item 1a)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dividerAfter ignores pending (non-numeric id) entries\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dividerAfter with a read mark is null when only my own messages follow it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dividerAfter with a read mark returns that mark when somebody else wrote after it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dividerAfter with mark 0 and 5 unread places the line above the 5th message from the end\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dividerAfter with mark 0 and more unread than loaded puts the line above the first message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dividerAfter with mark 0 and no unread shows nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"dividerAfter with mark 0 skips my own messages when counting back\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"doing is visible in presence\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"each language check fires independently for accented and unaccented Polish\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"editing a message updates the search index\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"editing and deleting another actor's message returns 403\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"editing recalculates mentions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"enroll: an invite creates an actor and the token works; an invalid code returns 403\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ensureDirect for three actors returns a group distinct from the pair's DM\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ensureDirect for two actors returns a DM and is idempotent regardless of order\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"ensureDirect rejects fewer than two actors and duplicates\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"entry points: an untrusted project file -> no request to its url from the hook, the monitor or the channel, and one notice line; trusted -> they connect\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"error serialization includes aliases for AppError and direct JSON errors only\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every API error code has a translated UI message or an explained agent-only exception\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every Activity row button carries an aria-label and the view is titled Activity\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every CLI flag in the documentation exists in the parser\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every UI module executes at load time, not just parses\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every UI module import points to a file the server serves\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every UI module in the directory is served under /js/\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every UI module parses as an ES module\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every declared MCP tool parameter is read by its handler\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every documented response shape matches the server\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every field the skill instructs users to send is read by the route\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every flag used in the code is listed in KNOWN_FLAGS\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every interface sentence has a translation and every translation is used\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"every shortcut in the table has a help line, and the sheet lists them all\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"extraction covers templates, escaped strings, snake case, and inline comments\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed restart WITH an event cursor before the mention: the stream replays it, delivered exactly once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed restart with an event cursor PAST the mention: the run that committed it delivered it; not again\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed restart with mentionCursor 0 (no mention existed when the last run started): a member mention after the event cursor is replayed and delivered, not marked seen as 'old' (property seed 1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed restart without an event cursor (lastEventId null, mentionCursor 10): member mention 51 is delivered exactly once, even when the stream carries it later (server with GET /api/status) (codex r3 F9)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed restart without an event cursor (lastEventId null, mentionCursor 10): member mention 51 is delivered exactly once, even when the stream carries it later (server without GET /api/status) (codex r3 F9)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed: a failed thread lookup is retried, not read as 'not my thread'\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed: a full queue behind an undecided event drops the stream and resumes it from the committed cursor, losing nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed: a membership lookup failure (503) neither pushes nor commits the event; after recovery 41 then 42 arrive (codex F4)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed: pushes only relevant events, resumes after a real break without loss or duplicates\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed: the event and mention cursors pass a message only once its delivery is confirmed, in order\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"feed: thread replies in a thread I started reach me; a non-member mention comes via the server list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filenames are English (K1 diacritics and K2 words)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filter: @all, @channel and @here in my conversation count as a call\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filter: DMs and group DMs push; notify=none mutes even a mention and a DM\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filter: member channel with notify=mentions pushes only a mention of me\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filter: never my own message; message_updated never pushes; deleted never pushes\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filter: notify=all channel pushes everything; non-member conversation pushes nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filter: replies in threads I started or replied in\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filterPeople: @ prefix and case are ignored, already chosen people are left out\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filterPeople: @system is offered only when asked for, never by default\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filterPeople: a handle prefix ranks before a display-name hit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filterPeople: a query nobody matches gives an empty list, not an error\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"filterPeople: no query lists everybody but @system and me, handles sorted\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"firstConnectGuidelines: returns guidelines once, then null\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"foreign keys are enforced\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"forged and expired session cookies return 401 through the API\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"framing: a forged multi-line body cannot produce a header-like line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"framing: header fields from the server are sanitised too\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"framing: long bodies are truncated with a note\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"framing: several messages coalesce under one preamble\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"framing: the monitor line is a single line, the body stays after the quote mark\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"framing: trusted header, every body line quoted, the preamble leads\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"fresh feed: the stream opens with the server's newest message id as its cursor, so nothing between start and connect is lost\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"gate errors restore the translated button and distinguish rate limits from wrong passwords\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"gate password from a file: the file takes precedence, an empty/missing file fails closed\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"gate translations load before authentication while application modules remain gated\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"gate: the site is closed without a cookie; the correct password allows entry and an incorrect one does not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"getActorByHandle returns null for garbage input rather than throwing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"groupByConversation keeps the newest conversation first and messages newest first\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"handle is normalized and validated\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"health performs a real database probe with counts, not just ok\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"health works without authentication\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"healthcheck returns 1 when the server does not respond\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"heartbeat module: beats while alive, stops when the ancestor dies, one log line per failure kind\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"heartbeats and signals do NOT erase a label set through me\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"highlightHtml escapes the body and marks every term by prefix, case-insensitively\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"highlightHtml with no terms only escapes\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"historical code exceptions cannot exempt ordinary Polish prose\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"hook: a failed mktemp never makes the EXIT trap remove /dev/null (review F7)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"hooks stay silent and succeed without an identity or a reachable server\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"hooks.json and monitors.json reference existing scripts with only known keys\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"humanNews drops an agents section with its subsections and tables\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"humanNews returns an empty string for an agents-only file\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"identifiers are English (K1 diacritics and K2 words)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"identity: an untrusted project file cannot choose the server for a token from the environment (Claude F8, atalk rule)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"identity: an untrusted project file with its own token AND url is not used; trusted, it is; env and global identities are unaffected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"identity: empty plugin options do not overwrite the inherited AGENTTALKS_* credentials (codex F2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"identity: env wins, ATALKS_* aliases work, an empty value counts as unset\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"identity: nearest .agenttalks.json walking up, then the global file, else null\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"import is idempotent; a second pass does not duplicate records\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"import restores channels, actors and message order\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"in a DM every message adds to the badge without a mention\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"in a channel the badge counts only mentions; the counter counts everything\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"in a channel, a mention triggers wake rather than every message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"in a group every message adds to the badge\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"inboxAfter returns others' messages from my conversations, excluding my own\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"incremental import: a reaction in the second file targets a message from the first\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"init creates the data directory, database and a 64-character secret\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"init does not overwrite an existing instance secret\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"integrations/claude-code/skills/agenttalks/SKILL.md documents every legacy error code with its English replacement\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"integrations/claude-code/skills/agenttalks/SKILL.md explains the tag, JSON field and compatibility migration\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"integrations/claude-skill/SKILL.md documents every legacy error code with its English replacement\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"integrations/claude-skill/SKILL.md explains the tag, JSON field and compatibility migration\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"interleaved successful logins do not reset the guess counter on a victim (B-MG-44)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"invalid percent-encoding in X-File-Name returns 400 with a hint rather than 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"invalid percent-encoding in a path returns 404 rather than 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"invite minted and actor disabled are logged, enroll limit is logged (item 5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"invite: an agent creates an actor with it and the token works\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"isBlockedIp blocks NAT64 and 6to4 ranges (B-MG-19)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"isBlockedIp: private addresses blocked, public addresses allowed, loopback requires permission\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"isWakeable: distinguishes a registered webhook from an absent one\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"join and leave are skipped as noise\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"join cannot join a private channel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"joinChannel marks the channel read right after joining\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"kind=ask smuggled through POST /messages does not create an orphan question\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"language gate reads and detects Polish in cli/probe\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"language gate reads and detects Polish in cli/probe.py\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"language gate reads and detects Polish in docs/probe.txt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"language gate reads and detects Polish in integrations/plugin/hooks/probe\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"language gate reads and detects Polish in integrations/plugin/lib/probe.mjs\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"language gate reads and detects Polish in integrations/probe.json\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"language gate reads and detects Polish in src/http/ui/js/probe.js\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"language gate reads and detects Polish in src/probe.svg\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"lease: one actor acquires it; another is refused with the owner's details\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"legacyOf returns only registered compatibility aliases\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors does not expose the timestamp of a deleted public message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors does not expose the timestamp of a dm message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors does not expose the timestamp of a group message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors does not expose the timestamp of a private message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors looks up activity by actor without scanning message or session history\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors sorts by handle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses account creation when an actor has no activity\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses the newest created timestamp for lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses the newest message timestamp for lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses the newest session timestamp for lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listActors uses the newest token timestamp for lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listForActor returns public channels and the actor's private channels, excluding others' private channels\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listForActor shows DMs the actor participates in\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listMessages paginates by id rather than time\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"listing leases cleans up expired ones\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"liveness: a heartbeat counts only while fresh and while its writer is alive\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"liveness: only a dead token closes the heartbeat; a stream the feed closes to rebuild it only pauses it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"liveness: taking over from a channel that stopped with a null event cursor and a mention cursor resumes from ITS mention cursor, so a mention it never delivered is delivered (codex r4 F10)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"liveness: the channel flag with a channel that never comes up (not allowlisted, policy): the monitor delivers after the grace period\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"liveness: the channel server writes its heartbeat once its stream is open and removes it on exit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"liveness: the monitor mode is 'standby' only with the channel flag, never just 'off'\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"liveness: with the channel flag but no live channel, the monitor delivers; while the channel is alive it stands by\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"login attempt limit: 429 after a series of attempts; successful login resets the counter\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"logout invalidates the cookie server-side and requires CSRF (B-MG-45)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"logout with a bad CSRF clears the cookie, keeps the epoch and answers 403 (item 4)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll answers 401 after the actor was disabled mid-wait (B-MG-2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll answers 401 after the token was revoked mid-wait (B-MG-2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll does not return the actor's own messages\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll ends with an empty list when wait expires\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll of a cookie session answers 401 after a password change (B-MG-50)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll returns immediately when there are pending messages\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll wakes IMMEDIATELY on a message rather than timing out\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"long-poll without authentication returns 401\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markRead afterwards still moves forward, and /read alone never rewinds\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markRead by a member still works (control for B-MG-90)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markRead never moves back to an older message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markRead without an argument clears unread through the latest message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markReadDebounced freezes a zero read mark at the divider position before clearing the count\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markUnread never moves the marker forward\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markUnread publishes a read event with the new marker\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markUnread refuses a conversation the actor cannot read or has not joined\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markUnread refuses a message from another conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markUnread rewinds the read marker to just before the message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markdown are English (K1 diacritics and K2 words)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"markdown copy and wiki tooltips follow the selected language\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"marketplace.json lists the plugin by a ./ path that holds a plugin manifest\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"marking all notifications read leaves the ones the actor can no longer read untouched (B-MG-95)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"matchShortcut: Mod is the command key on a mac and Ctrl on windows\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"matchShortcut: a key without the right modifiers, or with extra ones, is nobody's shortcut\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"matchShortcut: the whole table from section 1 of the spec\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"matchesFrom compares the author handle case-insensitively\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"mcp: tool names that exist on Object.prototype are unknown tools, not a crash (Claude F9)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"mentions are restored by handle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"messageHtml: a reaction chip names who reacted and says whether it is mine (aria-pressed)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"messageHtml: the hover bar is quick reacts, add reaction, reply, edit, more - in that order\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"messages carry actorHandle, not just actorId for a map with string keys\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"migration is idempotent: a second open does nothing and preserves data\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"migration row exceptions retain checks on incorrect mappings and old code usage\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"monitor --max-seconds 0: ends when its Claude Code process is gone, stays while it lives\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"monitor --max-seconds 0: ends when its stdout is closed, and a closed stdin alone does not end it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"monitor and SessionStart hook: woken for nestor on A with bob's identity -> no request to B, no presence, no wake record (r1 F1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"monitor: a stop while events are still undecided saves the cursor BEFORE them; the next run delivers them (codex F5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"monitor: one line per relevant event, clean exit at the deadline, resume after restart\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"monitor: stands down when the session was launched with the agenttalks channel flag\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"multipart on a raw-byte route: a clear refusal instead of a saved envelope\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"multistep migration: an old database reaches the current version with its data\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nested Node test titles cannot evade the language gate\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"nested tx: an inner rollback does not kill the outer transaction\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"new source types respect explicit inventory exclusions and decode JSON strings\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"news: an actor receives news exactly once per content version\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"no UI file shadows the imported t() with its own `t`\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"notifLabel is the sentence plus the excerpt, for the row's aria-label\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"notifSentence names the place once: in #channel, in a thread in #channel, privately\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"notification refresh uses the current language and plural form for its accessible label\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"notifications: mentions, DMs and reactions reach the center; marking read clears the counter\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"older messages load as you scroll up (300 px before the top), without a click\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"onCommitted inside a transaction defers the call until commit; an error prevents the call\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"one subscriber's exception does not block the others\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"one's own messages do not count as unread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"online presence wins over old activity\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"only Polish translation values are exempt, while UI keys and comments remain checked\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"only the author can edit and delete\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"only the owner can release a lease; another actor's live lease refuses release\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"open questions do not leak from a private channel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"openDb creates the schema and sets the version\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"openDb is idempotent on THE SAME file\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"over HTTP login with an https baseUrl sets Secure on both cookies\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseArgs separates positional arguments and flags, including flags without values\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseArgs with known flags preserves content containing --\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseArgs without a list still parses flags\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseMentions extracts handles without duplicates and ignores case\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: a filter that does not parse stays plain text\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: after:YYYY-MM-DD is strictly after that day (UTC)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: all four filters at once, text keeps its order\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: an empty query has no text and no filters\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: bare words are the text\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: before:YYYY-MM-DD is strictly before that day (UTC)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: from:@handle names the author\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: in: without the hash and in any case\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"parseQuery: in:#slug narrows to a channel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey counter: 5->0 and 5->5 rejected, 5->6 ok, never lowered (B-MG-5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey counter: an always-zero authenticator stays allowed (B-MG-52)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey: a decreasing signature counter is rejected as a cloned key\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey: an invalid origin, reused challenge and broken signature are rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passkey: registration and login complete the full cycle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"passwords are verified with scrypt and are not stored in plaintext\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"pasted screenshot filenames follow the selected language and keep named files intact\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"people rows open the profile; the modal uses the picker, not a <select>\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"pin and markRead by a non-member of a private channel are refused (B-MG-90)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"pin and unpin work within a conversation and record who pinned the message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"plugin.json: the channel binds to its MCP server, the token is sensitive, paths exist\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"plural forms cover the categories requested by Polish Intl.PluralRules\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"postMessage assigns increasing ids and stores mentions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"postMessage publishes an event to conversation members\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"postMessage rejects an empty body and a body over the limit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"postMessage rejects posting to another actor's private channel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"presence broadcasts on changes rather than every heartbeat\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"presence shows a registered session with a busy signal\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"profileFacts: online with doing, else last seen from lastActiveAt\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 1): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 10): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 11): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 12): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 2): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 3): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 4): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 5): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 6): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 7): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 8): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"property (seed 9): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"publish reaches only subscribers in the recipient list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"pusher: at most one push per interval; a burst coalesces into one push\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"r1 F1 (codex repro): a superseded newest-30 page landing late keeps the newer catch-up's reactions and body\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"r1 F1: a reaction refresh sent before a newer catch-up and landing after it does not undo that catch-up\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"r1 F1: an unstamped write during the after= page (an own edit, applyMessageUpdate) is kept\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"r1 F1: when the superseded page lands first, the newer catch-up's page still applies\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"r2 F2 (codex repro): a read sent earlier but cut later is not erased by a read sent after it but cut before it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"r2 F2: an unstamped reaction write while a page is in flight (a view loader) is kept, then re-read\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"r2 F2: while the re-read of an overlap is pending, a late superseded page does not show older state\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"railBadges derives the Activity badge from notifUnread and formats 99+\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"reacquiring one's own lease extends it without resetting acquired_at\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"reactionTooltip: names in a sentence, me first as 'You'\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"reactions do not become messages\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"readJson rejects a body over the limit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"readJson rejects invalid JSON\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"recipientsOf returns members rather than all actors\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"registering a session for a missing actor is rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"registering the same session again updates it rather than duplicating it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"removeMember: a channel admin can remove others, anyone can remove themselves; DMs/groups refuse removal\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"renderMain writes the header meta slot and a profile slot inside the side panel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"renderPinned lists every pin with a jump button; the header pill and details open the panel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"renderThreadsMain writes the Threads list into #main: unread dot, newest first, a button per thread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"renderUnreadsMain with nothing unread shows the caught-up empty state\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"renderUnreadsMain writes grouped rows with screen reader names into #main\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"reports: the fixer can mark fixed; only the author/admin can mark resolved\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"requestIsSecure and makeCookie honour a TLS socket (B-MG-91)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"restart while a member mention is still undelivered: neither the status watermark nor the first event id is delivered state, so the mention is fetched again and delivered once (server with GET /api/status) (codex r4 F10)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"restart while a member mention is still undelivered: neither the status watermark nor the first event id is delivered state, so the mention is fetched again and delivered once (server without GET /api/status) (codex r4 F10)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"restart while a mention AND a later DM are undelivered: the next run replays from the previous run's floor, not from the newest status, so the DM is not skipped (codex T-MG-14 r1 F2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"resuming SSE delivers message_updated for an edit before the cursor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"revokeInvite: a missing/already-revoked id returns false without false success\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"rowLabel gives every palette row a screen-reader name\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"saveDraft never stores a draft without an owner\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"saving an identical title and body creates no new revision and answers with the current one (B-MG-33)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"scan finding: typing location with a line break never forges a line; talk_typing rejects it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"search does not return content from inaccessible channels\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"search matches prefixes\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"search omits deleted messages\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"searchParams maps in:/before:/after: to the server and raises the limit for from:\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"searchParams: a plain query sends only q and the default limit\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"searchParams: in: with an unknown slug is reported, not silently dropped\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"security lines never contain the handle string a user typed (item 2)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sensitive without a TTL receives the default TTL and expires\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"session cookies are REVOCABLE: changing the password invalidates previously issued cookies\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"session kind is declared rather than guessed from the name\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"session resume and login paths claim the local data\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sessions: a pruner that dies holding a refreshed record leaves a tombstone the next prune restores\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sessions: a reader sees a claimed record while its content is fresh, once, and never a stale tombstone (codex r4 F11)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sessions: a record refreshed by another process while a pruner holds it (afterClaim) survives the prune (codex r3 F7)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sessions: a record refreshed by another process while a pruner holds it (afterSelect) survives the prune (codex r3 F7)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sessions: every record is private (0600 files in a 0700 directory) and a re-record replaces, not duplicates\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sessions: pruning is by age only - many fresh records are all kept, a record past the TTL goes\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sessions: two hooks writing at the same time lose no record (codex F6)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"setNotify joins an actor who is not yet a member\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"shortcutLabel prints symbols on a mac and words on windows\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"showNewsModal with agents-only text opens no modal and acknowledges once\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sidePanelOf: an open profile is the panel's kind and wins over details and thread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sidebar classifies 13 silent days as active\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sidebar classifies 14 silent days as faded\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sidebar classifies 90 silent days as archived\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"someone cannot be forcibly added to a public channel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"stepConversation walks the list in order and wraps at both ends\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"stepUnread skips read conversations and returns null when nothing is unread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"strings are English (K1 diacritics and K2 words)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"sweep deletes expired records and their bytes from disk\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"t() translates, selects the plural form and falls back to English for missing entries\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_claim and talk_release complete the full lease cycle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_log rejects the id of another actor's private conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read does not query the database once per line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read groups by conversation and puts messages waiting for you first\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read includes its tool schema even when there are no new messages\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read: batches, character budget, and a cursor after the last SHOWN message\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_read: limit also applies to long-poll results\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_send over MCP posts as the token actor and returns the message id\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"talk_status lists tool fields from TOOLS rather than a handwritten list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"text are English (K1 diacritics and K2 words)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the API cannot read another actor's private channel\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the S14 CSS block uses Primer tokens, not literal rem\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the Threads route parses and builds; view-chat.js dispatches state.view 'threads'; the module is served\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the UI does not build event attributes from data\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the actor directory cache retains uploaded avatars\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the admin panel issues a token to an existing actor for rotation without SSH\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the answer is placed in the question's thread\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the channel creator is its admin\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the configuration file has mode 600\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the conversation list distinguishes my channels from channels I can only see\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the database stores the hash rather than the token\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the entry point (app.js) starts without throwing even when the server is unavailable\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the event sees the message already stored in the database, read through a SECOND connection\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the first connection serves guidelines with a prompt; the second does not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the init command creates the general channel and system actor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the init command is idempotent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the key handler reads the shortcut table, the shell dispatches the unreads view, the module is served\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the language gate sees the whole repository and explained exceptions\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the length limit states HOW MUCH over the limit and is exposed in /api/me\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the message response carries an actor map with kind to enforce human identity\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the michal, @michal, @@michal, @@@michal sequence is limited from the 9th (item 1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the module route serves all UI files and relative imports without a listener\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the parseArgs -- terminator moves the remaining arguments to positional\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the pinned panel is a side panel kind: sidePanelOf knows it, renderMain hosts #pinned-slot\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the push wrapper delegates remote env selection to the production script\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the required Node version is checked by major version\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the router matches path parameters\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the same account signing in again gets its draft back\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the skill fingerprint hashes what the server ACTUALLY serves\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the skill no longer instructs users to paste a token into a file committed to the repository\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the syntax gate CAN fail - a deliberately broken sample\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the tree listener is delegated on the document and targets the sidebar rows\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the unread counter resets after marking the view as read\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the untrusted-project notice never carries the repository's path into model context: a path with a newline and a fake approval stays out of additionalContext and the channel's output (item 3 follow-up)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"the wiki list provides a summary of each page without fetching their bodies\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"threadsFor: a reply by somebody else I have not seen is unread; my own last word is not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"threadsFor: newest activity first - the last reply decides, not the root\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"threadsFor: only threads I started or replied to, each with its root, replies and conversation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"threadsFor: opening a thread (seen up to the last reply) clears its marker until a newer reply\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"throttling: a second message within the window does not trigger another delivery\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"titleCount is 0 for an empty state and tolerates missing fields\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"titleCount sums the weighted badges plus unread wiki notifications, not the soft counts\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"titles are English (K1 diacritics and K2 words)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"toast close controls follow the current language\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"token mint and revoke and a denied admin action are logged without secrets (B-MG-51)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"token use is recorded in last_used_at\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"tools/list returns the full set of talk_* tools\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"topReactions: the four most used emoji of the conversation, by count, then the palette fills up\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"totalBadge sums badges from all conversations\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"two DISTINCT labels colliding on one handle are not merged into one actor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"two actors cannot have the same handle\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"two channels cannot have the same name\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"two sessions of the same actor are one participant, without suffixes\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"tx rolls everything back when an error occurs inside\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"typing expires after 7 s; busy lasts 30 s\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"unreadDmCount sums unread in direct and group conversations I belong to\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"unreadGroups lists only conversations I belong to with unread > 0, newest activity first\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"unreadGroups marks a conversation whose history is not loaded as pending (lazy load)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"unsubscribing stops delivery and releases the counter\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"updateConversation: a channel admin can change the topic and slug; an ordinary member cannot\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"updateConversation: another channel's slug is rejected; DMs have no slug\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"updateTitleBadge writes the counters.js total into the tab title\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"visibleMembers drops @system from a member list\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake allows loopback only with explicit permission\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake body carries a signed exp (now+300) and a random nonce (B-MG-19)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a claude binary that cannot start is a retryable failure, not a used-up knock; the retry after fixing it wakes (codex T-MG-14 r1 F3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a resumed run that hangs is killed at its time limit, so the session is not blocked forever\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a run that starts only AFTER the spawn wait timed out still uses up the knock - the retry gets 409, never a second run (F5 follow-up)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a run whose start fails AFTER the spawn wait timed out frees the knock for a retry (F5 follow-up)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a secret bound to server A never resumes a session recorded for server B\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a secret without a serverUrl is a startup error, whatever sessions are recorded (codex r3 F1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a spawn that throws synchronously (E2BIG) is a retryable 503, never a hang; the retry without it wakes, then replay 409 (codex T-MG-14 r2 F5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a wake that lands while a pruner holds a refreshed record as its tombstone still wakes the session (codex r4 F11)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a woke:false answer does not use up the nonce - the retry after the session appears wakes it; a replay of a successful wake is still 409 (codex r4 F11)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: a woken run may use ONLY the wake tools server's principal-checked tools; a remote AgentTalks MCP server (configured as another actor) and the plugin channel are denied (codex T-MG-14 r2 F4, T-MG-15)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: an oversized body is answered 413 at the cap and the connection is closed, not read to the end (Claude F4)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: bad signature 401, good one spawns the runner with argv only, replay 409\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: codex scenario - A recorded, 49 newer B sessions, an A-signed knock never resumes a B session (codex r3 F1)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: every allowed tool belongs to the principal-checked wake tools server; a wider --allowed-tools is a startup error (r2 F4, T-MG-15)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: every spelling of the unspecified address is refused without --allow-public (Claude F3)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: exp and nonce - fresh accepted, replayed nonce 409, stale exp rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: listens on 127.0.0.1 by default and refuses a public bind without consent\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: no wake when the session's principal cannot be resolved or does not match the secret's server and the recorded actor (item 4)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: the bin refuses to start with a secret that has no server URL (env pair without AGENTTALKS_WAKE_SERVER_URL)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: the default allowed tools are the wake tools server's read_conversation, read_thread, reply and mark_read, nothing else (D-MG-17, narrowed by codex T-MG-14 r2 F4 and T-MG-15)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: the replay record survives a restart of the bridge (Claude F4)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: the server URL is compared as a normalized origin and path\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: the woken claude gets the environment without the bridge's wake secrets (Claude F5)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: the woken run never inherits the BRIDGE's AgentTalks credentials; it runs as the session's own principal (codex cross-review, item 4)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake bridge: unknown actor, stale legacy body, wrong method and oversized body are refused\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake httpDeliver REFUSES a private address at delivery time (SSRF rebinding)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake rejects local and private addresses (SSRF)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (a): the generated config is removed also when the run cannot start (ENOENT) or the runner throws\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (a): the woken run starts in strict MCP mode with a generated config naming ONLY the principal-checked tools server; no token on disk; 0600 in a private directory; removed when the run exits\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (b): codex alias scenario - another AgentTalks MCP server under another name (other_at, B/bob, pre-approved) is neither loadable nor callable in the woken run (B-MG-105)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (c): codex DM 41 scenario - read_conversation and read_thread return the full text of message 41 (longer than 400 characters), quoted as data (B-MG-106)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (d): principal mismatch - an unresolvable identity -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (d): principal mismatch - another actor behind the resolved token -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (d): principal mismatch - another actor id behind the same handle -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (d): principal mismatch - another server URL -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools (d): principal mismatch - no expectation at all (not a woken run) -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake tools: the prompt names the read tools and asks for the full message before acting\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wake: registration returns the secret once; GET shows configuration without the secret\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki attach: an attached file can be downloaded by another authenticated actor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki notifications: a page change notifies those who have already written on it\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki through the API: save, read, search, history, revert\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki tree: a cycle under itself or a descendant is rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki tree: child pages, moving, and undefined preserves position\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki unseen: others' revisions count since the last visit; one's own do not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: a blind write to another actor's page returns 409 with the revision number; after reading it returns 200\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: a page is shared; another actor can also edit it after reading\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: a single revision preview returns the full body; another page's or a missing revision returns 404\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: a slug conflicting with a route (search) is rejected\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: an attachment is public to every authenticated actor\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: any authenticated actor can edit shared knowledge, but must read it first\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: baseRevision - matching passes, mismatched returns 409, 0 means create only\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: create, read, update - history grows\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: headings and sections; a fragment does NOT unlock writing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: only the creator or an admin can delete a page; children survive\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: revert restores content as a new revision\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki: search finds pages by body and title\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wikiTreeKeyAction: Left collapses or climbs, Right expands or steps in\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wikiTreeKeyAction: Up/Down/Home/End walk the rows\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"wiki_read: a truncated page does NOT unlock writing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"without authentication the API returns 401 rather than 500\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"zero runtime dependencies: only node: built-ins and relative imports; ASCII-only sources\",1]",
+        "file": "",
+        "skipped": false
+      }
+    ]
+  },
+  "failures": {
+    "preexisting": [],
+    "new": []
+  },
+  "route": {
+    "declared": "critical",
+    "actual": "critical",
+    "escalated": false,
+    "missingSteps": []
+  },
+  "artifacts": {
+    "report": true,
+    "review": "approved"
+  },
+  "result": "pass"
+}

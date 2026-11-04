@@ -13,8 +13,8 @@
       "at": "2026-11-04T19:07:00.410Z"
     }
   ],
-  "status": "implemented",
-  "round": 1,
+  "status": "dispatched",
+  "round": 3,
   "events": [
     {
       "at": "2026-11-04T16:28:11.555Z",
@@ -99,6 +99,114 @@
       "data": {
         "report": "done-with-concerns",
         "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T19:58:19.655Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "a85b76d43d96",
+        "note": "scoped re-review r2"
+      }
+    },
+    {
+      "at": "2026-11-04T20:04:43.945Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:05:09.671Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 3,
+        "open": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:05:09.954Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "a85b76d43d96",
+        "note": "fix round 2: fresh implementer, search pagination"
+      }
+    },
+    {
+      "at": "2026-11-04T20:10:24.448Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:10:24.792Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "a85b76d43d96",
+        "note": "scoped re-review r3"
+      }
+    },
+    {
+      "at": "2026-11-04T20:16:31.398Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:16:43.413Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 3,
+        "addressed": 1,
+        "open": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:16:43.702Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "a85b76d43d96",
+        "note": "fix round 3: beforeId cursor (D-MG-42)"
+      }
+    },
+    {
+      "at": "2026-11-04T20:18:57.500Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 3
+      }
+    },
+    {
+      "at": "2026-11-04T20:18:57.714Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "a85b76d43d96",
+        "note": "scoped re-review r4"
       }
     }
   ],

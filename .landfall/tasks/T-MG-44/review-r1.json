@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 50,
+      "rule": "REV-2",
+      "text": "Read messages regain highlights after navigation. Node DOM-harness reproduction: open conversation 5 at mark 504, successfully read through 510, finish fading, then open 6 and 5; output unread=0, highlighted=[506,508,510], expected []. Entry clears the remembered state and rebuilds from the stale membership mark. Preserve the confirmed read watermark across navigation and exclude already-read IDs."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 99,
+      "rule": "REV-2",
+      "text": "The independent fade timer does not follow the actual read. Node reproduction: schedule read+fade, tick 400 ms, reschedule both, tick 100 ms; output posts=0, highlighted=[], fading=[506,508,510]. With a 503 read response, unread remains 3 while those rows still fade. Trigger fading from successful read completion, using the confirmed message boundary, instead of duplicating the debounce with an uncancelled timeout."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 173,
+      "rule": "REV-2",
+      "text": "Resume detection only runs through openConversation, but Activity → Home uses app.js goPlace(), which directly sets view='chat' and renders. Node reproduction using production goPlace and renderMain: open 5 through 510, switch to notifications, receive others' messages 511/513, call goPlace('home'); output view='chat', highlighted=[], expected [511,513]. Apply resume tracking to every route that restores the conversation."
+    },
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 129,
+      "rule": "REV-2",
+      "text": "Messages fetched after returning to a disconnected tab are classified as seen live. Node DOM-harness reproduction: enter through 510, hide and return, call noteTabVisible(), then deliver catch-up messages 511/512 and renderMessages(); highlighted=[], expected [511,512]. The visible render advances seen past the missed messages. Retain the absence watermark through asynchronous reconnect catch-up and classify recovered messages before advancing it."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 113,
+      "rule": "REV-2",
+      "text": "Highlight state and timers survive account changes; resetUnreadHighlights has no production caller. Node reproduction: schedule A's fade, tick 100 ms, cancel reads, change session generation/resetState, enter the same conversation as B, tick 400 ms; B's highlighted=[506,508,510] becomes [] without B reading. Wire highlight cleanup into account teardown and cancel or generation-guard outstanding fade timers."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": ".landfall/tasks/T-MG-44/brief.md",
+      "line": 22,
+      "rule": "SPC-13",
+      "text": "Acceptance points 1 and 2 are placeholders, so numbered acceptance compliance cannot be assessed. Reproduction: sed -n '15,27p' .landfall/tasks/T-MG-44/brief.md prints '<files>', unspecified interfaces, '1. <acceptance point: the reviewer cites its number>' and '2. <…>'. Supply the actual scope, contracts, steps and numbered acceptance criteria, then regenerate the review brief."
+    }
+  ],
+  "run": "codex-T-MG-44-reviewer-1",
+  "sha256": "ce615b4e80b5e5e517fd59d4f5fce60fdc98c93de82a1a6b3fb75f0026d62a96"
+}
