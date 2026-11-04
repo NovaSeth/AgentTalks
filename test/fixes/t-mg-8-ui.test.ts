@@ -227,7 +227,7 @@ test("B-MG-37: Enter then further typing keeps the composer, focus and new draft
   assert.equal(input.value, "next");
   assert.equal(doc.activeElement, input);
   assert.equal(state.drafts[7].text, "next");
-  assert.equal(storage.getItem("atalks_draft_7"), "next");
+  assert.equal(storage.getItem("atalks_draft_1_7"), "next");   // actor 1's namespace (F2 r3)
 });
 
 test("B-MG-37: a successful send only clears unchanged sent text", async () => {
@@ -349,7 +349,7 @@ test("B-MG-37: typing the same message again during a send preserves the new tex
   await settle();
   assert.equal(input.value, "again");
   assert.equal(doc.activeElement, input);
-  assert.equal(storage.getItem("atalks_draft_7"), "again");
+  assert.equal(storage.getItem("atalks_draft_1_7"), "again");   // actor 1's namespace (F2 r3)
 });
 
 test("B-MG-37: a response after switching conversations preserves both new drafts", async () => {

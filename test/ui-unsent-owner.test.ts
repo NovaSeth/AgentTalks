@@ -179,7 +179,7 @@ test("(b) B persists after A wrote: A's entry stays, is not re-owned, is not sho
   const stored = JSON.parse(store["atalks_unsent_5"]);
   assert.equal(stored.find((u: Any) => u.clientMsgId === "m-a").ownerId, 1, "A's entry keeps its owner");
   assert.equal(stored.find((u: Any) => u.clientMsgId === "m-b").ownerId, 2);
-  assert.equal(store["atalks_owner"], "2", "persistUnsent never writes the owner marker");
+  assert.equal(store["atalks_owner"], undefined, "persistUnsent never writes the owner marker (the migration removed it, F2 r3)");
   ui.st.state.pending = {};
   ui.st.claimLocalData(2);
   assert.deepEqual(failedBodies(ui), ["b-text"]);

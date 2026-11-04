@@ -200,7 +200,7 @@ test("a lost session saves the draft, returns to sign-in with a toast and keeps 
   assert.ok(shown.some((s) => s.includes("Your session ended")), `toast shown: ${JSON.stringify(shown)}`);
   assert.deepEqual(Object.keys(state.memberships), [], "afterLogin reloads the list");
   assert.equal(state.drafts[7]?.text, "half a thought", "the draft survives in memory");
-  assert.equal(saved["atalks_draft_7"], "half a thought", "and in localStorage");
+  assert.equal(saved[`atalks_draft_${ME}_7`], "half a thought", "and in localStorage, in the account's namespace (F2 r3)");
   assert.equal(typeof sse.onSessionLost, "function");
   // A second 401 while already signed out changes nothing.
   await assert.rejects(api.api("GET", "/api/conversations"));

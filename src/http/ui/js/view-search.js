@@ -27,7 +27,7 @@ let current = { q: "", parsed: parseQuery(""), loading: false, messages: [], unr
  *  it touches `current`, the actor directory or the DOM. */
 let searchSeq = 0;
 
-const emptySearch = () => ({ q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null, gen: sessionGeneration(), olderBefore: null });
+const emptySearch = () => ({ q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null, gen: sessionGeneration(), olderBefore: null, scanned: 0 });
 
 /** A filter-only page size: the server caps a page at 500; 200 leaves room for from: to thin it. */
 const FILTER_PAGE = 200;
@@ -81,7 +81,7 @@ export async function openSearchView(q) {
   const fresh = () => my === searchSeq && gen === sessionGeneration();
   const filterOnly = !parsed.text && hasFilter(parsed);
   const inConv = filterOnly ? resolveIn(parsed.in, state.conversations) : null;
-  current = { q: query, parsed, loading: !!parsed.text || !!inConv, messages: [], unresolvedIn: false, error: null, gen, olderBefore: null };
+  current = { q: query, parsed, loading: !!parsed.text || !!inConv, messages: [], unresolvedIn: false, error: null, gen, olderBefore: null, scanned: 0 };
   state.view = "search";
   state.drawerOpen = false;
   state.threadOpen = null;
@@ -133,6 +133,7 @@ async function loadFilterPage(convId, parsed, before, fresh, query) {
     const page = data.messages || [];
     current.messages = applyFilters([...current.messages, ...page], parsed);
     current.olderBefore = page.length >= FILTER_PAGE ? Math.min(...page.map((m) => m.id)) : null;
+    current.scanned = (current.scanned || 0) + page.length;   // F3 (r3): how far back the listing has looked
   }
   current.error = error;
   current.loading = false;
@@ -147,7 +148,7 @@ export function renderSearchMain() {
   if (!el || state.view !== "search") return;
   // Results kept from another account's session are never drawn (F1).
   if (current.gen !== sessionGeneration()) current = emptySearch();
-  const { q, parsed, loading, messages, unresolvedIn, error, olderBefore } = current;
+  const { q, parsed, loading, messages, unresolvedIn, error, olderBefore, scanned } = current;
   const groups = groupByConversation(messages);
   const terms = queryTerms(parsed.text);
   const back = state.activeId && state.conversations.find((c) => c.id === state.activeId);
@@ -170,7 +171,7 @@ export function renderSearchMain() {
           placeholder="${t("Words to find, with in:#channel from:@name before:YYYY-MM-DD after:YYYY-MM-DD")}">
         <button class="btn" type="submit">${t("Search")}</button>
       </form>
-      <div class="search-results viewfade" id="search-results">${resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q, listing, olderBefore, suggest: inTokenFor(back) })}</div>
+      <div class="search-results viewfade" id="search-results">${resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q, listing, olderBefore, scanned, suggest: inTokenFor(back) })}</div>
     </div>`;
   document.getElementById("search-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -204,7 +205,7 @@ export function renderSearchMain() {
   if (!loading) document.getElementById("search-q").focus();
 }
 
-function resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q, listing, olderBefore, suggest }) {
+export function resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q, listing, olderBefore, scanned, suggest }) {
   if (loading) return skeletonHtml();
   if (unresolvedIn) {
     return emptyStateHtml(iconSearch(2.4), t("No conversation named {name}", { name: parsed.in }),
@@ -216,6 +217,13 @@ function resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q, l
     return emptyStateHtml(iconSearch(2.4), t("Add a word to search for"),
       t("Or add in:#channel to list the latest messages there."))
       + (suggest && hasFilter(parsed) ? `<p class="search-suggest"><button class="btn slim" data-suggest-in="${escapeHtml(suggest)}">${escapeHtml(t("List the latest in {name}", { name: suggest }))}</button></p>` : "");
+  }
+  if (listing && !error && !groups.length && olderBefore) {
+    // F3 (r3): the newest page(s) had no match but older messages exist - the listing says how far
+    // it looked and keeps the pager, so a match beyond the first page stays one click away.
+    return emptyStateHtml(iconSearch(2.4), t("No matches in the newest {n} messages - show older", { n: scanned || FILTER_PAGE }),
+      t("Try another author or wider dates."))
+      + `<p class="search-older"><button class="btn slim" data-older="${olderBefore}">${escapeHtml(t("Show older"))}</button></p>`;
   }
   if (listing && !error && !groups.length) {
     return emptyStateHtml(iconSearch(2.4), t("Nothing in {name} matches these filters", { name: `#${parsed.in}` }),

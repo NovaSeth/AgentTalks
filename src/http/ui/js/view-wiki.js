@@ -7,7 +7,7 @@ import { avatarHtml, confirmModal, escapeHtml, fmtDateTime, formatBytes, hamburg
 import { iconDoc, iconEdit, iconFile, iconHistory, iconTrash } from "./icons.js";
 import { locale, t } from "./i18n.js";
 import { mdToHtml } from "./markdown.js";
-import { state, views } from "./state.js";
+import { clearWikiDraft, loadWikiDraft, saveWikiDraft, state, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 import { buildRoute, syncRoute } from "./router.js";
 
@@ -15,23 +15,8 @@ import { buildRoute, syncRoute } from "./router.js";
 // The chat has long kept a message draft that survives F5 and a deployment; the wiki editor
 // kept nothing, and it is where the longest texts are written. Leaving the editor (Cancel, a
 // click on another page, closing the tab) erased them without asking.
-const WIKI_DRAFT_KEY = (slug) => `atalks_wiki_draft_${slug}`;
-
-function saveWikiDraft(slug, draft) {
-  if (!slug || !draft) return;
-  try { localStorage.setItem(WIKI_DRAFT_KEY(slug), JSON.stringify(draft)); } catch { /* private browsing */ }
-}
-
-function loadWikiDraft(slug) {
-  try {
-    const raw = localStorage.getItem(WIKI_DRAFT_KEY(slug));
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function clearWikiDraft(slug) {
-  try { localStorage.removeItem(WIKI_DRAFT_KEY(slug)); } catch { /* private browsing */ }
-}
+// The draft is stored per account and page by state.js (saveWikiDraft / loadWikiDraft /
+// clearWikiDraft, F2 r3): two tabs signed in as two accounts never read each other's.
 
 /** Whether the editor holds anything the server does not have. */
 function hasUnsavedChanges() {

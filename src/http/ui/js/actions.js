@@ -274,10 +274,14 @@ export async function saveEditedMsg(messageId, text, beforeUpdate) {
 }
 
 export async function answerQuestion(questionId, text) {
+  // F1 (r3): the conversation is the one the answer was given in, captured before the await;
+  // the one open when the answer returns may be another.
+  const convId = state.activeId;
   const data = await api("POST", `/api/questions/${questionId}/answer`, { body: text, sessionId: mySessionId || undefined });
-  upsertMessage(state.activeId, data.message);
-  await refreshQuestions(state.activeId);
-  views.messages();
+  const target = data.message?.conversationId ?? convId;
+  upsertMessage(target, data.message);
+  await refreshQuestions(target);
+  if (state.activeId === target) views.messages();
 }
 
 export async function joinChannel(id, btn) {

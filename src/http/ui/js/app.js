@@ -16,7 +16,7 @@ import {
 import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
 import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
-import { dmOthers, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
+import { dmOthers, lastConvId, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { startDirect } from "./actions.js";
 import { buildRoute, consumeOwnPush, hashOfEvent, parseRoute, syncRoute } from "./router.js";
 import { showToast } from "./toasts.js";
@@ -317,7 +317,7 @@ async function afterLogin() {
 
 /** The conversation an empty hash opens: the last viewed one, else the first I belong to. */
 function defaultConversation() {
-  const lastId = Number(localStorage.getItem("atalks_last_conv"));
+  const lastId = lastConvId();   // per account (F2 r3)
   const last = state.conversations.find((c) => c.id === lastId && state.memberships[c.id]);
   return last || state.conversations.find((c) => state.memberships[c.id]) || state.conversations[0];
 }

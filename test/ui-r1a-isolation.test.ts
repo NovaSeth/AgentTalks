@@ -275,8 +275,15 @@ test("F3: another account never sees the unsent message", async (t) => {
   await signIn(ui, B, setFetch);
   assert.deepEqual(ui.st.visibleMessages(5), []);
   assert.deepEqual(ui.st.state.pending, {});
-  assert.ok(!Object.keys(store).some((k) => k.startsWith("atalks_unsent_")), "nothing of A stays in storage");
-  assert.ok(!JSON.stringify(store).includes("the message I typed"));
+  // F2 (r3, D-MG-26): B's sign-in no longer wipes A's storage (A may be signed in in another
+  // tab); A's text stays only in A's namespace / under A's ownerId, never readable as B's.
+  assert.equal(ui.st.loadDraft(5), null, "B's namespace holds none of A's draft");
+  const stored = JSON.parse(store["atalks_unsent_5"] || "[]");
+  assert.ok(stored.every((u: Any) => u.ownerId === A.id), "every stored unsent entry is A's, none re-owned by B");
+  assert.ok(!Object.entries(store).some(([k, v]) => k.includes(`_${B.id}_`) && v.includes("the message I typed")));
+  // A signs out (from B's tab the same browser): A's data goes, B's stays.
+  ui.st.clearLocalAccountData(A.id);
+  assert.ok(!JSON.stringify(store).includes("the message I typed"), "after A's sign-out nothing of A stays");
 });
 
 // ------------------------------------------------------------------ W3-S4-B

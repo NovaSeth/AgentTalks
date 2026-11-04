@@ -199,38 +199,143 @@ export function mergeReactions(messages, reactions) {
 // text and the attached files have to survive it. The text additionally lands in localStorage
 // so that it survives F5 and a deployment; the files stay in the tab's memory (a File object
 // cannot be serialised).
-const DRAFT_KEY = (id) => `atalks_draft_${id}`;
-const OWNER_KEY = "atalks_owner";
+//
+// F2 (r3): localStorage is shared by every tab of the browser, and two tabs may be signed in as
+// two accounts at once (the session lives in sessionStorage). A single "owner" marker therefore
+// could not decide whose data a key is: tab B overwrote it and read tab A's drafts. Every
+// per-account key now carries the actor in its name, every read and write goes through the
+// current actor's namespace, and nothing global decides visibility. Unsent messages stay one
+// list per conversation with an `ownerId` on every entry (8c92d64).
+const DRAFT_KEY = (owner, id) => `atalks_draft_${owner}_${id}`;
+const WIKI_DRAFT_KEY = (owner, slug) => `atalks_wiki_draft_${owner}_${slug}`;
+const LAST_CONV_KEY = (owner) => `atalks_last_conv_${owner}`;
+const RECENT_KEY = (owner) => `atalks_recent_${owner}`;
+// Written before r3: one marker for the whole browser and un-namespaced keys. Read only by the
+// one-time migration below.
+const LEGACY_OWNER_KEY = "atalks_owner";
+const LEGACY_DRAFT = /^atalks_draft_(\d+)$/;
+const LEGACY_WIKI_PREFIX = "atalks_wiki_draft_";
 
-/** Removes every persisted per-account UI key (drafts, last conversation, recent list). */
-export function clearLocalAccountData() {
+/** The account whose namespace this tab reads and writes: the signed-in actor, or during a lost
+ *  session the one the in-memory drafts are kept for. null = no account: nothing is stored. */
+function storageOwner() {
+  return state.actor?.id ?? state.draftsOwner ?? null;
+}
+
+function storageKeys() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) keys.push(key);
+  }
+  return keys;
+}
+
+/** The one-time migration of pre-r3 data: un-namespaced keys go to the actor the old marker
+ *  names (or, with no marker at all, to `fallback`: the first account that signs in), legacy
+ *  unsent entries without an ownerId get the marker's id, and the marker is removed. A namespaced
+ *  key that already exists wins over its legacy copy. Idempotent: with nothing legacy left it
+ *  changes nothing. A legacy wiki slug that itself starts with digits and "_" reads as namespaced
+ *  and is left alone (it then belongs to nobody visible). */
+function migrateLegacy(fallback) {
   try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key === "atalks_last_conv" || key === "atalks_recent"
-          || key?.startsWith("atalks_draft_") || key?.startsWith("atalks_wiki_draft_")
-          || key?.startsWith(UNSENT_PREFIX)) {
+    const marker = localStorage.getItem(LEGACY_OWNER_KEY);
+    const owner = marker ?? (fallback == null ? null : String(fallback));
+    const move = (from, to) => {
+      const value = localStorage.getItem(from);
+      if (owner != null && value != null && localStorage.getItem(to) == null) localStorage.setItem(to, value);
+      localStorage.removeItem(from);
+    };
+    for (const key of storageKeys()) {
+      let m;
+      if ((m = LEGACY_DRAFT.exec(key))) move(key, DRAFT_KEY(owner, m[1]));
+      else if (key.startsWith(LEGACY_WIKI_PREFIX) && !/^\d+_/.test(key.slice(LEGACY_WIKI_PREFIX.length))) {
+        move(key, WIKI_DRAFT_KEY(owner, key.slice(LEGACY_WIKI_PREFIX.length)));
+      } else if (key === "atalks_last_conv") move(key, LAST_CONV_KEY(owner));
+      else if (key === "atalks_recent") move(key, RECENT_KEY(owner));
+      else if (marker !== null && key.startsWith(UNSENT_PREFIX)) {
+        // Written by 4aa92d5 before entries carried an owner: the old marker is all we have.
+        let list = null;
+        try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* a broken entry */ }
+        if (!Array.isArray(list) || !list.some((u) => u && u.ownerId == null)) continue;
+        for (const u of list) if (u && u.ownerId == null) u.ownerId = Number(marker);
+        localStorage.setItem(key, JSON.stringify(list));
+      }
+    }
+    localStorage.removeItem(LEGACY_OWNER_KEY);
+  } catch { /* private browsing */ }
+}
+
+/** Sign-out: removes the persisted UI data of THIS account only (drafts, wiki drafts, the last
+ *  conversation, the recent list, its unsent entries). Another account signed in in another tab
+ *  keeps all of its own. */
+export function clearLocalAccountData(actorId) {
+  if (actorId == null) return;
+  migrateLegacy(actorId);
+  const me = String(actorId);
+  try {
+    for (const key of storageKeys()) {
+      if (key.startsWith(DRAFT_KEY(me, "")) || key.startsWith(WIKI_DRAFT_KEY(me, ""))
+          || key === LAST_CONV_KEY(me) || key === RECENT_KEY(me)) {
         localStorage.removeItem(key);
+      } else if (key.startsWith(UNSENT_PREFIX)) {
+        let list = null;
+        try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* a broken entry */ }
+        const rest = Array.isArray(list) ? list.filter((u) => u && String(u.ownerId) !== me) : [];
+        if (rest.length) localStorage.setItem(key, JSON.stringify(rest));
+        else localStorage.removeItem(key);
       }
     }
   } catch { /* Storage may be unavailable in private browsing. */ }
 }
 
-/** Persisted UI data belongs to one account. Called right after the signed-in actor is known:
-/**  data written by a different account is wiped (storage and memory) before anything reads it.
-/**  Data with no owner marker (written before this existed) is kept once and claimed. */
+/** Called right after the signed-in actor is known: pre-r3 data is migrated once, the memory of
+ *  another account (a lost session followed by a different sign-in) is dropped, and this
+ *  account's unsent messages come back. Storage of other accounts is left alone: it is not
+ *  readable from this namespace. */
 export function claimLocalData(actorId) {
-  const me = String(actorId);
-  let legacyOk = false;                    // unsent entries with no ownerId may be claimed only then
-  try {
-    const owner = localStorage.getItem(OWNER_KEY);
-    legacyOk = owner === me;
-    if (owner !== null && owner !== me) clearLocalAccountData();
-    localStorage.setItem(OWNER_KEY, me);
-  } catch { /* private browsing */ }
-  if (state.draftsOwner != null && String(state.draftsOwner) !== me) { state.drafts = {}; state.pending = {}; }
+  migrateLegacy(actorId);
+  if (state.draftsOwner != null && String(state.draftsOwner) !== String(actorId)) { state.drafts = {}; state.pending = {}; }
   state.draftsOwner = actorId;
-  restoreUnsent(actorId, legacyOk);
+  restoreUnsent(actorId);
+}
+
+// The wiki editor's draft (W5-S14): per account and page, the same namespace rule.
+export function saveWikiDraft(slug, draft) {
+  const owner = storageOwner();
+  if (!slug || !draft || owner == null) return;
+  try { localStorage.setItem(WIKI_DRAFT_KEY(owner, slug), JSON.stringify(draft)); } catch { /* private browsing */ }
+}
+
+export function loadWikiDraft(slug) {
+  const owner = storageOwner();
+  if (!slug || owner == null) return null;
+  try {
+    const raw = localStorage.getItem(WIKI_DRAFT_KEY(owner, slug));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function clearWikiDraft(slug) {
+  const owner = storageOwner();
+  if (!slug || owner == null) return;
+  try { localStorage.removeItem(WIKI_DRAFT_KEY(owner, slug)); } catch { /* private browsing */ }
+}
+
+/** The conversation an empty address opens next time (per account). */
+export function rememberLastConv(id) {
+  const owner = storageOwner();
+  if (owner == null) return;
+  try { localStorage.setItem(LAST_CONV_KEY(owner), String(id)); } catch { /* private browsing */ }
+}
+
+export function lastConvId() {
+  const owner = storageOwner();
+  if (owner == null) return null;
+  try {
+    const id = Number(localStorage.getItem(LAST_CONV_KEY(owner)));
+    return id > 0 ? id : null;
+  } catch { return null; }
 }
 
 // ------------------------------------------------------------------ unsent messages
@@ -238,7 +343,7 @@ export function claimLocalData(actorId) {
 // "not sent" bubble rather than folded into the composer text (T-MG-3 F3, W3-S4-B): the bubble
 // keeps its clientMsgId, so "Send again" can never post it twice even when the first attempt
 // did land, a thread reply stays a thread reply, and two failed messages stay two. They are
-// stored per conversation under the same owner marker as the drafts, so only the account that
+// stored per conversation, every entry with the `ownerId` that wrote it, so only the account that
 // wrote them gets them back.
 const UNSENT_PREFIX = "atalks_unsent_";
 
@@ -287,9 +392,9 @@ export function preserveUnsent() {
   }
 }
 
-/** Sign-in: the stored unsent messages of THIS account (claimLocalData has already wiped any
- *  other account's) come back as failed bubbles, merged with what the tab still holds. */
-function restoreUnsent(actorId, legacyOk = false) {
+/** Sign-in: the stored unsent messages of THIS account (entries of any other account are
+ *  skipped by their ownerId) come back as failed bubbles, merged with what the tab still holds. */
+function restoreUnsent(actorId) {
   let keys = [];
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -302,15 +407,13 @@ function restoreUnsent(actorId, legacyOk = false) {
     let list = [];
     try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* a broken entry */ }
     if (!Number.isFinite(convId) || !Array.isArray(list)) continue;
-    const mine = state.pending[convId] || (state.pending[convId] = []);
-    let claimed = false;
     for (const u of list) {
       if (!u || typeof u.body !== "string" || !u.clientMsgId) continue;
-      if (u.ownerId == null) {
-        // Written by 4aa92d5 before entries carried an owner: the global marker is all we have.
-        if (!legacyOk) continue;
-        u.ownerId = actorId; claimed = true;
-      } else if (String(u.ownerId) !== String(actorId)) continue;
+      // An entry with no ownerId left after the migration (no old marker named anyone) belongs
+      // to nobody we can prove: it is never shown.
+      if (u.ownerId == null || String(u.ownerId) !== String(actorId)) continue;
+      // Created only for an entry of this account: another account's list leaves no trace here.
+      const mine = state.pending[convId] || (state.pending[convId] = []);
       if (mine.some((p) => p.clientMsgId === u.clientMsgId)) continue;
       mine.push({
         id: `tmp-${u.clientMsgId}`, clientMsgId: u.clientMsgId, conversationId: convId, actorId,
@@ -319,7 +422,6 @@ function restoreUnsent(actorId, legacyOk = false) {
         error: u.error || t("This message may not have been sent. Send it again - it will not be posted twice."),
       });
     }
-    if (claimed) { try { localStorage.setItem(key, JSON.stringify(list)); } catch { /* private browsing */ } }
   }
 }
 
@@ -334,10 +436,10 @@ export function saveDraft() {
   const files = state.pendingFiles;
   if (text.trim() || state.replyTo || files.length) {
     state.drafts[id] = { text, replyTo: state.replyTo, files };
-    try {
-      if (state.actor) localStorage.setItem(OWNER_KEY, String(state.actor.id));
-      localStorage.setItem(DRAFT_KEY(id), text);
-    } catch { /* private browsing */ }
+    const owner = storageOwner();
+    // No known account: the draft stays in memory only - an unattributed key would leak it.
+    if (owner == null) return;
+    try { localStorage.setItem(DRAFT_KEY(owner, id), text); } catch { /* private browsing */ }
   } else {
     clearDraft(id);
   }
@@ -345,8 +447,10 @@ export function saveDraft() {
 
 export function loadDraft(convId) {
   if (state.drafts[convId]) return state.drafts[convId];
+  const owner = storageOwner();
+  if (owner == null) return null;
   try {
-    const text = localStorage.getItem(DRAFT_KEY(convId));
+    const text = localStorage.getItem(DRAFT_KEY(owner, convId));
     if (text) return (state.drafts[convId] = { text, replyTo: null, files: [] });
   } catch { /* private browsing */ }
   return null;
@@ -354,7 +458,9 @@ export function loadDraft(convId) {
 
 export function clearDraft(convId) {
   delete state.drafts[convId];
-  try { localStorage.removeItem(DRAFT_KEY(convId)); } catch { /* private browsing */ }
+  const owner = storageOwner();
+  if (owner == null) return;
+  try { localStorage.removeItem(DRAFT_KEY(owner, convId)); } catch { /* private browsing */ }
 }
 
 /** The history of conversations we are not looking at must not grow in the tab forever.
@@ -472,16 +578,21 @@ export function findMsgById(id) {
   return null;
 }
 
-// Recently opened conversations - what the palette shows for an empty query.
-const RECENT_KEY = "atalks_recent";
-
+// Recently opened conversations - what the palette shows for an empty query (per account, F2 r3).
 function recentConvIds() {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; }
+  const owner = storageOwner();
+  if (owner == null) return [];
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY(owner)) || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
 }
 
 export function pushRecent(id) {
+  const owner = storageOwner();
+  if (owner == null) return;
   const list = [id, ...recentConvIds().filter((x) => x !== id)].slice(0, 12);
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* private browsing */ }
+  try { localStorage.setItem(RECENT_KEY(owner), JSON.stringify(list)); } catch { /* private browsing */ }
 }
 
 export function recentConversations(myConversations) {

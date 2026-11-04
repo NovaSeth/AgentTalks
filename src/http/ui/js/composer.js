@@ -14,6 +14,7 @@
  * `renderComposer` stays re-exported from view-chat.js: callers that imported it from here
  * since S0 keep working.
  */
+import { sessionGeneration } from "./api.js";
 import { commandSuggestions } from "./commands.js";
 import { avatarHtml, escapeHtml, trackOverlay, watchDockHeight } from "./dom.js";
 import { rememberEmoji, searchEmoji } from "./emoji.js";
@@ -284,11 +285,13 @@ export function createAutocomplete(ta, providers) {
     if (cmd) {
       found = cmd.items;
     } else if (tokKind === "@") {
+      const gen = sessionGeneration();
       let actors = [];
       try { actors = await providers.actors(); } catch { /* offline: the list simply stays closed */ }
       // The sequence guard (M10): a slower answer to an older keystroke must not re-open the
       // list over a name the user has already picked or a token that is no longer there.
-      if (mySeq !== seq) return;
+      // F1 (r3): nor after the account changed, nor over a field that is no longer on screen.
+      if (mySeq !== seq || gen !== sessionGeneration() || ta.isConnected === false) return;
       const again = completeToken(ta.value, ta.selectionStart ?? ta.value.length, "@");
       if (!again || again.start !== tok.start) return;
       found = mentionItems(actors, again.query).map((a) => ({ ...a, insert: "@" + a.handle }));

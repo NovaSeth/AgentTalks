@@ -54,9 +54,9 @@ async function accountAWithLostSession() {
   s.state.activeId = 5;
   s.ta.value = "secret of A";
   s.saveDraft();
-  s.data["atalks_last_conv"] = "5";
-  s.data["atalks_recent"] = "[5]";
-  s.data["atalks_wiki_draft_home"] = "wiki text";
+  s.rememberLastConv(5);
+  s.pushRecent(5);
+  s.saveWikiDraft("home", { title: "t", body: "wiki text" });
   s.sse.onSessionLost();
   return s;
 }
@@ -70,11 +70,13 @@ test("account B signing in after A's lost session gets none of A's drafts or nav
   s.claimLocalData(2);
   assert.equal(s.state.drafts[5], undefined);
   assert.equal(s.loadDraft(5), null);
-  assert.equal(s.data["atalks_draft_5"], undefined);
-  assert.equal(s.data["atalks_last_conv"], undefined);
-  assert.equal(s.data["atalks_recent"], undefined);
-  assert.equal(s.data["atalks_wiki_draft_home"], undefined);
-  assert.equal(s.data["atalks_owner"], "2");
+  assert.equal(s.lastConvId(), null);
+  assert.deepEqual(s.recentConversations([{ id: 6 }, { id: 5 }]).map((c: { id: number }) => c.id), [6, 5]);
+  assert.equal(s.loadWikiDraft("home"), null);
+  // F2 (r3, D-MG-26): A's keys stay in A's namespace (A may be signed in in another tab); no key
+  // of B's namespace and no global marker carries A's data.
+  assert.equal(s.data["atalks_owner"], undefined);
+  assert.ok(!Object.keys(s.data).some((k) => k.includes("_2_") && s.data[k].includes("secret of A")));
 });
 
 test("the same account signing in again gets its draft back", async () => {
@@ -82,18 +84,18 @@ test("the same account signing in again gets its draft back", async () => {
   s.state.actor = { id: 1, handle: "a" };
   s.claimLocalData(1);
   assert.equal(s.loadDraft(5)?.text, "secret of A");
-  assert.equal(s.data["atalks_last_conv"], "5");
-  assert.equal(s.data["atalks_owner"], "1");
+  assert.equal(s.lastConvId(), 5);
+  assert.equal(s.data["atalks_draft_1_5"], "secret of A", "stored in A's namespace");
 });
 
 test("a legacy draft without an owner marker is kept once and claimed by the first sign-in", async () => {
   const s = await setup();
   s.data["atalks_draft_9"] = "old draft";
   s.claimLocalData(3);
-  assert.equal(s.data["atalks_draft_9"], "old draft");
-  assert.equal(s.data["atalks_owner"], "3");
+  assert.equal(s.data["atalks_draft_9"], undefined, "the legacy key is migrated");
+  assert.equal(s.data["atalks_draft_3_9"], "old draft", "into the first signer's namespace");
   s.claimLocalData(4);
-  assert.equal(s.data["atalks_draft_9"], undefined, "once claimed, another account does not inherit it");
+  assert.equal(s.data["atalks_draft_4_9"], undefined, "once claimed, another account does not inherit it");
 });
 
 test("saveDraft never stores a draft without an owner", async () => {
@@ -102,7 +104,13 @@ test("saveDraft never stores a draft without an owner", async () => {
   s.state.activeId = 2;
   s.ta.value = "x";
   s.saveDraft();
-  assert.equal(s.data["atalks_owner"], "7");
+  assert.equal(s.data["atalks_draft_7_2"], "x", "stored under the owner's namespace");
+  s.state.actor = null;
+  s.state.draftsOwner = null;
+  s.state.activeId = 3;
+  s.ta.value = "y";
+  s.saveDraft();
+  assert.ok(!Object.values(s.data).includes("y"), "no account: memory only");
 });
 
 test("session resume and login paths claim the local data", async () => {
@@ -118,6 +126,6 @@ test("session resume and login paths claim the local data", async () => {
   } finally { globalThis.fetch = realFetch; }
   assert.equal(s.state.actor.id, 2);
   assert.equal(s.state.drafts[5], undefined);
-  assert.equal(s.data["atalks_draft_5"], undefined);
-  assert.equal(s.data["atalks_owner"], "2");
+  assert.equal(s.loadDraft(5), null);
+  assert.equal(s.data["atalks_owner"], undefined);
 });

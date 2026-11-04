@@ -11,7 +11,7 @@ import { renderBody } from "./markdown.js";
 import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
 import { openPlusMenu } from "./commands.js";
 import { t } from "./i18n.js";
-import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, isReport, isReportChannel, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, trimConversationCache, pushRecent, saveDraft, state, upsertMessage, visibleMessages, views, reports } from "./state.js";
+import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, isReport, isReportChannel, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, trimConversationCache, pushRecent, rememberLastConv, saveDraft, state, upsertMessage, visibleMessages, views, reports } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { conversationRoute, permalink, syncRoute, unreadFrom } from "./router.js";
@@ -39,7 +39,7 @@ export async function openConversation(id, focusMessageId) {
   if (previousConversation !== id) { state.convMembersFor = null; state.convMembers = []; }
   state.view = "chat";
   state.activeId = id;
-  try { localStorage.setItem("atalks_last_conv", String(id)); } catch { /* private browsing */ }
+  rememberLastConv(id);              // per account (F2 r3)
   pushRecent(id);
   // S3: the address bar follows the view, so F5 restores it and Back walks the conversations
   // you opened in reverse. A jump to one message carries `/m/<id>`.
@@ -1437,8 +1437,11 @@ function startInlineAnswer(questionId, messageId, scope) {
       e.preventDefault();
       const v = ta.value.trim();
       if (!v) return;
-      try { await answerQuestion(questionId, v); showToast(t("Question closed - thank you!")); }
-      catch (err) { showError(err); renderMessages(); }
+      // F1 (r3): an answer that returns under another account draws nothing (the api drops it as
+      // stale; the old catch still redrew the list).
+      const gen = sessionGeneration();
+      try { await answerQuestion(questionId, v); if (gen === sessionGeneration()) showToast(t("Question closed - thank you!")); }
+      catch (err) { if (gen !== sessionGeneration()) return; showError(err); renderMessages(); }
     }
     if (e.key === "Escape") renderMessages();
   });
@@ -1640,9 +1643,14 @@ export function renderComposer() {
     const v = ta.value.trim();
     if (!v && !state.pendingFiles.length) return;
     ac.close();
+    // F1 (r3): the account, the conversation and the view are captured NOW and re-checked after
+    // every await below; a continuation that resumes elsewhere uploads, posts and draws nothing.
+    const convId = state.activeId;
+    const current = submitTarget({ withThread: false });
     // The draft is written NOW, with the text about to be sent, and cleared only once the server
     // confirms (actions.js does that on success). A failed send therefore survives F5: the fail
-    // bar holds the bubble, localStorage holds the words (M14).
+    // bar holds the bubble, localStorage holds the words (M14). A submit cut short by a switch
+    // leaves the words (and the files, in memory) in this conversation's draft.
     clearTimeout(draftTimer);
     saveDraft();
     const files = state.pendingFiles; state.pendingFiles = [];
@@ -1651,13 +1659,15 @@ export function renderComposer() {
     // with the only copy of the choice the user made.
     const failedFiles = [];
     for (const p of files) {
-      const ok = await uploadAttachment(p);
+      const ok = await uploadAttachment(p, convId);
+      if (!current()) return;
       if (ok) { if (p.url) URL.revokeObjectURL(p.url); } else failedFiles.push(p);
     }
     if (failedFiles.length) { state.pendingFiles = [...failedFiles, ...state.pendingFiles]; renderPreviews(); updateSendButton(); }
     if (v) {
-      const sent = await sendMessage(v);
-      if (!sent) return;   // keep the draft: the text is still the user's only copy besides the fail bar
+      const sent = await sendMessage(v, { conversationId: convId });
+      // keep the draft: the text is still the user's only copy besides the fail bar
+      if (!sent || !current()) return;
     }
     saveDraft();
   }
@@ -1750,8 +1760,8 @@ function renderPreviews() {
   }));
 }
 
-async function uploadAttachment(p) {
-  const convId = state.activeId;
+/** @param convId the conversation the submit started in (F1 r3: never the one active now). */
+async function uploadAttachment(p, convId) {
   const file = p.file;
   try {
     const res = await fetch(`/api/conversations/${convId}/files`, {
@@ -1789,6 +1799,17 @@ function mountAutocomplete(ta) {
     actors: async () => { await ensureActors(); return state.actorsList; },
     allAliases: ["wszyscy"],
   });
+}
+
+// ------------------------------------------------------------- submit guard
+/** F1 (r3): the target of a submit, captured when it starts. The returned check is true only
+ *  while the same account session, the chat view, the same conversation and (for the thread box)
+ *  the same thread are on screen. A submit asks it after every await and stops when it is false,
+ *  so a continuation of account A never sends, stores or draws into account B's view. */
+export function submitTarget({ withThread }) {
+  const gen = sessionGeneration(), convId = state.activeId, rootId = state.threadOpen;
+  return () => gen === sessionGeneration() && state.view === "chat" && state.activeId === convId
+    && (!withThread || state.threadOpen === rootId);
 }
 
 // ------------------------------------------------------------- thread (drawer)
@@ -1850,19 +1871,24 @@ export function renderThread() {
     ac.close();
     const also = !!document.getElementById("th-also")?.checked;
     ta.value = ""; autosize();
-    // Capture the target before awaiting: the user may switch threads or close the panel.
+    // Capture the target before awaiting: the user may switch accounts, threads or close the
+    // panel. F1 (r3): `current()` is asked again after EVERY await - a value computed before an
+    // await says nothing about the world after it (A's reply once landed in B's thread).
     const convId = state.activeId, rootId = state.threadOpen;
+    const current = submitTarget({ withThread: true });
     const msg = await sendMessage(v, { threadId: rootId, conversationId: convId });
-    const stillHere = state.view === "chat" && state.activeId === convId && state.threadOpen === rootId;
+    // sendMessage already stored the reply for its root; a stale continuation touches nothing.
+    if (!current()) return;
     // A failed send returns the text to the field - exactly as in the main composer.
     if (!msg) {
-      if (stillHere && document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
+      if (document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
       return;
     }
     // "Also send to the channel": a second POST without threadId, a copy in the main list.
-    if (also) await sendMessage(v, { conversationId: convId, threadId: null });
-    // sendMessage already stored the reply for its root; never insert it into another thread.
-    if (!stillHere) return;
+    if (also) {
+      await sendMessage(v, { conversationId: convId, threadId: null });
+      if (!current()) return;
+    }
     const index = state.threadMsgs.findIndex((entry) => entry.id === msg.id);
     if (index >= 0) state.threadMsgs[index] = msg;
     else { state.threadMsgs.push(msg); state.threadMsgs.sort((a, b) => a.id - b.id); }

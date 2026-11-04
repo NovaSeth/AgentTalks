@@ -918,6 +918,7 @@ export const PL = {
   "Or add in:#channel to list the latest messages there.": "Albo dodaj in:#kanał, żeby zobaczyć najnowsze wiadomości stamtąd.",
   "List the latest in {name}": "Pokaż najnowsze w {name}",
   "Nothing in {name} matches these filters": "Nic w {name} nie pasuje do tych filtrów",
+  "No matches in the newest {n} messages - show older": "Brak dopasowań w najnowszych {n} wiadomościach - pokaż starsze",
   "Try another author or wider dates.": "Spróbuj innego autora albo szerszych dat.",
   "Show older": "Pokaż starsze",
   "in: takes the name of a channel or a person you can see, for example in:#general or in:@nestor.": "in: przyjmuje nazwę kanału albo osoby, które widzisz, na przykład in:#general albo in:@nestor.",

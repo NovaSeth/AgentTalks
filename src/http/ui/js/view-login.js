@@ -49,6 +49,8 @@ async function doLogin(handle, password) {
 }
 
 export async function doLogout() {
+  // F2 (r3): sign-out clears the persisted data of the account that signs out, and only that.
+  const leaving = state.actor?.id ?? state.draftsOwner;
   try { if (mySessionId) await api("DELETE", `/api/sessions/${mySessionId}`); } catch { /* */ }
   try { await api("POST", "/api/logout"); } catch { /* */ }
   setCsrf(null);
@@ -66,7 +68,7 @@ export async function doLogout() {
   newSessionGeneration();
   closeAccountOverlays();
   resetState();
-  clearLocalAccountData();
+  clearLocalAccountData(leaving);
   document.title = "AgentTalks";
   views.render();
 }
