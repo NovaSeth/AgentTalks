@@ -423,6 +423,18 @@ test("T-MG-44 r3 F7: later renders never tint a message at or below the server's
   assert.deepEqual(highlighted(list()), [522]);
 });
 
+test("T-MG-47 B-MG-123: inserts behind a hidden tab respect the server watermark too", async () => {
+  setup(520);
+  await open();
+  data.cancelMarkRead();
+  g.document.visibilityState = "hidden";
+  for (const id of [512, 514]) { const m = msg(5, id); state.msgs[5].push(m); chat.upsertMessageNode(m); }
+  g.document.visibilityState = "visible";
+  chat.noteTabVisible();
+  chat.renderMessages();
+  assert.deepEqual(highlighted(list()), [], "512 and 514 are below the server's 520: already read");
+});
+
 // ------------------------------------------------------------------ 6: account change (F5, r2)
 test("T-MG-44 r2 F5: highlight state and timers do not cross an account change (session generation)", async () => {
   mock.timers.enable({ apis: ["setTimeout"] });
