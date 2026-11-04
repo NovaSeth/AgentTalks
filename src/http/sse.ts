@@ -14,7 +14,12 @@ import { json } from "./respond.ts";
 import { tooMany, unauthorized } from "../core/errors.ts";
 import type { Req, Res, RouteCtx } from "./router.ts";
 
-const PING_MS = 20_000;
+const DEFAULT_PING_MS = 20_000;
+let PING_MS = DEFAULT_PING_MS;
+/** Tests only: shortens (or with null restores) the ping / re-validation interval. */
+export function setSsePingMsForTests(ms: number | null): void {
+  PING_MS = ms ?? DEFAULT_PING_MS;
+}
 const MAX_WAIT_SEC = 300;
 const RESUME_PAGE = 200;
 // The replay window for edits/deletions on resumption. An id cursor carries no changes to
