@@ -35,7 +35,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolveIdentity, expectedPrincipal, principalProblem } from "../lib/identity.mjs";
 import { createApi } from "../lib/api.mjs";
-import { budgeted, frameItem, idAt } from "../lib/tools.mjs";
+import { budgeted, frameItem, idAt, chunk } from "../lib/tools.mjs";
 import { createStdioServer } from "../lib/mcp.mjs";
 import { deriveSessionId } from "../lib/sessions.mjs";
 
@@ -43,6 +43,8 @@ const VERSION = "0.3.1";
 const MAX_REPLY_CHARS = 60_000;
 export const MAX_READ_LIMIT = 50;
 const DEFAULT_READ_LIMIT = 20;
+/** The room one message body gets in a result; the rest is read with body_offset. */
+const BODY_PART_CHARS = 30_000;
 const BUDGET_NOTE = "A result is at most 50000 characters; when more exists it ends with a cursor line to call again with.";
 /** The tools, in the order tools/list shows them. The bridge pre-approves exactly these. */
 export const WAKE_TOOL_NAMES = /** @type {const} */ (["read_conversation", "read_thread", "reply", "mark_read"]);
@@ -55,6 +57,27 @@ function positiveInt(v) {
 
 /** @param {string} text */
 const fail = (text) => ({ text, isError: true });
+
+/** @param {unknown} v @returns {number | null} a non-negative integer */
+function offsetInt(v) {
+  const n = typeof v === "string" && /^\d+$/.test(v) ? Number(v) : v;
+  return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/** One message framed, its body from `offset` for at most BODY_PART_CHARS (cut at a line
+ *  end). A rest that does not fit ends with a plugin-written line naming the call that reads on.
+ *  @param {any} m @param {Record<string, any>} actors @param {number} offset
+ *  @param {(next: number) => string} cont */
+function framePart(m, actors, offset, cont) {
+  if (m.deletedAt) return frameItem(m, actors);
+  const text = String(m.body ?? "");
+  const { quoted, next } = chunk(text, offset, BODY_PART_CHARS);
+  if (next === null && offset === 0) return frameItem(m, actors);
+  const head = frameItem({ ...m, body: "" }, actors).split("\n")[0];
+  const from = offset > 0 ? ` from character ${offset}` : "";
+  const tail = next === null ? "" : `\n[message cut: ${text.length - next} more characters; continue with ${cont(next)}]`;
+  return `${head}${from}\n${quoted}${tail}`;
+}
 
 /**
  * The tools, bound to one identity and one expectation. `api` is created only for an
@@ -133,6 +156,7 @@ export function createWakeTools(o) {
           around: { type: "integer", description: "Optional: a message id to read around (included)" },
           after: { type: "integer", description: "Optional: read the messages after this id" },
           before: { type: "integer", description: "Optional: read the messages before this id" },
+          body_offset: { type: "integer", description: "Optional, with around: read only that message, its body from this character offset (the continuation line of a cut message)" },
           limit: { type: "integer", description: `Optional: how many messages, at most ${MAX_READ_LIMIT}` },
         },
         required: ["conversation_id"],
@@ -148,6 +172,9 @@ export function createWakeTools(o) {
         const around = given("around") ? positiveInt(args.around) : null;
         const after = given("after") ? positiveInt(args.after) : null;
         const before = given("before") ? positiveInt(args.before) : null;
+        const bodyOffset = given("body_offset") ? offsetInt(args.body_offset) : null;
+        if (given("body_offset") && bodyOffset === null) return fail("body_offset must be a non-negative integer");
+        if (bodyOffset !== null && !around) return fail("body_offset needs around (the message to read)");
         const limit = given("limit") ? positiveInt(args.limit) : DEFAULT_READ_LIMIT;
         if (given("around") && !around) return fail("around must be a positive integer");
         if (given("after") && !after) return fail("after must be a positive integer");
@@ -176,14 +203,23 @@ export function createWakeTools(o) {
             actors = r?.actors ?? {};
           }
           if (messages.length === 0) return { text: `conversation ${conv}: no messages in that range` };
+          /** @param {any} m @param {number} off */
+          const part = (m, off) => framePart(m, actors, off, (n) => `read_conversation conversation_id=${conv} around=${m.id} limit=1 body_offset=${n}`);
+          if (bodyOffset !== null) {
+            const m = messages.find((x) => Number(x.id) === around);
+            if (!m) return fail(`message ${around} is not in conversation ${conv}`);
+            if (bodyOffset > 0 && bodyOffset >= String(m.body ?? "").length) return fail("body_offset is past the end of the message");
+            return { text: budgeted(`conversation ${conv}: message [${around}]`, [part(m, bodyOffset)], () => "") };
+          }
           // The latest (or those before an id): keep the newest that fit, page back with before=.
           const back = !around && !after;
           const text = budgeted(`conversation ${conv}: ${messages.length} messages, oldest first`,
-            messages.map((m) => frameItem(m, actors)),
+            messages.map((m) => part(m, 0)),
             (picked) => back
               ? `[showing ${picked.length} of ${messages.length}; older ones: call read_conversation again with before=${idAt(messages, picked, 0)}]`
               : `[showing ${picked.length} of ${messages.length}; newer ones: call read_conversation again with after=${idAt(messages, picked)}]`,
-            { fromEnd: back });
+            // A full page from the API may have older (newer) rows behind it even when all fit.
+            { fromEnd: back, more: !around && messages.length >= limit });
           return { text };
         } catch (err) {
           return fail(`read_conversation failed: ${err instanceof Error ? err.message : "error"}`);
@@ -198,6 +234,7 @@ export function createWakeTools(o) {
           message_id: { type: "integer", description: "A message of the thread" },
           after: { type: "integer", description: "Optional: only messages after this id" },
           limit: { type: "integer", description: `Optional: at most this many, 1 to ${MAX_READ_LIMIT} (default ${MAX_READ_LIMIT})` },
+          body_offset: { type: "integer", description: "Optional: read only message_id, its body from this character offset (the continuation line of a cut message)" },
         },
         required: ["message_id"],
         additionalProperties: false,
@@ -214,12 +251,22 @@ export function createWakeTools(o) {
         const hasLimit = args?.limit !== undefined && args?.limit !== null;
         const limit = hasLimit ? positiveInt(args.limit) : MAX_READ_LIMIT;
         if (!limit || limit > MAX_READ_LIMIT) return fail(`limit must be an integer from 1 to ${MAX_READ_LIMIT}`);
+        const bodyOffset = args?.body_offset !== undefined && args?.body_offset !== null ? offsetInt(args.body_offset) : null;
+        if (args?.body_offset !== undefined && args?.body_offset !== null && bodyOffset === null) return fail("body_offset must be a non-negative integer");
         try {
           const r = await a.get(`/api/messages/${msg}/thread`);
+          /** @param {any} m @param {number} off */
+          const part = (m, off) => framePart(m, r?.actors ?? {}, off, (n) => `read_thread message_id=${m.id} body_offset=${n}`);
+          if (bodyOffset !== null) {
+            const m = (r?.messages ?? []).find((/** @type {any} */ x) => Number(x.id) === msg);
+            if (!m) return fail(`message ${msg} is not in the thread`);
+            if (bodyOffset > 0 && bodyOffset >= String(m.body ?? "").length) return fail("body_offset is past the end of the message");
+            return { text: budgeted(`thread of [${msg}]: message [${msg}]`, [part(m, bodyOffset)], () => "") };
+          }
           const all = [...(r?.messages ?? [])].sort((x, y) => x.id - y.id).filter((m) => !after || Number(m.id) > after);
           const page = all.slice(0, limit);
           const text = budgeted(`thread of [${msg}]: ${all.length} messages${after ? ` after [${after}]` : ""}, oldest first`,
-            page.map((m) => frameItem(m, r?.actors ?? {})),
+            page.map((m) => part(m, 0)),
             (picked) => `[showing ${picked.length} of ${all.length}; the rest: call read_thread again with after=${idAt(page, picked)}]`,
             { more: all.length > page.length });
           return { text };

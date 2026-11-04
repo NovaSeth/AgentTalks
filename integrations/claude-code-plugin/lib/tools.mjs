@@ -165,7 +165,7 @@ export function budgeted(lead, items, cursor, o = {}) {
  * @param {string} text @param {number} offset @param {number} room
  * @returns {{ quoted: string, next: number | null }}
  */
-function chunk(text, offset, room) {
+export function chunk(text, offset, room) {
   let end = Math.min(text.length, offset + room);
   for (;;) {
     let cut = end;
