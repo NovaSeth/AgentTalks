@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "f76411cee300feb39ce2706c36610d4961577569",
-  "collectedAt": "2026-11-04T14:57:08.989Z",
+  "head": "1db813557a6487ef61fd4f7866426eeae8554038",
+  "collectedAt": "2026-11-04T15:34:14.832Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -1676,6 +1676,31 @@
     },
     {
       "id": "[\"\",\"Set-Cookie: HttpOnly + SameSite=Lax always; Secure only over https or with trustProxy (B-MG-91)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-29: a DIFFERENT conversation does not inherit the old list's position\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-29: a re-render of the same conversation keeps a scrolled-up list at its scrollTop\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-29: an at-bottom list ends at the bottom after the re-render, with no smooth path involved\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-29: closing the side panel afterwards keeps the position too\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"T-MG-29: scrollToBottom(true) still asks for behavior smooth when reduced motion is off\",1]",
       "file": "",
       "skipped": false
     },
@@ -5231,5 +5256,5 @@
     }
   ],
   "failing": [],
-  "sha256": "79024ba72bf1d792af2c4569a09b0e3545c96ac6b10d467408e72fb3951b4e64"
+  "sha256": "b5c591f2567207a5e29ed1f6b4f327ce9168005b5a5c5047d9cbca34f539b3a5"
 }
