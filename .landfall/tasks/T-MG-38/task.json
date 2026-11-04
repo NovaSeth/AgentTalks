@@ -227,6 +227,25 @@
         "base": "3b666b9eda33",
         "note": "fix round 4: fresh designer, transition-based rule"
       }
+    },
+    {
+      "at": "2026-11-04T20:26:31.430Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 4
+      }
+    },
+    {
+      "at": "2026-11-04T20:26:31.919Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "3b666b9eda33",
+        "note": "scoped re-review r3"
+      }
     }
   ],
   "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",

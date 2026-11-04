@@ -13,7 +13,7 @@
       "at": "2026-11-04T19:07:00.410Z"
     }
   ],
-  "status": "dispatched",
+  "status": "done",
   "round": 3,
   "events": [
     {
@@ -208,8 +208,74 @@
         "base": "a85b76d43d96",
         "note": "scoped re-review r4"
       }
+    },
+    {
+      "at": "2026-11-04T20:23:57.957Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 4,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T20:24:01.979Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:e2c3125ea11b2450",
+          "files-over",
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T20:24:01.979Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "baseline-shrunk",
+        "head": "32416d492bfeceb4289a0f52294d619e28376f1e",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:25:35.147Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "32416d492bfeceb4289a0f52294d619e28376f1e",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T20:26:30.363Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "32416d492bfeceb4289a0f52294d619e28376f1e"
+      }
+    },
+    {
+      "at": "2026-11-04T20:26:34.205Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "78da1151863ea73908e931cea58efc5947444482",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "2c6502915af996efeaabce413829dd98edbd8274"
+      }
     }
   ],
   "base": "a85b76d43d9603b341c401f465604f5219275749",
-  "branch": "task/T-MG-40-plugin-full-api"
+  "branch": "task/T-MG-40-plugin-full-api",
+  "mergedAt": "2026-11-04T20:26:34.205Z"
 }
