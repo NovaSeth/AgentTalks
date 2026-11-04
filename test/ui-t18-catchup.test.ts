@@ -63,11 +63,11 @@ const http500 = () => ({ ok: false, status: 500, json: async () => ({ error: "bo
 g.fetch = async (path: string) => {
   requests.push(String(path));
   onRequest?.(String(path));
+  const pre = preHolds.findIndex((h) => h.match.test(String(path)));
+  if (pre >= 0) await preHolds.splice(pre, 1)[0].gate;
   const fail = failOnce.findIndex((r) => r.test(String(path)));
   if (fail >= 0) { failOnce.splice(fail, 1); return http500(); }
   if (failWhile && failWhile.test(String(path))) return http500();
-  const pre = preHolds.findIndex((h) => h.match.test(String(path)));
-  if (pre >= 0) await preHolds.splice(pre, 1)[0].gate;
   const url = new URL(String(path), "https://test.local");
   const m = /^\/api\/conversations\/(\d+)\/messages$/.exec(url.pathname);
   let messages: Any[] = [];
@@ -540,10 +540,15 @@ test("r2 F2: while the re-read of an overlap is pending, a late superseded page 
 });
 
 // ---- T-MG-46 (codex T-MG-43 r3 F3 = B-MG-121, F4 = B-MG-122): owed ranges survive a failed re-read and the round cap
-/** Test 22's overlap up to the moment its re-read of [1, 2] is sent: A (the reaction read of message 1,
- *  delayed before its cut) and B (a newest-30 read, held after its cut) overlap; message 1 is edited and
- *  reacted to in between, and 3..32 arrive; A lands, then B, and the stream is down. */
+/** Test 22's overlap up to its first re-read: A (the reaction read of message 1, delayed before its cut)
+ *  and B (a newest-30 read, held after its cut) overlap; message 1 is edited and reacted to in between,
+ *  and 3..32 arrive; A lands, then B, and the stream is down. The re-read of [1, 2] is held before its
+ *  cut until the catch-up's gap page (after=2, which it overlaps) has landed, so that nothing else is in
+ *  the air when the re-read answers; whether it fails is up to failOnce/failWhile. */
+const REREAD = /after=0&limit=\d+$/;
 async function owedOverlap(t: Any) {
+  let deliverR!: () => void;
+  const rereadHeld = new Promise<void>((r) => { deliverR = r; });
   await heldResume(t, /never/);
   hold = null;
   await settle();
@@ -565,10 +570,15 @@ async function owedOverlap(t: Any) {
   for (let i = 3; i <= 32; i++) server5.push(msg(i));
   deliverA();
   await settle();
+  preHolds = [{ match: /after=0&limit=2$/, gate: rereadHeld }];
   deliverB();
   await settle();
+  assert.ok(requests.some((p) => /after=2&limit=200$/.test(p)), requests.join(" "));
+  assert.equal(preHolds.length, 0, "the re-read of [1, 2] was sent");
+  deliverR();
+  await settle();
 }
-const rereads = () => requests.filter((p) => /after=0&limit=2$/.test(p)).length;
+const rereads = () => requests.filter((p) => REREAD.test(p)).length;
 
 test("B-MG-121 (codex repro): a re-read that fails with HTTP 500 keeps its owed range, and the reconnect repairs message 1", async (t) => {
   await heldResume(t, /never/);
@@ -607,7 +617,7 @@ test("B-MG-121 (codex repro): a re-read that fails with HTTP 500 keeps its owed 
 });
 
 test("B-MG-121: a failed re-read is retried by its backoff timer alone, once, without a reconnect", async (t) => {
-  failOnce = [/after=0&limit=2$/];
+  failOnce = [REREAD];
   await owedOverlap(t);
   assert.equal(rereads(), 1);
   await settle();
@@ -625,7 +635,7 @@ test("B-MG-121: a failed re-read is retried by its backoff timer alone, once, wi
 });
 
 test("B-MG-121: a reconnect retries a failed re-read before its grown backoff ends", async (t) => {
-  failOnce = [/after=0&limit=2$/, /after=0&limit=2$/];
+  failOnce = [REREAD, REREAD];
   await owedOverlap(t);
   t.mock.timers.tick(999);
   await settle();
@@ -646,7 +656,7 @@ test("B-MG-121: a reconnect retries a failed re-read before its grown backoff en
 });
 
 test("B-MG-121: a re-read that keeps failing is retried on a bounded backoff (1, 2, 4, 8, 16, 30 s), then waits for a landed read", async (t) => {
-  failWhile = /after=0&limit=2$/;
+  failWhile = REREAD;
   await owedOverlap(t);
   const sent = [rereads()];
   for (const ms of [1000, 2000, 4000, 8000, 16000, 30000, 30000, 60000, 600000]) {
@@ -738,4 +748,14 @@ test("B-MG-122: past the round cap the next round waits for its backoff timer; a
   t.mock.timers.tick(60000);
   await settle();
   assert.equal(cappedReads(), 4, "a repaired range is not read again");
+});
+
+test("T-MG-46: a range owed under a session that has ended is not re-read by its pending repair timer", async (t) => {
+  failOnce = [REREAD];
+  await owedOverlap(t);
+  assert.equal(rereads(), 1);
+  api.newSessionGeneration();         // a sign-out or a lost session
+  t.mock.timers.tick(60000);
+  await settle();
+  assert.equal(rereads(), 1);
 });
