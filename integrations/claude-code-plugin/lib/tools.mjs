@@ -143,7 +143,7 @@ function capItem(text, max = MAX_ITEM_CHARS) {
  * @param {(picked: number[]) => string} cursor
  * @param {{ fromEnd?: boolean, more?: boolean }} [o]
  */
-function budgeted(lead, items, cursor, o = {}) {
+export function budgeted(lead, items, cursor, o = {}) {
   const capped = items.map((t) => capItem(t));
   let size = PREAMBLE.length + 1 + lead.length + NOTE_RESERVE;
   /** @type {number[]} */
@@ -193,7 +193,7 @@ async function actorMap(api) {
 /** One message framed: a plugin-written header (thread and question markers), the author's
  *  text quoted. @param {any} m @param {Record<string, { handle?: string, kind?: string }>} actors
  *  @param {string} [more] */
-function frameItem(m, actors, more = "") {
+export function frameItem(m, actors, more = "") {
   const head = header({
     id: m.id, convLabel: String(Number(m.conversationId) || 0),
     author: m.actorHandle ?? actors?.[m.actorId]?.handle ?? "?",
@@ -205,7 +205,7 @@ function frameItem(m, actors, more = "") {
 }
 
 /** @param {any[]} list @param {number[]} picked */
-const idAt = (list, picked, which = picked.length - 1) => Number(list[picked[which]]?.id) || 0;
+export const idAt = (list, picked, which = picked.length - 1) => Number(list[picked[which]]?.id) || 0;
 
 /**
  * Resolves a send address to a conversation id: a numeric id, `#slug` (a channel you can see),
