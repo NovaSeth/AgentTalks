@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "b23191fec7ac07c69742a7652c8c56f289e7c523",
-  "collectedAt": "2026-11-04T00:51:54.119Z",
+  "head": "eed83bb6171c0b3bbe7307881f78abcb3ea9109b",
+  "collectedAt": "2026-11-04T02:13:01.045Z",
   "tests": [
     {
       "id": "[\"\",\"/api/me pokazuje, kto pisze - bez pytania o liste obecnych\",1]",
@@ -610,6 +610,26 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"SessionStart against a server that never answers ends within its overall budget (Claude F6)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"SessionStart registers presence, adds a quoted summary, records the session; SessionEnd ends it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"SessionStart writes the wake record and the summary even when the presence POST fails (Claude F6)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"SessionStart: crafted handles and slugs cannot break out of the trusted summary lines (Claude F9)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"Set-Cookie: HttpOnly + SameSite=Lax always; Secure only over https or with trustProxy (B-MG-91)\",1]",
       "file": "",
       "skipped": false
@@ -845,6 +865,16 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"channel -> monitor handover: 51 pushed, 52 still held by the rate limit at SIGTERM; the heartbeat says 51 and the monitor delivers 52 exactly once (codex r3 F8)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"channel server: MCP handshake, tools/list, a pushed DM arrives framed, reply posts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"clientKey: przy proxy bierze PRAWY czlon XFF (nie spoofowalny lewy)\",1]",
       "file": "",
       "skipped": false
@@ -1030,6 +1060,91 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"feed restart WITH an event cursor before the mention: the stream replays it, delivered exactly once\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed restart with an event cursor PAST the mention: the run that committed it delivered it; not again\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed restart with mentionCursor 0 (no mention existed when the last run started): a member mention after the event cursor is replayed and delivered, not marked seen as 'old' (property seed 1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed restart without an event cursor (lastEventId null, mentionCursor 10): member mention 51 is delivered exactly once, even when the stream carries it later (server with GET /api/status) (codex r3 F9)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed restart without an event cursor (lastEventId null, mentionCursor 10): member mention 51 is delivered exactly once, even when the stream carries it later (server without GET /api/status) (codex r3 F9)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed: a failed thread lookup is retried, not read as 'not my thread'\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed: a full queue behind an undecided event drops the stream and resumes it from the committed cursor, losing nothing\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed: a membership lookup failure (503) neither pushes nor commits the event; after recovery 41 then 42 arrive (codex F4)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed: pushes only relevant events, resumes after a real break without loss or duplicates\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed: the event and mention cursors pass a message only once its delivery is confirmed, in order\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"feed: thread replies in a thread I started reach me; a non-member mention comes via the server list\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"filter: @all, @channel and @here in my conversation count as a call\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"filter: DMs and group DMs push; notify=none mutes even a mention and a DM\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"filter: member channel with notify=mentions pushes only a mention of me\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"filter: never my own message; message_updated never pushes; deleted never pushes\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"filter: notify=all channel pushes everything; non-member conversation pushes nothing\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"filter: replies in threads I started or replied in\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"firstConnectGuidelines: raz zwraca zasady, potem null\",1]",
       "file": "",
       "skipped": false
@@ -1041,6 +1156,41 @@
     },
     {
       "id": "[\"\",\"formy mnogie pokrywaja kategorie, o ktore pyta polski Intl.PluralRules\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"framing: a forged multi-line body cannot produce a header-like line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"framing: header fields from the server are sanitised too\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"framing: long bodies are truncated with a note\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"framing: several messages coalesce under one preamble\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"framing: the monitor line is a single line, the body stays after the quote mark\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"framing: trusted header, every body line quoted, the preamble leads\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"fresh feed: the stream opens with the server's newest message id as its cursor, so nothing between start and connect is lost\",1]",
       "file": "",
       "skipped": false
     },
@@ -1096,6 +1246,36 @@
     },
     {
       "id": "[\"\",\"hook: a failed mktemp never makes the EXIT trap remove /dev/null (review F7)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"hooks stay silent and succeed without an identity or a reachable server\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"hooks.json and monitors.json reference existing scripts with only known keys\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"identity: an untrusted project file cannot choose the server for a token from the environment (Claude F8, atalk rule)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"identity: empty plugin options do not overwrite the inherited AGENTTALKS_* credentials (codex F2)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"identity: env wins, ATALKS_* aliases work, an empty value counts as unset\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"identity: nearest .agenttalks.json walking up, then the global file, else null\",1]",
       "file": "",
       "skipped": false
     },
@@ -1360,6 +1540,36 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"liveness: a heartbeat counts only while fresh and while its writer is alive\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"liveness: only a dead token closes the heartbeat; a stream the feed closes to rebuild it only pauses it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"liveness: the channel flag with a channel that never comes up (not allowlisted, policy): the monitor delivers after the grace period\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"liveness: the channel server writes its heartbeat once its stream is open and removes it on exit\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"liveness: the monitor mode is 'standby' only with the channel flag, never just 'off'\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"liveness: with the channel flag but no live channel, the monitor delivers; while the channel is alive it stands by\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"logout invalidates the cookie server-side and requires CSRF (B-MG-45)\",1]",
       "file": "",
       "skipped": false
@@ -1425,7 +1635,17 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"marketplace.json lists the plugin by a ./ path that holds a plugin manifest\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"marking all notifications read leaves the ones the actor can no longer read untouched (B-MG-95)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"mcp: tool names that exist on Object.prototype are unknown tools, not a crash (Claude F9)\",1]",
       "file": "",
       "skipped": false
     },
@@ -1441,6 +1661,21 @@
     },
     {
       "id": "[\"\",\"moduly UI: kazdy import ma odpowiadajacy eksport\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"monitor: a stop while events are still undecided saves the cursor BEFORE them; the next run delivers them (codex F5)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"monitor: one line per relevant event, clean exit at the deadline, resume after restart\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"monitor: stands down when the session was launched with the agenttalks channel flag\",1]",
       "file": "",
       "skipped": false
     },
@@ -1725,6 +1960,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"plugin.json: the channel binds to its MCP server, the token is sensitive, paths exist\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"po serii porazek wake gasnie i wlasciciel dostaje systemowy DM\",1]",
       "file": "",
       "skipped": false
@@ -1780,12 +2020,57 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"property (seed 1): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 2): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 3): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 4): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 5): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 6): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 7): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 8): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"publish trafia tylko do subskrybentow z listy odbiorcow\",1]",
       "file": "",
       "skipped": false
     },
     {
       "id": "[\"\",\"punkt wejscia (app.js) startuje bez wyjatku, takze gdy serwer nie odpowiada\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"pusher: at most one push per interval; a burst coalesces into one push\",1]",
       "file": "",
       "skipped": false
     },
@@ -1891,6 +2176,36 @@
     },
     {
       "id": "[\"\",\"sesja trwala bez heartbeatu znika po oknie retencji, wczesniej jest stale\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sessions: a pruner that dies holding a refreshed record leaves a tombstone the next prune restores\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sessions: a record refreshed by another process while a pruner holds it (afterClaim) survives the prune (codex r3 F7)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sessions: a record refreshed by another process while a pruner holds it (afterSelect) survives the prune (codex r3 F7)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sessions: every record is private (0600 files in a 0700 directory) and a re-record replaces, not duplicates\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sessions: pruning is by age only - many fresh records are all kept, a record past the TTL goes\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sessions: two hooks writing at the same time lose no record (codex F6)\",1]",
       "file": "",
       "skipped": false
     },
@@ -2155,6 +2470,81 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"wake bridge: a resumed run that hangs is killed at its time limit, so the session is not blocked forever\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: a secret bound to server A never resumes a session recorded for server B\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: a secret without a serverUrl is a startup error, whatever sessions are recorded (codex r3 F1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: an oversized body is answered 413 at the cap and the connection is closed, not read to the end (Claude F4)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: bad signature 401, good one spawns the runner with argv only, replay 409\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: codex scenario - A recorded, 49 newer B sessions, an A-signed knock never resumes a B session (codex r3 F1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: every spelling of the unspecified address is refused without --allow-public (Claude F3)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: exp and nonce - fresh accepted, replayed nonce 409, stale exp rejected\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: listens on 127.0.0.1 by default and refuses a public bind without consent\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: the bin refuses to start with a secret that has no server URL (env pair without AGENTTALKS_WAKE_SERVER_URL)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: the default allowed tools cover this plugin's own tools and the remote AgentTalks server, nothing else (D-MG-17)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: the replay record survives a restart of the bridge (Claude F4)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: the server URL is compared as a normalized origin and path\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: the woken claude gets the environment without the bridge's wake secrets (Claude F5)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: unknown actor, stale legacy body, wrong method and oversized body are refused\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"wake httpDeliver ODMAWIA polaczenia na adres prywatny przy strzale (SSRF rebinding)\",1]",
       "file": "",
       "skipped": false
@@ -2410,6 +2800,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"zero runtime dependencies: only node: built-ins and relative imports; ASCII-only sources\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"zerwany klient SSE zwalnia subskrypcje\",1]",
       "file": "",
       "skipped": false
@@ -2466,5 +2861,5 @@
     }
   ],
   "failing": [],
-  "sha256": "75d3af9db0fc538ffc489584e3c310c4578996d3e20d5b2cf2306ab9080558ff"
+  "sha256": "278b87651b90d2c15c054000023a76b2187420eb917139487aadb49a14d28041"
 }

@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 368,
+      "rule": "SEC-8",
+      "text": "F1 NOT ADDRESSED (acceptance 5): the original A+B test now refuses, but an unbound A secret still selects whichever server remains. In-memory test: record A then B, add 49 B sessions so A is pruned, send an A-signed wake: status=202, woke=true, resumed=session-b0048. Server A can inject into B's session. Require an explicit serverUrl for every secret; never infer its binding from retained sessions."
+    },
+    {
+      "id": "F7",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/sessions.mjs",
+      "line": 83,
+      "rule": "OWA-6",
+      "text": "Acceptance 4: pruning reintroduces concurrent session-record loss. In-memory interleaving with 50 records: A selects the oldest for deletion; B refreshes that session to updatedAt=1000; A then unlinks B's replacement. Output: records=49, refreshedVictimPresent=false. The active session loses its wake target. Serialize pruning with record updates across processes, or use a deletion protocol that cannot remove a concurrently replaced record."
+    },
+    {
+      "id": "F8",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/server/channel.mjs",
+      "line": 155,
+      "rule": "OWA-10",
+      "text": "Acceptance 2/3: handover saves the feed cursor before queued pushes are delivered. In-memory channel test using the actual feed/pusher: receive 51/52, then SIGTERM before the rate-limit timer; notifications=[51], heartbeat={state:'closed',lastEventId:52}. The monitor resumes after 52 and permanently skips the queued message. Advance delivery cursors only after notifications are written, including mentions, and preserve pending pushes during handover."
+    },
+    {
+      "id": "F9",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/feed.mjs",
+      "line": 222,
+      "rule": "OWA-10",
+      "text": "Acceptance 2/3: member-mention deferral loses messages when restarting without an SSE cursor. In-memory restart with lastEventId=null, mentionCursor=10 and member mention 51 gives delivered=[], mentionCursor=51; SSE starts without Last-Event-ID and cannot replay 51. Restoring direct mention handling yields delivered=[51]. Deliver mentions when no replay cursor exists, or establish a valid stream cursor before advancing the mention cursor."
+    }
+  ],
+  "run": "codex-T-MG-12-reviewer-2",
+  "sha256": "a371f5553932b1e5a7236501abd611d6da00c9645269aadfc5c2e45b96c5e937"
+}

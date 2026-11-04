@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "task": "T-MG-12",
+  "class": "critical",
+  "tier": null,
+  "startedAt": "2026-11-04T00:07:28.229Z",
+  "endedAt": "2026-11-04T02:13:00.665Z",
+  "wallMs": 7532436,
+  "tokens": {
+    "input": 314687,
+    "output": 483108,
+    "cacheRead": 125032066,
+    "cacheWrite": 1186567
+  },
+  "costMicroUsd": 38593923,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 94,
+        "output": 24673,
+        "cacheRead": 31357874,
+        "cacheWrite": 140675
+      },
+      "costMicroUsd": 7890808
+    },
+    {
+      "agentType": "landfall:designer",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 782,
+        "output": 392230,
+        "cacheRead": 88079302,
+        "cacheWrite": 942506
+      },
+      "costMicroUsd": 30176132
+    },
+    {
+      "agentType": "landfall:security-reviewer",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+        "input": 26,
+        "output": 17816,
+        "cacheRead": 903050,
+        "cacheWrite": 103386
+      },
+      "costMicroUsd": 526983
+    }
+  ],
+  "external": [
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-12-reviewer-1",
+      "model": null,
+      "tokens": {
+        "input": 89038,
+        "output": 16669,
+        "cacheRead": 1199872,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 407644,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-12-reviewer-2",
+      "model": null,
+      "tokens": {
+        "input": 114722,
+        "output": 17360,
+        "cacheRead": 1787136,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 447485,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-12-reviewer-3",
+      "model": null,
+      "tokens": {
+        "input": 110025,
+        "output": 14360,
+        "cacheRead": 1704832,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 464395,
+      "exit": 0
+    }
+  ],
+  "rounds": 2,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": false
+}

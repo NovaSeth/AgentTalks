@@ -1,0 +1,41 @@
+{
+  "schema": 2,
+  "id": "T-MG-14",
+  "kind": "task",
+  "title": "Plugin: F10 wznowienie wzmianki po restarcie, F11 wake w oknie przycinania rejestru (D-MG-19)",
+  "lane": null,
+  "owner": "MG",
+  "class": "critical",
+  "classHistory": [
+    {
+      "class": "critical",
+      "reason": "critical: flag security",
+      "at": "2026-11-04T02:14:31.594Z"
+    }
+  ],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T02:14:24.683Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T02:14:31.594Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-flag:security",
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

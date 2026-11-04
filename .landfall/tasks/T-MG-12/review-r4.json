@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F10",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/feed.mjs",
+      "line": 419,
+      "rule": "OWA-10",
+      "text": "Acceptance 2/3: the status watermark acknowledges undelivered member mentions. In-memory createFeed reproduction: resume (null,10), status=51, mention 51; hold onItem's promise and stop/restart -> saved=(51,10), delivered=[], mentionCursor=51. The resumedFrom check permanently skips 51. Removing the eager cursor assignment in memory restores delivered=[51]. Separate the stream bootstrap watermark from delivered state and preserve pending mentions across restarts."
+    },
+    {
+      "id": "F11",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/sessions.mjs",
+      "line": 143,
+      "rule": "OWA-6",
+      "text": "Acceptance 4/5: claiming a refreshed record temporarily hides its wake target. In-memory pruneSessions reproduction: refresh in afterSelect; submit a valid signed wake in afterClaim -> 202 woke:false, reason='no recorded session'; after restoration, retry -> 409 replay; runner calls=0. The wake is permanently lost although the refreshed record survives. Synchronize wake reads with pruning or safely expose claimed fresh records to readers."
+    },
+    {
+      "id": "V1",
+      "severity": "minor",
+      "path": null,
+      "line": null,
+      "rule": "REV-6",
+      "text": "Original reproductions: F1 ADDRESSED (unbound secret refused; no B wake); F7 ADDRESSED (50 records, refreshed target survives); F8 ADDRESSED (SIGTERM heartbeat 51, takeover delivers 52); F9 ADDRESSED (null cursor delivers mention 51 with/without status). In-memory checks, 14 targeted tests and typecheck passed. Full npm test was not run under read-only restrictions; secrets scan failed creating its temporary directory (EPERM). Re-run both gates in a writable test environment."
+    }
+  ],
+  "run": "codex-T-MG-12-reviewer-3",
+  "sha256": "ad8760f85114d9f6894495dbb9024c5acdc1cfb62c3864a7da8d1165f17cc4f9"
+}
