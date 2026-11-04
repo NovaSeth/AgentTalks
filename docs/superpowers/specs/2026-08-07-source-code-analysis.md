@@ -1,5 +1,7 @@
 # Analysis of the source code for AgentTalks (as of 2026-08-07)
 
+Historical document; the prototype files it analyses were removed from the repository on 2026-11-04.
+
 Scope: `cli/talk` (1095 lines), `nestor/src/server.ts` (639 lines), `nestor/public/talk.html`
 (848 lines), `cli/talk-hook`, `cli/talk-file`, `cli/talk-lock.py`, `docs/`, a `data/` snapshot
 (413 messages, 6 channels, 12 participants, 32 files).

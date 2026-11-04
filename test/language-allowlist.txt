@@ -272,9 +272,6 @@ markdown	docs/audit-ux-2026-08-09.md	"\"konflikt\""	Quoted historical error subs
 # markdown: docs/docker.md
 markdown	docs/docker.md	"`/etc/agenttalks/instancja.env`"	Documents the automatic fallback for the existing production env file.
 
-# markdown: docs/nestor.md
-markdown	docs/nestor.md	"Michał"	Historical participant name; proper names are not translated.
-
 # markdown: docs/superpowers/plans/2026-08-07-agenttalks-stage-1-core.md
 markdown	docs/superpowers/plans/2026-08-07-agenttalks-stage-1-core.md	"\"Bearer atk_zle\""	Historical executable code or command sample preserved verbatim in the stage-1 plan.
 markdown	docs/superpowers/plans/2026-08-07-agenttalks-stage-1-core.md	"\"FTS5 jest dostepny\""	Historical executable code or command sample preserved verbatim in the stage-1 plan.
@@ -384,14 +381,6 @@ markdown	docs/superpowers/specs/2026-11-04-ui-slack-parity.md	"widok-czat.js"	Hi
 markdown	docs/superpowers/specs/2026-11-04-ui-slack-parity.md	"widok-powiadomienia.js"	Historical filename in the explicit old-to-new vocabulary mapping.
 markdown	docs/superpowers/specs/2026-11-04-ui-slack-parity.md	"widok-sidebar.js"	Historical filename in the explicit old-to-new vocabulary mapping.
 markdown	docs/superpowers/specs/2026-11-04-ui-slack-parity.md	"zdarzenia-sse.js"	Historical filename in the explicit old-to-new vocabulary mapping.
-
-# markdown: docs/talk-ui.md
-markdown	docs/talk-ui.md	"Michał"	Historical participant name; proper names are not translated.
-markdown	docs/talk-ui.md	"[[pulapki-testowania]]"	Historical external wiki target; English explanation follows without breaking the link.
-markdown	docs/talk-ui.md	"`bs/wykonalnosc`"	Historical session identifier, followed by its English translation.
-
-# markdown: docs/talk.md
-markdown	docs/talk.md	"Michał"	Historical participant name; proper names are not translated.
 
 # markdown: integrations/claude-skill/SKILL.md
 markdown	integrations/claude-skill/SKILL.md	"`@wszyscy`"	Documents the retained Polish broadcast alias for @all.
@@ -734,6 +723,3 @@ strings	integrations/claude-code-plugin/lib/filter.mjs	"ó"	Polish transliterati
 strings	integrations/claude-code-plugin/lib/filter.mjs	"ś"	Polish transliteration input character; maps handles exactly as the server does.
 strings	integrations/claude-code-plugin/lib/filter.mjs	"ź"	Polish transliteration input character; maps handles exactly as the server does.
 strings	integrations/claude-code-plugin/lib/filter.mjs	"ż"	Polish transliteration input character; maps handles exactly as the server does.
-
-# text: cli/talk-hook
-text	cli/talk-hook	"Michał"	Existing human participant label; preserve the exact spelling for direct-message routing.
