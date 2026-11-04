@@ -25,7 +25,7 @@ test("hook: a failed mktemp never makes the EXIT trap remove /dev/null (review F
   };
   stub("mktemp", "exit 1");
   stub("rm", `echo "$*" >> "${rmLog}"`);
-  stub("atalk", "exit 0");
+  stub("atalks", "exit 0");
   execFileSync("/bin/bash", [HOOK, "tick"], {
     input: "{}",
     env: { PATH: `${bin}:/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin`, HOME: dir, AGENTTALKS_TOKEN: "atk_synthetic" }, // SYNTH

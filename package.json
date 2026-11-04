@@ -9,6 +9,7 @@
   },
   "bin": {
     "agenttalks": "bin/agenttalks.js",
+    "atalks": "bin/atalk.js",
     "atalk": "bin/atalk.js"
   },
   "files": [

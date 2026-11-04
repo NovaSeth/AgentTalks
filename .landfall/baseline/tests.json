@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "3462642df667518a5ee4de8ee650f9287d9f9fbe",
-  "collectedAt": "2026-11-04T17:13:01.866Z",
+  "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c",
+  "collectedAt": "2026-11-04T19:34:54.127Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -95,7 +95,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"A2A-F8: a missing atalk prints exactly one line on stderr and nothing on stdout\",1]",
+      "id": "[\"\",\"A2A-F8: a missing atalks prints exactly one line on stderr and nothing on stdout\",1]",
       "file": "",
       "skipped": false
     },
@@ -1710,6 +1710,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"T-MG-41: with only the old atalk on PATH the hook falls back to it\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"U10: notifications, unreads, search, the palette and the digest preview use stripMd\",1]",
       "file": "",
       "skipped": false
@@ -2305,6 +2310,21 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"a failing test gate prints the failing test name and failure, keeps the log, stops with exit 1 (T-MG-36)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a failing typecheck gate prints the tsc errors and stops with exit 1 (T-MG-36)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a failing-tests section longer than 150 lines still ends with the log path and STOP, exit 1 (T-MG-36)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"a file appears in a conversation as a message and a member can download it\",1]",
       "file": "",
       "skipped": false
@@ -2331,6 +2351,11 @@
     },
     {
       "id": "[\"\",\"a garbage code is rejected without creating an actor\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a green gate stays quiet: one OK line, no test output (T-MG-36)\",1]",
       "file": "",
       "skipped": false
     },
@@ -2835,6 +2860,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"atalks and the atalk compatibility alias resolve to the same installed implementation\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"avatar: bytes rather than a URL, format detected from content, SVG rejected\",1]",
       "file": "",
       "skipped": false
@@ -2851,6 +2881,11 @@
     },
     {
       "id": "[\"\",\"binding to loopback is always allowed\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"both client names print identical atalks help, usage and error hints\",1]",
       "file": "",
       "skipped": false
     },
@@ -3946,6 +3981,16 @@
     },
     {
       "id": "[\"\",\"migration row exceptions retain checks on incorrect mappings and old code usage\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"monitor --max-seconds 0: ends when its Claude Code process is gone, stays while it lives\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"monitor --max-seconds 0: ends when its stdout is closed, and a closed stdin alone does not end it\",1]",
       "file": "",
       "skipped": false
     },
@@ -5281,5 +5326,5 @@
     }
   ],
   "failing": [],
-  "sha256": "298841eb5908cc414b1e9140b803503deed61b5b622d4fa422629b0dec493e00"
+  "sha256": "4c8e159673d6eaa2d957e6bdcb94e54f841f628664f3a46e2c2ba3f06395ef18"
 }

@@ -84,7 +84,7 @@ test("every field the skill instructs users to send is read by the route", () =>
 /**
  * Every CLI flag shown in the documentation has to exist in the parser.
  *
- *For `atalk` the consequence of an error is SILENT and has already occurred once: the
+ *For `atalks` the consequence of an error is SILENT and has already occurred once: the
  *`--force` and `--base` flags were not listed in KNOWN_FLAGS, so instead of working they
  *landed in the CONTENT of the wiki page being saved. No error, no message - an unknown flag
  *is an ordinary word to the parser.
@@ -125,7 +125,7 @@ test("every CLI flag in the documentation exists in the parser", () => {
         // The CLI name has to be used AS A COMMAND - followed by a subcommand, not straight by a
         // flag. Otherwise `docker inspect agenttalks --format` would count docker's flag as ours
         // (agenttalks is a container name there).
-        for (const m of l.matchAll(/(?:^|\s|\/)(atalk|agenttalks)(?:\.js)?\s+(?=[a-z])/g)) {
+        for (const m of l.matchAll(/(?:^|\s|\/)(atalks?|agenttalks)(?:\.js)?\s+(?=[a-z])/g)) {
           let tail = l.slice(m.index! + m[0].length);
           const end = tail.search(/\||&&|;/);
           if (end >= 0) tail = tail.slice(0, end);
@@ -147,8 +147,10 @@ test("every CLI flag in the documentation exists in the parser", () => {
     ...[...src.matchAll(/flagStr\(args,\s*"([a-z-]+)"\)/g)].map((x) => x[1]),
     ...[...src.matchAll(/args\.flags\.([a-zA-Z]+)/g)].map((x) => x[1]),
   ]);
+  const clientFlags = known(file("../src/cli/atalk.ts"), "const KNOWN_FLAGS");
   const parser = {
-    atalk: known(file("../src/cli/atalk.ts"), "const KNOWN_FLAGS"),
+    atalks: clientFlags,
+    atalk: clientFlags,
     agenttalks: known(file("../src/cli/main.ts"), "const BOOLEAN_FLAGS"),
   };
 
@@ -157,16 +159,18 @@ test("every CLI flag in the documentation exists in the parser", () => {
   for (const [cli, flags] of used) {
     for (const f of flags) {
       count++;
-      if (!parser[cli as "atalk" | "agenttalks"].has(f)) unknown.push(`${cli} --${f}`);
+      if (!parser[cli as keyof typeof parser].has(f)) unknown.push(`${cli} --${f}`);
     }
   }
 
   // The same protection as above: an extraction that has stopped finding anything reports
   // success. Today there are 18 flags in code blocks.
   assert.ok(count >= 15, `only ${count} flags found in the documentation; extraction is broken`);
+  assert.ok(used.has("atalks"), "the canonical client examples must be checked");
+  assert.ok(used.has("atalk"), "the compatibility alias in historical examples must still be checked");
   assert.deepEqual(
     unknown, [],
-    `the documentation teaches flags unknown to the parser (atalk treats them as CONTENT): ${unknown.join(", ")}`,
+    `the documentation teaches flags unknown to the parser (atalks treats them as CONTENT): ${unknown.join(", ")}`,
   );
 });
 
