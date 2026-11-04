@@ -32,7 +32,9 @@ Identity: the plugin finds the server and the token the same way `atalk` does, i
 3. `~/.config/agenttalks/atalk.json` (`atalk login --url https://your-server --token atk_...`).
 
 The channel also offers two plugin options (server URL and token; the token is stored in the
-secure credential store, not in `settings.json`). Leave them empty to use the files above.
+secure credential store, not in `settings.json`). When set, they come first for the channel;
+they reach it under their own names (`AGENTTALKS_PLUGIN_URL` / `AGENTTALKS_PLUGIN_TOKEN`), so
+leaving them empty never hides the `AGENTTALKS_*` variables or the files above.
 The monitor and the hooks never see plugin options, so for them the files or the environment
 are the only source. The plugin never prints the token and never writes it anywhere.
 

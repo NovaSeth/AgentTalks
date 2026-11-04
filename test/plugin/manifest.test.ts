@@ -43,7 +43,7 @@ test("plugin.json: the channel binds to its MCP server, the token is sensitive, 
       assert.ok(["type", "title", "description", "required", "default", "sensitive"].includes(k), `unknown userConfig key ${k}`);
     }
   }
-  assert.equal(srv.env.AGENTTALKS_TOKEN, "${user_config.token}");
+  assert.equal(srv.env.AGENTTALKS_PLUGIN_TOKEN, "${user_config.token}");
 });
 
 test("hooks.json and monitors.json reference existing scripts with only known keys", () => {

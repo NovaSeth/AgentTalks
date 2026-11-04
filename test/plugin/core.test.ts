@@ -5,7 +5,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveIdentity } from "../../integrations/claude-code-plugin/lib/identity.mjs";
@@ -39,6 +39,34 @@ test("identity: env wins, ATALKS_* aliases work, an empty value counts as unset"
   const env3 = { AGENTTALKS_TOKEN: "", AGENTTALKS_URL: "" };
   assert.deepEqual(resolveIdentity({ env: env3, cwd: t.deep, home: t.home }),
     { url: "https://proj.example", token: "atk_project", source: "project" });
+});
+
+/** What Claude Code does with plugin.json's channel server env: substitute every
+ *  ${user_config.KEY} (an option left empty becomes "") and lay the result over the
+ *  environment the server inherits. */
+function launchEnv(inherited: Record<string, string>, options: Record<string, string> = {}) {
+  const manifest = JSON.parse(readFileSync(new URL("../../integrations/claude-code-plugin/.claude-plugin/plugin.json", import.meta.url), "utf8"));
+  const env: Record<string, string> = { ...inherited };
+  for (const [k, v] of Object.entries(manifest.mcpServers.agenttalks.env as Record<string, string>)) {
+    env[k] = v.replace(/\$\{user_config\.([A-Za-z0-9_]+)\}/g, (_m: string, key: string) => options[key] ?? "");
+  }
+  return env;
+}
+
+test("identity: empty plugin options do not overwrite the inherited AGENTTALKS_* credentials (codex F2)", () => {
+  const t = tree();
+  writeFileSync(join(t.home, ".config", "agenttalks", "atalk.json"),
+    JSON.stringify({ url: "https://other.example", token: "atk_global" }));
+  const inherited = { AGENTTALKS_URL: "https://intended.example", AGENTTALKS_TOKEN: "atk_env" };
+  // Options left empty: the inherited variables win, not the global file.
+  const id = resolveIdentity({ env: launchEnv(inherited), cwd: t.deep, home: t.home });
+  assert.deepEqual(id, { url: "https://intended.example", token: "atk_env", source: "env" });
+  // Without the global file the same launch still finds the inherited identity.
+  const t2 = tree();
+  assert.equal(resolveIdentity({ env: launchEnv(inherited), cwd: t2.deep, home: t2.home })?.url, "https://intended.example");
+  // Options that ARE set win over the inherited variables.
+  const set = resolveIdentity({ env: launchEnv(inherited, { url: "https://option.example", token: "atk_option" }), cwd: t.deep, home: t.home });
+  assert.deepEqual(set, { url: "https://option.example", token: "atk_option", source: "env" });
 });
 
 test("identity: nearest .agenttalks.json walking up, then the global file, else null", () => {
