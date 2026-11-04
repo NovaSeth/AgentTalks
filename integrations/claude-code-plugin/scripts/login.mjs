@@ -18,15 +18,20 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createApi } from "../lib/api.mjs";
-import { trustProjectFile } from "../lib/trust.mjs";
+import { trustDir, trustProjectFile } from "../lib/trust.mjs";
 
 const NAME = ".agenttalks.json";
 
+/** Undoes the credential write when a later step fails (set once the credential is written).
+ *  @type {(() => void) | null} */
+let undo = null;
+
 /** @param {string} msg @returns {never} */
 function fail(msg) {
+  if (undo) { const u = undo; undo = null; try { u(); } catch { /* best effort */ } }
   process.stderr.write(`[agenttalks-login] ${msg}\n`);
   process.exit(1);
 }
@@ -42,18 +47,32 @@ function parseArgs(argv) {
       if (v === undefined) fail(`${k} needs a value`);
       a[/** @type {"url" | "token" | "dir"} */ (k.slice(2))] = v;
     } else {
-      fail(`unknown argument ${JSON.stringify(k.slice(0, 40))}; usage: node login.mjs --url <server> --token - [--dir <path>]`);
+      fail("unknown argument; usage: node login.mjs --url <server> --token - [--dir <path>]");
     }
   }
   return a;
 }
 
-/** @param {string} s */
+/** The server URL, or a refusal: https anywhere, http only for a loopback host (the token is
+ *  sent as a bearer), and no user:pass@ in the URL.
+ *  @param {string} s @returns {string} */
 function cleanUrl(s) {
   let u;
-  try { u = new URL(s.trim()); } catch { return null; }
-  if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+  try { u = new URL(s.trim()); } catch { return fail("--url must be an absolute http(s) URL"); }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return fail("--url must be an absolute http(s) URL");
+  if (u.username || u.password) return fail("--url must not carry credentials in the URL (user:pass@)");
+  const h = u.hostname;
+  const loopback = h === "localhost" || h === "[::1]" || /^127\.\d+\.\d+\.\d+$/.test(h);
+  if (u.protocol === "http:" && !loopback) return fail("use https:// for a remote server (http:// is only accepted for localhost)");
   return u.origin + u.pathname.replace(/\/+$/, "");
+}
+
+/** The kind of p without following a final link: "none" | "file" | "dir" | "link" | "other".
+ *  @param {string} p */
+function kindOf(p) {
+  let st;
+  try { st = lstatSync(p); } catch { return "none"; }
+  return st.isSymbolicLink() ? "link" : st.isFile() ? "file" : st.isDirectory() ? "dir" : "other";
 }
 
 /** The top of the git work tree `dir` is in (the nearest ancestor with a .git), or null.
@@ -99,8 +118,8 @@ function trackedState(dir) {
 
 /** A new file under a fresh name (flag wx: never follows or reuses an existing path), then a
  *  rename over the target, so a link planted at the target is replaced, not written through.
- *  @param {string} path @param {string} data @param {number} mode */
-function writeAtomic(path, data, mode) {
+ *  @param {string} path @param {string | Buffer} data @param {number} mode @param {boolean} [quiet] */
+function writeAtomic(path, data, mode, quiet = false) {
   const tmp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
   try {
     writeFileSync(tmp, data, { mode, flag: "wx" });
@@ -108,6 +127,7 @@ function writeAtomic(path, data, mode) {
     renameSync(tmp, path);
   } catch (err) {
     try { unlinkSync(tmp); } catch { /* not created */ }
+    if (quiet) throw err;
     fail(`could not write ${path} (${err instanceof Error ? err.name : "error"})`);
   }
 }
@@ -118,7 +138,6 @@ const env = process.env;
 const rawUrl = args.url ?? (env.AGENTTALKS_URL || env.ATALKS_URL);
 if (!rawUrl) fail("--url <server> is required");
 const url = cleanUrl(rawUrl);
-if (!url) fail("--url must be an absolute http(s) URL");
 
 let token;
 if (args.token === undefined) {
@@ -148,10 +167,17 @@ if (!actor || typeof actor.handle !== "string" || actor.handle === "") {
 
 const file = join(dir, NAME);
 const gi = join(dir, ".gitignore");
+const tdir = trustDir(env, homedir());
+const tfile = join(tdir, "trusted-projects.json");
 
-// Preflight: every refusal comes before the first write.
-if (isLink(file)) fail(`${NAME} in the target directory is a symbolic link; refusing to write through it; nothing was written`);
-if (isLink(gi)) fail(".gitignore in the target directory is a symbolic link; refusing to write through it; nothing was written");
+// Preflight: every refusal comes before the first write. Every existing output must be what
+// it should be: a regular file (the trust directory: a real directory), never a link, FIFO,
+// device or directory.
+const willTouchGi = inGitTree(dir) || existsSync(gi);
+if (kindOf(file) !== "none" && kindOf(file) !== "file") fail(`${NAME} in the target directory is not a regular file (link, directory or special file); refusing to write; nothing was written`);
+if (willTouchGi && kindOf(gi) !== "none" && kindOf(gi) !== "file") fail(".gitignore in the target directory is not a regular file (link, directory or special file); refusing to write; nothing was written");
+if (kindOf(tdir) !== "none" && kindOf(tdir) !== "dir") fail("the trust directory is not a real directory; refusing to write; nothing was written");
+if (kindOf(tfile) !== "none" && kindOf(tfile) !== "file") fail("the trust list is not a regular file (link or special file); refusing to write; nothing was written");
 const tracked = trackedState(dir);
 if (tracked === "tracked") {
   fail(`${NAME} is tracked by git here: writing the token into it would put the token in the repository. `
@@ -162,12 +188,9 @@ if (tracked === "unknown") {
     + "refusing to write a token into a possible repository; nothing was written");
 }
 
-writeAtomic(file, JSON.stringify({ url, token, writtenBy: "agenttalks-plugin-login" }, null, 2) + "\n", 0o600);
-trustProjectFile(file, { env });
-
-// The token must not reach a repository: ignore the file the way `atalk login --local` does.
+// 1. The ignore line first, so the credential is never unignored.
 let ignored = false;
-if (inGitTree(dir) || existsSync(gi)) {
+if (willTouchGi) {
   const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
   if (!current.split("\n").some((l) => l.trim() === NAME)) {
     writeAtomic(gi, current + (current && !current.endsWith("\n") ? "\n" : "") + NAME + "\n",
@@ -175,6 +198,40 @@ if (inGitTree(dir) || existsSync(gi)) {
     ignored = true;
   }
 }
+
+// 2. The credential. A failure from here on restores the previous bytes or removes it.
+const previous = kindOf(file) === "file" ? readFileSync(file) : null;
+const content = Buffer.from(JSON.stringify({ url, token, writtenBy: "agenttalks-plugin-login" }, null, 2) + "\n");
+writeAtomic(file, content, 0o600);
+undo = () => {
+  // Only while the file is still what this run wrote: never clobber someone else's file.
+  let now = null;
+  try { now = readFileSync(file); } catch { /* gone */ }
+  if (now !== null && !now.equals(content)) return;
+  if (previous !== null) writeAtomic(file, previous, 0o600, true);
+  else unlinkSync(file);
+};
+
+// Test seam (never set in production): runs a script between the rename and the verify.
+const seam = env.AGENTTALKS_LOGIN_TEST_AFTER_RENAME;
+if (seam) { try { execFileSync(process.execPath, [seam, file], { stdio: "ignore" }); } catch { /* the script's own failure is not login's */ } }
+
+// 3. Trust binds to the bytes this run wrote: if the file is not exactly those, trust nothing.
+let onDisk = null;
+try { onDisk = readFileSync(file); } catch { /* gone */ }
+if (onDisk === null || !onDisk.equals(content)) {
+  undo = null;
+  fail("the file changed while saving; nothing trusted");
+}
+try {
+  trustProjectFile(file, content, { env });
+} catch (err) {
+  fail(/locked/.test(String(/** @type {any} */ (err)?.message))
+    ? "trust list is locked by another login; try again; nothing was trusted"
+    : `could not update the trust list (${err instanceof Error ? err.name : "error"}); nothing was trusted`);
+}
+undo = null;
+
 const safeHandle = String(actor.handle).replace(/[^A-Za-z0-9_.-]/g, "?");
 const safeKind = String(actor.kind ?? "actor").replace(/[^A-Za-z0-9_.-]/g, "?");
 process.stdout.write(`@${safeHandle} (${safeKind}) on ${url}: saved ${file}, trusted for the AgentTalks plugin; start a new Claude Code session to connect\n`);
