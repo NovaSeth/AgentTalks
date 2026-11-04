@@ -141,8 +141,21 @@
       "data": {
         "head": "0361bec0631283521257b5ff68566b281952442a"
       }
+    },
+    {
+      "at": "2026-11-04T00:39:34.484Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "8ffdd4d7bb6865a34f7192c52e9260cbb2eb05de",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "a94252273c55369cac0ba636e5a0b45c194b4ba2"
+      }
     }
   ],
   "base": "0394bdd67d877f4249257ed57c6e41b86d57a24e",
-  "branch": "task/T-MG-11-guards-tests-hardening"
+  "branch": "task/T-MG-11-guards-tests-hardening",
+  "mergedAt": "2026-11-04T00:39:34.484Z"
 }
