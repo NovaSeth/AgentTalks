@@ -44,15 +44,23 @@ g.EventSource = FakeEventSource;
 
 /** The server's table: conversation 5 holds `server5`; the route limit is 500 (core/messages.ts). */
 let server5: Any[] = [];
+/** The server's reactions of conversation 5: messageId -> {emoji: [handle]} (T-MG-43). */
+let reactions5: Record<number, Any> = {};
 const requests: string[] = [];
 const MAX_LIMIT = 500;
 let failAfterOnce = false;
 let onRequest: ((path: string) => void) | null = null;
 /** When set, a request whose path matches is answered from the table as it is NOW, but only after the gate opens. */
 let hold: { match: RegExp; gate: Promise<void> } | null = null;
+/** One-shot holds (T-MG-43 r1): only the FIRST request matching each entry waits for its gate. */
+let onceHolds: { match: RegExp; gate: Promise<void> }[] = [];
+/** One-shot holds BEFORE the cut (T-MG-43 r2): the request reaches the server only when the gate opens. */
+let preHolds: { match: RegExp; gate: Promise<void> }[] = [];
 g.fetch = async (path: string) => {
   requests.push(String(path));
   onRequest?.(String(path));
+  const pre = preHolds.findIndex((h) => h.match.test(String(path)));
+  if (pre >= 0) await preHolds.splice(pre, 1)[0].gate;
   const url = new URL(String(path), "https://test.local");
   const m = /^\/api\/conversations\/(\d+)\/messages$/.exec(url.pathname);
   let messages: Any[] = [];
@@ -63,12 +71,19 @@ g.fetch = async (path: string) => {
   if (m && m[1] === "5") {
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 50), 1), MAX_LIMIT);
     const after = url.searchParams.get("after");
+    const before = url.searchParams.get("before");
     messages = after !== null
       ? server5.filter((x) => x.id > Number(after)).slice(0, limit)
-      : server5.slice(-limit);
+      : before !== null
+        ? server5.filter((x) => x.id < Number(before)).slice(-limit)
+        : server5.slice(-limit);
   }
+  // The page is cut NOW (messages and reactions alike); a held request only answers later.
+  const reactions = Object.fromEntries(messages.filter((x) => x.id in reactions5).map((x) => [x.id, structuredClone(reactions5[x.id])]));
   if (hold && hold.match.test(String(path))) await hold.gate;
-  return { ok: true, status: 200, json: async () => ({ messages, reactions: {}, actors: [] }) };
+  const once = onceHolds.findIndex((h) => h.match.test(String(path)));
+  if (once >= 0) await onceHolds.splice(once, 1)[0].gate;
+  return { ok: true, status: 200, json: async () => ({ messages, reactions, actors: [] }) };
 };
 
 const i18n = await import(UI + "i18n.js");
@@ -91,12 +106,16 @@ beforeEach(() => {
   requests.length = 0;
   onRequest = null;
   hold = null;
+  onceHolds = [];
+  preHolds = [];
   failAfterOnce = false;
+  reactions5 = {};
   Object.assign(state, {
     actor: { id: 1, handle: "michal", kind: "human" }, view: "chat", activeId: 5,
     conversations: [{ id: 5, slug: "general", kind: "public" }],
     memberships: { 5: {} }, actorsCache: { 1: { handle: "michal" }, 2: { handle: "nestor" } }, actorsList: [],
     msgs: { 5: [] }, loaded: { 5: true }, unread: {}, unreadBadge: {}, online: true, sseCursor: 0,
+    reactions: {}, threadOpen: null,
   });
 });
 
@@ -217,10 +236,10 @@ const edited = (id: number, body: string) => ({ ...msg(id), body, editedAt: 99 }
 const updated = (m: Any) => last().listeners.message_updated[0]({ data: JSON.stringify({ type: "message_updated", conversationId: m.conversationId, message: m }) });
 const bodyOf = (id: number) => state.msgs[5].find((m: Any) => m.id === id)?.body;
 
-async function heldResume(t: Any, match: RegExp) {
+async function heldResume(t: Any, match: RegExp, server: Any[] = [msg(1), msg(2)]) {
   let release!: () => void;
   const gate = new Promise<void>((r) => { release = r; });
-  server5 = [msg(1), msg(2)];
+  server5 = server;
   state.msgs[5] = [msg(1)];
   t.mock.timers.enable({ apis: ["setTimeout"] });
   sse.connectSSE(); last().open();
@@ -255,4 +274,258 @@ test("F4: a delayed newest-30 refresh does not replace a message edited live mea
   await settle();
   assert.equal(bodyOf(2), "edited live");
   assert.deepEqual(ids(5), [1, 2]);
+});
+
+// ---- T-MG-43 (codex T-MG-18 r4 F5 = B-MG-118): REST reactions are merged independently of the body filter
+const reacted = (id: number) => last().listeners.reaction[0]({ data: JSON.stringify({ type: "reaction", conversationId: 5, messageId: id }) });
+const thumbs = (...who: string[]) => ({ "+1": who });
+
+test("B-MG-118 (codex repro): a message held from SSE during the newest-30 refresh keeps its REST reactions", async (t) => {
+  reactions5 = { 2: thumbs("nestor") };
+  const release = await heldResume(t, /messages\?limit=30$/, range(32).map((i) => msg(i)));
+  live(msg(2));                       // SSE messages carry no reactions
+  await settle();
+  release();
+  await settle();
+  assert.deepEqual(ids(5), range(32));
+  assert.deepEqual(state.reactions[2], thumbs("nestor"));
+});
+
+test("B-MG-118: a reaction refreshed by a live event during the after= page is not overwritten by the older page", async (t) => {
+  reactions5 = { 2: thumbs("nestor") };
+  const release = await heldResume(t, /after=1/);
+  assert.ok(requests.some((p) => p.includes("after=1")), requests.join(", "));
+  reactions5 = { 2: thumbs("nestor", "michal") };   // a newer reaction, after the page was cut
+  reacted(2);
+  await settle();
+  assert.deepEqual(state.reactions[2], thumbs("nestor", "michal"));
+  release();
+  await settle();
+  assert.deepEqual(state.reactions[2], thumbs("nestor", "michal"));
+});
+
+test("B-MG-118: a reaction removed by a live event during the after= page stays removed", async (t) => {
+  reactions5 = { 2: thumbs("nestor") };
+  const release = await heldResume(t, /after=1/);
+  reactions5 = {};
+  reacted(2);
+  await settle();
+  release();
+  await settle();
+  assert.equal(state.reactions[2], undefined);
+});
+
+test("B-MG-118: a held message edited live during the newest-30 refresh still gets its REST reactions", async (t) => {
+  reactions5 = { 1: thumbs("nestor") };
+  const release = await heldResume(t, /messages\?limit=30$/);
+  updated(edited(1, "edited live"));
+  await settle();
+  release();
+  await settle();
+  assert.equal(bodyOf(1), "edited live");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+});
+
+test("F4 (T-MG-43): a message replaced by a REST reaction refresh during the after= page keeps that newer revision", async (t) => {
+  const release = await heldResume(t, /after=1/);
+  server5[1] = edited(2, "edited after the page was cut");
+  reactions5 = { 2: thumbs("nestor") };
+  reacted(2);                         // its refresh (before=3&limit=1) upserts message 2 from REST
+  await settle();
+  assert.equal(bodyOf(2), "edited after the page was cut");
+  release();
+  await settle();
+  assert.equal(bodyOf(2), "edited after the page was cut");
+  assert.deepEqual(state.reactions[2], thumbs("nestor"));
+});
+
+// ---- T-MG-43 (codex T-MG-18 r4 F6 = B-MG-119): a held gap message gets the newer REST revision
+async function failedRetry(t: Any) {
+  server5 = [msg(1)];
+  failAfterOnce = true;
+  await resume(t);
+  await settle();
+  assert.deepEqual(ids(5), [1]);
+  last().drop(2);
+  server5[0] = edited(1, "edited during outage");
+  for (let i = 2; i <= 31; i++) server5.push(msg(i));
+  t.mock.timers.tick(2000);
+  assert.equal(last().url, "/api/events");
+}
+
+test("B-MG-119 (codex repro): after a failed retry the reconnect refreshes a held gap message older than the newest 30", async (t) => {
+  await failedRetry(t);
+  last().open();
+  await settle();
+  assert.deepEqual(ids(5), range(31));
+  assert.equal(bodyOf(1), "edited during outage");
+});
+
+test("F4 (T-MG-43): a held gap message edited by a live event during the after= request keeps the live body", async (t) => {
+  await failedRetry(t);
+  let release!: () => void;
+  hold = { match: /after=0/, gate: new Promise<void>((r) => { release = r; }) };
+  last().open();
+  await settle();
+  state.conversations = [{ id: 5, slug: "general", kind: "public" }];   // the fake list route answers with none
+  assert.ok(requests.some((p) => p.includes("after=0")), requests.join(", "));
+  updated(edited(1, "edited live"));
+  await settle();
+  release();
+  await settle();
+  assert.equal(bodyOf(1), "edited live");
+  assert.deepEqual(ids(5), range(31));
+});
+
+// ---- T-MG-43 fix round 1 (codex review-r1 F1): a page of a superseded catch-up never undoes a newer one
+const general = () => { state.conversations = [{ id: 5, slug: "general", kind: "public" }]; };
+
+test("r1 F1 (codex repro): a superseded newest-30 page landing late keeps the newer catch-up's reactions and body", async (t) => {
+  const release = await heldResume(t, /messages\?limit=30$/);
+  hold = null;
+  last().drop(2);
+  server5[0] = edited(1, "edited in outage 2");
+  reactions5 = { 1: thumbs("nestor") };
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  release();
+  await settle();
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+});
+
+test("r1 F1: when the superseded page lands first, the newer catch-up's page still applies", async (t) => {
+  let releaseOld!: () => void;
+  let releaseNew!: () => void;
+  server5 = [msg(1), msg(2)];
+  state.msgs[5] = [msg(1)];
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  sse.connectSSE(); last().open();
+  live(msg(1));
+  last().drop(2);
+  t.mock.timers.tick(1000);
+  onceHolds = [{ match: /messages\?limit=30$/, gate: new Promise<void>((r) => { releaseOld = r; }) }];
+  last().open();
+  await settle();
+  general();
+  last().drop(2);
+  server5[0] = edited(1, "edited in outage 2");
+  reactions5 = { 1: thumbs("nestor") };
+  t.mock.timers.tick(1000);
+  onceHolds = [{ match: /messages\?limit=30$/, gate: new Promise<void>((r) => { releaseNew = r; }) }];
+  last().open();
+  await settle();
+  general();
+  releaseOld();
+  await settle();
+  releaseNew();
+  await settle();
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  assert.deepEqual(ids(5), [1, 2]);
+});
+
+test("r1 F1: an unstamped write during the after= page (an own edit, applyMessageUpdate) is kept", async (t) => {
+  const release = await heldResume(t, /after=1/);
+  server5[1] = edited(2, "own edit");   // r2: an own edit is the server's answer, so the server holds it
+  store.upsertMessage(5, edited(2, "own edit"));
+  release();
+  await settle();
+  assert.equal(bodyOf(2), "own edit");
+});
+
+test("r1 F1: a reaction refresh sent before a newer catch-up and landing after it does not undo that catch-up", async (t) => {
+  await heldResume(t, /never/);
+  hold = null;
+  await settle();
+  let releaseRefresh!: () => void;
+  onceHolds = [{ match: /before=3&limit=1/, gate: new Promise<void>((r) => { releaseRefresh = r; }) }];
+  reacted(2);                         // its refresh is cut now: body m2, no reactions
+  await settle();
+  last().drop(2);
+  server5[1] = edited(2, "edited in outage 2");
+  reactions5 = { 2: thumbs("nestor") };
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  assert.equal(bodyOf(2), "edited in outage 2");
+  releaseRefresh();
+  await settle();
+  assert.equal(bodyOf(2), "edited in outage 2");
+  assert.deepEqual(state.reactions[2], thumbs("nestor"));
+});
+
+// ---- T-MG-43 fix round 2 (codex review-r2 F2): send order is not the server's cut order
+test("r2 F2 (codex repro): a read sent earlier but cut later is not erased by a read sent after it but cut before it", async (t) => {
+  await heldResume(t, /never/);
+  hold = null;
+  await settle();
+  general();
+  assert.deepEqual(ids(5), [1, 2]);
+  // A: the reaction read of message 1, delayed BEFORE it reaches the server.
+  let deliverA!: () => void;
+  preHolds = [{ match: /before=2&limit=1/, gate: new Promise<void>((r) => { deliverA = r; }) }];
+  reacted(1);
+  await settle();
+  // B: the next reconnect's newest-30 read, cut now and held after its cut.
+  let deliverB!: () => void;
+  onceHolds = [{ match: /messages\?limit=30$/, gate: new Promise<void>((r) => { deliverB = r; }) }];
+  last().drop(2);
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  // The stream drops; meanwhile message 1 gets a reaction and an edit, and messages 3..32 arrive.
+  last().drop(2);
+  reactions5 = { 1: thumbs("nestor") };
+  server5[0] = edited(1, "edited in outage");
+  for (let i = 3; i <= 32; i++) server5.push(msg(i));
+  deliverA();
+  await settle();
+  deliverB();
+  await settle();
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  assert.equal(bodyOf(1), "edited in outage");
+  assert.deepEqual(ids(5), range(32));
+});
+
+test("r2 F2: an unstamped reaction write while a page is in flight (a view loader) is kept, then re-read", async (t) => {
+  const release = await heldResume(t, /after=1/);
+  reactions5 = { 2: thumbs("nestor", "michal") };
+  store.mergeReactions([msg(2)], { 2: thumbs("nestor", "michal") });   // e.g. the thread or jump loader of view-chat.js
+  release();
+  await settle();
+  assert.deepEqual(state.reactions[2], thumbs("nestor", "michal"));
+});
+
+test("r2 F2: while the re-read of an overlap is pending, a late superseded page does not show older state", async (t) => {
+  const release = await heldResume(t, /messages\?limit=30$/);
+  hold = null;
+  last().drop(2);
+  server5[0] = edited(1, "edited in outage 2");
+  reactions5 = { 1: thumbs("nestor") };
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  let releaseReread!: () => void;
+  onceHolds = [{ match: /after=0&limit=2$/, gate: new Promise<void>((r) => { releaseReread = r; }) }];
+  release();                          // the superseded newest-30 page lands; its overlap owes [1, 2]
+  await settle();
+  assert.ok(requests.some((p) => /after=0&limit=2$/.test(p)), requests.join(", "));
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  releaseReread();
+  await settle();
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
 });

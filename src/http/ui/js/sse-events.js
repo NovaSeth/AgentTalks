@@ -2,10 +2,10 @@
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
 import { ACTOR_KEY, CSRF_KEY, api, newSessionGeneration, onUnauthorized, sessionGeneration, setCsrf } from "./api.js";
-import { cancelMarkRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, reactionsOf, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { applyPage, beginRead, cancelMarkRead, currentSeq, endRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, nextSeq, stampRow, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { announce, closeAccountOverlays, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
-import { actorHandle, findMsgById, mentionsMe, mergeActors, mergeReactions, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
+import { actorHandle, findMsgById, mentionsMe, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
 import { showToast } from "./toasts.js";
 
 // ------------------------------------------------------------ session lost (S7)
@@ -135,19 +135,24 @@ function captureReplayFloor() {
 /** The messages of one conversation after `floor`, page by page (the route's limit is 500) until a
  *  page is shorter than the limit. A page of another session generation is dropped by api(). */
 const CATCH_UP_PAGE = 200;
-async function loadGapAfter(convId, floor, gen) {
+
+/** `mark` = currentSeq() when this conversation's catch-up began (before its newest-30 refresh). */
+async function loadGapAfter(convId, floor, gen, mark) {
   let after = floor;
   for (;;) {
-    const data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${CATCH_UP_PAGE}`);
-    if (gen !== sessionGeneration()) return;
-    // F4 (codex r3): the catch-up only INSERTS ids not held yet. A held message belongs to a live event
-    // (or an explicit reload) that may be newer than this page, which was cut on the server before the
-    // await; the page still advances the paging cursor below by every id it carried.
-    const held = new Set((state.msgs[convId] || []).map((m) => m.id));
-    const fresh = data.messages.filter((m) => !held.has(m.id));
-    for (const m of fresh) upsertMessage(convId, m);
-    mergeActors(data.actors);
-    mergeReactions(fresh, reactionsOf(fresh, data.reactions));
+    // F4 (codex r3), F6 (codex r4, B-MG-119), review-r1 F1, r2 F2: the page is a flight (data.js
+    // beginRead/applyPage/endRead): a held message gets its revision unless a later-sent request, a
+    // live write since this conversation's catch-up began (mark), or an unstamped write in flight
+    // holds it; reactions are merged for the whole page by the same order (F5, B-MG-118); a page that
+    // overlapped another read of this conversation owes a re-read. The page still advances the paging
+    // cursor by every id it carried.
+    const f = beginRead(convId);
+    let data = null;
+    try {
+      data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${CATCH_UP_PAGE}`);
+      if (gen !== sessionGeneration()) return;
+      applyPage(convId, data, f, mark);
+    } finally { endRead(convId, f, data && data.messages); }
     const top = data.messages.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), after);
     if (data.messages.length < CATCH_UP_PAGE || top <= after) return;
     after = top;
@@ -171,7 +176,8 @@ async function catchUpLoadedHistories(gen) {
     // list had before the break is then paged in full (B-MG-116): a gap longer than 30 messages
     // would otherwise lose its oldest ones.
     const floor = gapFloors[convId] ?? newestIdOf(convId);
-    try { await loadMessages(convId, { keepTouched: true }); await loadGapAfter(convId, floor, gen); } catch { continue; }
+    const mark = currentSeq();
+    try { await loadMessages(convId, { keepTouched: true }); await loadGapAfter(convId, floor, gen, mark); } catch { continue; }
     if (gen !== sessionGeneration()) return;
     delete gapFloors[convId];
     if (state.view === "chat" && state.activeId === convId) views.messages?.();
@@ -297,7 +303,7 @@ async function onMessageEvent(ev) {
   // A message for a conversation we have never opened does NOT create an array: an
   // empty-but-existing one then looked like "history already loaded", and after entering you
   // saw one message with nothing before it.
-  if (state.loaded[convId] || conversationOpen) upsertMessage(convId, msg);
+  if (state.loaded[convId] || conversationOpen) { upsertMessage(convId, msg); stampRow(msg, nextSeq(), true); }
   if (msg.id > state.sseCursor) state.sseCursor = msg.id;
   if (msg.kind === "ask" || msg.kind === "answer") refreshQuestions(convId);
   // "Looking at a conversation" is not the same as "seeing the newest": with the history
