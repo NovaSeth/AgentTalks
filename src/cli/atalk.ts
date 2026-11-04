@@ -176,7 +176,7 @@ function loadClientConfig(args: Args): ClientConfig {
   if (projectInUse && tokenExplicit && !urlExplicit && stored.url && !isTrustedProject(storedPath!)) {
     throw new Error(
       `the project file ${storedPath} is not trusted, so its url is not used with your token. ` +
-        `Run \`atalk login --local\` in that directory (if you wrote it) or pass --url.`,
+        `Run \`atalk login --local --url <server> --token -\` in that directory and paste its token (if you wrote it), or pass --url.`,
     );
   }
   const url = firstSet(flagStr(args, "url"), process.env.AGENTTALKS_URL, process.env.ATALKS_URL,

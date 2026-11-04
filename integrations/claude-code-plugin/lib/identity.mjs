@@ -142,7 +142,7 @@ export function describeIdentity(id) {
  *  no path, because a cloned repository controls its own path (a directory name can hold
  *  newlines or text that looks like an instruction). */
 export const UNTRUSTED_PROJECT_CONTEXT = "This project's .agenttalks.json is not trusted, so AgentTalks is not connected. "
-  + "If you created it, run `atalk login --local` in the project directory.";
+  + "If you created it, run `atalk login --local --url <server> --token -` in the project directory and paste its token.";
 
 /** The one line the entry points print on STDERR (never model context) when a project file
  *  they would use is not trusted: the fixed sentence, then the file's path as one quoted
