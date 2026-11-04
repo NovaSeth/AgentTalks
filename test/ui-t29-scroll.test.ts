@@ -107,9 +107,14 @@ function hostify(host: El): El {
     set(v: string) {
       html = String(v);
       host.dropAll();
-      for (const m of html.matchAll(/\bid="([^"]+)"/g)) {
-        const id = m[1];
+      // Every tag with an id becomes an element; its data-* attributes land in dataset, as in a
+      // browser (the list's data-conv is what the production code reads).
+      for (const tag of html.matchAll(/<[a-z]+\b[^>]*\bid="([^"]+)"[^>]*>/g)) {
+        const id = tag[1];
         const fresh = id === "messages" ? messageList({ id }) : hostify(el({ id }));
+        for (const d of tag[0].matchAll(/\bdata-([a-z-]+)="([^"]*)"/g)) {
+          fresh.dataset[d[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = d[2];
+        }
         els.set(id, fresh); owned.add(id);
       }
     },
@@ -177,14 +182,17 @@ test("T-MG-29: an at-bottom list ends at the bottom after the re-render, with no
   const list = els.get("messages")!;
   assert.notEqual(list, old);
   assert.ok(atBottom(list), `the list stays at the bottom (scrollTop ${list.scrollTop})`);
-  assert.ok(list.scrolledTo.every((s) => s.behavior !== "smooth"), "nothing asked for a smooth scroll");
-  // The contract that a plain `scrollTop = ...` is instant: the list has no CSS scroll-behavior,
-  // and a non-smooth request says "instant" instead of deferring to CSS with "auto".
+  assert.ok(list.scrolledTo.every((s: { behavior: string }) => s.behavior !== "smooth"), "nothing asked for a smooth scroll");
+  // The contract that a plain `scrollTop = ...`, a re-pin and a deep-link scrollIntoView are
+  // instant: no stylesheet rule sets scroll-behavior:smooth on the list (the only place it was),
+  // so the "auto" of a non-smooth request means instant, and a non-smooth request never says
+  // "smooth".
   const css = readFileSync(CSS, "utf8");
   const messagesRule = /\.messages\{[^}]*\}/.exec(css)?.[0] ?? "";
   assert.ok(messagesRule, "the .messages rule exists");
   assert.doesNotMatch(messagesRule, /scroll-behavior\s*:\s*smooth/, ".messages carries no scroll-behavior:smooth");
-  assert.equal(dom.scrollBehavior(false), "instant");
+  assert.doesNotMatch(css, /scroll-behavior\s*:\s*smooth/, "no rule in app.css asks for smooth scrolling");
+  assert.notEqual(dom.scrollBehavior(false), "smooth");
 });
 
 // ------------------------------------------------------------------ acceptance 3 (smooth where intended)

@@ -5,7 +5,7 @@ import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg
 import { api, csrf, sessionGeneration } from "./api.js";
 import { dividerAfter } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
-import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, notePinned, openModal, repinIfPinned, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior, watchListPin } from "./dom.js";
+import { IMG_RE, avatarHtml, captureListPosition, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, notePinned, openModal, repinIfPinned, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior, watchListPin } from "./dom.js";
 import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconChevron, iconCopy, iconDigest, iconEdit, iconFile, iconFlame, iconGear, iconInfo, iconLink, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconUnpin, iconWrench } from "./icons.js";
 import { renderBody, stripMd } from "./markdown.js";
 import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
@@ -277,6 +277,11 @@ export function renderMain() {
   // own host to #main when it is missing; the S2 CSS lays that host out like the panel).
   state.sidePanel = sidePanelOf(state);
   if (state.sidePanel) lastSidePanel = state.sidePanel;
+  // T-MG-29: the reading position is read from the OLD list before the column is replaced. Only
+  // a list of the same conversation counts: another conversation positions itself afresh at the
+  // unread line or the bottom (openConversation), as before.
+  const old = captureListPosition();
+  const kept = old && old.conv === String(state.activeId) ? old : null;
   el.innerHTML = `
     <div class="main-col" id="main-col">
     <div class="topbar">
@@ -291,7 +296,7 @@ export function renderMain() {
         aria-expanded="${state.detailsOpen}" aria-controls="details-slot" title="${t("Conversation details")}">${iconInfo()}</button>
     </div>
     ${offlineBarHtml()}
-    <div class="messages viewfade" id="messages" role="log" aria-label="${t("Messages")}"></div>
+    <div class="messages viewfade" id="messages" role="log" aria-label="${t("Messages")}" data-conv="${state.activeId}"></div>
     <div class="dock">
       <button class="jump-newest" id="jump-newest" aria-label="${t("Scroll to the newest message")}" title="${t("Scroll to the newest")}">
         <span class="jn-label">${t("Latest")}</span>${iconArrowDown()}
@@ -334,9 +339,12 @@ export function renderMain() {
     }
   });
   renderTopbar();
-  bindScrollWatch(document.getElementById("messages"));
-  if (state.loadingConv === state.activeId) document.getElementById("messages").innerHTML = skeletonHtml();
-  else renderMessages();
+  bindScrollWatch(document.getElementById("messages"), kept ? kept.atBottom : true);
+  if (state.loadingConv === state.activeId) {
+    const list = document.getElementById("messages");
+    list.innerHTML = skeletonHtml();
+    delete list.dataset.conv;        // a skeleton has no reading position to carry over
+  } else renderMessages(kept);
   renderPresenceBar();
   if (isMember) { renderComposer(); bindDropZone(el); }
   if (state.threadOpen) renderThread();
@@ -728,9 +736,9 @@ export function renderPresenceBar() {
 }
 
 /** Attached once per list render: tracks the scroll position and drives the pill. */
-function bindScrollWatch(el) {
+function bindScrollWatch(el, atBottom = true) {
   // U1 (r4): the list's own size changes re-pin it when it was at the bottom.
-  watchListPin(el);
+  watchListPin(el, atBottom);
   el.addEventListener("scroll", () => {
     notePinned();
     updateJumpPill();
@@ -777,14 +785,16 @@ function restoreOpenEdit(el, snap) {
   ta.setSelectionRange(snap.start, snap.end);
 }
 
-export function renderMessages() {
+/** `position` (T-MG-29): the reading position captured from the list that renderMain just
+ *  replaced ({ atBottom, scrollTop }); without it the position is the current element's own. */
+export function renderMessages(position = null) {
   const el = document.getElementById("messages");
   if (!el) return;
   if (closeEmojiPopover) closeEmojiPopover();
   if (closeMsgMenu) closeMsgMenu();
   const openEdit = saveOpenEdit(el);
-  const keepAtBottom = isScrolledToBottom();
-  const scrollTop = el.scrollTop;
+  const keepAtBottom = position ? position.atBottom : isScrolledToBottom();
+  const scrollTop = position ? position.scrollTop : el.scrollTop;
   const all = visibleMessages(state.activeId);
   const c = state.conversations.find((x) => x.id === state.activeId);
   // S5: the "N open" pill in the header and, when it is pressed, the list narrowed to the open
@@ -839,7 +849,9 @@ export function renderMessages() {
   const lm = el.querySelector("#btn-loadmore");
   if (lm) lm.addEventListener("click", () => { lm.disabled = true; loadOlderMessages(state.activeId); });
   // Reading position: replacing the children resets scrollTop, so we either hold the bottom
-  // (because that is where we were) or return to where the user was actually looking.
+  // (because that is where we were) or return to where the user was actually looking. The
+  // assignment is instant: .messages has no CSS scroll-behavior (T-MG-29), so no frame shows the
+  // list at the top on the way.
   el.scrollTop = keepAtBottom ? el.scrollHeight : scrollTop;
   restoreOpenEdit(el, openEdit);
 }

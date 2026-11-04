@@ -27,6 +27,9 @@ export const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
 // than CSS animations.
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
+// "auto" defers to the element's CSS scroll-behavior: since T-MG-29 `.messages` sets none (app.css),
+// so a re-pin, a restore of the reading position or a deep-link scrollIntoView is instant, and only
+// the jump pill and an own sent message ask for "smooth" (unless reduced motion).
 export const scrollBehavior = (smooth) => (smooth && !REDUCED_MOTION.matches ? "smooth" : "auto");
 
 /** The only live region in the application (#live). We announce what is NEW,
@@ -397,12 +400,24 @@ export function repinIfPinned() {
   el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
 }
 
+/** T-MG-29: the reading position of the list ON SCREEN, taken before the chat column is rebuilt
+ *  (renderMain replaces #messages wholesale: the fresh element knows nothing of where the user
+ *  was). `conv` names the conversation the list shows (data-conv), so the position is restored
+ *  only for the same conversation; a skeleton or a missing list gives null. */
+export function captureListPosition() {
+  const el = document.getElementById("messages");
+  if (!el || !el.dataset.conv) return null;
+  return { conv: el.dataset.conv, atBottom: isScrolledToBottom(), scrollTop: el.scrollTop };
+}
+
 /** The list's own box changes when the side panel opens or closes (the column narrows and the
  *  content reflows taller) and when the viewport changes: one observer per list element re-pins.
  *  A fresh list starts pinned: a conversation opens at the bottom or at the unread line, and the
- *  scroll event of that first positioning sets the flag right. */
-export function watchListPin(list) {
-  pinned = true;
+ *  scroll event of that first positioning sets the flag right. A list rebuilt for the SAME
+ *  conversation (T-MG-29) passes the pin it had: a user who had scrolled up stays unpinned, so
+ *  the observer's first call does not throw them to the bottom. */
+export function watchListPin(list, atBottom = true) {
+  pinned = atBottom;
   if (!list || list.dataset.pinWatched || typeof ResizeObserver !== "function") return;
   list.dataset.pinWatched = "1";
   new ResizeObserver(() => repinIfPinned()).observe(list);
