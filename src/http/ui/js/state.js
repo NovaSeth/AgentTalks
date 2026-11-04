@@ -15,6 +15,7 @@ export const state = {
   msgs: {},                // convId -> Message[] (ascending by id)
   loaded: {},              // convId -> whether the history was FETCHED (not: whether any messages exist)
   readMark: {},            // convId -> last read id, FROZEN on entry (the new-messages divider)
+  draftsOwner: null,       // actor id the in-memory drafts belong to (kept across a lost session)
   drafts: {},              // convId -> {text, replyTo} - a draft surviving a conversation switch
   pending: {},             // convId -> local in-flight messages (ids "tmp-...")
   actorsCache: {},         // id -> {handle, displayName, kind}
@@ -183,6 +184,34 @@ export function mergeReactions(messages, reactions) {
 // so that it survives F5 and a deployment; the files stay in the tab's memory (a File object
 // cannot be serialised).
 const DRAFT_KEY = (id) => `atalks_draft_${id}`;
+const OWNER_KEY = "atalks_owner";
+
+/** Removes every persisted per-account UI key (drafts, last conversation, recent list). */
+export function clearLocalAccountData() {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key === "atalks_last_conv" || key === "atalks_recent"
+          || key?.startsWith("atalks_draft_") || key?.startsWith("atalks_wiki_draft_")) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch { /* Storage may be unavailable in private browsing. */ }
+}
+
+/** Persisted UI data belongs to one account. Called right after the signed-in actor is known:
+/**  data written by a different account is wiped (storage and memory) before anything reads it.
+/**  Data with no owner marker (written before this existed) is kept once and claimed. */
+export function claimLocalData(actorId) {
+  const me = String(actorId);
+  try {
+    const owner = localStorage.getItem(OWNER_KEY);
+    if (owner !== null && owner !== me) clearLocalAccountData();
+    localStorage.setItem(OWNER_KEY, me);
+  } catch { /* private browsing */ }
+  if (state.draftsOwner != null && String(state.draftsOwner) !== me) state.drafts = {};
+  state.draftsOwner = actorId;
+}
 
 /** It looks into the text field, because that is the source of truth about a draft's content
 /**  (the state does not track every keystroke). This is the only place in this module that
@@ -195,7 +224,10 @@ export function saveDraft() {
   const files = state.pendingFiles;
   if (text.trim() || state.replyTo || files.length) {
     state.drafts[id] = { text, replyTo: state.replyTo, files };
-    try { localStorage.setItem(DRAFT_KEY(id), text); } catch { /* private browsing */ }
+    try {
+      if (state.actor) localStorage.setItem(OWNER_KEY, String(state.actor.id));
+      localStorage.setItem(DRAFT_KEY(id), text);
+    } catch { /* private browsing */ }
   } else {
     clearDraft(id);
   }

@@ -6,7 +6,7 @@ import { mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { $app, escapeHtml, openModal } from "./dom.js";
 import { LANGS, lang, setLang, t } from "./i18n.js";
 import { iconChat, iconFingerprint } from "./icons.js";
-import { applyUnreadRows, rebuildMentionRe, resetState, state, views } from "./state.js";
+import { applyUnreadRows, claimLocalData, clearLocalAccountData, rebuildMentionRe, resetState, state, views } from "./state.js";
 import { showToast } from "./toasts.js";
 import { disconnectSSE } from "./sse-events.js";
 
@@ -17,6 +17,7 @@ export async function tryRestoreSession() {
   try {
     const me = await api("GET", "/api/me");
     state.actor = me.actor;
+    claimLocalData(me.actor.id);
     state.conversations = me.conversations;
     applyUnreadRows(me.unread);
     state.guidelines = me.guidelines || null;
@@ -39,6 +40,7 @@ export async function tryRestoreSession() {
 async function doLogin(handle, password) {
   const data = await api("POST", "/api/login", { handle, password });
   state.actor = data.actor;
+  claimLocalData(data.actor.id);
   setCsrf(data.csrf);
   sessionStorage.setItem(CSRF_KEY, csrf);
   sessionStorage.setItem(ACTOR_KEY, data.actor.handle);
@@ -57,15 +59,7 @@ export async function doLogout() {
   stopDigestTimer();
   disconnectSSE();
   resetState();
-  try {
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const key = localStorage.key(i);
-      if (key === "atalks_last_conv" || key === "atalks_recent"
-          || key?.startsWith("atalks_draft_") || key?.startsWith("atalks_wiki_draft_")) {
-        localStorage.removeItem(key);
-      }
-    }
-  } catch { /* Storage may be unavailable in private browsing. */ }
+  clearLocalAccountData();
   document.title = "AgentTalks";
   views.render();
 }
@@ -180,6 +174,7 @@ async function passkeyLogin() {
     signature: bufToB64u(cred.response.signature),
   });
   state.actor = data.actor;
+  claimLocalData(data.actor.id);
   setCsrf(data.csrf);
   sessionStorage.setItem(CSRF_KEY, csrf);
   sessionStorage.setItem(ACTOR_KEY, data.actor.handle);

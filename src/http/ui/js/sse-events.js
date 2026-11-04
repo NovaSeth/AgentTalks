@@ -23,8 +23,10 @@ export function onSessionLost() {
   stopDigestTimer();
   disconnectSSE();
   const drafts = state.drafts;
+  const owner = state.actor.id;
   resetState();
   state.drafts = drafts;
+  state.draftsOwner = owner;
   document.title = "AgentTalks";
   views.render();
   showToast(t("Your session ended, your draft is kept"));
