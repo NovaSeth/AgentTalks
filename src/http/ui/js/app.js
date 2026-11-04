@@ -19,7 +19,7 @@ import { onLangChange, t } from "./i18n.js";
 import { iconBell, iconChat, iconDoc, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
 import { dmOthers, lastConvId, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { startDirect } from "./actions.js";
-import { buildRoute, consumeOwnPush, hashOfEvent, onNavigate, parseRoute, syncRoute } from "./router.js";
+import { buildRoute, consumeOwnPush, hashOfEvent, parseRoute, syncRoute } from "./router.js";
 import { showToast } from "./toasts.js";
 import { openSearchPalette, openSearchRoute } from "./search.js";
 import { matchShortcut, openShortcutHelp, stepConversation, stepUnread } from "./shortcuts.js";
@@ -29,13 +29,13 @@ import { openThreadsView, renderThreadsMain } from "./view-threads.js";
 import { findInConversation, renderSearchMain } from "./view-search.js";
 import { openUsersView, renderUsersMain, resetUsersError } from "./view-admin.js";
 import {
-  bindMessageEvents, closeThread, openConversation, openThread, refreshDetailsData, renderComposer,
+  bindMessageEvents, closeThread, openConversation, openConversationInBackground, openThread, refreshDetailsData, renderComposer,
   renderDetails, renderMain, renderMessages, renderPresenceBar, renderThread, renderTopbar,
   toggleSidePanel, typingFacesHtml, updateOfflineBar, upsertMessageNode,
 } from "./view-chat.js";
 import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./view-login.js";
 import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./view-notifications.js";
-import { getSidebarPlace, placeAfterNavigation, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
+import { getSidebarPlace, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, settlePlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { connectSSE, ensureSSE } from "./sse-events.js";
 
@@ -51,6 +51,9 @@ function renderShell() {
   // ("where we talk"), users ("who has access"). The badge on the bell is the one
   // counter visible without entering anything.
   const adminHuman = state.actor?.isAdmin && state.actor?.kind === "human";
+  // T-MG-38 (fix round 4): a view transition derives the place BEFORE the rail is drawn, so the
+  // rail markup below is (place, view) of this very render.
+  settlePlace();
   const withSidebar = hasSidebar();
   const inConv = inConversations();
   // The DMs place counts every unread message in a direct or group conversation I belong to
@@ -164,12 +167,14 @@ function railButton(id, label, title, icon, on, badge, ariaName = label, extraCl
 
 /** Home, DMs and Wiki are three PLACES of the same sidebar: Home shows the conversations, DMs
  *  narrows it to direct conversations and people, Wiki holds the tree and the claimed resources
- *  (T-MG-38). Picking a place from another view returns to the chat. */
+ *  (T-MG-38). Picking a place from another view returns to the chat. The place is the reader's
+ *  explicit choice: set AFTER the view moves to the chat, so the render that follows sees no
+ *  transition to derive a place from (view-sidebar.js: setSidebarPlace, settlePlace). */
 function goPlace(place) {
   resetUsersError();
   const samePlace = getSidebarPlace() === place;
+  if (!inConversations()) { state.view = "chat"; setSidebarPlace(place); renderShell(); return; }
   setSidebarPlace(place);
-  if (!inConversations()) { state.view = "chat"; renderShell(); return; }
   if (window.matchMedia("(max-width:760px)").matches) {
     // On a phone the drawer is the only route to the list: the same place toggles it,
     // another place opens it with the new filter.
@@ -186,35 +191,10 @@ function goPlace(place) {
   renderSidebarList();
 }
 
-// T-MG-38 (fix round 3): the ONE place the rail place moves by itself. router.js reports every
-// navigation at its START (syncRoute: openWikiPage, openConversation, the rail, a search call
-// it before they await anything), so a wiki page lights Wiki and a conversation opened from the
-// Wiki place returns to Home at once - whatever the reader came from, and nothing moves later:
-// not when a slow route completes, not on a redraw. A newer choice (another route, a rail
-// click) therefore always wins. A conversation's own address rewrites (a dead `/m/<id>` link
-// dropped after the load) report the same conversation and move nothing: only a navigation to
-// ANOTHER conversation than the one last reported counts, while a wiki page counts every time
-// (a [[link]] to the page on screen must still show its tree, review F2).
-let lastConversation = null;
-onNavigate((hash) => {
-  const route = parseRoute(hash);
-  const kind = route.view;
-  if (kind === "chat" || kind === "dm") {
-    const key = kind === "chat" ? `c:${route.slug}` : `dm:${(route.handles || []).join(",")}`;
-    if (key === lastConversation) return;
-    lastConversation = key;
-  } else if (kind === "wiki") {
-    lastConversation = null;   // coming back to the same conversation from a page is a navigation
-  }
-  const place = getSidebarPlace();
-  const next = placeAfterNavigation(place, kind);
-  if (next === place) return;
-  setSidebarPlace(next);
-  paintRail();
-  renderSidebarList();
-});
-
-/** The `on` state of the three places without redrawing the whole shell. */
+/** The `on` state of the three places, from (place, view), without redrawing the whole shell.
+ *  T-MG-38 (fix round 4): called after EVERY sidebar refresh (views.sidebar below), not only
+ *  when the place moves - returning from Search to the page on screen keeps the place and must
+ *  still light Wiki (review r2 F5). */
 function paintRail() {
   const inConv = inConversations();
   for (const [id, place] of [["rail-chats", "home"], ["rail-dms", "dms"], ["rail-wiki", "wiki"]]) {
@@ -234,7 +214,7 @@ registerViews({
   render,
   shell: renderShell,
   main: renderMain,
-  sidebar: renderSidebarList,
+  sidebar: () => { renderSidebarList(); paintRail(); },
   conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
   // refreshPresence does not have to know where the dots, the bar, the topbar and
@@ -267,6 +247,7 @@ registerViews({
   typing: typingFacesHtml,
   detailsData: refreshDetailsData,
   openConversation: openConversation,
+  openConversationInBackground: openConversationInBackground,
   openWiki: openWikiPage,
   afterLogin: afterLogin,
 });

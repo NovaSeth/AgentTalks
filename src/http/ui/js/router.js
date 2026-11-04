@@ -99,21 +99,10 @@ export function unreadFrom(list, messageId, me) {
 // tick (open a conversation, then its thread) each fire their own event.
 const ownPushes = new Set();
 
-// T-MG-38: who wants to know that the app NAVIGATED. Every opener (a conversation, a wiki page,
-// a rail place, a search) calls syncRoute at its start, before it awaits anything - so this is
-// the one report of a navigation at the moment it begins, the same hash or not. The rail place
-// in app.js moves on it; nothing moves on a route's completion or on a redraw.
-const navigateListeners = [];
-export function onNavigate(fn) { navigateListeners.push(fn); }
-
 /** Write a hash to the address bar (a new history entry, so Back returns here). The same hash
- *  twice is a no-op for the address bar: the browser fires no event and adds no entry. The
- *  navigation listeners hear it either way: a [[link]] to the page on screen is still a
- *  navigation to that page. */
+ *  twice is a no-op: the browser fires no event and adds no entry. */
 export function syncRoute(hash) {
-  if (!hash) return;
-  for (const fn of navigateListeners) fn(hash);
-  if (typeof location === "undefined" || location.hash === hash) return;
+  if (typeof location === "undefined" || !hash || location.hash === hash) return;
   ownPushes.add(hash);
   location.hash = hash;
 }

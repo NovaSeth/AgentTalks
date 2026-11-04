@@ -266,14 +266,13 @@ test("T38-r1: app.js decides the place before drawing the rail and repaints the 
   const app = readFileSync(UI + "app.js", "utf8");
   const sb = readFileSync(UI + "view-sidebar.js", "utf8");
   const shell = app.indexOf("function renderShell()");
+  // Fix round 4: the round-1 followPlace() is settlePlace() (a view transition, not a navigation key).
   const settle = app.indexOf("settlePlace()", shell);
   const rail = app.indexOf('railButton("rail-chats"', shell);
   assert.ok(settle > shell && settle < rail, "renderShell settles the place before the rail markup");
-  // Fix round 4: the repaint sits in renderSidebarList itself, so views.sidebar AND every direct
-  // call of it (goPlace, a section toggle, a route's list refresh) paint the rail.
+  assert.match(app, /sidebar: \(\) => \{ renderSidebarList\(\); paintRail\(\); \}/, "views.sidebar paints the rail");
   const list = sb.indexOf("export function renderSidebarList()");
-  const body = sb.slice(list, sb.indexOf("\n}\n", list));
-  assert.match(body, /settlePlace\(\);\s*paintRail\(\);/, "every sidebar refresh settles the place and repaints the rail");
+  assert.match(sb.slice(list, list + 200), /settlePlace\(\)/, "a sidebar refresh settles the place before drawing the list");
 });
 
 // ------------------------------------------------------------------ fix round 2
@@ -297,6 +296,14 @@ async function bootApp() {
   g.fetch = async (path: string) => {
     fetched.push(path);
     for (const [key, p] of holds) if (path.includes(key)) await p;
+    // Fix round 4: a page that fails to load, and the conversation list after #3 was archived.
+    if (path.includes("/api/wiki/broken")) {
+      return { ok: false, status: 500, json: async () => ({ error: "boom" }), text: async () => "", headers: { get: () => null } };
+    }
+    if (/\/api\/conversations$/.test(path)) {
+      const json = { conversations: [{ id: 1, kind: "public", slug: "general" }], memberships: [{ conversationId: 1 }], unread: [] };
+      return { ok: true, status: 200, json: async () => json, text: async () => "", headers: { get: () => null } };
+    }
     const json = /\/api\/wiki\/[^/]+\/history/.test(path) ? { revisions: [] }
       : /\/api\/wiki\/[^/]+$/.test(path) ? { page: { slug: path.split("/").pop(), title: "Page", revisions: 1, updatedBy: "nestor", updatedAt: 0, createdBy: "nestor" }, files: [] }
       : /\/api\/wiki$/.test(path) ? { pages: [{ slug: "nowosci", title: "Nowosci" }, { slug: "slow", title: "Slow" }] }
@@ -523,4 +530,33 @@ test("T38-r4: opening another conversation (Cmd+K, a link) from the Wiki place i
   await openConversation(3);
   assert.equal(state.activeId, 3);
   assert.equal(sidebar.getSidebarPlace(), "home");
+});
+
+test("T38-r4: a page that fails to load falls back to the chat without a late jump of the place", async () => {
+  const { state, sidebar, views, go } = await bootApp();
+  const { openWikiPage } = await import(UI + "view-wiki.js");
+  await go("#/c/general");
+  sidebar.setSidebarPlace("home");
+  await openWikiPage("broken");   // a [[link]] to a page the server cannot serve
+  assert.equal(state.view, "chat", "the failed page falls back to the conversation");
+  const placeAtFallback = sidebar.getSidebarPlace();
+  views.sidebar();   // any later refresh (a presence tick, an SSE event)
+  views.render();
+  assert.equal(sidebar.getSidebarPlace(), placeAtFallback, "the place does not move at a later, unrelated render");
+});
+
+test("T38-r4: the conversation on screen archived by somebody else opens the next one without moving the reader's place", async () => {
+  const { state, sidebar, go } = await bootApp();
+  const { connectSSE } = await import(UI + "sse-events.js");
+  connectSSE();
+  const { openConversation } = await import(UI + "view-chat.js");
+  await go("#/c/general");
+  await openConversation(3);
+  assert.equal(state.activeId, 3);
+  sidebar.setSidebarPlace("wiki");   // the reader picked Wiki from the rail while in the DM
+  await sseListeners.conversation({ data: JSON.stringify({ conversationId: 3 }) });
+  await tick(20);
+  assert.equal(state.view, "chat");
+  assert.equal(state.activeId, 1, "the next conversation is open");
+  assert.equal(sidebar.getSidebarPlace(), "wiki", "a background switch keeps the reader's place");
 });

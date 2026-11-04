@@ -214,7 +214,7 @@ export function connectSSE() {
     try {
       const ev = JSON.parse(e.data);
       if (state.view === "wiki" && !state.wiki.editing && ev.slug === state.wiki.slug) {
-        views.openWiki(ev.slug);
+        views.openWiki(ev.slug, { refresh: true });   // T-MG-38: a refresh keeps the reader's rail place
       }
     } catch { /* event without data */ }
   });
@@ -231,7 +231,8 @@ export function connectSSE() {
           const next = state.conversations.find((c) => state.memberships[c.id]);
           state.activeId = null;
           state.detailsOpen = false;
-          if (next) { views.openConversation(next.id); return; }
+          // T-MG-38: not the reader's navigation - the rail place stays.
+          if (next) { views.openConversationInBackground(next.id); return; }
         }
         if (state.detailsOpen) await views.detailsData();
         views.main();
