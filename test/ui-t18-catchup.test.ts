@@ -506,3 +506,26 @@ test("r2 F2: an unstamped reaction write while a page is in flight (a view loade
   await settle();
   assert.deepEqual(state.reactions[2], thumbs("nestor", "michal"));
 });
+
+test("r2 F2: while the re-read of an overlap is pending, a late superseded page does not show older state", async (t) => {
+  const release = await heldResume(t, /messages\?limit=30$/);
+  hold = null;
+  last().drop(2);
+  server5[0] = edited(1, "edited in outage 2");
+  reactions5 = { 1: thumbs("nestor") };
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  let releaseReread!: () => void;
+  onceHolds = [{ match: /after=0&limit=2$/, gate: new Promise<void>((r) => { releaseReread = r; }) }];
+  release();                          // the superseded newest-30 page lands; its overlap owes [1, 2]
+  await settle();
+  assert.ok(requests.some((p) => /after=0&limit=2$/.test(p)), requests.join(", "));
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  releaseReread();
+  await settle();
+  assert.equal(bodyOf(1), "edited in outage 2");
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+});
