@@ -19,7 +19,7 @@ test("zaproszenie z limitem uzyc wyczerpuje sie", () => {
   const ctx = testCtx();
   const { code } = createInvite(ctx, { createdBy: null, uses: 1 });
   redeemInvite(ctx, { code, handle: "pierwszy" });
-  assert.throws(() => redeemInvite(ctx, { code, handle: "drugi" }), /zuzyte|nieprawidlowe/);
+  assert.throws(() => redeemInvite(ctx, { code, handle: "drugi" }), /used up|invalid/);
 });
 
 test("zaproszenie wygasa po TTL", () => {
@@ -27,14 +27,14 @@ test("zaproszenie wygasa po TTL", () => {
   const ctx = testCtx(() => t);
   const { code } = createInvite(ctx, { createdBy: null, ttlSec: 60 });
   t = 1061;
-  assert.throws(() => redeemInvite(ctx, { code, handle: "spozniony" }), /wygasle|nieprawidlowe/);
+  assert.throws(() => redeemInvite(ctx, { code, handle: "spozniony" }), /expired|invalid/);
 });
 
 test("zajeta nazwa NIE zuzywa zaproszenia", () => {
   const ctx = testCtx();
   mkActor(ctx, "zajety");
   const { code } = createInvite(ctx, { createdBy: null, uses: 1 });
-  assert.throws(() => redeemInvite(ctx, { code, handle: "zajety" }), /zajeta/);
+  assert.throws(() => redeemInvite(ctx, { code, handle: "zajety" }), /already taken/);
   // the use was not consumed - a different name goes through
   const r = redeemInvite(ctx, { code, handle: "wolny" });
   assert.equal(r.actor.handle, "wolny");
@@ -44,7 +44,7 @@ test("odwolane zaproszenie nie dziala", () => {
   const ctx = testCtx();
   const { code, info } = createInvite(ctx, { createdBy: null });
   assert.equal(revokeInvite(ctx, info.id), true);
-  assert.throws(() => redeemInvite(ctx, { code, handle: "ktos" }), /nieprawidlowe/);
+  assert.throws(() => redeemInvite(ctx, { code, handle: "ktos" }), /invalid/);
 });
 
 test("revokeInvite: nieistniejace/juz-odwolane id zwraca false (bez falszywego sukcesu)", () => {
@@ -65,7 +65,7 @@ test("zaproszenie --admin nadaje aktorowi uprawnienia admina", () => {
 
 test("smieciowy kod jest odrzucany bez tworzenia aktora", () => {
   const ctx = testCtx();
-  assert.throws(() => redeemInvite(ctx, { code: "smiec", handle: "x" }), /nieprawidlowy/);
+  assert.throws(() => redeemInvite(ctx, { code: "smiec", handle: "x" }), /invalid/);
   assert.equal(getActorByHandle(ctx, "x"), null);
 });
 

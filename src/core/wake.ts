@@ -50,7 +50,7 @@ export function setWake(
 ): { config: WakeConfig; secret: string } {
   const url = new URL(target); // validation; throws on junk
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("wake_target musi byc adresem http(s)");
+    throw new Error("set wake_target to an HTTP(S) URL");
   }
   // SSRF: the server performs the POST to this address itself, so an actor could make it
   // knock on internal services (cloud metadata at 169.254.169.254, a database, a panel on
@@ -85,8 +85,8 @@ function assertPublicHost(hostname: string, allowLoopback: boolean): void {
   // different from isBlockedIp. Now the rules are one set.
   if (h === "localhost" || isBlockedIp(h, allowLoopback)) {
     throw new Error(
-      `wake_target ${hostname} wskazuje adres lokalny/prywatny - serwer nie bedzie ` +
-        `w niego strzelal. Uzyj adresu publicznego mostu.`,
+      `wake_target ${hostname} points to a local or private address; the server will not ` +
+        `call it. Use the bridge's public address.`,
     );
   }
 }
@@ -246,8 +246,8 @@ export function registerWake(
  */
 function doIpv4(ip: string): string {
   const s = ip.replace(/^\[|\]$/g, "").toLowerCase();
-  const kropkowy = s.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (kropkowy) return kropkowy[1];
+  const dotted = s.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (dotted) return dotted[1];
   const hex = s.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
   if (hex) {
     const a = parseInt(hex[1], 16), b = parseInt(hex[2], 16);
@@ -291,7 +291,7 @@ function guardedLookup(allowLoopback: boolean): typeof dnsLookup {
       const list = addresses as Array<{ address: string; family: number }>;
       for (const a of list) {
         if (isBlockedIp(a.address, allowLoopback)) {
-          return cb(new Error(`wake_target rozwiazal sie na adres prywatny ${a.address}`));
+          return cb(new Error(`wake_target resolved to private address ${a.address}; use a public address`));
         }
       }
       const first = list[0];
@@ -377,10 +377,10 @@ function onFailure(ctx: Ctx, actorId: number, handle: string): void {
       actorId: system.id,
       kind: "system",
       body:
-        `Wake dla @${handle} zostal WYLACZONY po ${WAKE_MAX_FAILURES} nieudanych probach. ` +
-        `Napraw webhook i zarejestruj go ponownie (PUT /api/wake).`,
+        `Wake for @${handle} was DISABLED after ${WAKE_MAX_FAILURES} failed attempts. ` +
+        `Fix the webhook and register it again (PUT /api/wake).`,
     });
   } catch (err) {
-    console.error("[wake] nie udalo sie zostawic sladu o wylaczeniu:", err);
+    console.error("[wake] could not record that wake was disabled:", err);
   }
 }

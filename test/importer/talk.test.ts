@@ -124,7 +124,7 @@ test("nierozwiazywalny adresat trafia do raportu, nie ginie", () => {
   const ctx = testCtx();
   const rep = importTalkHome(ctx, home);
   assert.equal(rep.skipped, 1);
-  assert.match(rep.problems.join(" "), /nie rozwiazano adresata/);
+  assert.match(rep.problems.join(" "), /could not resolve recipient/);
 });
 
 test("uszkodzona linia JSON nie przerywa importu i jest policzona", () => {
@@ -136,7 +136,7 @@ test("uszkodzona linia JSON nie przerywa importu i jest policzona", () => {
   const rep = importTalkHome(ctx, home);
   assert.equal(rep.messages, 1);
   assert.equal(rep.skipped, 1);
-  assert.match(rep.problems.join(" "), /uszkodzona linia/);
+  assert.match(rep.problems.join(" "), /invalid JSON line/);
 });
 
 test("wzmianki sa odtworzone po handle", () => {

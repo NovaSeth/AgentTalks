@@ -28,7 +28,7 @@ test("slug kanalu gubi krzyzyk", () => {
 test("nie da sie utworzyc dwoch aktorow o tym samym handle", () => {
   const ctx = testCtx();
   createActor(ctx, { kind: "agent", handle: "nestor" });
-  assert.throws(() => createActor(ctx, { kind: "agent", handle: "Nestor" }), /zajety/);
+  assert.throws(() => createActor(ctx, { kind: "agent", handle: "Nestor" }), /already taken/);
 });
 
 test("displayName domyslnie rowna sie handle i daje sie zmienic bez ruszania handle", () => {
@@ -62,7 +62,7 @@ test("aktor bez hasla nie zaloguje sie pustym haslem", () => {
 test("za krotkie haslo jest odrzucone", () => {
   const ctx = testCtx();
   const a = createActor(ctx, { kind: "human", handle: "michal" });
-  assert.throws(() => setPassword(ctx, a.id, "krotkie"), /8 znakow/);
+  assert.throws(() => setPassword(ctx, a.id, "krotkie"), /8 characters/);
 });
 
 test("getActorByHandle nie rzuca na smieciach, tylko zwraca null", () => {

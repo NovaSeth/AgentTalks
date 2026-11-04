@@ -123,11 +123,11 @@ function toPage(ctx: Ctx, r: PageRow): WikiPage {
 
 function validate(title: string, body: string): { title: string; body: string } {
   const t = String(title ?? "").trim();
-  if (!t) throw badRequest("title_required", "strona wiki musi miec tytul");
-  if (t.length > MAX_TITLE) throw badRequest("title_too_long", `tytul do ${MAX_TITLE} znakow`);
+  if (!t) throw badRequest("title_required", "enter a title for the wiki page");
+  if (t.length > MAX_TITLE) throw badRequest("title_too_long", `shorten the title to at most ${MAX_TITLE} characters`);
   const b = String(body ?? "");
   if (Buffer.byteLength(b, "utf8") > MAX_WIKI_BYTES) {
-    throw badRequest("body_too_long", `tresc strony jest za dluga (limit ${MAX_WIKI_BYTES} B)`);
+    throw badRequest("body_too_long", `the page body exceeds ${MAX_WIKI_BYTES} B; shorten it or split it into pages`);
   }
   return { title: t, body: b };
 }
@@ -142,17 +142,17 @@ function resolveParent(
 ): number | null {
   if (parentSlug === null) return null;
   const parent = ctx.db.prepare("SELECT id, parent_id FROM wiki_pages WHERE slug = ?").get(
-    normalizeSlug(parentSlug, "nazwa strony"),
+    normalizeSlug(parentSlug, "page name"),
   ) as { id: number; parent_id: number | null } | undefined;
-  if (!parent) throw notFound("page_not_found", `nie ma strony wiki "${parentSlug}" na rodzica`);
+  if (!parent) throw notFound("page_not_found", `parent wiki page "${parentSlug}" was not found; choose an existing parent page`);
   if (pageIdOrNull !== null) {
     let cur: number | null = parent.id;
     let hops = 0;
     while (cur !== null) {
       if (cur === pageIdOrNull) {
-        throw badRequest("wiki_cycle", "strona nie moze wisiec pod soba ani pod wlasnym potomkiem");
+        throw badRequest("wiki_cycle", "a page cannot be its own ancestor; choose a different parent page");
       }
-      if (++hops > 100) throw badRequest("wiki_cycle", "drzewo wiki jest za glebokie");
+      if (++hops > 100) throw badRequest("wiki_cycle", "the wiki tree is too deep; choose a parent closer to the root");
       const row = ctx.db.prepare("SELECT parent_id FROM wiki_pages WHERE id = ?").get(cur) as
         | { parent_id: number | null }
         | undefined;
@@ -180,10 +180,10 @@ function seenRevisionId(ctx: Ctx, pageIdValue: number, actorId: number): number 
 function describeRevision(ctx: Ctx, revisionId: number): string {
   const r = ctx.db.prepare("SELECT actor_id, created_at FROM wiki_revisions WHERE id = ?")
     .get(revisionId) as { actor_id: number; created_at: number } | undefined;
-  if (!r) return `rewizja ${revisionId}`;
+  if (!r) return `revision ${revisionId}`;
   const who = handleOf(ctx, r.actor_id);
   const when = new Date(r.created_at * 1000).toISOString().slice(0, 16).replace("T", " ");
-  return `rewizja ${revisionId} (@${who ?? "?"}, ${when} UTC)`;
+  return `revision ${revisionId} (@${who ?? "?"}, ${when} UTC)`;
 }
 
 /**
@@ -212,19 +212,19 @@ function assertNoClobber(
     if (current === 0) {
       throw conflict(
         "wiki_conflict",
-        `strona "${slug}" nie istnieje, a podales baseRevision=${base}. ` +
-          `Zaloz ja z baseRevision=0 albo bez tego pola.`,
+        `page "${slug}" does not exist, but you supplied baseRevision=${base}. ` +
+          `Create it with baseRevision=0 or omit that field.`,
       );
     }
     throw conflict(
       "wiki_conflict",
       Number(base) === 0
-        ? `strona "${slug}" juz istnieje (${describeRevision(ctx, current)}), a baseRevision=0 znaczy ` +
-          `"tylko zaloz". Przeczytaj ja (GET /api/wiki/${slug}) i powtorz zapis z baseRevision=${current}.`
-        : `strona "${slug}" zmienila sie odkad ja czytales: teraz ${describeRevision(ctx, current)}, ` +
-          `Ty opierasz sie na ${base}. Przeczytaj jej tresc ` +
-          `(GET /api/wiki/${slug}/revisions/${current}), wkomponuj swoja zmiane i powtorz zapis ` +
-          `z baseRevision=${current}. Swiadome nadpisanie: force=true.`,
+        ? `page "${slug}" already exists (${describeRevision(ctx, current)}), and baseRevision=0 means ` +
+          `"create only". Read it (GET /api/wiki/${slug}) and save again with baseRevision=${current}.`
+        : `page "${slug}" has changed since you read it: now ${describeRevision(ctx, current)}, ` +
+          `but your change is based on ${base}. Read its body ` +
+          `(GET /api/wiki/${slug}/revisions/${current}), incorporate your change and save again ` +
+          `with baseRevision=${current}. To overwrite deliberately, use force=true.`,
     );
   }
 
@@ -233,10 +233,10 @@ function assertNoClobber(
 
   throw conflict(
     "wiki_conflict",
-    `strona "${slug}" ma ${describeRevision(ctx, current)}, ktorej nie czytales - ten zapis ` +
-      `nadpisalby cudza prace, a autor dowiedzialby sie o tym przypadkiem. Przeczytaj ja ` +
-      `(GET /api/wiki/${slug} albo wiki_read), dopisz sie do tego, co tam jest, i zapisz jeszcze raz. ` +
-      `Swiadome nadpisanie: baseRevision=${current} albo force=true.`,
+    `page "${slug}" has ${describeRevision(ctx, current)}, which you have not read; this save ` +
+      `would overwrite someone else's work without their knowledge. Read it ` +
+      `(GET /api/wiki/${slug} or wiki_read), incorporate your change into the current content and save again. ` +
+      `To overwrite deliberately, use baseRevision=${current} or force=true.`,
   );
 }
 
@@ -267,9 +267,9 @@ export function savePage(
     force?: boolean;
   },
 ): WikiPage {
-  const slug = normalizeSlug(input.slug, "nazwa strony");
+  const slug = normalizeSlug(input.slug, "page name");
   if (RESERVED_SLUGS.has(slug)) {
-    throw badRequest("slug_reserved", `nazwa "${slug}" jest zarezerwowana - wybierz inna`);
+    throw badRequest("slug_reserved", `name "${slug}" is reserved; choose another`);
   }
   const { title, body } = validate(input.title, input.body);
   const now = ctx.now();
@@ -344,7 +344,7 @@ export function savePage(
 /** The "I have seen it" marker: moves the actor's pointer to the page's newest revision. */
 export function markPageSeen(ctx: Ctx, slug: string, actorId: number): void {
   const id = pageId(ctx, slug);
-  if (id === null) throw notFound("page_not_found", `nie ma strony wiki "${slug}"`);
+  if (id === null) throw notFound("page_not_found", `wiki page "${slug}" was not found; check the page name`);
   const last = ctx.db.prepare("SELECT MAX(id) AS m FROM wiki_revisions WHERE page_id = ?")
     .get(id) as { m: number | null };
   ctx.db
@@ -362,7 +362,7 @@ export function getPage(ctx: Ctx, slug: string): WikiPage | null {
   return r ? toPage(ctx, r) : null;
 }
 
-export type Sekcja = {
+export type WikiSection = {
   /** The heading text without the hashes, as a human sees it. */
   heading: string;
   /** 1-6, from the number of hashes. */
@@ -394,14 +394,14 @@ export type Sekcja = {
  * Code blocks are skipped, because `# a comment` in bash is not a page heading - and in
  * this wiki in particular, shell examples are everywhere.
  */
-export function pageOutline(body: string): Sekcja[] {
-  const linie = body.split("\n");
-  const out: Sekcja[] = [];
-  let wKodzie = false;
-  for (let i = 0; i < linie.length; i++) {
-    const l = linie[i];
-    if (/^\s*```/.test(l)) { wKodzie = !wKodzie; continue; }
-    if (wKodzie) continue;
+export function pageOutline(body: string): WikiSection[] {
+  const lines = body.split("\n");
+  const out: WikiSection[] = [];
+  let inCodeBlock = false;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^\s*```/.test(l)) { inCodeBlock = !inCodeBlock; continue; }
+    if (inCodeBlock) continue;
     const m = l.match(/^(#{1,6})\s+(.+?)\s*$/);
     if (!m) continue;
     out.push({ heading: m[2], level: m[1].length, line: i + 1, bytes: 0, ownBytes: 0 });
@@ -410,12 +410,12 @@ export function pageOutline(body: string): Sekcja[] {
   // Subsections count towards the parent, because an agent fetching "## Deployment" expects
   // its "### Step 1" as well - otherwise it would get a heading with no content.
   for (let i = 0; i < out.length; i++) {
-    const nast = out.findIndex((s2, j) => j > i && s2.level <= out[i].level);
-    const koniec = nast === -1 ? linie.length : out[nast].line - 1;
-    out[i].bytes = linie.slice(out[i].line - 1, koniec).join("\n").length;
+    const next = out.findIndex((s2, j) => j > i && s2.level <= out[i].level);
+    const end = next === -1 ? lines.length : out[next].line - 1;
+    out[i].bytes = lines.slice(out[i].line - 1, end).join("\n").length;
     // A leaf ends at EVERY next heading, including a deeper one.
-    const dziecko = i + 1 < out.length ? out[i + 1].line - 1 : koniec;
-    out[i].ownBytes = linie.slice(out[i].line - 1, Math.min(dziecko, koniec)).join("\n").length;
+    const childStart = i + 1 < out.length ? out[i + 1].line - 1 : end;
+    out[i].ownBytes = lines.slice(out[i].line - 1, Math.min(childStart, end)).join("\n").length;
   }
   return out;
 }
@@ -434,28 +434,28 @@ export function pageOutline(body: string): Sekcja[] {
  * maintain - otherwise it goes stale silently at the first edit, and an out-of-date summary
  * is worse than none, because it leads to the wrong place.
  */
-export function pageSummary(body: string, maxZnakow = 220): string {
-  const akapit: string[] = [];
-  let wKodzie = false;
-  for (const linia of String(body ?? "").split("\n")) {
-    if (/^\s*```/.test(linia)) { wKodzie = !wKodzie; continue; }
-    if (wKodzie) continue;
-    const l = linia.trim();
-    if (!l) { if (akapit.length) break; continue; }
+export function pageSummary(body: string, maxChars = 220): string {
+  const paragraph: string[] = [];
+  let inCodeBlock = false;
+  for (const line of String(body ?? "").split("\n")) {
+    if (/^\s*```/.test(line)) { inCodeBlock = !inCodeBlock; continue; }
+    if (inCodeBlock) continue;
+    const l = line.trim();
+    if (!l) { if (paragraph.length) break; continue; }
     // List and heading markers require a SPACE after them. Without that condition,
     // "**Conclusion: ...**" - the most common opening of a page in this wiki - was taken for a
     // list item and skipped, so the summary started from the SECOND line of the paragraph, that
     // is, in the middle of a sentence. It only showed up on real content; on my test with a
     // single paragraph it looked correct.
-    if (/^(#{1,6}|[*+-]|\d+\.)\s/.test(l) || /^[>|]/.test(l)) { if (akapit.length) break; continue; }
+    if (/^(#{1,6}|[*+-]|\d+\.)\s/.test(l) || /^[>|]/.test(l)) { if (paragraph.length) break; continue; }
     // A markdown paragraph is sometimes WRAPPED, so a sentence runs across several lines - we
     // collect up to a blank line, otherwise we cut off at a random point.
-    akapit.push(l);
-    if (akapit.join(" ").length >= maxZnakow) break;
+    paragraph.push(l);
+    if (paragraph.join(" ").length >= maxChars) break;
   }
-  const czyste = akapit.join(" ").replace(/[*_`]/g, "").replace(/\s+/g, " ").trim();
-  if (czyste.length < 20) return "";
-  return czyste.length > maxZnakow ? czyste.slice(0, maxZnakow - 1).trimEnd() + "…" : czyste;
+  const plainText = paragraph.join(" ").replace(/[*_`]/g, "").replace(/\s+/g, " ").trim();
+  if (plainText.length < 20) return "";
+  return plainText.length > maxChars ? plainText.slice(0, maxChars - 1).trimEnd() + "…" : plainText;
 }
 
 /**
@@ -464,15 +464,15 @@ export function pageSummary(body: string, maxZnakow = 220): string {
  * outline, not an identifier that does not exist.
  */
 export function pageSection(body: string, heading: string): string | null {
-  const szukane = String(heading ?? "").trim().toLowerCase();
-  if (!szukane) return null;
-  const spis = pageOutline(body);
-  const i = spis.findIndex((s2) => s2.heading.toLowerCase() === szukane);
+  const needle = String(heading ?? "").trim().toLowerCase();
+  if (!needle) return null;
+  const outline = pageOutline(body);
+  const i = outline.findIndex((s2) => s2.heading.toLowerCase() === needle);
   if (i === -1) return null;
-  const linie = body.split("\n");
-  const nast = spis.findIndex((s2, j) => j > i && s2.level <= spis[i].level);
-  const koniec = nast === -1 ? linie.length : spis[nast].line - 1;
-  return linie.slice(spis[i].line - 1, koniec).join("\n");
+  const lines = body.split("\n");
+  const next = outline.findIndex((s2, j) => j > i && s2.level <= outline[i].level);
+  const end = next === -1 ? lines.length : outline[next].line - 1;
+  return lines.slice(outline[i].line - 1, end).join("\n");
 }
 
 export function pageId(ctx: Ctx, slug: string): number | null {
@@ -498,7 +498,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
       // first paragraph lives at the beginning, and 1200 characters is about 1% of the largest
       // page in this instance. Reading whole bodies would take us right back to the problem
       // LENGTH() above solves.
-      `SELECT p.slug, p.title, LENGTH(p.body) AS body_len, SUBSTR(p.body, 1, 1200) AS poczatek,
+      `SELECT p.slug, p.title, LENGTH(p.body) AS body_len, SUBSTR(p.body, 1, 1200) AS bodyStart,
               p.parent_id, p.updated_by, p.updated_at,
               (SELECT COUNT(*) FROM wiki_reads wr2 WHERE wr2.page_id = p.id) AS readers,
               (SELECT COUNT(*) FROM wiki_revisions r
@@ -511,7 +511,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
         ORDER BY p.updated_at DESC`,
     )
     .all(actorId, actorId) as Array<{
-      slug: string; title: string; body_len: number; poczatek: string; readers: number;
+      slug: string; title: string; body_len: number; bodyStart: string; readers: number;
       parent_id: number | null;
       updated_by: number | null; updated_at: number; unseen: number;
     }>;
@@ -522,7 +522,7 @@ export function listPages(ctx: Ctx, actorId: number): WikiListItem[] {
     updatedBy: handleOf(ctx, r.updated_by),
     updatedAt: r.updated_at,
     bytes: r.body_len,
-    summary: pageSummary(r.poczatek),
+    summary: pageSummary(r.bodyStart),
     readers: r.readers,
     unseen: r.unseen,
   }));
@@ -552,7 +552,7 @@ export function searchWiki(ctx: Ctx, text: string, limit = 20): WikiHit[] {
 
 export function pageHistory(ctx: Ctx, slug: string): WikiRevision[] {
   const id = pageId(ctx, slug);
-  if (id === null) throw notFound("page_not_found", `nie ma strony wiki "${slug}"`);
+  if (id === null) throw notFound("page_not_found", `wiki page "${slug}" was not found; check the page name`);
   const rows = ctx.db
     .prepare(
       "SELECT id, actor_id, title, note, created_at FROM wiki_revisions WHERE page_id = ? ORDER BY id DESC",
@@ -604,17 +604,17 @@ export function revertPage(
 ): WikiPage {
   return tx(ctx.db, () => {
     const id = pageId(ctx, input.slug);
-    if (id === null) throw notFound("page_not_found", `nie ma strony wiki "${input.slug}"`);
+    if (id === null) throw notFound("page_not_found", `wiki page "${input.slug}" was not found; check the page name`);
     const rev = ctx.db
       .prepare("SELECT title, body FROM wiki_revisions WHERE id = ? AND page_id = ?")
       .get(input.revisionId, id) as { title: string; body: string } | undefined;
-    if (!rev) throw notFound("revision_not_found", `nie ma rewizji ${input.revisionId} dla tej strony`);
+    if (!rev) throw notFound("revision_not_found", `revision ${input.revisionId} was not found for this page; check the page history`);
     return savePage(ctx, {
       slug: input.slug,
       title: rev.title,
       body: rev.body,
       actorId: input.actorId,
-      note: `revert do rewizji ${input.revisionId}`,
+      note: `revert to revision ${input.revisionId}`,
       // A revert IS a deliberate overwrite: you point at a specific revision from this page's
       // history, and the revert itself leaves another revision, so nothing is lost.
       force: true,
@@ -637,13 +637,13 @@ export function deletePage(
 ): { slug: string; title: string; body: string; parentSlug: string | null; movedChildren: number } {
   return tx(ctx.db, () => {
     const row = ctx.db.prepare("SELECT * FROM wiki_pages WHERE slug = ?")
-      .get(normalizeSlug(input.slug, "nazwa strony")) as PageRow | undefined;
-    if (!row) throw notFound("page_not_found", `nie ma strony wiki "${input.slug}"`);
+      .get(normalizeSlug(input.slug, "page name")) as PageRow | undefined;
+    if (!row) throw notFound("page_not_found", `wiki page "${input.slug}" was not found; check the page name`);
     if (row.created_by !== input.actorId && !input.isAdmin) {
       throw forbidden(
         "not_your_page",
-        `strone "${row.slug}" zalozyl @${handleOf(ctx, row.created_by) ?? "?"} - skasowac moze ` +
-          `on albo admin instancji. Chcesz usunac tresc, nie strone? Zapisz ja pusta - historia zostanie.`,
+        `page "${row.slug}" was created by @${handleOf(ctx, row.created_by) ?? "?"}; it can only be deleted by ` +
+          `its creator or an instance admin. To remove the content and keep the history, save an empty page.`,
       );
     }
     const moved = ctx.db.prepare("UPDATE wiki_pages SET parent_id = ? WHERE parent_id = ?")
@@ -672,7 +672,7 @@ export function wikiPageCount(ctx: Ctx): number {
 // Safe normalisation: for a READ we want "there is no such page" rather than a validation error.
 function normalizeSlugSafe(raw: string): string | null {
   try {
-    return normalizeSlug(raw, "nazwa strony");
+    return normalizeSlug(raw, "page name");
   } catch {
     return null;
   }

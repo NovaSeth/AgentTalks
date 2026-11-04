@@ -47,7 +47,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   }
   if (rc.ctx.bus.streamCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
     throw tooMany("too_many_streams",
-      `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych strumieni - zamknij ktorys`);
+      `you already have ${MAX_STREAMS_PER_ACTOR} open streams; close one before opening another`);
   }
   const releaseStream = rc.ctx.bus.openStream(actor.id);
 
@@ -58,10 +58,10 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
   // its own stream with no way to recover it.
   let unsubscribe: (() => void) | null = null;
   let ping: ReturnType<typeof setInterval> | null = null;
-  let posprzatane = false;
+  let cleanedUp = false;
   const cleanup = () => {
-    if (posprzatane) return;
-    posprzatane = true;
+    if (cleanedUp) return;
+    cleanedUp = true;
     if (ping) clearInterval(ping);
     if (unsubscribe) unsubscribe();
     releaseStream();
@@ -95,7 +95,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
    * separately and keep it current. That is the same trap as in REST (#bugs [386]), only
    * more painful, because there the map is at least in the response.
    */
-  const zAutorem = (event: Event): Event => {
+  const withAuthor = (event: Event): Event => {
     if (event.type !== "message" && event.type !== "message_updated") return event;
     const a = rc.ctx.db.prepare("SELECT handle FROM actors WHERE id = ?")
       .get(event.message.actorId) as { handle: string } | undefined;
@@ -124,7 +124,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
       if (res.destroyed || res.writableEnded) { cleanup(); return; }
       const batch = inboxAfter(rc.ctx, actor.id, cursor, RESUME_PAGE, { includeOwn: true });
       for (const message of batch) {
-        send(zAutorem({ type: "message", conversationId: message.conversationId, message }),
+        send(withAuthor({ type: "message", conversationId: message.conversationId, message }),
              message.id);
       }
       if (batch.length < RESUME_PAGE) break;
@@ -144,10 +144,10 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
       editCursor = changed[changed.length - 1].id;
     }
   }
-  res.write(": polaczono\n\n");
+  res.write(": connected\n\n");
 
   unsubscribe = rc.ctx.bus.subscribe(actor.id, (event) => {
-    send(zAutorem(event), event.type === "message" ? event.message.id : undefined);
+    send(withAuthor(event), event.type === "message" ? event.message.id : undefined);
   });
 
   // A comment every 20 s. Without it a proxy with an idle timeout drops the connection, and
@@ -196,7 +196,7 @@ export function longPollHandler(req: Req, res: Res, rc: RouteCtx): Promise<void>
   // a loop bypassed the stream limit by switching to long-poll.
   if (rc.ctx.bus.streamCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
     throw tooMany("too_many_streams",
-      `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych oczekiwan - poczekaj na ich koniec`);
+      `you already have ${MAX_STREAMS_PER_ACTOR} pending waits; wait for one to finish`);
   }
   const releaseStream = rc.ctx.bus.openStream(actor.id);
 
@@ -216,7 +216,7 @@ export function longPollHandler(req: Req, res: Res, rc: RouteCtx): Promise<void>
       if (!stillAuthenticated(rc.ctx, rc.config, req, actor.id)) {
         const note = authFailureNote(rc.ctx, req);
         reject(unauthorized(note?.code ?? "unauthenticated",
-          note?.message ?? "sesja albo token przestaly obowiazywac - zaloguj sie ponownie"));
+          note?.message ?? "the session or token is no longer valid; sign in again"));
         return;
       }
       json(res, 200, { messages: inboxAfter(rc.ctx, actor.id, after) });

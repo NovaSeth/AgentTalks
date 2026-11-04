@@ -48,7 +48,7 @@ export type Message = {
   fixedBy: number | null;
   meta: Record<string, unknown> | null;
   /** The author's handle - attached at the HTTP/SSE boundary rather than read from the
-   *  database for every row. See `zHandlem` in http/respond.ts: it removes the trap of
+   *  database for every row. See `withActorHandles` in http/respond.ts: it removes the trap of
    *  "the key of the actors map is a string, and actorId is a number". */
   actorHandle?: string;
 };
@@ -94,17 +94,17 @@ export const messageFromRow = (r: MsgRow): Message => ({
 
 function validateBody(body: string, maxBytes: number): string {
   const text = String(body ?? "").trim();
-  if (!text) throw badRequest("empty_body", "wiadomosc nie moze byc pusta");
-  const bajty = Buffer.byteLength(text, "utf8");
-  if (bajty > maxBytes) {
+  if (!text) throw badRequest("empty_body", "the message is empty; enter some text");
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (bytes > maxBytes) {
     // The message says BY HOW MUCH it is too big and in what unit. "limit 65536 B" does not
     // help somebody counting characters - and an accented letter is two bytes, so a limit in
     // bytes is unpredictable for a human. The client also receives `maxMessageBytes` in
     // /api/me, so it can show a counter BEFORE anybody sends.
     throw tooLarge(
       "message_too_long",
-      `wiadomosc jest o ${bajty - maxBytes} B za dluga (masz ${bajty} B, limit ${maxBytes} B - ` +
-        `polskie znaki licza sie podwojnie). Skroc ja albo wyslij jako plik.`,
+      `the message is ${bytes - maxBytes} B too long (${bytes} B, limit ${maxBytes} B - ` +
+        `accented characters can use multiple bytes). Shorten it or send it as a file.`,
     );
   }
   return text;
@@ -212,14 +212,14 @@ export function postMessage(
     // Muting a conversation (notify='none') has to mean something. Previously the switch in
     // the UI affected nothing: the notification was created all the same, so the only
     // difference was that the user believed they had muted it.
-    const wyciszeni = new Set(
+    const muted = new Set(
       (ctx.db.prepare("SELECT actor_id FROM members WHERE conversation_id = ? AND notify = 'none'")
         .all(input.conversationId) as Array<{ actor_id: number }>).map((r) => r.actor_id),
     );
-    const odbiorcy = (direct ? recipientsOf(ctx, input.conversationId) : mentioned)
-      .filter((id) => !wyciszeni.has(id));
+    const recipients = (direct ? recipientsOf(ctx, input.conversationId) : mentioned)
+      .filter((id) => !muted.has(id));
     notified = notify(ctx, {
-      actorIds: odbiorcy,
+      actorIds: recipients,
       kind: direct ? "dm" : "mention",
       fromActorId: input.actorId,
       conversationId: input.conversationId,
@@ -256,9 +256,9 @@ function rootOfThread(ctx: Ctx, threadId: number | null, convId: number): number
   const parent = ctx.db
     .prepare("SELECT id, conversation_id, thread_id FROM messages WHERE id = ?")
     .get(threadId) as { id: number; conversation_id: number; thread_id: number | null } | undefined;
-  if (!parent) throw notFound("message_not_found", `nie ma wiadomosci ${threadId}`);
+  if (!parent) throw notFound("message_not_found", `message ${threadId} was not found; check the message ID`);
   if (parent.conversation_id !== convId) {
-    throw badRequest("foreign_thread", "watek nalezy do innej konwersacji");
+    throw badRequest("foreign_thread", "this thread belongs to another conversation; choose a thread in this conversation");
   }
   return parent.thread_id ?? parent.id;
 }
@@ -306,22 +306,22 @@ export function listThread(ctx: Ctx, threadId: number): Message[] {
 
 export function editMessage(ctx: Ctx, id: number, actorId: number, body: string): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow | undefined;
-  if (!row) throw notFound("message_not_found", `nie ma wiadomosci ${id}`);
+  if (!row) throw notFound("message_not_found", `message ${id} was not found; check the message ID`);
   // CURRENT access, not only authorship: an author removed from a private channel must not
   // keep rewriting it (and notifying its current members).
   const conv = assertCanRead(ctx, row.conversation_id, actorId);
-  if (row.actor_id !== actorId) throw forbidden("not_author", "nie jestes autorem tej wiadomosci");
-  if (conv.archivedAt) throw forbidden("conversation_archived", "ta konwersacja jest zarchiwizowana");
-  if (row.deleted_at) throw badRequest("message_deleted", "nie da sie edytowac skasowanej wiadomosci");
+  if (row.actor_id !== actorId) throw forbidden("not_author", "only the author can change this message");
+  if (conv.archivedAt) throw forbidden("conversation_archived", "this conversation is archived; ask an admin to restore it");
+  if (row.deleted_at) throw badRequest("message_deleted", "a deleted message cannot be edited; post a new message");
   const text = validateBody(body, MAX_BODY_BYTES);
 
   // Who was mentioned BEFORE the edit - so that we notify only those who were added, rather
   // than burying everybody in a repeat over a fixed typo.
-  const mialiWzmianke = new Set(
+  const previouslyMentioned = new Set(
     (ctx.db.prepare("SELECT actor_id FROM mentions WHERE message_id = ?").all(id) as
       Array<{ actor_id: number }>).map((r) => r.actor_id),
   );
-  let nowoWspomniani: number[] = [];
+  let newlyMentioned: number[] = [];
 
   const message = tx(ctx.db, () => {
     ctx.db.prepare("UPDATE messages SET body = ?, edited_at = ? WHERE id = ?")
@@ -332,20 +332,20 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
     );
     // The same filter as on send: a mention carries content, so it must not reach somebody who
     // has no access to the conversation (see postMessage).
-    const wspomniani = resolveMentions(ctx, text, row.conversation_id)
+    const mentioned = resolveMentions(ctx, text, row.conversation_id)
       .filter((a) => a !== actorId)
       .filter((a) => canRead(ctx, row.conversation_id, a));
-    for (const a of wspomniani) stmt.run(id, a);
+    for (const a of mentioned) stmt.run(id, a);
     // An edit that ADDS a call has to notify - otherwise "@michal, do it after all" appended to
     // your own message reaches nobody while the author is convinced they called somebody. We
     // notify only the NEWLY mentioned.
-    nowoWspomniani = wspomniani.filter((a) => !mialiWzmianke.has(a));
+    newlyMentioned = mentioned.filter((a) => !previouslyMentioned.has(a));
     return messageFromRow(ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow);
   });
 
-  if (nowoWspomniani.length) {
+  if (newlyMentioned.length) {
     notify(ctx, {
-      actorIds: nowoWspomniani,
+      actorIds: newlyMentioned,
       kind: "mention",
       fromActorId: actorId,
       conversationId: row.conversation_id,
@@ -363,10 +363,10 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
 
 export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow | undefined;
-  if (!row) throw notFound("message_not_found", `nie ma wiadomosci ${id}`);
+  if (!row) throw notFound("message_not_found", `message ${id} was not found; check the message ID`);
   // As in editMessage: deleting needs current read access to the conversation.
   assertCanRead(ctx, row.conversation_id, actorId);
-  if (row.actor_id !== actorId) throw forbidden("not_author", "nie jestes autorem tej wiadomosci");
+  if (row.actor_id !== actorId) throw forbidden("not_author", "only the author can change this message");
 
   const message = tx(ctx.db, () => {
     // The content really disappears, so that "delete" means delete rather than "hide in the UI".
@@ -406,8 +406,8 @@ export function markFixed(
   input: { id: number; actorId: number; fixed: boolean },
 ): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow | undefined;
-  if (!row) throw notFound("message_not_found", `nie ma wiadomosci ${input.id}`);
-  if (row.deleted_at) throw badRequest("message_deleted", "skasowanej wiadomosci nie da sie oznaczyc");
+  if (!row) throw notFound("message_not_found", `message ${input.id} was not found; check the message ID`);
+  if (row.deleted_at) throw badRequest("message_deleted", "a deleted message cannot be marked as fixed");
   assertCanRead(ctx, row.conversation_id, input.actorId);
   // One transaction: the state change and notifying the report's author are one event. Split
   // apart, a crash between them left the report marked as fixed, which its author would
@@ -449,13 +449,13 @@ export function resolveMessage(
   input: { id: number; actorId: number; resolved: boolean; isInstanceAdmin: boolean },
 ): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow | undefined;
-  if (!row) throw notFound("message_not_found", `nie ma wiadomosci ${input.id}`);
-  if (row.deleted_at) throw badRequest("message_deleted", "skasowanej wiadomosci nie da sie rozwiazac");
+  if (!row) throw notFound("message_not_found", `message ${input.id} was not found; check the message ID`);
+  if (row.deleted_at) throw badRequest("message_deleted", "a deleted message cannot be resolved");
   assertCanRead(ctx, row.conversation_id, input.actorId);
   if (!input.isInstanceAdmin && row.actor_id !== input.actorId) {
     const m = getMember(ctx, row.conversation_id, input.actorId);
     if (!m || m.role !== "admin") {
-      throw forbidden("not_permitted", "rozwiazac moze autor, admin kanalu albo admin instancji");
+      throw forbidden("not_permitted", "only the author, a channel admin or an instance admin can resolve this message");
     }
   }
   ctx.db.prepare("UPDATE messages SET resolved_at = ?, resolved_by = ? WHERE id = ?")
@@ -511,10 +511,10 @@ export function updatedBefore(
       `SELECT m.* FROM messages m
          JOIN members mem ON mem.conversation_id = m.conversation_id AND mem.actor_id = ?
         WHERE m.id > ? AND m.id <= ?
-          -- Bez COALESCE: NULL >= x daje NULL (czyli falsz), wiec wynik jest ten
-          -- sam, ale warunek da sie oprzec o indeks czesciowy z migracji 14.
-          -- Roznica jest tylko przy sinceTs = 0, gdzie stara wersja uznawala
-          -- KAZDA wiadomosc za zmieniona - co i tak bylo bledne.
+          -- Without COALESCE, NULL >= x yields NULL (false), so the result is the
+          -- same, but the condition can use the partial index from migration 14.
+          -- The only difference is sinceTs = 0, where the old version incorrectly
+          -- treated EVERY message as changed.
           AND (m.edited_at >= ? OR m.deleted_at >= ?)
         ORDER BY m.id LIMIT 500`,
     )
@@ -529,4 +529,3 @@ export function lastMessageId(ctx: Ctx): number {
   };
   return row.id;
 }
-

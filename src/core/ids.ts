@@ -17,7 +17,7 @@ const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,47}$/;
  * diacritics would give "micha" (the `ł` alone disappeared, because NFD does not decompose it -
  * it is a separate character, not a letter with a diacritic). A handle is to stay recognisable.
  */
-const POLSKIE: Record<string, string> = {
+const POLISH_TRANSLITERATION: Record<string, string> = {
   "ą": "a", "ć": "c", "ę": "e", "ł": "l",
   "ń": "n", "ó": "o", "ś": "s", "ź": "z", "ż": "z",
 };
@@ -25,7 +25,7 @@ const POLSKIE: Record<string, string> = {
 export function transliterate(s: string): string {
   return s
     .toLowerCase()
-    .replace(/[ąćęłńóśźż]/g, (c) => POLSKIE[c])
+    .replace(/[ąćęłńóśźż]/g, (c) => POLISH_TRANSLITERATION[c])
     // The remaining Latin alphabets: NFD decomposition strips the diacritics.
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
@@ -45,7 +45,7 @@ export function normalizeHandle(raw: string): string {
   if (!HANDLE_RE.test(cleaned)) {
     throw badRequest(
       "handle",
-      `nieprawidlowy handle: "${raw}". Dozwolone [a-z0-9._-], dlugosc 2-32.`,
+      `invalid handle: "${raw}". Use 2-32 characters from [a-z0-9._-].`,
     );
   }
   return cleaned;
@@ -54,10 +54,10 @@ export function normalizeHandle(raw: string): string {
 /** "#general" -> "general". Channels in the prototype had the hash in their name; here the
  *  hash is decoration in the interface, not part of the identifier.
  *
- *  `czego` names the THING the name belongs to, because the same function serves channels
+ *  `nameKind` names the THING the name belongs to, because the same function serves channels
  *  and wiki pages: the message "invalid channel name" while creating a PAGE pointed
  *  attention at a completely different part of the product (UX audit, D23). */
-export function normalizeSlug(raw: string, czego = "nazwa"): string {
+export function normalizeSlug(raw: string, nameKind = "name"): string {
   const cleaned = transliterate(String(raw ?? "").trim().replace(/^#+/, ""))
     .replace(/[\s/\\]+/g, "-")
     .replace(/[^a-z0-9._-]/g, "")
@@ -66,8 +66,8 @@ export function normalizeSlug(raw: string, czego = "nazwa"): string {
   if (!SLUG_RE.test(cleaned)) {
     throw badRequest(
       "slug",
-      `nieprawidlowa ${czego}: "${raw}". Dozwolone sa male litery, cyfry, kropka i myslnik ` +
-        `(np. "jak-wdrazac").`,
+      `invalid ${nameKind}: "${raw}". Use lowercase letters, digits, dots, underscores or hyphens ` +
+        `(e.g. "how-to-deploy").`,
     );
   }
   return cleaned;
@@ -78,7 +78,7 @@ export function normalizeSlug(raw: string, czego = "nazwa"): string {
 export function normalizeEmoji(raw: string): string {
   const e = String(raw ?? "").trim();
   if (!e || e.length > 16 || /\s/.test(e)) {
-    throw badRequest("emoji", "reakcja musi byc krotkim znakiem bez spacji");
+    throw badRequest("emoji", "use a short reaction without spaces");
   }
   return e;
 }
@@ -92,10 +92,10 @@ export function normalizeEmoji(raw: string): string {
  * it through would change the meaning of the query.
  */
 export function ftsMatch(text: string): string | null {
-  const slowa = String(text ?? "")
+  const words = String(text ?? "")
     .toLowerCase()
     .split(/[^\p{L}\p{N}_]+/u)
     .filter((w) => w.length > 0);
-  if (slowa.length === 0) return null;
-  return slowa.map((w) => `"${w.replace(/"/g, "")}"*`).join(" ");
+  if (words.length === 0) return null;
+  return words.map((w) => `"${w.replace(/"/g, "")}"*`).join(" ");
 }

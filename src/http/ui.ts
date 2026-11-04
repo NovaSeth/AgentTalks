@@ -83,7 +83,7 @@ export function assetStamp(): string {
   const h = createHash("sha256");
   try {
     h.update(readFileSync(uiFile("app.css")));
-  } catch { /* brak pliku = stempel z tego, co jest */ }
+  } catch { /* missing file; stamp the available content */ }
   for (const name of UI_MODULES) {
     try {
       h.update(readFileSync(uiFile(`js/${name}`)));
@@ -243,7 +243,7 @@ function checkGateLimit(key: string, now: number): void {
   const e = gateAttempts.get(key);
   if (!e || e.resetAt <= now) { gateAttempts.set(key, { count: 1, resetAt: now + 900 }); return; }
   e.count += 1;
-  if (e.count > 15) throw tooMany("too_many_attempts", "za duzo prob - sprobuj pozniej");
+  if (e.count > 15) throw tooMany("too_many_attempts", "too many attempts; try again later");
 }
 
 /** Returns true when the gate STOPPED the request (sent a response). Called before routing:
@@ -275,7 +275,7 @@ export function registerUiRoutes(router: Router): void {
     const body = await readJson(req, 1024);
     const password = str(body.password) ?? "";
     if (!eq(password, rc.config.sitePassword)) {
-      json(res, 401, { error: "nieprawidlowe haslo", code: "wrong_password" });
+      json(res, 401, { error: "invalid password; try again", code: "wrong_password" });
       return;
     }
     res.setHeader("set-cookie", gateSetCookie(rc.config));
@@ -309,10 +309,10 @@ export function registerUiRoutes(router: Router): void {
     json(res, 200, { stamp: assetStamp() });
   });
   router.add("GET", "/app.css", (_req, res) => serveStatic(res, uiFile("app.css")));
-  router.add("GET", "/js/:plik", (_req, res, rc) => {
-    const name = rc.params.plik ?? "";
+  router.add("GET", "/js/:file", (_req, res, rc) => {
+    const name = rc.params.file ?? "";
     if (!UI_MODULE_SET.has(name)) {
-      json(res, 404, { error: "nie ma takiego pliku", code: "file_required" });
+      json(res, 404, { error: "file not found; check the file name", code: "file_required" });
       return;
     }
     serveModule(res, name);

@@ -169,10 +169,10 @@ test("gate password from a file: the file takes precedence, an empty/missing fil
     assert.equal(loadConfig(dir).sitePassword, "tajne-haslo-bramki");
     // An empty file is not "no password" but an OPEN gate - hence the refusal to start.
     writeFileSync(pwPath, "", { mode: 0o600 });
-    assert.throws(() => loadConfig(dir), /pusty/);
+    assert.throws(() => loadConfig(dir), /empty/);
     // A missing file likewise: silent emptiness would be a failure nobody sees.
     process.env.AGENTTALKS_SITE_PASSWORD_FILE = join(dir, "nie-ma-takiego");
-    assert.throws(() => loadConfig(dir), /nie da sie odczytac/);
+    assert.throws(() => loadConfig(dir), /cannot be read/);
   } finally {
     if (prev === undefined) delete process.env.AGENTTALKS_SITE_PASSWORD_FILE;
     else process.env.AGENTTALKS_SITE_PASSWORD_FILE = prev;

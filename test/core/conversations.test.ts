@@ -38,8 +38,8 @@ test("kanal prywatny jest niewidoczny dla obcego", () => {
   const a = mkActor(ctx, "michal"), b = mkActor(ctx, "obcy");
   const c = createChannel(ctx, { slug: "infra", kind: "private", createdBy: a.id });
   assert.equal(canRead(ctx, c.id, b.id), false);
-  assert.throws(() => assertCanRead(ctx, c.id, b.id), /brak dostepu/);
-  assert.throws(() => assertCanPost(ctx, c.id, b.id), /brak dostepu/);
+  assert.throws(() => assertCanRead(ctx, c.id, b.id), /do not have access/);
+  assert.throws(() => assertCanPost(ctx, c.id, b.id), /do not have access/);
 });
 
 test("nieistniejaca konwersacja i zabroniona daja ten sam blad", () => {
@@ -57,7 +57,7 @@ test("nie da sie zalozyc dwoch kanalow o tej samej nazwie", () => {
   createChannel(ctx, { slug: "general", kind: "public", createdBy: a.id });
   assert.throws(
     () => createChannel(ctx, { slug: "#General", kind: "public", createdBy: a.id }),
-    /juz istnieje/,
+    /already exists/,
   );
 });
 
@@ -91,15 +91,15 @@ test("rozmowa bezposrednia dochodzi w calosci, nie tylko przy wzmiance", () => {
 test("ensureDirect odrzuca liste krotsza niz dwa i duplikaty", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
-  assert.throws(() => ensureDirect(ctx, [a.id]), /co najmniej/);
-  assert.throws(() => ensureDirect(ctx, [a.id, a.id]), /co najmniej/);
+  assert.throws(() => ensureDirect(ctx, [a.id]), /at least/);
+  assert.throws(() => ensureDirect(ctx, [a.id, a.id]), /at least/);
 });
 
 test("z rozmowy bezposredniej nie da sie wyjsc, z kanalu tak", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const d = ensureDirect(ctx, [a.id, b.id]);
-  assert.throws(() => leave(ctx, d.id, a.id), /nie da sie wyjsc/);
+  assert.throws(() => leave(ctx, d.id, a.id), /cannot leave/);
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
   join(ctx, c.id, b.id);
   leave(ctx, c.id, b.id);
@@ -158,7 +158,7 @@ test("updateConversation: admin kanalu zmienia temat i slug, zwykly czlonek nie"
   assert.equal(upd.slug, "nowy");
   assert.throws(
     () => updateConversation(ctx, { convId: c.id, actorId: b.id, isInstanceAdmin: false, topic: "hack" }),
-    /zarzadza/,
+    /can manage/,
   );
   // the instance admin can, despite having no role in the channel
   const upd2 = updateConversation(ctx, { convId: c.id, actorId: b.id, isInstanceAdmin: true, topic: "od admina" });
@@ -173,7 +173,7 @@ test("updateConversation: slug zajety przez inny kanal jest odrzucany, dm bez sl
   const c2 = createChannel(ctx, { slug: "wolny", kind: "public", createdBy: a.id });
   assert.throws(
     () => updateConversation(ctx, { convId: c2.id, actorId: a.id, isInstanceAdmin: false, slug: "zajety" }),
-    /istnieje/,
+    /exists/,
   );
   const dm = ensureDirect(ctx, [a.id, b.id]);
   assert.throws(
@@ -189,11 +189,11 @@ test("archiveConversation: znika z list, nie przyjmuje wiadomosci, dm nietykalny
   const c = createChannel(ctx, { slug: "do-kasacji", kind: "public", createdBy: a.id });
   archiveConversation(ctx, { convId: c.id, actorId: a.id, isInstanceAdmin: false });
   assert.equal(listForActor(ctx, a.id).some((x) => x.id === c.id), false);
-  assert.throws(() => acp(ctx, c.id, a.id), /zarchiwizowana/);
+  assert.throws(() => acp(ctx, c.id, a.id), /archived/);
   const dm = ensureDirect(ctx, [a.id, b.id]);
   assert.throws(
     () => archiveConversation(ctx, { convId: dm.id, actorId: a.id, isInstanceAdmin: true }),
-    /1:1/,
+    /one-to-one/,
   );
 });
 
@@ -207,7 +207,7 @@ test("removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie", async
   // an ordinary member does not throw others out
   assert.throws(
     () => removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: c3.id, isInstanceAdmin: false }),
-    /zarzadza/,
+    /can manage/,
   );
   // yourself - allowed
   removeMember(ctx, { convId: c.id, actorId: b.id, targetActorId: b.id, isInstanceAdmin: false });
@@ -218,6 +218,6 @@ test("removeMember: admin kanalu wyrzuca, sam siebie kazdy, dm/grupa nie", async
   const grp = ensureDirect(ctx, [a.id, b.id, c3.id]);
   assert.throws(
     () => removeMember(ctx, { convId: grp.id, actorId: a.id, targetActorId: b.id, isInstanceAdmin: true }),
-    /bezposredniej/,
+    /direct conversation/,
   );
 });

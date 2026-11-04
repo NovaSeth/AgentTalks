@@ -40,7 +40,7 @@ export function buildRouter(): Router {
     json(res, 200, {
       ok: true,
       version: VERSION,
-      ...(zPetliZwrotnej(req) ? { actors: row.actors, lastMessageId: row.lastMessageId } : {}),
+      ...(isLoopbackRequest(req) ? { actors: row.actors, lastMessageId: row.lastMessageId } : {}),
     });
   });
 
@@ -69,14 +69,14 @@ export function buildRouter(): Router {
   router.add("POST", "/mcp", async (req, res, rc) => {
     if (!rc.auth || rc.auth.via !== "token") {
       // Bearer only: an MCP client is an agent, not a browser tab.
-      throw unauthorized("unauthenticated", "MCP wymaga naglowka Authorization: Bearer <token>");
+      throw unauthorized("unauthenticated", "MCP requires an Authorization: Bearer <token> header");
     }
     let mcp;
     try {
       mcp = await import("../mcp/server.ts");
     } catch {
       json(res, 501, {
-        error: "modul MCP niedostepny - zainstaluj zaleznosci: npm install",
+        error: "MCP module unavailable; install dependencies with npm install",
         code: "mcp_unavailable",
       });
       return;
@@ -88,7 +88,7 @@ export function buildRouter(): Router {
     await mcp.handleMcp(rc.ctx, rc.config, rc.auth.actor, req, res, parsed);
   });
   router.add("GET", "/mcp", (_req, res) => {
-    json(res, 405, { error: "serwer MCP jest bezstanowy - uzyj POST", code: "post_only" });
+    json(res, 405, { error: "the MCP server is stateless; use POST", code: "post_only" });
   });
   // The UI, the gate, public onboarding - mounted last (the most general routes).
   registerUiRoutes(router);
@@ -165,7 +165,7 @@ async function readMcpBody(
 
 /** Whether the request came from this machine. The presence of X-Forwarded-For means it went
 /**  through a proxy, so it is not local, even when the socket says 127.0.0.1. */
-function zPetliZwrotnej(req: { headers: Record<string, unknown>; socket: { remoteAddress?: string } }): boolean {
+function isLoopbackRequest(req: { headers: Record<string, unknown>; socket: { remoteAddress?: string } }): boolean {
   if (req.headers["x-forwarded-for"]) return false;
   const a = String(req.socket.remoteAddress ?? "");
   return a === "127.0.0.1" || a === "::1" || a === "::ffff:127.0.0.1";
@@ -182,7 +182,7 @@ export function createServer(ctx: Ctx, config: Config): Server {
         if (siteGateBlocks(req, res, config, url.pathname)) return;
         const match = router.match(req.method ?? "GET", url.pathname);
         if (!match) {
-          json(res, 404, { error: "nie ma takiej sciezki", code: "not_found" });
+          json(res, 404, { error: "path not found; check the URL", code: "not_found" });
           return;
         }
         // Security headers on EVERY response, set before a handler starts writing. The reason for

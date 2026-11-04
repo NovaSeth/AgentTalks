@@ -82,7 +82,7 @@ test("lista dzierzaw sprzata wygasle", () => {
 test("nazwa zasobu ze spacja jest odrzucona", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala");
-  assert.throws(() => acquire(ctx, { resource: "zly zasob", actorId: ala.id }), /zasobu/);
+  assert.throws(() => acquire(ctx, { resource: "zly zasob", actorId: ala.id }), /resource name/);
 });
 
 // --- files -----------------------------------------------------------------
@@ -114,7 +114,7 @@ test("plik z cudzej konwersacji jest niewidoczny i niepobieralny", () => {
     data: Buffer.from("x"), maxBytes: 1024,
   });
   assert.equal(getFileInfo(ctx, file.id, obcy.id), null);
-  assert.throws(() => readFile(ctx, file.id, obcy.id), /nie ma pliku/);
+  assert.throws(() => readFile(ctx, file.id, obcy.id), /file .* was not found/);
 });
 
 test("burn: plik znika po pobraniu przez nie-autora, autor nie spala", () => {
@@ -260,14 +260,14 @@ test("po serii porazek wake gasnie i wlasciciel dostaje systemowy DM", async () 
   const sysMsg = ctx.db.prepare(
     "SELECT body FROM messages WHERE kind = 'system' ORDER BY id DESC LIMIT 1",
   ).get() as { body: string } | undefined;
-  assert.ok(sysMsg && /WYLACZONY/.test(sysMsg.body), "brak sladu o wylaczeniu");
+  assert.ok(sysMsg && /DISABLED/.test(sysMsg.body), "brak sladu o wylaczeniu");
 });
 
 test("zly URL webhooka jest odrzucany przy rejestracji", () => {
   const ctx = testCtx();
   const bob = mkActor(ctx, "bob");
-  assert.throws(() => setWake(ctx, bob.id, "nie-url"), /Invalid URL|http/);
-  assert.throws(() => setWake(ctx, bob.id, "file:///etc/passwd"), /http/);
+  assert.throws(() => setWake(ctx, bob.id, "nie-url"), /Invalid URL|HTTP/);
+  assert.throws(() => setWake(ctx, bob.id, "file:///etc/passwd"), /HTTP/);
 });
 
 // --- digest i wzmianki -----------------------------------------------------
@@ -329,7 +329,7 @@ test("nie da sie przypiac wiadomosci z kanalu bez dostepu", () => {
   const ala = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
   const prv = createChannel(ctx, { slug: "s", kind: "private", createdBy: ala.id });
   const m = postMessage(ctx, { conversationId: prv.id, actorId: ala.id, body: "x" });
-  assert.throws(() => pin(ctx, { messageId: m.id, actorId: obcy.id }), /brak dostepu/);
+  assert.throws(() => pin(ctx, { messageId: m.id, actorId: obcy.id }), /is not accessible/);
 });
 
 // --- zywotnosc aktora ------------------------------------------------------
@@ -355,7 +355,7 @@ test("wake odrzuca adresy lokalne i prywatne (SSRF)", () => {
     "http://127.0.0.1/wake", "http://localhost:9000/x", "http://169.254.169.254/latest/meta-data",
     "http://10.0.0.5/x", "http://192.168.1.1/x", "http://172.16.0.1/x", "http://[::1]/x",
   ]) {
-    assert.throws(() => setWake(ctx, bob.id, bad), /lokalny|prywatny|http/, `przeszlo: ${bad}`);
+    assert.throws(() => setWake(ctx, bob.id, bad), /local|private|HTTP/, `przeszlo: ${bad}`);
   }
   assert.doesNotThrow(() => setWake(ctx, bob.id, "https://most.example.com/wake"));
 });
@@ -363,7 +363,7 @@ test("wake odrzuca adresy lokalne i prywatne (SSRF)", () => {
 test("wake pozwala na loopback tylko za jawna zgoda", () => {
   const ctx = testCtx();
   const bob = mkActor(ctx, "bob");
-  assert.throws(() => setWake(ctx, bob.id, "http://127.0.0.1/wake"), /lokalny/);
+  assert.throws(() => setWake(ctx, bob.id, "http://127.0.0.1/wake"), /local/);
   assert.doesNotThrow(() => setWake(ctx, bob.id, "http://127.0.0.1/wake", { allowLoopback: true }));
 });
 
@@ -473,7 +473,7 @@ test("wiki: kazdy zalogowany moze edytowac (wspolna wiedza), ale nie na slepo", 
   // revision id so that it can be read.
   assert.throws(
     () => savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: obcy.id }),
-    /konflikt|nie czytales/,
+    /conflict|have not read/,
   );
   // "a stranger" is nobody's member, and can still write - the wiki is public
   markPageSeen(ctx, "s", obcy.id);
@@ -487,7 +487,7 @@ test("wiki: slug kolidujacy z trasa (search) jest odrzucany", async () => {
   const a = mkActor(ctx, "ala");
   assert.throws(
     () => savePage(ctx, { slug: "search", title: "S", body: "x", actorId: a.id }),
-    /zarezerwowana/,
+    /reserved/,
   );
   assert.equal(getPage(ctx, "search"), null); // the page was not created
 });
@@ -515,16 +515,16 @@ test("wiki drzewo: cykl (pod soba / pod potomkiem) jest odrzucany", async () => 
   savePage(ctx, { slug: "b", title: "B", body: "x", actorId: a.id, parentSlug: "a" });
   assert.throws(
     () => savePage(ctx, { slug: "a", title: "A", body: "x", actorId: a.id, parentSlug: "a" }),
-    /pod soba/,
+    /its own ancestor/,
   );
   assert.throws(
     () => savePage(ctx, { slug: "a", title: "A", body: "x", actorId: a.id, parentSlug: "b" }),
-    /pod soba|potomkiem/,
+    /its own ancestor|descendant/,
   );
   // the parent has to exist
   assert.throws(
     () => savePage(ctx, { slug: "c", title: "C", body: "x", actorId: a.id, parentSlug: "nie-ma" }),
-    /nie ma strony/,
+    /wiki page .* was not found/,
   );
 });
 

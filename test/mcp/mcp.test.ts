@@ -108,7 +108,7 @@ test("talk_log rejects the id of another actor's private conversation", async ()
   });
   const result = r.result as { isError?: boolean; content: Array<{ text: string }> };
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /brak dostepu/);
+  assert.match(result.content[0].text, /do not have access/);
   assert.doesNotMatch(result.content[0].text, /sekret/);
   await s.close();
 });
@@ -301,7 +301,7 @@ test("wiki_read: a truncated page does NOT unlock writing", async () => {
     });
     const tz = zapis.result as { content: Array<{ text: string }>; isError?: boolean };
     assert.ok(tz.isError, "przyciety odczyt wpuscil do zapisu - to cicha kasacja tresci");
-    assert.match(tz.content[0].text, /wiki_conflict|nie czytales/);
+    assert.match(tz.content[0].text, /wiki_conflict|have not read/);
   } finally {
     await s.close();
   }

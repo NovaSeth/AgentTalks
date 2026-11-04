@@ -28,7 +28,7 @@ type CborValue = number | bigint | string | Buffer | boolean | null | CborValue[
 /** A CBOR decoder limited to what occurs in attestationObject and COSE: numbers, bytes,
  *  text, arrays, maps, simple values. No streams. */
 function cborDecode(buf: Buffer): { value: CborValue; rest: Buffer } {
-  if (buf.length === 0) throw badRequest("cbor", "puste dane CBOR");
+  if (buf.length === 0) throw badRequest("cbor", "empty CBOR data");
   const ib = buf[0];
   const major = ib >> 5;
   const info = ib & 0x1f;
@@ -38,7 +38,7 @@ function cborDecode(buf: Buffer): { value: CborValue; rest: Buffer } {
   else if (info === 25) { len = BigInt(buf.readUInt16BE(off)); off += 2; }
   else if (info === 26) { len = BigInt(buf.readUInt32BE(off)); off += 4; }
   else if (info === 27) { len = buf.readBigUInt64BE(off); off += 8; }
-  else if (info >= 28) throw badRequest("cbor", "nieobslugiwana dlugosc CBOR");
+  else if (info >= 28) throw badRequest("cbor", "unsupported CBOR length");
 
   const n = Number(len);
   switch (major) {
@@ -62,7 +62,7 @@ function cborDecode(buf: Buffer): { value: CborValue; rest: Buffer } {
         const k = cborDecode(rest);
         const v = cborDecode(k.rest);
         if (typeof k.value !== "number" && typeof k.value !== "string") {
-          throw badRequest("cbor", "klucz mapy CBOR musi byc liczba albo tekstem");
+          throw badRequest("cbor", "a CBOR map key must be a number or text");
         }
         map.set(k.value, v.value); rest = v.rest;
       }
@@ -73,9 +73,9 @@ function cborDecode(buf: Buffer): { value: CborValue; rest: Buffer } {
       if (info === 20) return { value: false, rest: buf.subarray(off) };
       if (info === 21) return { value: true, rest: buf.subarray(off) };
       if (info === 22) return { value: null, rest: buf.subarray(off) };
-      throw badRequest("cbor", "nieobslugiwana prosta wartosc CBOR");
+      throw badRequest("cbor", "unsupported CBOR simple value");
     }
-    default: throw badRequest("cbor", "nieznany typ CBOR");
+    default: throw badRequest("cbor", "unknown CBOR type");
   }
 }
 
@@ -91,7 +91,7 @@ function coseToJwk(cose: Map<number | string, CborValue>): StoredKey {
     const crv = cose.get(-1);
     const x = cose.get(-2), y = cose.get(-3);
     if (crv !== 1 || !Buffer.isBuffer(x) || !Buffer.isBuffer(y)) {
-      throw badRequest("webauthn", "obslugujemy tylko krzywa P-256");
+      throw badRequest("webauthn", "only the P-256 curve is supported");
     }
     return {
       kty: "EC", alg: alg || -7,
@@ -100,10 +100,10 @@ function coseToJwk(cose: Map<number | string, CborValue>): StoredKey {
   }
   if (kty === 3) { // RSA
     const n = cose.get(-1), e = cose.get(-2);
-    if (!Buffer.isBuffer(n) || !Buffer.isBuffer(e)) throw badRequest("webauthn", "zly klucz RSA");
+    if (!Buffer.isBuffer(n) || !Buffer.isBuffer(e)) throw badRequest("webauthn", "invalid RSA key");
     return { kty: "RSA", alg: alg || -257, jwk: { kty: "RSA", n: b64u.enc(n), e: b64u.enc(e) } };
   }
-  throw badRequest("webauthn", `nieobslugiwany typ klucza COSE (kty=${String(kty)})`);
+  throw badRequest("webauthn", `unsupported COSE key type (kty=${String(kty)})`);
 }
 
 // --------------------------------------------------------------- challenges
@@ -125,7 +125,7 @@ function consumeChallenge(c: string, purpose: "register" | "login"):
   const row = challenges.get(String(c ?? ""));
   challenges.delete(String(c ?? ""));
   if (!row || row.purpose !== purpose || row.expires < Date.now()) {
-    throw unauthorized("webauthn_challenge", "wyzwanie wygaslo albo nie istnieje - sprobuj jeszcze raz");
+    throw unauthorized("webauthn_challenge", "the challenge expired or does not exist; try again");
   }
   return { actorId: row.actorId };
 }
@@ -137,7 +137,7 @@ type ClientData = { type: string; challenge: string; origin: string };
 function parseClientData(raw: Buffer): ClientData {
   let parsed: unknown;
   try { parsed = JSON.parse(raw.toString("utf8")); } catch {
-    throw badRequest("webauthn", "clientDataJSON nie jest JSON-em");
+    throw badRequest("webauthn", "clientDataJSON is not valid JSON; retry the passkey operation");
   }
   const o = parsed as Record<string, unknown>;
   return { type: String(o.type ?? ""), challenge: String(o.challenge ?? ""), origin: String(o.origin ?? "") };
@@ -145,7 +145,7 @@ function parseClientData(raw: Buffer): ClientData {
 
 function assertOrigin(origin: string, expectedOrigins: readonly string[]): void {
   if (!expectedOrigins.includes(origin)) {
-    throw unauthorized("webauthn_origin", `origin ${origin} nie pasuje do tej instancji`);
+    throw unauthorized("webauthn_origin", `origin ${origin} does not match this instance; use the instance's configured URL`);
   }
 }
 
@@ -177,50 +177,50 @@ export type RegistrationInput = {
  *  subarray, CBOR) throw a RangeError on truncated data - and an unhandled RangeError is our
  *  failure in response to somebody else's error, that is, a message that lies about who was
  *  at fault. */
-function zeSmieciemJako400<T>(co: () => T): T {
+function withInvalidDataAsBadRequest<T>(operation: () => T): T {
   try {
-    return co();
+    return operation();
   } catch (err) {
     if (err instanceof RangeError || err instanceof TypeError) {
-      throw badRequest("webauthn", "dane rejestracji klucza sa niekompletne albo uszkodzone");
+      throw badRequest("webauthn", "key registration data is incomplete or corrupt; try registering again");
     }
     throw err;
   }
 }
 
 export function registerCredential(ctx: Ctx, input: RegistrationInput): string {
-  return zeSmieciemJako400(() => registerCredentialWewn(ctx, input));
+  return withInvalidDataAsBadRequest(() => registerCredentialInternal(ctx, input));
 }
 
-function registerCredentialWewn(ctx: Ctx, input: RegistrationInput): string {
+function registerCredentialInternal(ctx: Ctx, input: RegistrationInput): string {
   const client = parseClientData(b64u.dec(input.clientDataJSON));
-  if (client.type !== "webauthn.create") throw badRequest("webauthn", "zly typ clientData");
+  if (client.type !== "webauthn.create") throw badRequest("webauthn", "invalid clientData type; retry the passkey operation");
   const ch = consumeChallenge(client.challenge, "register");
   if (ch.actorId !== input.actorId) {
-    throw unauthorized("webauthn_challenge", "wyzwanie nie nalezy do tego aktora");
+    throw unauthorized("webauthn_challenge", "the challenge belongs to another actor; start registration again");
   }
   assertOrigin(client.origin, input.expectedOrigins);
 
   const att = cborDecode(b64u.dec(input.attestationObject)).value;
-  if (!(att instanceof Map)) throw badRequest("webauthn", "zly attestationObject");
+  if (!(att instanceof Map)) throw badRequest("webauthn", "invalid attestationObject; try registering again");
   const authData = att.get("authData");
-  if (!Buffer.isBuffer(authData)) throw badRequest("webauthn", "brak authData");
-  if (!rpIdHashOk(authData, input.rpId)) throw unauthorized("webauthn_rpid", "rpIdHash nie pasuje");
+  if (!Buffer.isBuffer(authData)) throw badRequest("webauthn", "missing authData; try registering again");
+  if (!rpIdHashOk(authData, input.rpId)) throw unauthorized("webauthn_rpid", "rpIdHash does not match; use the instance's configured URL");
   const flags = authData[32];
   if (!(flags & FLAG_UP) || !(flags & FLAG_UV)) {
-    throw unauthorized("webauthn_uv", "wymagana weryfikacja uzytkownika (odcisk/twarz)");
+    throw unauthorized("webauthn_uv", "user verification is required; verify with your fingerprint or face");
   }
-  if (!(flags & FLAG_AT)) throw badRequest("webauthn", "brak attested credential data");
+  if (!(flags & FLAG_AT)) throw badRequest("webauthn", "missing attested credential data; try registering again");
 
   // authData: rpIdHash(32) flags(1) signCount(4) aaguid(16) credIdLen(2) credId cose
   const credIdLen = authData.readUInt16BE(53);
   const credId = authData.subarray(55, 55 + credIdLen);
   const coseRaw = authData.subarray(55 + credIdLen);
   const cose = cborDecode(coseRaw).value;
-  if (!(cose instanceof Map)) throw badRequest("webauthn", "zly klucz COSE");
+  if (!(cose instanceof Map)) throw badRequest("webauthn", "invalid COSE key; try registering again");
   const key = coseToJwk(cose);
   if (key.alg !== -7 && key.alg !== -257) {
-    throw badRequest("webauthn", `nieobslugiwany algorytm ${key.alg}`);
+    throw badRequest("webauthn", `unsupported algorithm ${key.alg}; use a supported passkey`);
   }
   const signCount = authData.readUInt32BE(33);
   const id = b64u.enc(credId);
@@ -248,18 +248,18 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   ).get(String(input.credentialId ?? "")) as
     | { actor_id: number; public_key: string; sign_count: number }
     | undefined;
-  if (!row) throw notFound("credential_not_found", "nieznane poswiadczenie - zaloguj sie haslem i dodaj je ponownie");
+  if (!row) throw notFound("credential_not_found", "unknown credential; sign in with your password and add it again");
 
   const client = parseClientData(b64u.dec(input.clientDataJSON));
-  if (client.type !== "webauthn.get") throw badRequest("webauthn", "zly typ clientData");
+  if (client.type !== "webauthn.get") throw badRequest("webauthn", "invalid clientData type; retry the passkey operation");
   consumeChallenge(client.challenge, "login");
   assertOrigin(client.origin, input.expectedOrigins);
 
   const authData = b64u.dec(input.authenticatorData);
-  if (!rpIdHashOk(authData, input.rpId)) throw unauthorized("webauthn_rpid", "rpIdHash nie pasuje");
+  if (!rpIdHashOk(authData, input.rpId)) throw unauthorized("webauthn_rpid", "rpIdHash does not match; use the instance's configured URL");
   const flags = authData[32];
   if (!(flags & FLAG_UP) || !(flags & FLAG_UV)) {
-    throw unauthorized("webauthn_uv", "wymagana weryfikacja uzytkownika (odcisk/twarz)");
+    throw unauthorized("webauthn_uv", "user verification is required; verify with your fingerprint or face");
   }
 
   const key = JSON.parse(row.public_key) as StoredKey;
@@ -278,7 +278,7 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   } catch {
     ok = false;
   }
-  if (!ok) throw unauthorized("webauthn_signature", "podpis sie nie zgadza");
+  if (!ok) throw unauthorized("webauthn_signature", "the signature does not match; try signing in again");
 
   const count = authData.readUInt32BE(33);
   // The signature counter grows on devices that support it; a regression MAY mean a cloned
@@ -286,7 +286,7 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   // Once either side is non-zero the counter has to strictly increase: a received 0 after a
   // stored 5 must not reset clone detection, and the stored value is never lowered.
   if ((row.sign_count > 0 || count > 0) && count <= row.sign_count) {
-    throw unauthorized("webauthn_counter", "licznik podpisow sie cofnal - poswiadczenie odrzucone");
+    throw unauthorized("webauthn_counter", "the signature counter decreased; credential rejected. Sign in with your password and register a new passkey");
   }
   ctx.db.prepare(
     "UPDATE webauthn_credentials SET sign_count = ?, last_used_at = ? WHERE id = ?",

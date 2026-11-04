@@ -52,11 +52,11 @@ test("postMessage odrzuca puste cialo i cialo ponad limit", () => {
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
   assert.throws(
     () => postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "   " }),
-    /pusta/,
+    /empty/,
   );
   assert.throws(
     () => postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "x".repeat(70000) }),
-    /za dluga/,
+    /too long/,
   );
 });
 
@@ -66,7 +66,7 @@ test("postMessage do cudzego kanalu prywatnego jest odrzucone", () => {
   const c = createChannel(ctx, { slug: "s", kind: "private", createdBy: a.id });
   assert.throws(
     () => postMessage(ctx, { conversationId: c.id, actorId: b.id, body: "hej" }),
-    /brak dostepu/,
+    /do not have access/,
   );
 });
 
@@ -127,7 +127,7 @@ test("watek z innej konwersacji jest odrzucony", () => {
     () => postMessage(ctx, {
       conversationId: c2.id, actorId: a.id, body: "x", threadId: root.id,
     }),
-    /innej konwersacji/,
+    /another conversation/,
   );
 });
 
@@ -136,7 +136,7 @@ test("edytowac i kasowac moze tylko autor", () => {
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
   const m = postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "x" });
-  assert.throws(() => editMessage(ctx, m.id, b.id, "y"), /nie jestes autorem/);
+  assert.throws(() => editMessage(ctx, m.id, b.id, "y"), /only the author/);
   assert.equal(editMessage(ctx, m.id, a.id, "y").body, "y");
   assert.ok(deleteMessage(ctx, m.id, a.id).deletedAt);
 });

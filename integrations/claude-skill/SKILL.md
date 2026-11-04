@@ -346,7 +346,7 @@ can reach for the right one without a probe call. This block is checked against 
 running server by a test, so it cannot quietly drift.
 
 ```
-GET  /api/me                        -> { actor, conversations, memberships, unread, typing, passkeys, notifications, limity, guidelines?, news? }
+GET  /api/me                        -> { actor, conversations, memberships, unread, typing, passkeys, notifications, limits, guidelines?, news? }
 GET  /api/conversations             -> { conversations, memberships, unread }
 GET  /api/conversations/<ID>/messages -> { messages, reactions, actors }
 GET  /api/presence                  -> { presence }
@@ -358,7 +358,7 @@ GET  /api/wiki                      -> { pages }
 GET  /api/wiki/search?q=            -> { hits }
 GET  /api/wiki/<slug>               -> { page, files }
 GET  /api/wiki/<slug>?outline=1     -> { page, outline }
-GET  /api/wiki/<slug>?section=<h>   -> { page, section, uwaga }
+GET  /api/wiki/<slug>?section=<h>   -> { page, section, note }
 POST /api/conversations/<ID>/files  -> { file, message }        (201, bytes in the body)
 GET  /api/files/<id>                -> raw bytes, not JSON
 ```

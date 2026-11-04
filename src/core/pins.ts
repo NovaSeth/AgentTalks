@@ -13,7 +13,7 @@ export function pin(ctx: Ctx, input: { messageId: number; actorId: number }): Pi
     .prepare("SELECT conversation_id FROM messages WHERE id = ? AND deleted_at IS NULL")
     .get(input.messageId) as { conversation_id: number } | undefined;
   if (!msg || !canRead(ctx, msg.conversation_id, input.actorId)) {
-    throw notFound("message_not_found", `nie ma wiadomosci ${input.messageId} (albo brak dostepu)`);
+    throw notFound("message_not_found", `message ${input.messageId} was not found or is not accessible; check the message ID and your access`);
   }
   ctx.db
     .prepare(

@@ -111,7 +111,7 @@ test("doing widac w obecnosci", () => {
 
 test("rejestracja sesji nieistniejacego aktora jest odrzucona", () => {
   const ctx = testCtx();
-  assert.throws(() => registerSession(ctx, { sessionId: "s1", actorId: 999 }), /nie ma aktora/);
+  assert.throws(() => registerSession(ctx, { sessionId: "s1", actorId: 999 }), /actor .* was not found/);
 });
 
 test("heartbeat i sygnaly NIE kasuja etykiety ustawionej przez me", () => {

@@ -24,7 +24,7 @@ export function react(
   // One error for "does not exist" and "you have no access": the id of a message from
   // somebody else's private channel must not be an oracle for its existence.
   if (!msg || !canRead(ctx, msg.conversation_id, input.actorId)) {
-    throw notFound("message_not_found", `nie ma wiadomosci ${input.messageId} (albo brak dostepu)`);
+    throw notFound("message_not_found", `message ${input.messageId} was not found or is not accessible; check the message ID and your access`);
   }
 
   const target = ctx.db

@@ -14,7 +14,7 @@ import {
   type SessionKind,
 } from "../../core/presence.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
-import { int, json, readJson, str, zHandlem} from "../respond.ts";
+import { int, json, readJson, str, withActorHandles} from "../respond.ts";
 import type { Router } from "../router.ts";
 
 export function registerMessageRoutes(router: Router): void {
@@ -69,14 +69,14 @@ export function registerMessageRoutes(router: Router): void {
     // One error for "does not exist" and "no access" - message ids are global, so different
     // answers would reveal the existence of content in other people's channels.
     if (!root || !canRead(rc.ctx, root.conversationId, actor.id)) {
-      throw notFound("message_not_found", `nie ma wiadomosci ${rc.params.id} (albo brak dostepu)`);
+      throw notFound("message_not_found", `message ${rc.params.id} was not found or is not accessible; check the message ID and your access`);
     }
     const messages = listThread(rc.ctx, root.threadId ?? root.id);
-    const autorzy = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
+    const authors = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
     json(res, 200, {
-      messages: zHandlem(messages, autorzy),
+      messages: withActorHandles(messages, authors),
       reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)),
-      actors: autorzy,
+      actors: authors,
     });
   });
 
@@ -101,8 +101,8 @@ export function registerMessageRoutes(router: Router): void {
       sinceTs: int(rc.query.get("sinceTs") ?? undefined),
       untilTs: int(rc.query.get("untilTs") ?? undefined),
     });
-    const autorzy = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
-    json(res, 200, { messages: zHandlem(messages, autorzy), actors: autorzy });
+    const authors = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
+    json(res, 200, { messages: withActorHandles(messages, authors), actors: authors });
   });
 
   router.add("GET", "/api/presence", (_req, res, rc) => {
@@ -120,7 +120,7 @@ export function registerMessageRoutes(router: Router): void {
     const body = await readJson(req, 4096);
     const sessionId = str(body.sessionId);
     if (!sessionId) {
-      json(res, 400, { error: "brak sessionId", code: "session_id_required" });
+      json(res, 400, { error: "provide sessionId", code: "session_id_required" });
       return;
     }
     // Registering an EXISTING session belonging to another actor is an attempt to take over its
@@ -128,7 +128,7 @@ export function registerMessageRoutes(router: Router): void {
     const owner = rc.ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?")
       .get(sessionId) as { actor_id: number } | undefined;
     if (owner && owner.actor_id !== actor.id) {
-      throw forbidden("not_your_session", "ta sesja nalezy do innego aktora");
+      throw forbidden("not_your_session", "this session belongs to another actor; use your own session");
     }
     const kind = str(body.kind);
     registerSession(rc.ctx, {
@@ -159,9 +159,9 @@ export function registerMessageRoutes(router: Router): void {
     const row = rc.ctx.db
       .prepare("SELECT actor_id FROM sessions WHERE id = ?")
       .get(sessionId) as { actor_id: number } | undefined;
-    if (!row) throw notFound("session_not_found", `nie ma sesji ${sessionId}`);
+    if (!row) throw notFound("session_not_found", `session ${sessionId} was not found; register a session first`);
     if (row.actor_id !== actorId) {
-      throw forbidden("not_your_session", "ta sesja nalezy do innego aktora");
+      throw forbidden("not_your_session", "this session belongs to another actor; use your own session");
     }
   };
 
@@ -174,7 +174,7 @@ export function registerMessageRoutes(router: Router): void {
     const body = await readJson(req, 1024);
     const kind = str(body.kind);
     if (kind !== "typing" && kind !== "busy") {
-      json(res, 400, { error: "kind musi byc typing albo busy", code: "invalid_signal" });
+      json(res, 400, { error: "set kind to typing or busy", code: "invalid_signal" });
       return;
     }
     // `in` = where they are writing ("c:<convId>" / "w:<slug>"); stop=true clears the bubble at

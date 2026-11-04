@@ -26,17 +26,17 @@ import { markRead, unreadFor } from "../../core/unread.ts";
 import { actorLiveness } from "../../core/presence.ts";
 import { isWakeable } from "../../core/wake.ts";
 import { assertCsrf, requireAuth } from "../auth.ts";
-import { int, json, readJson, str, zHandlem} from "../respond.ts";
+import { int, json, readJson, str, withActorHandles} from "../respond.ts";
 import type { Router } from "../router.ts";
 import type { Ctx } from "../../core/ctx.ts";
 
 /** A handle to an actor id. Needed, because the client addresses by handle and the core by
 /**  id - and that is the right boundary: a handle is a public name, an id is a key. */
 function resolveHandles(ctx: Ctx, raw: unknown): number[] {
-  if (!Array.isArray(raw)) throw badRequest("members_required", "podaj liste members");
+  if (!Array.isArray(raw)) throw badRequest("members_required", "provide the members list");
   return raw.map((h) => {
     const actor = getActorByHandle(ctx, String(h));
-    if (!actor) throw notFound("actor_not_found", `nie ma aktora @${h}`);
+    if (!actor) throw notFound("actor_not_found", `actor @${h} was not found; check the handle`);
     return actor.id;
   });
 }
@@ -53,7 +53,7 @@ type MemberRow = {
 
 const convId = (rc: { params: Record<string, string> }): number => {
   const id = Number(rc.params.id);
-  if (!Number.isFinite(id)) throw badRequest("invalid_id", "nieprawidlowy identyfikator konwersacji");
+  if (!Number.isFinite(id)) throw badRequest("invalid_id", "invalid conversation ID; provide a positive integer");
   return id;
 };
 
@@ -112,7 +112,7 @@ export function registerConversationRoutes(router: Router): void {
       json(res, 201, { conversation: ensureDirect(rc.ctx, ids) });
       return;
     }
-    throw badRequest("invalid_kind", "kind musi byc public, private, dm albo group");
+    throw badRequest("invalid_kind", "set kind to public, private, dm or group");
   });
 
   router.add("GET", "/api/conversations/:id", (_req, res, rc) => {
@@ -131,11 +131,11 @@ export function registerConversationRoutes(router: Router): void {
       before: int(rc.query.get("before") ?? undefined),
       limit: int(rc.query.get("limit") ?? undefined),
     });
-    const autorzy = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
+    const authors = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
     json(res, 200, {
-      messages: zHandlem(messages, autorzy),
+      messages: withActorHandles(messages, authors),
       reactions: reactionsFor(rc.ctx, messages.map((m) => m.id)),
-      actors: autorzy,
+      actors: authors,
     });
   });
 
@@ -211,13 +211,13 @@ export function registerConversationRoutes(router: Router): void {
     if (conversation?.kind === "dm" || conversation?.kind === "group") {
       // Adding a person to an existing conversation would change its membership, and thereby who
       // sees the earlier messages. The right operation is a new conversation.
-      throw badRequest("not_for_conversations", "do rozmowy bezposredniej nie dodaje sie osob; zaloz nowa");
+      throw badRequest("not_for_conversations", "participants cannot be added to a direct conversation; create a new one");
     }
     if (conversation?.kind === "public") {
       // Anybody joins a public channel THEMSELVES (join). Forcibly adding other people's accounts
       // is an invitation to counter spam - anybody could add any channel to anybody's unread.
       throw badRequest("public_channel_open",
-        "do kanalu publicznego dolacza sie samemu (POST .../join)");
+        "participants join a public channel themselves (POST .../join)");
     }
     const [memberId] = resolveHandles(rc.ctx, [str(body.handle) ?? ""]);
     json(res, 200, { member: join(rc.ctx, id, memberId) });
@@ -259,7 +259,7 @@ export function registerConversationRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const target = getActorByHandle(rc.ctx, String(rc.params.handle ?? ""));
-    if (!target) throw notFound("actor_not_found", `nie ma aktora @${rc.params.handle}`);
+    if (!target) throw notFound("actor_not_found", `actor @${rc.params.handle} was not found; check the handle`);
     removeMember(rc.ctx, {
       convId: convId(rc),
       actorId: actor.id,
@@ -275,7 +275,7 @@ export function registerConversationRoutes(router: Router): void {
     const body = await readJson(req, 1024);
     const notify = str(body.notify);
     if (notify !== "all" && notify !== "mentions" && notify !== "none") {
-      throw badRequest("invalid_notify", "notify musi byc all, mentions albo none");
+      throw badRequest("invalid_notify", "set notify to all, mentions or none");
     }
     const id = convId(rc);
     assertCanRead(rc.ctx, id, actor.id);

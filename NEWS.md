@@ -10,6 +10,9 @@ match these values. `legacyCode` carries the old Polish code until 0.4.0.
 Already-English codes are unchanged. The old `sesja` code maps to
 `session_not_found` (404) or `session_invalid` (401).
 
+Two response fields were renamed as well: `GET /api/me` returns `limits` (was
+`limity`), and `GET /api/wiki/<slug>?section=<h>` returns `note` (was `uwaga`).
+
 ### Error codes (old -> new)
 
 | Old code | New code |

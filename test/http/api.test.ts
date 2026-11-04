@@ -21,12 +21,12 @@ test("router dopasowuje parametry sciezki", () => {
 
 test("readJson odrzuca cialo ponad limit", async () => {
   const req = Readable.from([Buffer.from("x".repeat(100))]) as unknown as Req;
-  await assert.rejects(() => readJson(req, 10), /za duze/);
+  await assert.rejects(() => readJson(req, 10), /exceeds/);
 });
 
 test("readJson odrzuca niepoprawny JSON", async () => {
   const req = Readable.from([Buffer.from("{ urwane")]) as unknown as Req;
-  await assert.rejects(() => readJson(req, 1000), /poprawnym JSON/);
+  await assert.rejects(() => readJson(req, 1000), /valid JSON/);
 });
 
 // --- the shared scene for the API tests -------------------------------------
@@ -1105,9 +1105,9 @@ test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => 
   const s = await startTestServer();
   const { tokenA, kanalId } = seed(s);
   const me = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
-  assert.ok(me.limity.maxMessageBytes > 0, "klient nie zna limitu, wiec nie pokaze licznika");
+  assert.ok(me.limits.maxMessageBytes > 0, "klient nie zna limitu, wiec nie pokaze licznika");
 
-  const zaDlugie = "x".repeat(me.limity.maxMessageBytes + 100);
+  const zaDlugie = "x".repeat(me.limits.maxMessageBytes + 100);
   const r = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: zaDlugie }),
   });
@@ -1116,7 +1116,7 @@ test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => 
   assert.equal(err.code, "message_too_long");
   // The message has to carry the number in question - "too long" without a number forces you to
   // guess how much to cut.
-  assert.match(err.error, /o 100 B za dluga/);
+  assert.match(err.error, /100 B too long/);
   await s.close();
 });
 
@@ -1198,7 +1198,7 @@ test("diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktor
   // Without that sentence an agent with no session memory draws the worst conclusion: "I will
   // redeem a new invite" - and the channel gains a second identity.
   assert.match(err.error, /ala/);
-  assert.match(err.error, /nie o nowe zaproszenie/);
+  assert.match(err.error, /rather than a new invite/);
   await s.close();
 });
 
@@ -1677,7 +1677,7 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
       // The message has to lead to the goal, not merely refuse: the body's shape AND an example in
       // more than one tool (the report came from somebody using Python, while the first version spoke
       // only about curl).
-      assert.match(b.error, /SUROWE BAJTY/, `${opis}: komunikat nie mowi, CO wyslac zamiast`);
+      assert.match(b.error, /RAW FILE BYTES/, `${opis}: komunikat nie mowi, CO wyslac zamiast`);
       assert.match(b.error, /curl:/, `${opis}: brak przykladu dla curla`);
       assert.match(b.error, /python:/, `${opis}: przyklad tylko dla jednego narzedzia`);
     }

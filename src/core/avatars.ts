@@ -23,7 +23,7 @@ export const MAX_AVATAR_BYTES = 256 * 1024;
 /** A whitelist, not "image/*": an SVG is a document with a script rather than a picture,
 /**  and served from our domain it would be an XSS vector. The remaining raster formats
 /**  execute nothing. */
-const DOZWOLONE: Record<string, string> = {
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
@@ -32,7 +32,7 @@ const DOZWOLONE: Record<string, string> = {
 
 /** Recognition by CONTENT, not by the header - the header is written by the client.
 /**  Returns null when the bytes are none of the permitted formats. */
-export function rozpoznajObraz(data: Buffer): string | null {
+export function detectImageMime(data: Buffer): string | null {
   if (data.length < 12) return null;
   if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) return "image/png";
   if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return "image/jpeg";
@@ -42,9 +42,9 @@ export function rozpoznajObraz(data: Buffer): string | null {
   return null;
 }
 
-export type Awatar = { file: string; mime: string; hash: string };
+export type Avatar = { file: string; mime: string; hash: string };
 
-export function pobierzAwatar(ctx: Ctx, actorId: number): Awatar | null {
+export function getAvatar(ctx: Ctx, actorId: number): Avatar | null {
   const r = ctx.db
     .prepare("SELECT avatar_file, avatar_mime, avatar_hash FROM actors WHERE id = ?")
     .get(actorId) as { avatar_file: string | null; avatar_mime: string | null; avatar_hash: string | null } | undefined;
@@ -52,7 +52,7 @@ export function pobierzAwatar(ctx: Ctx, actorId: number): Awatar | null {
   return { file: r.avatar_file, mime: r.avatar_mime, hash: r.avatar_hash };
 }
 
-export function bajtyAwatara(filesDir: string, a: Awatar): Buffer {
+export function readAvatarBytes(filesDir: string, a: Avatar): Buffer {
   return readFileSync(join(filesDir, a.file));
 }
 
@@ -61,37 +61,37 @@ export function bajtyAwatara(filesDir: string, a: Awatar): Buffer {
  * ONE avatar per actor, so keeping a history would give a growing directory of no use to
  * anybody.
  */
-export function ustawAwatar(
-  ctx: Ctx, filesDir: string, actorId: number, data: Buffer, mimeZNaglowka?: string,
-): Awatar {
-  if (data.length === 0) throw badRequest("empty_avatar", "awatar nie moze byc pusty");
+export function setAvatar(
+  ctx: Ctx, filesDir: string, actorId: number, data: Buffer, headerMime?: string,
+): Avatar {
+  if (data.length === 0) throw badRequest("empty_avatar", "the avatar is empty; upload an image");
   if (data.length > MAX_AVATAR_BYTES) {
-    throw tooLarge("avatar_too_large", `awatar moze miec najwyzej ${MAX_AVATAR_BYTES} B (to miniatura)`);
+    throw tooLarge("avatar_too_large", `the avatar exceeds ${MAX_AVATAR_BYTES} B; resize it to a thumbnail`);
   }
-  const mime = rozpoznajObraz(data);
+  const mime = detectImageMime(data);
   if (!mime) {
     throw badRequest(
       "invalid_format",
-      `to nie jest obrazek w obslugiwanym formacie (${Object.keys(DOZWOLONE).join(", ")}). ` +
-        (mimeZNaglowka ? `Naglowek mowil "${mimeZNaglowka}", ale licza sie bajty.` : ""),
+      `use an image in a supported format (${Object.keys(ALLOWED_IMAGE_TYPES).join(", ")}). ` +
+        (headerMime ? `The header said "${headerMime}", but the bytes determine the format.` : ""),
     );
   }
   const hash = createHash("sha256").update(data).digest("hex").slice(0, 16);
-  const nazwa = `avatar-${randomBytes(12).toString("base64url")}.${DOZWOLONE[mime]}`;
+  const fileName = `avatar-${randomBytes(12).toString("base64url")}.${ALLOWED_IMAGE_TYPES[mime]}`;
   mkdirSync(filesDir, { recursive: true });
-  writeFileSync(join(filesDir, nazwa), data, { mode: 0o600 });
+  writeFileSync(join(filesDir, fileName), data, { mode: 0o600 });
 
-  const stary = pobierzAwatar(ctx, actorId);
+  const previousAvatar = getAvatar(ctx, actorId);
   ctx.db.prepare("UPDATE actors SET avatar_file = ?, avatar_mime = ?, avatar_hash = ? WHERE id = ?")
-    .run(nazwa, mime, hash, actorId);
-  if (stary) { try { unlinkSync(join(filesDir, stary.file)); } catch { /* juz go nie ma */ } }
-  return { file: nazwa, mime, hash };
+    .run(fileName, mime, hash, actorId);
+  if (previousAvatar) { try { unlinkSync(join(filesDir, previousAvatar.file)); } catch { /* already removed */ } }
+  return { file: fileName, mime, hash };
 }
 
 /** Back to the dot with initials. */
-export function usunAwatar(ctx: Ctx, filesDir: string, actorId: number): void {
-  const stary = pobierzAwatar(ctx, actorId);
+export function deleteAvatar(ctx: Ctx, filesDir: string, actorId: number): void {
+  const previousAvatar = getAvatar(ctx, actorId);
   ctx.db.prepare("UPDATE actors SET avatar_file = NULL, avatar_mime = NULL, avatar_hash = NULL WHERE id = ?")
     .run(actorId);
-  if (stary) { try { unlinkSync(join(filesDir, stary.file)); } catch { /* juz go nie ma */ } }
+  if (previousAvatar) { try { unlinkSync(join(filesDir, previousAvatar.file)); } catch { /* already removed */ } }
 }

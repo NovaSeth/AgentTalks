@@ -43,12 +43,12 @@ function webauthnParams(req: IncomingMessage, config: Config): { rpId: string; o
   }
   const host = String(req.headers.host ?? "localhost");
   const hostname = host.replace(/:\d+$/, "");
-  const lokalnie = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  if (!lokalnie) {
+  const isLocal = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  if (!isLocal) {
     throw badRequest(
       "base_url_required",
-      "logowanie kluczem (passkey) wymaga ustawionego AGENTTALKS_BASE_URL - bez niego " +
-        "domena klucza pochodzilaby z naglowka podanego przez klienta",
+      "passkey sign-in requires AGENTTALKS_BASE_URL; configure it before using passkeys. Otherwise " +
+        "the passkey domain would come from a client-supplied header",
     );
   }
   return { rpId: hostname, origins: [`http://${host}`, `https://${host}`] };
@@ -61,7 +61,7 @@ function webauthnParams(req: IncomingMessage, config: Config): { rpId: string; o
  * Deterministic decoys (the same for the same handle) mean the shape of the answer reveals
  * nothing, and asking twice does not expose randomness.
  */
-function atrapaCredentials(secret: string, handle: string): string[] {
+function dummyCredentials(secret: string, handle: string): string[] {
   const mac = createHmac("sha256", secret).update(`webauthn-atrapa:${handle.toLowerCase()}`).digest();
   return [mac.toString("base64url")];
 }
@@ -77,9 +77,9 @@ const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 /** The limiter maps grow with the number of distinct source addresses and nothing shrinks
 /**  them - under a scan from thousands of IPs that is a memory leak in the process. We clean
 /**  up expired windows along the way, without a separate timer. */
-function sprzatniecieOkien(mapa: Map<string, { count: number; resetAt: number }>, now: number): void {
-  if (mapa.size < 1000) return;
-  for (const [k, v] of mapa) if (v.resetAt <= now) mapa.delete(k);
+function sweepExpiredWindows(windows: Map<string, { count: number; resetAt: number }>, now: number): void {
+  if (windows.size < 1000) return;
+  for (const [k, v] of windows) if (v.resetAt <= now) windows.delete(k);
 }
 
 /**
@@ -90,7 +90,7 @@ function sprzatniecieOkien(mapa: Map<string, { count: number; resetAt: number }>
  * instance = one secret), and in the tests it gives isolation without any "reset the
  * limiter" back door, which would sooner or later find its way into production code.
  */
-function kluczLimitu(secret: string, key: string): string {
+function rateLimitKey(secret: string, key: string): string {
   // The WHOLE secret, not its beginning. The first version took `slice(0, 8)` - and every
   // test secret started the same way, so the "isolation" produced the same key for every
   // instance and isolated nothing. This is a map in the process's memory, so the full secret
@@ -99,7 +99,7 @@ function kluczLimitu(secret: string, key: string): string {
 }
 
 function checkLoginLimit(key: string, now: number): void {
-  sprzatniecieOkien(loginAttempts, now);
+  sweepExpiredWindows(loginAttempts, now);
   const entry = loginAttempts.get(key);
   if (!entry || entry.resetAt <= now) {
     loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_SEC });
@@ -109,7 +109,7 @@ function checkLoginLimit(key: string, now: number): void {
   if (entry.count > LOGIN_MAX_ATTEMPTS) {
     securityLog("rate_limited", { scope: "webauthn" });
     throw tooMany("too_many_attempts",
-      `za duzo prob logowania; sprobuj za ${Math.ceil((entry.resetAt - now) / 60)} min`);
+      `too many sign-in attempts; try again in ${Math.ceil((entry.resetAt - now) / 60)} min`);
   }
 }
 
@@ -117,7 +117,7 @@ function checkLoginLimit(key: string, now: number): void {
 /**  to punish a human who did log in: without this, ten normal entries (or a few passkey
 /**  entries, which cost two attempts each) locked the owner out of their account for 15
 /**  minutes. */
-function zwolnijLimitLogowania(key: string): void {
+function clearLoginLimit(key: string): void {
   loginAttempts.delete(key);
 }
 
@@ -156,15 +156,15 @@ function loginKeys(ctx: Ctx, secret: string, ip: string, rawHandle: string): Log
         handleHash: createHmac("sha256", secret).update(`log-handle:${norm}`).digest("hex").slice(0, 8) };
   return {
     actorId: actor ? actor.id : null,
-    ipHandle: kluczLimitu(secret, `lf|${ip}|${id}`),
-    handle: kluczLimitu(secret, `lh|${id}`),
-    ip: kluczLimitu(secret, `li|${ip}`),
+    ipHandle: rateLimitKey(secret, `lf|${ip}|${id}`),
+    handle: rateLimitKey(secret, `lh|${id}`),
+    ip: rateLimitKey(secret, `li|${ip}`),
     who,
   };
 }
 
 function assertLoginAllowed(keys: LoginKeys, ip: string, now: number, knownDevice: boolean): void {
-  sprzatniecieOkien(loginFailures, now);
+  sweepExpiredWindows(loginFailures, now);
   // D-MG-14: the per-account cap applies BEFORE verification (a distributed guesser must not get
   // to run scrypt, or succeed, past it). The only exemption is a browser holding a valid at_dev
   // cookie for this very actor, which also skips the IP+handle cap (shared IPs); the plain
@@ -178,7 +178,7 @@ function assertLoginAllowed(keys: LoginKeys, ip: string, now: number, knownDevic
     if (e && e.resetAt > now && e.count >= max) {
       securityLog("rate_limited", { scope: "login", ...keys.who, ip });
       throw tooMany("too_many_attempts",
-        `za duzo prob logowania; sprobuj za ${Math.ceil((e.resetAt - now) / 60)} min`);
+        `too many sign-in attempts; try again in ${Math.ceil((e.resetAt - now) / 60)} min`);
     }
   }
 }
@@ -193,12 +193,12 @@ function recordLoginFailure(keys: LoginKeys, now: number): void {
 
 const enrollAttempts = new Map<string, { count: number; resetAt: number }>();
 function checkEnrollLimit(key: string, now: number): void {
-  sprzatniecieOkien(enrollAttempts, now);
+  sweepExpiredWindows(enrollAttempts, now);
   const e = enrollAttempts.get(key);
   if (!e || e.resetAt <= now) { enrollAttempts.set(key, { count: 1, resetAt: now + 3600 }); return; }
   e.count += 1;
   if (e.count > 20) securityLog("rate_limited", { scope: "enroll" });
-  if (e.count > 20) throw tooMany("too_many_attempts", "za duzo prob rejestracji, sprobuj pozniej");
+  if (e.count > 20) throw tooMany("too_many_attempts", "too many registration attempts; try again later");
 }
 
 // A limiter key per source address. Behind a proxy, X-Forwarded-For is a list that EVERY
@@ -226,7 +226,7 @@ export function registerAuthRoutes(router: Router): void {
   // Enrollment: the only WRITE route without a login - because an invite IS a credential.
   // A new agent redeems a code for an actor + token. The rate limit protects against guessing it.
   router.add("POST", "/api/enroll", async (req, res, rc) => {
-    checkEnrollLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
+    checkEnrollLimit(rateLimitKey(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 4096);
     // kind does NOT come from the request body: self-registration creates ONLY an agent actor.
     // "I am a human" is a trust signal that must not be self-declared through a distributed
@@ -255,7 +255,7 @@ export function registerAuthRoutes(router: Router): void {
       recordLoginFailure(keys, now);
       securityLog("login_failed", { ...keys.who, ip });
 
-      throw unauthorized("invalid_data", "nieprawidlowy uzytkownik lub haslo");
+      throw unauthorized("invalid_data", "invalid username or password; check your credentials and try again");
     }
     loginFailures.delete(keys.ipHandle);
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
@@ -291,7 +291,7 @@ export function registerAuthRoutes(router: Router): void {
 
   router.add("POST", "/api/webauthn/register/options", (req, res, rc) => {
     const { actor } = requireAuth(rc);
-    if (actor.kind !== "human") throw badRequest("humans_only", "passkey jest dla ludzi - agent ma token");
+    if (actor.kind !== "human") throw badRequest("humans_only", "passkeys are for humans; agents must use a token");
     const { rpId } = webauthnParams(req, rc.config);
     json(res, 200, {
       challenge: issueChallenge("register", actor.id),
@@ -308,7 +308,7 @@ export function registerAuthRoutes(router: Router): void {
   router.add("POST", "/api/webauthn/register", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
-    if (actor.kind !== "human") throw badRequest("humans_only", "passkey jest dla ludzi - agent ma token");
+    if (actor.kind !== "human") throw badRequest("humans_only", "passkeys are for humans; agents must use a token");
     const body = await readJson(req, 64 * 1024);
     const { rpId, origins } = webauthnParams(req, rc.config);
     const id = registerCredential(rc.ctx, {
@@ -330,7 +330,7 @@ export function registerAuthRoutes(router: Router): void {
   /** Options for a passkey login. Public and rate-limited like a password login.
   /**  Without a handle: a discoverable credential (the browser shows the accounts itself). */
   router.add("POST", "/api/webauthn/login/options", async (req, res, rc) => {
-    checkLoginLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
+    checkLoginLimit(rateLimitKey(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 4096);
     const { rpId } = webauthnParams(req, rc.config);
     const handle = str(body.handle);
@@ -344,14 +344,14 @@ export function registerAuthRoutes(router: Router): void {
       // list differed from a non-empty one and thereby answered the question "does this user
       // exist". The browser will not find that key anyway, so the user sees an ordinary refusal.
       if (allowCredentials.length === 0) {
-        allowCredentials = atrapaCredentials(rc.config.secret, handle);
+        allowCredentials = dummyCredentials(rc.config.secret, handle);
       }
     }
     json(res, 200, { challenge: issueChallenge("login", null), rpId, allowCredentials });
   });
 
   router.add("POST", "/api/webauthn/login", async (req, res, rc) => {
-    checkLoginLimit(kluczLimitu(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
+    checkLoginLimit(rateLimitKey(rc.config.secret, clientKey(req, rc.config.trustProxy)), Math.floor(Date.now() / 1000));
     const body = await readJson(req, 64 * 1024);
     const { rpId, origins } = webauthnParams(req, rc.config);
     const actorId = verifyAssertion(rc.ctx, {
@@ -363,7 +363,7 @@ export function registerAuthRoutes(router: Router): void {
       signature: str(body.signature) ?? "",
     });
     const actor = getActor(rc.ctx, actorId);
-    if (!actor || actor.disabledAt) throw unauthorized("account_disabled", "to konto jest wylaczone");
+    if (!actor || actor.disabledAt) throw unauthorized("account_disabled", "this account is disabled; contact an admin");
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
     res.setHeader("set-cookie", [cookie, makeDeviceCookie(rc.ctx, rc.config, actor.id, requestIsSecure(req))]);
     json(res, 200, {
@@ -397,7 +397,7 @@ export function registerAuthRoutes(router: Router): void {
       // The instance limits given EXPLICITLY: a client that does not know them can only send and
       // see an error - and for a human writing a long report that is the worst possible moment to
       // find out about a limit.
-      limity: {
+      limits: {
         maxMessageBytes: rc.config.maxMessageBytes,
         maxFileBytes: rc.config.maxFileBytes,
         maxWikiBytes: MAX_WIKI_BYTES,
@@ -424,7 +424,7 @@ export function registerAuthRoutes(router: Router): void {
     const body = await readJson(req, 4096);
     const kind = str(body.kind);
     if (kind !== "human" && kind !== "agent") {
-      throw badRequest("invalid_kind", "kind musi byc 'human' albo 'agent'");
+      throw badRequest("invalid_kind", "set kind to 'human' or 'agent'");
     }
     const actor = createActor(rc.ctx, {
       kind,

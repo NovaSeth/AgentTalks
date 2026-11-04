@@ -172,24 +172,24 @@ export function authFailureNote(
   if (!header?.startsWith("Bearer ")) return null;
   const t = tokenTrouble(ctx, header.slice(7));
   if (!t) return null;
-  const who = t.handle ? `@${t.handle}` : "tego aktora";
-  if (t.reason === "aktor_wylaczony") {
-    return { code: "actor_disabled", message: `aktor ${who} jest wylaczony - odezwij sie do admina` };
+  const who = t.handle ? `@${t.handle}` : "this actor";
+  if (t.reason === "actor_disabled") {
+    return { code: "actor_disabled", message: `actor ${who} is disabled; contact an admin` };
   }
-  const co = t.reason === "wygasl" ? "wygasl" : "zostal odwolany";
+  const status = t.reason === "expired" ? "expired" : "was revoked";
   return {
-    code: t.reason === "wygasl" ? "token_expired" : "token_revoked",
+    code: t.reason === "expired" ? "token_expired" : "token_revoked",
     message:
-      `token dla ${who} ${co}. Popros admina o NOWY TOKEN DO TEGO SAMEGO aktora ` +
-      `(agenttalks token create --actor ${t.handle ?? "<handle>"}), a nie o nowe zaproszenie: ` +
-      `zaproszenie zaklada KOLEJNEGO aktora, wiec Twoja historia, wzmianki i czlonkostwa zostalyby przy starym.`,
+      `the token for ${who} ${status}. Ask an admin for a NEW TOKEN FOR THE SAME actor ` +
+      `(agenttalks token create --actor ${t.handle ?? "<handle>"}), rather than a new invite: ` +
+      `an invite creates ANOTHER actor, leaving your history, mentions and memberships with the old one.`,
   };
 }
 
 export function requireAuth(rc: RouteCtx): Auth {
   if (!rc.auth) {
     const note = rc.authNote;
-    throw unauthorized(note?.code ?? "unauthenticated", note?.message ?? "zaloguj sie albo podaj token");
+    throw unauthorized(note?.code ?? "unauthenticated", note?.message ?? "sign in or provide a token");
   }
   return rc.auth;
 }
@@ -198,7 +198,7 @@ export function requireAdmin(rc: RouteCtx): Auth {
   const auth = requireAuth(rc);
   if (!auth.actor.isAdmin) {
     securityLog("admin_denied", { actorId: auth.actor.id, guard: "admin" });
-    throw forbidden("not_admin", "ta operacja wymaga uprawnien admina");
+    throw forbidden("not_admin", "this operation requires admin permissions; ask an admin");
   }
   return auth;
 }
@@ -209,7 +209,7 @@ export function requireHumanAdmin(rc: RouteCtx): Auth {
   const auth = requireAuth(rc);
   if (!auth.actor.isAdmin || auth.actor.kind !== "human") {
     securityLog("admin_denied", { actorId: auth.actor.id, guard: "human_admin" });
-    throw forbidden("human_admin_only", "ta operacja jest dla zalogowanego czlowieka-admina");
+    throw forbidden("human_admin_only", "sign in as a human admin to perform this operation");
   }
   return auth;
 }
@@ -236,7 +236,7 @@ export function assertCsrf(rc: RouteCtx, req: Req): void {
   const token = cookies[COOKIE_NAME];
   const presented = req.headers[CSRF_HEADER];
   if (!token || typeof presented !== "string" || presented !== csrfFor(token)) {
-    throw forbidden("csrf", "brak albo nieprawidlowy naglowek X-AT-CSRF");
+    throw forbidden("csrf", "missing or invalid X-AT-CSRF header; sign in again and send the current CSRF token");
   }
 }
 

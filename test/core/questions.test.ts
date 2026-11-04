@@ -35,7 +35,7 @@ test("na zamkniete pytanie nie da sie odpowiedziec drugi raz", () => {
   answer(ctx, { questionId: q.question, actorId: b.id, body: "raz" });
   assert.throws(
     () => answer(ctx, { questionId: q.question, actorId: b.id, body: "dwa" }),
-    /juz odpowiedzial/,
+    /already been answered/,
   );
 });
 
@@ -83,7 +83,7 @@ test("nie da sie zareagowac na wiadomosc z kanalu bez dostepu", () => {
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "obcy");
   const c = createChannel(ctx, { slug: "s", kind: "private", createdBy: a.id });
   const m = postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "x" });
-  assert.throws(() => react(ctx, { messageId: m.id, actorId: b.id, emoji: "OK" }), /brak dostepu/);
+  assert.throws(() => react(ctx, { messageId: m.id, actorId: b.id, emoji: "OK" }), /is not accessible/);
 });
 
 test("wyszukiwanie nie zwraca tresci z kanalow bez dostepu", () => {

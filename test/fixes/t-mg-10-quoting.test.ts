@@ -84,7 +84,7 @@ test("B-MG-10: a page whose single line exceeds the budget is NOT recorded as re
   assert.match(out, /does NOT unlock writing/);
   assert.ok(!out.includes("TAIL"));
   const w = await tool(s.url, token, "wiki_write", { slug: "dluga", title: "Dluga", body: "moj akapit" });
-  assert.match(w, /wiki_conflict|nie czytales/);
+  assert.match(w, /wiki_conflict|have not read/);
   assert.equal(getPage(s.ctx, "dluga")!.body.length, 50004);
   await s.close();
 });
