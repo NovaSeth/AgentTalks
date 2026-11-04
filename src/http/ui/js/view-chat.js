@@ -65,10 +65,17 @@ const serverRead = (convId) => {
   return typeof n === "number" ? n : 0;
 };
 
+/** The ONE read watermark: h.read starts at the server mark and only moves up (server state or a
+ *  confirmed read); every classification path reads it through here (B-MG-123). */
+function readMark(h, convId) {
+  h.read = Math.max(h.read, serverRead(convId));
+  return h.read;
+}
+
 /** Tints what the user missed: the others' messages above the floor and the confirmed read that
  *  were not seen arriving and are not mid-fade. */
 function tintMissed(h, list, me, convId) {
-  for (const id of highlightUnreadIds(list, Math.max(h.floor, h.read, serverRead(convId)), me)) {
+  for (const id of highlightUnreadIds(list, Math.max(h.floor, readMark(h, convId)), me)) {
     if (!h.live.has(id) && !h.fading.has(id)) h.ids.add(id);
   }
 }
@@ -140,7 +147,7 @@ function noteListDrawn(convId, list, mark) {
   const h = hlOf(convId);
   if (drawnConv !== convId) {
     h.ids.clear(); h.live.clear();
-    const since = mark === null || mark === undefined ? null : Math.max(mark, h.read, serverRead(convId));
+    const since = mark === null || mark === undefined ? null : Math.max(mark, readMark(h, convId));
     for (const id of highlightUnreadIds(list, since, me)) if (!h.fading.has(id)) h.ids.add(id);
     h.floor = newestIdIn(list);
     drawnConv = convId;
@@ -1027,7 +1034,7 @@ export function upsertMessageNode(msg) {
   const theirs = typeof msg.id === "number" && msg.actorId !== state.actor.id && !msg.deletedAt;
   if (theirs && !hl.live.has(msg.id)) {
     if (document.visibilityState === "visible") hl.live.add(msg.id);
-    else if (msg.id > Math.max(hl.floor, hl.read) && !hl.fading.has(msg.id)) hl.ids.add(msg.id);
+    else if (msg.id > Math.max(hl.floor, readMark(hl, state.activeId)) && !hl.fading.has(msg.id)) hl.ids.add(msg.id);
   }
   const list = visibleMessages(state.activeId);
   const i = list.findIndex((x) => x.id === msg.id);
