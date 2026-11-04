@@ -17,6 +17,7 @@ import { mintToken } from "../../src/core/tokens.ts";
 import { createChannel, ensureDirect, join as joinConv } from "../../src/core/conversations.ts";
 
 import { hasChannelFlag, monitorShouldRun } from "../../integrations/claude-code-plugin/lib/launch.mjs";
+import { convs, fakeAt } from "./fake-at.ts";
 
 const MONITOR = fileURLToPath(new URL("../../integrations/claude-code-plugin/scripts/monitor.mjs", import.meta.url));
 
@@ -83,6 +84,33 @@ test("monitor: one line per relevant event, clean exit at the deadline, resume a
   assert.equal(lines2.filter((l) => /^\[\d+\]/.test(l)).length, 1, second.out.stdout);
   assert.ok(!second.out.stdout.includes(`[${m1}]`), "no duplicate of the first run's event");
   assert.ok(!(first.out.stderr + second.out.stderr + first.out.stdout).includes(tokenN));
+});
+
+test("monitor: a stop while events are still undecided saves the cursor BEFORE them; the next run delivers them (codex F5)", async (t) => {
+  const fake = await fakeAt();
+  t.after(() => fake.close());
+  fake.conversations = convs([{ id: 3, kind: "public", slug: "general", notify: "mentions" }]);
+  fake.threads.set(50, "hang"); // the lookup that decides "is this nestor's thread" never answers
+  const home = mkdtempSync(join(tmpdir(), "at-plugin-mon-"));
+  const first = runMonitor(fake.url, "atk_test", home, 1);
+  t.after(() => first.child.kill());
+  await waitFor(() => fake.streams() === 1, 5000);
+  fake.emit({ id: 51, conversationId: 3, actorId: 8, body: "reply one", threadId: 50 });
+  fake.emit({ id: 52, conversationId: 3, actorId: 8, body: "reply two", threadId: 50 });
+  await waitFor(() => first.out.exited, 8000);
+  assert.equal(first.out.code, 0, first.out.stderr);
+  assert.ok(!/^\[5[12]\]/m.test(first.out.stdout), first.out.stdout);
+  const dir = join(home, ".config", "agenttalks", "state");
+  const saved = JSON.parse(readFileSync(join(dir, readdirSync(dir)[0]), "utf8"));
+  assert.ok(saved.lastEventId === null || saved.lastEventId < 51, `saved cursor ${saved.lastEventId} skips undelivered events`);
+
+  // The thread lookup works again: the restarted monitor gets 51 and 52 by replay, once each.
+  fake.threads.set(50, { status: 200, body: { messages: [{ id: 50, conversationId: 3, actorId: 7, body: "root", threadId: null }] } });
+  const second = runMonitor(fake.url, "atk_test", home, 2);
+  t.after(() => second.child.kill());
+  await waitFor(() => second.out.exited, 8000);
+  const events = second.out.stdout.split("\n").filter((l) => /^\[\d+\]/.test(l));
+  assert.deepEqual(events.map((l) => l.slice(0, 4)), ["[51]", "[52]"], second.out.stdout + second.out.stderr);
 });
 
 test("monitor: stands down when the session was launched with the agenttalks channel flag", () => {
