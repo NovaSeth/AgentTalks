@@ -179,6 +179,31 @@ test("wake bridge: an oversized body is answered 413 at the cap and the connecti
   assert.equal(b.calls.length, 0);
 });
 
+test("wake bridge: the woken claude gets the environment without the bridge's wake secrets (Claude F5)", async (t) => {
+  const env = {
+    PATH: "/usr/bin:/bin", HOME: "/home/agent", LANG: "C.UTF-8",
+    AGENTTALKS_WAKE_SECRET: "wake-secret-SYNTH", AGENTTALKS_WAKE_ACTOR: "nestor", AGENTTALKS_WAKE_SERVER_URL: A,
+    AGENTTALKS_URL: "https://at.example", AGENTTALKS_TOKEN: "atk_identity_SYNTH", ANTHROPIC_API_KEY: "sk-SYNTH",
+  };
+  const b = await bridge(t, () => NOW, { extra: { env } });
+  assert.equal((await b.send(legacyBody())).status, 202);
+  const got = b.calls[0].env ?? {};
+  for (const k of Object.keys(got)) assert.ok(!k.startsWith("AGENTTALKS_WAKE_"), `${k} reached the woken run`);
+  assert.equal(got.PATH, env.PATH);
+  assert.equal(got.HOME, env.HOME);
+  // The agent's own identity and claude's credentials are what the woken session needs.
+  assert.equal(got.AGENTTALKS_TOKEN, env.AGENTTALKS_TOKEN);
+  assert.equal(got.ANTHROPIC_API_KEY, env.ANTHROPIC_API_KEY);
+
+  // spawnRunner hands exactly that environment to the child.
+  const out = join(mkdtempSync(join(tmpdir(), "at-plugin-wenv-")), "env.json");
+  await spawnRunner(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(out)}, JSON.stringify(process.env))`],
+    { cwd: tmpdir(), env: { PATH: process.env.PATH ?? "", ONLY: "this" } } as any);
+  const childEnv = JSON.parse(readFileSync(out, "utf8"));
+  assert.equal(childEnv.ONLY, "this");
+  assert.equal(childEnv.AGENTTALKS_WAKE_SECRET, undefined);
+});
+
 const A = "https://a.example";
 const B = "https://b.example";
 const SESSION_A = "session-a000-1111-2222";

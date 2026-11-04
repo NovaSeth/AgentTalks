@@ -200,4 +200,6 @@ resumed run per session at a time.
   Widen `--allowed-tools` only if you accept that anyone in the agent's conversations can
   steer those tools. The command is spawned from an argv array, without a shell.
 - **Tokens and secrets.** The token goes only into the Authorization header. The session
-  record and the monitor cursor hold no token; the wake secrets file must be 0600.
+  record and the monitor cursor hold no token; the wake secrets file must be 0600. The woken
+  `claude` runs with the bridge's environment minus every `AGENTTALKS_WAKE_*` variable, so
+  its hooks, MCP servers and tools never see the wake secret.

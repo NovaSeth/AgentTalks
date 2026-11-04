@@ -136,9 +136,26 @@ export function wakePrompt(body) {
  *  as running and block every later wake for it. */
 export const MAX_RUN_MS = 15 * 60 * 1000;
 
-/** @type {(cmd: string, argv: string[], opts: { cwd: string, timeoutMs?: number }) => Promise<void>} */
+/**
+ * The environment of the woken claude: the bridge's own, minus the wake secrets the bridge
+ * was configured with (AGENTTALKS_WAKE_*). The woken session's hooks, MCP servers and tools
+ * run under it, so they must not see the secret that authenticates knocks. Everything else
+ * stays: PATH and HOME, claude's own credentials, and the AgentTalks identity variables the
+ * plugin's channel server uses to answer.
+ * @param {NodeJS.ProcessEnv} env @returns {NodeJS.ProcessEnv}
+ */
+export function wakeEnv(env) {
+  /** @type {NodeJS.ProcessEnv} */
+  const out = {};
+  for (const [k, v] of Object.entries(env)) if (!k.startsWith("AGENTTALKS_WAKE_")) out[k] = v;
+  return out;
+}
+
+/** @type {(cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv, timeoutMs?: number }) => Promise<void>} */
 export const spawnRunner = (cmd, argv, opts) => new Promise((resolve) => {
-  const child = spawn(cmd, argv, { cwd: opts.cwd, shell: false, stdio: ["ignore", "ignore", "inherit"] });
+  const child = spawn(cmd, argv, {
+    cwd: opts.cwd, env: opts.env ?? wakeEnv(process.env), shell: false, stdio: ["ignore", "ignore", "inherit"],
+  });
   const limit = setTimeout(() => {
     child.kill("SIGTERM");
     setTimeout(() => child.kill("SIGKILL"), 5000).unref();
@@ -214,6 +231,7 @@ export function checkWakeConfig(secrets, sessions) {
  *   claudeBin?: string,
  *   allowedTools?: string,
  *   replayFile?: string | null,
+ *   env?: NodeJS.ProcessEnv,
  *   now?: () => number,
  *   log?: (line: string) => void,
  * }} opts
@@ -369,7 +387,7 @@ export function createWakeBridge(opts) {
         "--tools", "", "--allowedTools", allowedTools, "--", wakePrompt(body)];
       running.add(rec.sessionId);
       log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
-      void runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd })
+      void runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env: wakeEnv(opts.env ?? process.env) })
         .catch(() => {})
         .finally(() => running.delete(rec.sessionId));
       return reply(res, 202, { ok: true, woke: true });
