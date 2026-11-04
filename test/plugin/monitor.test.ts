@@ -130,3 +130,56 @@ test("monitor: stands down when the session was launched with the agenttalks cha
   assert.equal(monitorShouldRun({ AGENTTALKS_MONITOR: "off" }), false);
   assert.equal(monitorShouldRun({ AGENTTALKS_MONITOR: "on" }), true);
 });
+
+// T-MG-35 r1 F1: with no deadline (--max-seconds 0) the monitor must still end when the Claude
+// Code process it belongs to is gone, or when nobody reads its stdout any more. stdin is NOT a
+// signal: the tests (and a plain spawn) start it with stdin ignored, so it is closed from the start.
+function runNoDeadline(url: string, token: string, home: string, extraEnv: Record<string, string>, stdinMode: "ignore" | "pipe" = "ignore") {
+  const child = spawn(process.execPath, [MONITOR, "--max-seconds", "0"], {
+    cwd: home,
+    env: {
+      PATH: process.env.PATH, HOME: home, AGENTTALKS_URL: url, AGENTTALKS_TOKEN: token, AGENTTALKS_MONITOR: "on",
+      AGENTTALKS_ORPHAN_POLL_MS: "200", ...extraEnv,
+    },
+    stdio: [stdinMode, "pipe", "pipe"],
+  });
+  const out = { stderr: "", exited: false, code: null as number | null };
+  child.stderr!.on("data", (c) => { out.stderr += c; });
+  child.on("exit", (code) => { out.code = code; out.exited = true; });
+  return { child, out };
+}
+
+test("monitor --max-seconds 0: ends when its Claude Code process is gone, stays while it lives", async (t) => {
+  const home = mkdtempSync(join(tmpdir(), "at-plugin-orph-"));
+  const fakeClaude = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  t.after(() => fakeClaude.kill("SIGKILL"));
+  // An unreachable server: the monitor sits in its start-retry loop, as an orphan would.
+  const m = runNoDeadline("http://127.0.0.1:1", "tok", home, { AGENTTALKS_CLAUDE_PID: String(fakeClaude.pid) });
+  t.after(() => m.child.kill("SIGKILL"));
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal(m.out.exited, false, "a live Claude process keeps the monitor alive");
+  fakeClaude.kill("SIGKILL");
+  await waitFor(() => m.out.exited, 6000);
+  assert.equal(m.out.code, 0);
+});
+
+test("monitor --max-seconds 0: ends when its stdout is closed, and a closed stdin alone does not end it", async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.close());
+  const nestor = createActor(s.ctx, { kind: "agent", handle: "nestor" });
+  const bob = createActor(s.ctx, { kind: "agent", handle: "bob" });
+  const dm = ensureDirect(s.ctx, [nestor.id, bob.id]);
+  const tokenN = mintToken(s.ctx, nestor.id, "t").token;
+  const tokenB = mintToken(s.ctx, bob.id, "t").token;
+  const home = mkdtempSync(join(tmpdir(), "at-plugin-epipe-"));
+  const m = runNoDeadline(s.url, tokenN, home, {}, "pipe");
+  t.after(() => m.child.kill("SIGKILL"));
+  await waitFor(() => s.ctx.bus.streamCount(nestor.id) === 1, 5000);
+  m.child.stdin!.end();
+  await new Promise((r) => setTimeout(r, 800));
+  assert.equal(m.out.exited, false, "stdin end must not stop the monitor");
+  m.child.stdout!.destroy();
+  await post(s, tokenB, dm.id, "anyone there?");
+  await waitFor(() => m.out.exited, 6000);
+  assert.equal(m.out.code, 0);
+});

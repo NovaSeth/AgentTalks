@@ -127,6 +127,12 @@ deadline, and you re-arm it. Either way it saves its cursor in
 commit a cursor only for what they have WRITTEN (the monitor's line, the channel's notification
 after its 1-second rate limit), for events and mentions alike.
 
+With no deadline the monitor ends itself (cursor saved, presence stopped, exit 0) when the Claude
+Code process it belongs to is gone (checked every 15 s; `AGENTTALKS_ORPHAN_POLL_MS` overrides) or
+when its stdout is closed, so a crashed session leaves no orphan behind. A closed stdin does not
+end it: monitors normally start with stdin closed. Run by hand with no claude ancestor, only a
+signal or the deadline ends it.
+
 When the session was started with the channel flag, the monitor goes on standby so events do
 not arrive twice, but it stands down only while the channel PROVES it delivers: the channel
 server writes a heartbeat (`~/.config/agenttalks/state/channel-<claude pid>.json`, 0600, ids
