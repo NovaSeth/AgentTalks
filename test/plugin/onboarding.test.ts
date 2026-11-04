@@ -221,3 +221,31 @@ test("S8: login.mjs refuses when .agenttalks.json is tracked by git (the token w
   assert.equal(existsSync(s.conf), false);
   assert.ok(!(r.stdout + r.stderr).includes(TOKEN));
 });
+
+test("S9: login's git calls run no repository-configured program (core.fsmonitor in .git/config) and the repo's config is not consulted from the project cwd", async (t) => {
+  const fake: FakeAt = await fakeAt();
+  t.after(() => fake.close());
+  const s = setup();
+  const git = (...a: string[]) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: s.project, stdio: "pipe" });
+  git("init", "-q");
+  writeFileSync(join(s.project, "other.txt"), "x\n");
+  git("add", "other.txt");
+  git("commit", "-qm", "init");
+  const marker = join(s.home, "fsmonitor-ran");
+  const script = join(s.home, "fsmon.sh");
+  writeFileSync(script, `#!/bin/sh\ntouch ${marker}\nprintf '\\0'\n`, { mode: 0o755 });
+  git("config", "core.fsmonitor", script);
+  git("config", "core.hooksPath", join(s.home, "hooks"));
+  const r = await login(s, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(existsSync(marker), false, "the repository's fsmonitor program must not run");
+});
+
+test("S9b: login.mjs spawns git only with the hardening flags, a neutral cwd and a minimal env", () => {
+  const src = readFileSync(LOGIN, "utf8");
+  assert.ok(src.includes('"core.fsmonitor=false"'));
+  assert.ok(src.includes('"core.hooksPath=/dev/null"'));
+  assert.ok(src.includes("GIT_CONFIG_NOSYSTEM"));
+  assert.ok(src.includes("tmpdir()"));
+  assert.ok(/"-C", dir/.test(src));
+});
