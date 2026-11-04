@@ -26,7 +26,7 @@ const zrodloAtalk = readFileSync(
   "utf8",
 );
 
-test("kazda flaga uzywana w kodzie jest wymieniona w KNOWN_FLAGS", () => {
+test("every flag used in the code is listed in KNOWN_FLAGS", () => {
   const uzyte = new Set<string>();
   for (const m of zrodloAtalk.matchAll(/flagStr\(args,\s*"([a-z-]+)"\)/g)) uzyte.add(m[1]);
   for (const m of zrodloAtalk.matchAll(/args\.flags\.([a-zA-Z]+)/g)) uzyte.add(m[1]);
@@ -43,7 +43,7 @@ test("kazda flaga uzywana w kodzie jest wymieniona w KNOWN_FLAGS", () => {
   );
 });
 
-test("parser argumentow: nieznana flaga zostaje trescia, terminator konczy flagi", () => {
+test("argument parser: an unknown flag stays content, the terminator ends flags", () => {
   const znane = new Set(["title", "file"]);
   const a = parseArgs(["say", "testy", "padly", "na", "--coverage", "prosze"], znane);
   assert.deepEqual(a.positional, ["say", "testy", "padly", "na", "--coverage", "prosze"]);
@@ -79,7 +79,7 @@ async function uruchom(argv: string[], env: Record<string, string>): Promise<num
   }
 }
 
-test("atalk mowi do zywego serwera: whoami, say, read", async () => {
+test("atalk talks to a live server: whoami, say, read", async () => {
   const s = await startTestServer();
   const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
   createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
@@ -98,7 +98,7 @@ test("atalk mowi do zywego serwera: whoami, say, read", async () => {
   await s.close();
 });
 
-test("atalk wiki write --force dziala jako FLAGA, a nie jako tresc strony", async () => {
+test("atalk wiki write --force works as a FLAG rather than page content", async () => {
   const s = await startTestServer();
   const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });
   const bob = createActor(s.ctx, { kind: "agent", handle: "bob" });
@@ -128,12 +128,12 @@ test("atalk wiki write --force dziala jako FLAGA, a nie jako tresc strony", asyn
   await s.close();
 });
 
-test("atalk bez tokenu konczy sie kodem bledu, a nie wyjatkiem", async () => {
+test("atalk without a token returns an error code rather than throwing", async () => {
   const kod = await uruchom(["whoami"], { AGENTTALKS_URL: "http://127.0.0.1:1", AGENTTALKS_TOKEN: "" });
   assert.equal(kod, 1);
 });
 
-test("flaga logiczna nie polyka nastepnego slowa", () => {
+test("a boolean flag does not swallow the next word", () => {
   const znane = new Set(["title", "force", "stdin"]);
   // This is exactly the case that quietly broke `wiki write --force`: the parser took the
   // content as the flag's VALUE, so forcing did not happen and the first word of the content
@@ -168,7 +168,7 @@ import { join as sciezka } from "node:path";
 
 const wykonaj = promisify(execFile);
 
-test("atalk przyjmuje ATALKS_* obok AGENTTALKS_*, kanoniczne wygrywa", async () => {
+test("atalk accepts ATALKS_* alongside AGENTTALKS_*, the canonical name wins", async () => {
   const s = await startTestServer();
   try {
     const ala = createActor(s.ctx, { kind: "agent", handle: "ala" });

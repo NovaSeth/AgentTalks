@@ -92,7 +92,7 @@ test("kazde pole, ktore skill kaze wyslac, jest czytane przez trase", () => {
  *the code is known). This is the other direction, which that one cannot see: DOCUMENT ->
  *parser. We are teaching somebody a flag that does not exist.
  */
-test("kazda flaga CLI z dokumentacji istnieje w parserze", () => {
+test("every CLI flag in the documentation exists in the parser", () => {
   // Directories are READ, not listed by hand: a hard-coded list goes stale at the first new
   // document and quietly shrinks the coverage. The assertion on the number of flags found
   // caught this when that list was typed out.
@@ -148,7 +148,7 @@ test("kazda flaga CLI z dokumentacji istnieje w parserze", () => {
   ]);
   const parser = {
     atalk: znane(plik("../src/cli/atalk.ts"), "const KNOWN_FLAGS"),
-    agenttalks: znane(plik("../src/cli/main.ts"), "const FLAGI_LOGICZNE"),
+    agenttalks: znane(plik("../src/cli/main.ts"), "const BOOLEAN_FLAGS"),
   };
 
   const nieznane: string[] = [];

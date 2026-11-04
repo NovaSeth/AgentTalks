@@ -7,10 +7,10 @@
 const major = Number(process.versions.node.split(".")[0]);
 if (major < 24) {
   process.stderr.write(
-    `AgentTalks wymaga Node 24 lub nowszego, a to jest Node ${process.versions.node}.\n` +
-      `Dwie drogi wyjscia:\n` +
-      `  1. Kontener:  docker compose up -d   (wersja Node jest wtedy wlasnoscia obrazu)\n` +
-      `  2. Menedzer wersji:  fnm use 24  albo  nvm use 24\n`,
+    `AgentTalks requires Node 24 or newer; this is Node ${process.versions.node}.\n` +
+      `Choose one of these options:\n` +
+      `  1. Container:  docker compose up -d   (the image provides the Node version)\n` +
+      `  2. Version manager:  fnm use 24  or  nvm use 24\n`,
   );
   process.exit(1);
 }
