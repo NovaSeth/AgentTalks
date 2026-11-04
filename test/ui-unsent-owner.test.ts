@@ -157,34 +157,32 @@ const failedBodies = (ui: Any) => ui.st.visibleMessages(5).filter((m: Any) => m.
 const storedIds = (owner: number, conv: number) => Object.keys(store)
   .filter((k) => k.startsWith(`atalks_unsent_${owner}_${conv}_`)).map((k) => JSON.parse(store[k]).clientMsgId).sort();
 
-test("(a) A and B entries in one key: each account restores only its own", async (t) => {
-  for (const [actor, marker, want] of [[A, "1", ["a-text"]], [B, "2", ["b-text"]]] as Any[]) {
+test("(a) D-MG-30: a shared list holding A and B entries is deleted; neither account restores from it", async (t) => {
+  for (const actor of [A, B] as Any[]) {
     const ui = await loadUi();
     freshState(ui);
     const setFetch = useFetch(t);
-    store["atalks_owner"] = marker;
+    store["atalks_owner"] = String(actor.id);
     seed(5, [entry("m-a", "a-text", 1), entry("m-b", "b-text", 2)]);
     await signIn(ui, actor, setFetch);
-    assert.deepEqual(failedBodies(ui), want);
+    assert.deepEqual(failedBodies(ui), []);
+    assert.equal(store["atalks_unsent_5"], undefined, "the legacy list is deleted");
+    assert.equal(store["atalks_owner"], undefined);
   }
 });
 
-test("(b) B persists after A wrote: A's entry stays, is not re-owned, is not shown to B", async (t) => {
+test("(b) B persists after A wrote its own key: A's entry stays A's, is not shown to B", async (t) => {
   const ui = await loadUi();
   freshState(ui);
   const setFetch = useFetch(t);
-  store["atalks_owner"] = "2";
-  seed(5, [entry("m-a", "a-text", 1)]);
+  store["atalks_unsent_1_5_m-a"] = JSON.stringify(entry("m-a", "a-text"));
   await signIn(ui, B, setFetch);
   assert.deepEqual(failedBodies(ui), []);
   ui.st.state.pending[5] = [{ clientMsgId: "m-b", body: "b-text", ts: 2, failed: true, error: null }];
   ui.st.persistUnsent(5);
-  // F5 (r5): one key per account; the pre-r5 shared list was split by ownerId at sign-in.
-  // T-MG-16 fix round 1: the shared list is only read (copied per message), and B's write leaves it as it was.
-  assert.equal(store["atalks_unsent_5"], JSON.stringify([entry("m-a", "a-text", 1)]), "the shared list is only read, never rewritten");
   assert.deepEqual(storedIds(1, 5), ["m-a"], "A's entry stays A's, untouched by B's write");
   assert.deepEqual(storedIds(2, 5), ["m-b"], "B's entry only in B's key");
-  assert.equal(store["atalks_owner"], undefined, "persistUnsent never writes the owner marker (the migration removed it, F2 r3)");
+  assert.equal(store["atalks_owner"], undefined, "persistUnsent never writes the owner marker");
   ui.st.state.pending = {};
   ui.st.claimLocalData(2);
   assert.deepEqual(failedBodies(ui), ["b-text"]);
@@ -203,25 +201,17 @@ test("(b2) persistUnsent leaves the marker alone even when it was never set", as
   assert.equal(store["atalks_unsent_5"], undefined);
 });
 
-test("(c) a legacy entry without ownerId goes to the marker's account once, never to another", async (t) => {
+test("(c) D-MG-30: a legacy entry without ownerId is deleted, whoever the marker names", async (t) => {
   const ui = await loadUi();
   freshState(ui);
   const setFetch = useFetch(t);
-  store["atalks_owner"] = "1";
-  seed(5, [entry("old", "legacy-text")]);
-  await signIn(ui, A, setFetch);
-  assert.deepEqual(failedBodies(ui), ["legacy-text"]);
-  assert.deepEqual(storedIds(1, 5), ["old"], "claimed by A, into A's key (F5 r5)");
-
-  freshState(ui);
-  store["atalks_owner"] = "2";
-  seed(5, [entry("old2", "legacy-2")]);
-  await signIn(ui, A, setFetch);
-  assert.deepEqual(failedBodies(ui), [], "marker is B: the legacy entry is foreign to A");
-
-  freshState(ui);
-  store["atalks_owner"] = "1";
-  seed(5, [entry("old3", "legacy-3")]);
-  await signIn(ui, B, setFetch);
-  assert.deepEqual(failedBodies(ui), [], "B never gets a legacy entry");
+  for (const [marker, actor] of [["1", A], ["2", A], ["1", B]] as Any[]) {
+    freshState(ui);
+    store["atalks_owner"] = marker;
+    seed(5, [entry("old", "legacy-text")]);
+    await signIn(ui, actor, setFetch);
+    assert.deepEqual(failedBodies(ui), []);
+    assert.deepEqual(storedIds(actor.id, 5), []);
+    assert.equal(store["atalks_unsent_5"], undefined, "the legacy list is deleted");
+  }
 });

@@ -320,3 +320,63 @@ test("R1 F5: Enter saves a main-list edit; the focus lands in the composer that 
   } finally { store.registerViews({ message: chat.upsertMessageNode }); }
   assert.equal(active, fresh);
 });
+
+// ------------------------------------------------------------------ T-MG-18 (B-MG-117)
+// The save's SSE message_updated can redraw the thread BEFORE the PATCH answer: the redraw removes
+// the editor, so the focus check at the answer saw "no focus" and gave nothing back.
+const sseRedraw = (body: string) => {
+  const updated = { id: 10, conversationId: 5, actorId: 1, body, ts: 1, kind: "text", editedAt: 2 };
+  state.msgs[5][0] = updated; state.threadMsgs = [updated];
+  chat.renderThread();
+};
+
+test("B-MG-117 (codex repro): the SSE redraw before the PATCH answer still ends with the focus in th-input", async () => {
+  openChat();
+  store.registerViews({ thread: chat.renderThread });
+  try {
+    Object.assign(state, { threadOpen: 10, threadMsgs: [state.msgs[5][0]] });
+    threadSlot();
+    chat.renderThread();
+    const ta = startEdit(els.get("th-msgs")!);
+    ta.value = "thread edit saved";
+    key(ta, "Enter");
+    await settle();
+    assert.equal(held[0]?.method, "PATCH");
+    sseRedraw("thread edit saved");                    // message_updated arrives first
+    assert.equal(active, null, "the redraw removed the editor and the focus with it");
+    answer(200, { message: { id: 10, conversationId: 5, actorId: 1, body: "thread edit saved", ts: 1, kind: "text", editedAt: 2 } });
+    await settle();
+    assert.equal(active, els.get("th-input"), "the focus is in the thread box on screen");
+  } finally {
+    store.registerViews({ thread: () => {} });
+  }
+});
+
+test("B-MG-117: the user focusing something else after the submit (a focusin) keeps that focus", async () => {
+  openChat();
+  store.registerViews({ thread: chat.renderThread });
+  const added: ((ev: Any) => unknown)[] = [];
+  const doc = g.document;
+  const [add, remove] = [doc.addEventListener, doc.removeEventListener];
+  doc.addEventListener = (type: string, fn: (ev: Any) => unknown) => { if (type === "focusin") added.push(fn); };
+  doc.removeEventListener = (type: string, fn: (ev: Any) => unknown) => { const i = added.indexOf(fn); if (type === "focusin" && i >= 0) added.splice(i, 1); };
+  try {
+    Object.assign(state, { threadOpen: 10, threadMsgs: [state.msgs[5][0]] });
+    threadSlot();
+    chat.renderThread();
+    const ta = startEdit(els.get("th-msgs")!);
+    ta.value = "thread edit saved";
+    key(ta, "Enter");
+    await settle();
+    const other = el({ id: "search" });
+    sseRedraw("thread edit saved");
+    for (const fn of [...added]) fn({ target: other });          // the user clicked the search box meanwhile
+    answer(200, { message: { id: 10, conversationId: 5, actorId: 1, body: "thread edit saved", ts: 1, kind: "text", editedAt: 2 } });
+    await settle();
+    assert.notEqual(active, els.get("th-input"), "the thread box does not steal the focus");
+    assert.equal(added.length, 0, "the focusin listener is removed once the save settled");
+  } finally {
+    doc.addEventListener = add; doc.removeEventListener = remove;
+    store.registerViews({ thread: () => {} });
+  }
+});

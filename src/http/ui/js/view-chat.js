@@ -1409,8 +1409,12 @@ function startInlineEdit(messageId, scope) {
   const ta = holder.querySelector("textarea");
   ta.value = msg.body;
   const inThread = scope?.id === "th-msgs";
-  /** Closes the editor; returns the focus step, to run once every redraw of the save is done. */
-  const finishEdit = () => {
+  const boxIds = new Set(["th-input", "composer-input"]);
+  /** Closes the editor; returns the focus step, to run once every redraw of the save is done.
+   *  `intent` (B-MG-117): the edit was submitted from the focused editor, so the focus is owed to the
+   *  box even when a background redraw (the SSE message_updated) removed the editor before the
+   *  answer came - unless the user deliberately focused something else since the submit. */
+  const finishEdit = (intent) => {
     // B-MG-98: the field is about to disappear; while it still had the focus, the focus goes back
     // to the box the edit belongs to (the thread box for an edit in the thread panel), so ArrowUp
     // there edits the last message again. A focus the user moved elsewhere during the save stays.
@@ -1422,7 +1426,12 @@ function startInlineEdit(messageId, scope) {
     // Fix round 1 (codex F5): the save redraws the thread (and may redraw the list) AFTER this
     // point, removing the box focused here; the box is looked up again once the update settled.
     return () => {
-      if (!hadFocus) return;
+      if (intent) {
+        const now = document.activeElement;
+        const elsewhere = now && now !== document.body && now !== document.documentElement && now !== ta
+          && !boxIds.has(now.id) && !(now.closest && now.closest(`[data-text="${messageId}"]`));
+        if (intent.moved || elsewhere) return;
+      } else if (!hadFocus) return;
       const box = (inThread && document.getElementById("th-input")) || document.getElementById("composer-input");
       box?.focus();
     };
@@ -1435,10 +1444,21 @@ function startInlineEdit(messageId, scope) {
       const v = ta.value.trim();
       if (!v || v === msg.body) { finishEdit()(); return; }
       let refocus = null;
+      // B-MG-117: a focusin outside the editor and the boxes since the submit is a deliberate move.
+      const intent = { moved: false };
+      const onFocusIn = (ev) => {
+        const target = ev.target;
+        if (target === ta || (target && boxIds.has(target.id))) return;
+        if (target && target.closest && target.closest(`[data-text="${messageId}"]`)) return;
+        intent.moved = true;
+      };
+      const armed = document.activeElement === ta;
+      if (armed) document.addEventListener("focusin", onFocusIn);
       try {
-        await saveEditedMsg(messageId, v, () => { refocus = finishEdit(); });
+        await saveEditedMsg(messageId, v, () => { refocus = finishEdit(armed ? intent : undefined); });
         refocus?.();
       } catch (err) { showError(err); }
+      finally { document.removeEventListener("focusin", onFocusIn); }
     }
     if (e.key === "Escape") { e.preventDefault(); finishEdit()(); }
   });

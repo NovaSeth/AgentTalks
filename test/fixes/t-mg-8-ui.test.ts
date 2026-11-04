@@ -290,11 +290,8 @@ test("B-MG-41: logout clears all account state and drafts while preserving brows
   assert.deepEqual(model.dmMembersCache, {});
   assert.equal(model.animatedMsgs.size, 0);
   assert.equal(model.reports.size, 0);
-  // The storage-layout flag (F4 r5) is a browser-level record, like the language: no account data.
-  // T-MG-16 fix round 1: the layout's first-seen time is browser-level, next to the flag.
-  assert.ok(Number(storage.data.get("atalks_storage_v_since")) > 0);
-  assert.deepEqual([...storage.data].filter(([k]) => k !== "atalks_storage_v_since"),
-    [["atalks_lang", "en"], ["unrelated", "keep"], ["atalks_storage_v", "2"]]);
+  // Legacy keys are deleted at sign-out (D-MG-30); only browser preferences remain.
+  assert.deepEqual([...storage.data], [["atalks_lang", "en"], ["unrelated", "keep"]]);
   assert.equal(session.getItem("atalks_actor"), null);
   assert.equal(session.getItem("atalks_csrf"), null);
 });

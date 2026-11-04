@@ -39,14 +39,28 @@ const INITIAL_BATCH_SIZE = 30;
 
 const OLDER_BATCH_SIZE = 20;
 
-export async function loadMessages(convId) {
+/** The reactions of just these messages: a skipped message keeps the reactions it already has. */
+export function reactionsOf(msgs, reactions) {
+  return Object.fromEntries(msgs.filter((m) => reactions && m.id in reactions).map((m) => [m.id, reactions[m.id]]));
+}
+
+export async function loadMessages(convId, { keepTouched = false } = {}) {
   const firstLoad = !state.loaded[convId];
+  // keepTouched (resume refresh, codex r3 F4): a message whose held object changed while the request
+  // was in flight was replaced by a live event or a newer action, so the answer (cut earlier on the
+  // server) must not put the older revision back. A reference comparison: every writer replaces the object.
+  const before = keepTouched ? new Map((state.msgs[convId] || []).map((m) => [m.id, m])) : null;
   const data = await api("GET", `/api/conversations/${convId}/messages?limit=${INITIAL_BATCH_SIZE}`);
   // We MERGE rather than replace the array: assigning `state.msgs[id] = ...` erased everything
   // the user had loaded by scrolling up.
   // History enters without animation - the "slide in" is played only by a message that arrived
   // live (SSE), not by every opening of a channel.
-  for (const m of data.messages) { upsertMessage(convId, m); animatedMsgs.add(m.id); }
+  const touched = (m) => {
+    const held = state.msgs[convId]?.find((h) => h.id === m.id);
+    return before !== null && held !== undefined && held !== before.get(m.id);
+  };
+  const fresh = data.messages.filter((m) => !touched(m));
+  for (const m of fresh) { upsertMessage(convId, m); animatedMsgs.add(m.id); }
   // The "history FETCHED" marker (not "there are some messages"): a single message from SSE
   // must not pretend to be a loaded conversation.
   state.loaded[convId] = true;
@@ -54,7 +68,7 @@ export async function loadMessages(convId) {
   // conversation, a new batch says nothing about what lies ABOVE our list.
   if (firstLoad) state.hasMore[convId] = data.messages.length >= INITIAL_BATCH_SIZE;
   mergeActors(data.actors);
-  mergeReactions(data.messages, data.reactions);
+  mergeReactions(fresh, reactionsOf(fresh, data.reactions));
   // Thread replies do not stand in the main list, so a batch of 30 messages can produce a
   // screen with three. We fetch more until there is something to scroll - without that, lazy
   // loading would never start, because there simply is no scrollbar.

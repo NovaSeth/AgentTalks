@@ -2,10 +2,10 @@
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
 import { ACTOR_KEY, CSRF_KEY, api, newSessionGeneration, onUnauthorized, sessionGeneration, setCsrf } from "./api.js";
-import { cancelMarkRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { cancelMarkRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, reactionsOf, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { announce, closeAccountOverlays, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
-import { actorHandle, findMsgById, mentionsMe, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
+import { actorHandle, findMsgById, mentionsMe, mergeActors, mergeReactions, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
 import { showToast } from "./toasts.js";
 
 // ------------------------------------------------------------ session lost (S7)
@@ -96,6 +96,7 @@ export function disconnectSSE() {
   state.sseCursor = 0;
   sseResume = false;
   replayFloor = undefined;
+  gapFloors = {};
 }
 
 /** The newest message id among the conversations whose history was fetched (REST): undefined
@@ -111,8 +112,52 @@ function newestLoadedId() {
   return newest;
 }
 
+// T-MG-18 fix round 1 (codex F1): the catch-up floor of each loaded conversation = its newest id
+// when the stream broke. Recorded once with replayFloor, kept until that conversation's catch-up
+// has succeeded in full; live events and refreshes in between never raise it.
+let gapFloors = {};
+
+// T-MG-18 fix round 2 (codex F2, F3): a pending floor is captured at EVERY break for each loaded
+// conversation that has none (an older unresolved floor is lower and still owed, so it is never
+// overwritten), and cleared only by that conversation's full catch-up.
+function captureGapFloors() {
+  for (const id of Object.keys(state.loaded)) {
+    if (state.loaded[id] && gapFloors[id] === undefined) gapFloors[id] = newestIdOf(Number(id));
+  }
+}
+
 function captureReplayFloor() {
-  if (!state.sseCursor && replayFloor === undefined) replayFloor = newestLoadedId();
+  captureGapFloors();
+  if (state.sseCursor || replayFloor !== undefined) return;
+  replayFloor = newestLoadedId();
+}
+
+/** The messages of one conversation after `floor`, page by page (the route's limit is 500) until a
+ *  page is shorter than the limit. A page of another session generation is dropped by api(). */
+const CATCH_UP_PAGE = 200;
+async function loadGapAfter(convId, floor, gen) {
+  let after = floor;
+  for (;;) {
+    const data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${CATCH_UP_PAGE}`);
+    if (gen !== sessionGeneration()) return;
+    // F4 (codex r3): the catch-up only INSERTS ids not held yet. A held message belongs to a live event
+    // (or an explicit reload) that may be newer than this page, which was cut on the server before the
+    // await; the page still advances the paging cursor below by every id it carried.
+    const held = new Set((state.msgs[convId] || []).map((m) => m.id));
+    const fresh = data.messages.filter((m) => !held.has(m.id));
+    for (const m of fresh) upsertMessage(convId, m);
+    mergeActors(data.actors);
+    mergeReactions(fresh, reactionsOf(fresh, data.reactions));
+    const top = data.messages.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), after);
+    if (data.messages.length < CATCH_UP_PAGE || top <= after) return;
+    after = top;
+  }
+}
+
+function newestIdOf(convId) {
+  let newest = 0;
+  for (const m of state.msgs[convId] || []) if (typeof m.id === "number" && m.id > newest) newest = m.id;
+  return newest;
 }
 
 /** F4: a floor of 0 is not sent as `after=0` (that replays every message of every conversation
@@ -122,8 +167,13 @@ function captureReplayFloor() {
 async function catchUpLoadedHistories(gen) {
   const loaded = Object.keys(state.loaded).filter((id) => state.loaded[id]).map(Number);
   for (const convId of loaded) {
-    try { await loadMessages(convId); } catch { continue; }
+    // The newest 30 refresh what the list already holds (edits); the gap after the newest id the
+    // list had before the break is then paged in full (B-MG-116): a gap longer than 30 messages
+    // would otherwise lose its oldest ones.
+    const floor = gapFloors[convId] ?? newestIdOf(convId);
+    try { await loadMessages(convId, { keepTouched: true }); await loadGapAfter(convId, floor, gen); } catch { continue; }
     if (gen !== sessionGeneration()) return;
+    delete gapFloors[convId];
     if (state.view === "chat" && state.activeId === convId) views.messages?.();
   }
 }
@@ -137,14 +187,15 @@ export function connectSSE() {
   // after a break - a replay from the cursor: the last event's id, or (B-MG-97, F3) the floor
   // captured before the first attempt while no event has arrived.
   const after = state.sseCursor || (sseResume ? replayFloor : undefined);
-  const catchUp = sseResume && !state.sseCursor && replayFloor === 0;
   const source = es = new EventSource(after ? `/api/events?after=${after}` : "/api/events");
   es.onopen = async () => {
     sseRetry = 0;
     setOnline(true);
     if (!sseResume) return;
     sseResume = false;
-    if (catchUp) catchUpLoadedHistories(sessionGeneration());
+    // The REST catch-up is independent of the stream's cursor: each conversation pages from its own
+    // pending floor, whatever events the stream has delivered meanwhile.
+    catchUpLoadedHistories(sessionGeneration());
     // After a break the unread counters and list contents can be arbitrarily stale - a replay
     // carries messages only, not state.
     try { await loadConversationsList(); views.sidebar(); updateTitleBadge(); }
