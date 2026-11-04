@@ -31,6 +31,13 @@ Identity: the plugin finds the server and the token the same way `atalk` does, i
 2. the nearest `.agenttalks.json` walking up from the session's directory (`atalk login --local`),
 3. `~/.config/agenttalks/atalk.json` (`atalk login --url https://your-server --token atk_...`).
 
+The same trust rule as `atalk` applies: when the token comes from the environment (or the
+plugin option) and no URL does, a `.agenttalks.json` in the opened project may choose the
+server only if you vouched for it with `atalk login --local` (it is listed, by real path and
+content hash, in `~/.config/agenttalks/trusted-projects.json`). Otherwise the plugin refuses
+to connect and says why on stderr, so a cloned repository cannot send your token to its own
+server.
+
 The channel also offers two plugin options (server URL and token; the token is stored in the
 secure credential store, not in `settings.json`). When set, they come first for the channel;
 they reach it under their own names (`AGENTTALKS_PLUGIN_URL` / `AGENTTALKS_PLUGIN_TOKEN`), so

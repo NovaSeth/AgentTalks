@@ -5,7 +5,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveIdentity } from "../../integrations/claude-code-plugin/lib/identity.mjs";
@@ -67,6 +68,42 @@ test("identity: empty plugin options do not overwrite the inherited AGENTTALKS_*
   // Options that ARE set win over the inherited variables.
   const set = resolveIdentity({ env: launchEnv(inherited, { url: "https://option.example", token: "atk_option" }), cwd: t.deep, home: t.home });
   assert.deepEqual(set, { url: "https://option.example", token: "atk_option", source: "env" });
+});
+
+test("identity: an untrusted project file cannot choose the server for a token from the environment (Claude F8, atalk rule)", () => {
+  const t = tree();
+  const projectFile = join(t.project, ".agenttalks.json");
+  // A cloned repository ships a project file that points at its own server, no token.
+  writeFileSync(projectFile, JSON.stringify({ url: "https://attacker.example" }));
+  const env = { AGENTTALKS_TOKEN: "atk_env" };
+  const reasons: string[] = [];
+  assert.equal(resolveIdentity({ env, cwd: t.deep, home: t.home, report: (m: string) => reasons.push(m) } as any), null,
+    "fail closed: the env token must not go to the project file's url");
+  assert.match(reasons.join("\n"), /not trusted/);
+  // The plugin's own option token is a token from elsewhere too.
+  assert.equal(resolveIdentity({ env: { AGENTTALKS_PLUGIN_TOKEN: "atk_opt" }, cwd: t.deep, home: t.home } as any), null);
+  // An explicit URL decides instead: the project file's url is not used.
+  assert.equal(resolveIdentity({ env: { ...env, AGENTTALKS_URL: "https://mine.example" }, cwd: t.deep, home: t.home })?.url,
+    "https://mine.example");
+
+  // `atalk login --local` vouched for the file (trusted-projects.json: real path + sha256).
+  const sha = createHash("sha256").update(readFileSync(projectFile)).digest("hex");
+  writeFileSync(join(t.home, ".config", "agenttalks", "trusted-projects.json"),
+    JSON.stringify({ projects: [{ path: realpathSync(projectFile), sha256: sha }] }));
+  assert.equal(resolveIdentity({ env, cwd: t.deep, home: t.home })?.url, "https://attacker.example");
+  // A changed file is no longer the file that was vouched for.
+  writeFileSync(projectFile, JSON.stringify({ url: "https://attacker.example/changed" }));
+  assert.equal(resolveIdentity({ env, cwd: t.deep, home: t.home }), null);
+  // AGENTTALKS_CONFIG_DIR moves the trust list, as for atalk.
+  const cfg = mkdtempSync(join(tmpdir(), "at-plugin-cfg-"));
+  writeFileSync(join(cfg, "trusted-projects.json"), JSON.stringify({ projects: [{ path: realpathSync(projectFile),
+    sha256: createHash("sha256").update(readFileSync(projectFile)).digest("hex") }] }));
+  assert.equal(resolveIdentity({ env: { ...env, AGENTTALKS_CONFIG_DIR: cfg }, cwd: t.deep, home: t.home })?.url,
+    "https://attacker.example/changed");
+  // A project file with its OWN token sends that token to its own url (atalk only warns).
+  writeFileSync(projectFile, JSON.stringify({ url: "https://proj.example", token: "atk_project" }));
+  assert.deepEqual(resolveIdentity({ env: {}, cwd: t.deep, home: t.home }),
+    { url: "https://proj.example", token: "atk_project", source: "project" });
 });
 
 test("identity: nearest .agenttalks.json walking up, then the global file, else null", () => {

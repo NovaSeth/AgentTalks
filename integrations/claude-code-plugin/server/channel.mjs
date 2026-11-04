@@ -30,7 +30,7 @@ const log = (line) => process.stderr.write(`[agenttalks-channel] ${line}\n`);
 // Claude Code starts stdio servers in the project; CLAUDE_PROJECT_DIR, when present, is the
 // more reliable answer to "which project is this session in".
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const identity = resolveIdentity({ cwd });
+const identity = resolveIdentity({ cwd, report: log });
 log(describeIdentity(identity));
 const api = identity ? createApi(identity) : null;
 const sessionId = process.env.CLAUDE_CODE_SESSION_ID

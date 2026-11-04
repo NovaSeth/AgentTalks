@@ -43,7 +43,7 @@ function parseArgs(argv) {
 
 const { maxSeconds, stateDir } = parseArgs(process.argv.slice(2));
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const identity = resolveIdentity({ cwd });
+const identity = resolveIdentity({ cwd, report: log });
 if (!identity) {
   log("no AgentTalks identity (AGENTTALKS_TOKEN, .agenttalks.json or ~/.config/agenttalks/atalk.json): nothing to watch");
   process.exit(0);

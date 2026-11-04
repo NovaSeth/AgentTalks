@@ -90,7 +90,7 @@ async function main() {
   const input = await readInput();
   const claudeSession = typeof input.session_id === "string" ? input.session_id : "";
   const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
-  const identity = resolveIdentity({ cwd });
+  const identity = resolveIdentity({ cwd, report: (/** @type {string} */ r) => process.stderr.write(`[agenttalks-hook] ${r}\n`) });
   if (!identity || !claudeSession) return;
   const sessionId = deriveSessionId(claudeSession);
 
