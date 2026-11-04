@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/data.js",
+      "line": 60,
+      "rule": "REV-2",
+      "text": "Acceptance 4; ui-t18 harness repro: heldResume(t,/messages\\?limit=30$/), drop again, set reactions5={1:thumbs('nestor')}, finish another reconnect, then release the held response. Output: reactions[1]=undefined; base keeps {'+1':['nestor']}. Only live refreshes are stamped, so the old page erases newer REST reactions; after=1 cannot restore message 1. Track all reaction writes or reject superseded catch-ups, and add this regression."
+    }
+  ],
+  "run": "codex-T-MG-43-reviewer-1",
+  "sha256": "fb60822e0aee96e3466b17d53424e4675bd2d25f192bbad42339bdc332f5885a"
+}

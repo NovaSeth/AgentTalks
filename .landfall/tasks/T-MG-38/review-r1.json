@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": 57,
+      "rule": "REV-2",
+      "text": "Acceptance 2/5: selecting Wiki from Activity opens Home. Reproduced using the task's bootApp harness: state.view='notifications'; views.render(); await go('#/wiki') produced {view:'chat',place:'home',wikiTree:false}. setSidebarPlace records a null navigation key before goPlace switches to chat, so followPlace overrides the explicit Wiki choice. Establish the baseline after switching views."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-sidebar.js",
+      "line": 86,
+      "rule": "REV-2",
+      "text": "Acceptance 4: reopening the current wiki page through a non-route entry leaves its tree hidden. Reproduced in the task's Node harness: await openWikiPage('nowosci'); sidebar.setSidebarPlace('home'); await openWikiPage('nowosci') produced {view:'wiki',place:'home',wikiTree:false}. The unchanged navigation key suppresses this explicit navigation. Select Wiki on page-opening actions while allowing ordinary redraws to preserve the chosen place."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "src/http/ui/js/app.js",
+      "line": 413,
+      "rule": "REV-2",
+      "text": "Acceptance 3/5: delayed route completion overrides a newer place selection. Reproduced with the task's Node harness: hold GET /api/wiki/slow, navigate to #/wiki/slow, then #/dms, and release the GET. Output changed from {hash:'#/dms',place:'dms'} to {hash:'#/dms',place:'wiki'}. settleRoutePlace runs unconditionally after the await. Apply the place when navigation starts, or guard completion against newer navigation, rail selections and session changes."
+    }
+  ],
+  "run": "codex-T-MG-38-reviewer-1",
+  "sha256": "eb1e1748c1e0f7084ff6829e991c5e75bfcb046c1fafb9a6d0c5d834254f639a"
+}
