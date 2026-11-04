@@ -420,3 +420,58 @@ test("wake tools (T-MG-45): the version is 0.3.1 in the plugin manifest, channel
     assert.ok(readFileSync(join(root, f), "utf8").includes('const VERSION = "0.3.1";'), f);
   }
 });
+
+// --- T-MG-45 fix round 1 ---
+
+const MIXED: Msg[] = Array.from({ length: 90 }, (_, i) => ({
+  id: 60 + i, conversationId: 3, actorId: 9, actorHandle: "michal",
+  body: i === 89 ? "LAST\n" + "y".repeat(60_000) : `small-${60 + i}\n` + "z".repeat(1_000), threadId: null, deletedAt: null,
+}));
+
+test("wake tools (T-MG-45 F1): mixed sizes, default limit - following the printed cursor reaches every id exactly once", async (t) => {
+  const api = await fakeApi(t, { [NESTOR_TOKEN]: { id: 7, handle: "nestor" } }, MIXED);
+  const s = toolsServer(t, { identity: { url: api.url, token: NESTOR_TOKEN }, expect: nestorExpect(api.url) });
+  await s.start();
+  const seen: number[] = [];
+  let args: Record<string, unknown> = { conversation_id: 3, limit: 50 };
+  for (let guard = 0; guard < 40; guard++) {
+    const r = await s.call("read_conversation", args);
+    const text: string = r.content[0].text;
+    assert.ok(text.length <= BUDGET);
+    seen.unshift(...idsIn(text));
+    const cur = /call read_conversation again with before=(\d+)\]/.exec(text);
+    if (!cur) break;
+    args = { conversation_id: 3, limit: 50, before: Number(cur[1]) };
+  }
+  assert.deepEqual(seen, MIXED.map((m) => m.id));
+});
+
+test("wake tools (T-MG-45 F2): a 60 000-char message is reachable whole through the printed continuation, in read_conversation and read_thread", async (t) => {
+  const one: Msg[] = [{ id: 100, conversationId: 3, actorId: 9, actorHandle: "michal", body: "x".repeat(59_990) + "\nEND-MARKER", threadId: null, deletedAt: null }];
+  const api = await fakeApi(t, { [NESTOR_TOKEN]: { id: 7, handle: "nestor" } }, one);
+  const s = toolsServer(t, { identity: { url: api.url, token: NESTOR_TOKEN }, expect: nestorExpect(api.url) });
+  await s.start();
+  for (const [tool, first, re, mk] of [
+    ["read_conversation", { conversation_id: 3, around: 100, limit: 1 }, /read_conversation conversation_id=3 around=100 limit=1 body_offset=(\d+)\]/, (n: number) => ({ conversation_id: 3, around: 100, limit: 1, body_offset: n })],
+    ["read_thread", { message_id: 100 }, /read_thread message_id=100 body_offset=(\d+)\]/, (n: number) => ({ message_id: 100, body_offset: n })],
+  ] as const) {
+    let args: any = first;
+    let xs = 0;
+    let marker = false;
+    for (let guard = 0; guard < 10; guard++) {
+      const r = await s.call(tool, args);
+      assert.notEqual(r.isError, true, JSON.stringify(r).slice(0, 300));
+      const text: string = r.content[0].text;
+      assert.ok(text.length <= BUDGET);
+      xs += (text.match(/x/g) ?? []).length;
+      if (text.split("\n").includes("> END-MARKER")) marker = true;
+      const cur = re.exec(text);
+      if (!cur) break;
+      args = mk(Number(cur[1]));
+    }
+    assert.equal(xs, 59_990, tool);
+    assert.ok(marker, `${tool}: the tail is reachable`);
+  }
+  assert.equal((await s.call("read_conversation", { conversation_id: 3, body_offset: 5 })).isError, true, "body_offset needs around");
+  assert.equal((await s.call("read_thread", { message_id: 100, body_offset: 70_000 })).isError, true, "offset past the end");
+});
