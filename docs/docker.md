@@ -2,9 +2,9 @@
 
 ## Why a container
 
-The target server already runs a service on Node 18 (`nestor.service`), and AgentTalks
-needs Node 24 or newer. A container makes the Node version **a property of the image, not
-of the machine**, which means:
+AgentTalks needs Node 24 or newer, and a server often runs other services on an older
+Node. A container makes the Node version **a property of the image, not of the machine**,
+which means:
 
 1. nothing collides with existing services and nothing breaks on a system upgrade,
 2. an upgrade and a rollback are a change of image tag, not a manual operation on files
@@ -27,7 +27,10 @@ docker compose logs -f agenttalks
 ```
 
 A fresh clone comes up with no configuration at all: port `127.0.0.1:8787`, the anti-bot
-gate off, data in the `agenttalks_data` volume.
+gate off, data in the `agenttalks_data` volume. The variables that matter
+(`AGENTTALKS_HOST_PORT`, `AGENTTALKS_BASE_URL`, `AGENTTALKS_SITE_PASSWORD_FILE`,
+`AGENTTALKS_SECRETS_DIR`, `AGENTTALKS_DATA_VOLUME`) are listed in
+`deploy/instance.env.example`.
 
 On a server, keep this instance's values **outside the repository** - they survive a
 deployment (which deletes and unpacks the code directory from scratch) and never reach
@@ -129,7 +132,7 @@ number of skipped records **and their reasons**.
 
 Everything lives in the `agenttalks_data` volume mounted at `/data`: `agenttalks.sqlite`
 (the database), `agenttalks.json` (configuration with the session secret, mode 600),
-`files/` (uploaded files, stage 3).
+`files/` (uploaded files).
 
 Wiki attachments are readable by **every signed-in actor**, because the wiki is
 shared across the instance. They do not inherit a private conversation's access
@@ -171,20 +174,12 @@ Schema migrations run at start, inside a transaction, based on `PRAGMA user_vers
 Rolling a change back is `docker compose up -d` with an older image tag, as long as the
 newer version did not raise the schema version.
 
-## Coexisting with `nestor.service`
+## Coexisting with other services on the host
 
-Nothing collides. `nestor.service` runs as a host process on Node 18 and listens on
-`127.0.0.1:8787`; AgentTalks runs in a container and **also** publishes on
-`127.0.0.1:8787`. That is the only real conflict on this machine - the port. Three ways
-out, in order of sense:
-
-1. give AgentTalks a different host port (`"127.0.0.1:8788:8080"` in compose) and its own
-   vhost,
-2. retire `nestor.service` once AgentTalks takes over its role (stage 2 delivers MCP,
-   which is what Nestor exists for),
-3. keep both, each under its own name in the reverse proxy.
-
-The choice is an operational decision, not a technical one, so it is not made in the code.
+The only real conflict is the port. If another process already listens on
+`127.0.0.1:8787`, give AgentTalks a different host port (`AGENTTALKS_HOST_PORT=8788` in
+the instance env file) and point the reverse proxy vhost at it. The choice is an
+operational decision, so it is not made in the code.
 
 ## Health and diagnostics
 
