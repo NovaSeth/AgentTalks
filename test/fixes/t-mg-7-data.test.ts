@@ -142,8 +142,8 @@ test("B-MG-32: unread counts are exact under the cap and capped above it", () =>
   assert.equal(b.lastUnreadMessageId, lastBig);
 });
 
-// 200 channels, `total` unread messages spread over them; returns the best of 7 unreadFor timings.
-function unreadCost(total: number): number {
+// 200 channels, `total` unread messages spread over them; returns a timer for one unreadFor call.
+function unreadCost(total: number): () => number {
   const ctx = testCtx();
   const alice = mkActor(ctx, "alice");
   const bob = mkActor(ctx, "bob");
@@ -162,26 +162,34 @@ function unreadCost(total: number): number {
     assert.ok(first.every((r) => r.badge > 0 && r.badge < UNREAD_CAP));
     assert.equal(first.reduce((n, r) => n + r.badge, 0), Math.floor((300_000 - 1) / 51) + 1);
   }
-  let best = Infinity;
-  for (let i = 0; i < 7; i++) {
+  return () => {
     const t0 = performance.now();
     unreadFor(ctx, bob.id);
-    best = Math.min(best, performance.now() - t0);
-  }
-  return best;
+    return performance.now() - t0;
+  };
 }
 
 test("B-MG-32: unreadFor over 200 channels and 300k unread messages stays under 50 ms", () => {
   // D-MG-36: this used to assert `ms < 50` in absolute wall-clock time, which failed 1 of 5 full
   // `npm test` runs and 4 of 5 runs under CPU load while the code was fine. The regression it guards
   // is "unreadFor stops capping at UNREAD_CAP and counts every unread row", where cost grows with
-  // the history. Both sizes run back to back in this process, each takes the best of 7 runs, and
-  // they are compared as a ratio so machine load cancels out: capped, 300k costs about the same as
-  // 20k (both at or above the cap, ratio ~1); uncapped it would be ~15x.
+  // the history. Both datasets are built once and timed INTERLEAVED (20k, 300k, 20k, ...) for 9
+  // pairs; the verdict is the MEDIAN of the per-pair ratios, so a load spike hits both sides of a
+  // pair. Capped, 300k costs about the same as 20k (ratio ~1-2.5, a few under heavy load);
+  // uncapped it is 22-70x. The threshold 10 sits between the two with margin on both sides.
   const small = unreadCost(20_000);
   const big = unreadCost(300_000);
-  console.log(`unreadFor best of 7: 20k messages ${small.toFixed(2)} ms, 300k messages ${big.toFixed(2)} ms`);
-  assert.ok(big < small * 5, `unreadFor cost grew with history: ${small.toFixed(2)} ms at 20k, ${big.toFixed(2)} ms at 300k`);
+  const ratios: number[] = [], smalls: number[] = [], bigs: number[] = [];
+  for (let i = 0; i < 9; i++) {
+    const sm = small(), bg = big();
+    smalls.push(sm); bigs.push(bg); ratios.push(bg / sm);
+  }
+  ratios.sort((x, y) => x - y);
+  const median = ratios[4]!;
+  const info = `20k min ${Math.min(...smalls).toFixed(2)} ms, 300k min ${Math.min(...bigs).toFixed(2)} ms`;
+  console.log(`unreadFor 9 interleaved pairs: median ratio ${median.toFixed(2)} (${info})`);
+  // D-MG-36: load-independent ratio instead of an absolute millisecond bound.
+  assert.ok(median < 10, `unreadFor cost grew with history: median 300k/20k ratio ${median.toFixed(2)} (${info})`);
 });
 
 // ---- B-MG-47 ---------------------------------------------------------------

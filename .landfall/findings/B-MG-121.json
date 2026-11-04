@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-121",
+  "status": "taken",
+  "task": "T-MG-43",
+  "round": 3,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F3",
+  "severity": "blocking",
+  "path": "src/http/ui/js/data.js",
+  "line": 177,
+  "rule": "REV-2",
+  "text": "Acceptance 4; previous F2 ADDRESSED (24/24 tests; exact repro fails on base). New in-memory ui-t18 repro: repeat F2 but return HTTP 500 once for after=0&limit=2. After reconnect, body(1)='m1' and reactions[1]=undefined instead of the outage edit and reaction. reconcile deletes owed ranges before reading and discards them on failure, so subsequent catch-up misses message 1. Retain unfinished ranges and retry after reconnect/backoff; add this regression.",
+  "filedAt": "2026-11-04T20:19:38.277Z",
+  "filedBy": "MG",
+  "takenBy": "T-MG-46",
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

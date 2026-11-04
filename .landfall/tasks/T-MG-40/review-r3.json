@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/tools.mjs",
+      "line": 426,
+      "rule": "REV-6",
+      "text": "Acceptance 3; F5 ADDRESSED for six matches ([6,5],[4,3],[2,1]), but dense results still disappear. In-memory real-route test: fix ctx.now, post 201 'needle' messages, follow cursors with limit=50; page counts [50,50,50,50,0], missing ID 1. untilTs re-fetches the same newest 200 before filtering IDs. Apply an ID bound before the server cap (request shared API support if needed), and cover >200 matches in one second and concurrent arrivals."
+    },
+    {
+      "id": "F7",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/tools.mjs",
+      "line": 434,
+      "rule": "SPC-3",
+      "text": "Acceptance 3: a capped fetch with a short client page incorrectly ends pagination. In-memory real-route test: 20 'needle' posts at T, 190 at T+1, limit=30; cursor walk returns page counts [30,30,30,30,30,30,20], no cursor, 200/210 matches (IDs 1-10 missing). Removing page.length === limit makes this test reach 210/210. Preserve continuation when the fetch hits SEARCH_FETCH, even for a partial page, and add this boundary test."
+    }
+  ],
+  "run": "codex-T-MG-40-reviewer-3",
+  "sha256": "bfcb02a36d67bf6e2431581ce15accbd207beb0920c3e2a487cdce6ee3352224"
+}

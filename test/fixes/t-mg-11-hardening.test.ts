@@ -118,8 +118,8 @@ test("digest counts exactly under the cap and stops counting at UNREAD_CAP per c
   assert.equal(d.last?.body, `b${UNREAD_CAP + 49}`, "last is still the newest unread message");
 });
 
-// 200 conversations with `perConv` unread rows each; returns the best of `runs` digestFor timings.
-function digestCost(perConv: number, runs: number): { ms: number; count: number } {
+// 200 conversations with `perConv` unread rows each; returns a timer for one digestFor call.
+function digestCost(perConv: number): { time: () => number; count: number } {
   const ctx = testCtx();
   const me = mkActor(ctx, "me"), ala = mkActor(ctx, "ala");
   for (let i = 0; i < 200; i++) {
@@ -136,31 +136,39 @@ function digestCost(perConv: number, runs: number): { ms: number; count: number 
   const total = (ctx.db.prepare("SELECT COUNT(*) AS n FROM messages").get() as { n: number }).n;
   assert.equal(total, 200 * perConv);
   const count = digestFor(ctx, me.id)!.count; // also warms the statement cache
-  let best = Infinity;
-  for (let r = 0; r < runs; r++) {
+  const time = () => {
     const t0 = process.hrtime.bigint();
     digestFor(ctx, me.id);
-    best = Math.min(best, Number(process.hrtime.bigint() - t0) / 1e6);
-  }
-  return { ms: best, count };
+    return Number(process.hrtime.bigint() - t0) / 1e6;
+  };
+  return { time, count };
 }
 
 test("digestFor on 300k unread rows is fast (B-MG-94)", () => {
   // D-MG-36: this used to assert `ms < 50`, an absolute wall-clock bound that failed under the
   // parallel load of `npm test` while the code was fine. The regression it guards is "digestFor stops
   // capping at UNREAD_CAP and scans every unread row", and then the cost grows with the history.
-  // So both sizes run in this process, back to back, each takes the best of several runs, and they
-  // are compared as a RATIO: machine load hits both and cancels out. Capped, 1500 rows per
-  // conversation costs about the same as 100 (both are at or above the cap; ratio ~1); uncapped
-  // it is ~15x.
+  // So both datasets are built once in this process and timed INTERLEAVED (small, large, small,
+  // large, ...) for 9 pairs; the verdict is the MEDIAN of the per-pair ratios, so a load spike hits
+  // both sides of a pair and one bad pair cannot decide. Capped, 1500 rows per conversation costs
+  // about the same as 100 (ratio ~1-2, a few under heavy load); uncapped it is 22-70x. The
+  // threshold 10 sits between the two with margin on both sides.
   assert.ok(UNREAD_CAP <= 100, "the small case must be at or above the cap");
-  const small = digestCost(100, 7);
-  const big = digestCost(1500, 7);
-  console.log(`digestFor best of 7: 20k rows ${small.ms.toFixed(2)} ms, 300k rows ${big.ms.toFixed(2)} ms`);
+  const small = digestCost(100);
+  const big = digestCost(1500);
   assert.equal(small.count, 200 * UNREAD_CAP);
   assert.equal(big.count, 200 * UNREAD_CAP);
+  const ratios: number[] = [], smalls: number[] = [], bigs: number[] = [];
+  for (let i = 0; i < 9; i++) {
+    const sm = small.time(), bg = big.time();
+    smalls.push(sm); bigs.push(bg); ratios.push(bg / sm);
+  }
+  ratios.sort((x, y) => x - y);
+  const median = ratios[4]!;
+  const info = `20k min ${Math.min(...smalls).toFixed(2)} ms, 300k min ${Math.min(...bigs).toFixed(2)} ms`;
+  console.log(`digestFor 9 interleaved pairs: median ratio ${median.toFixed(2)} (${info})`);
   // D-MG-36: load-independent ratio instead of an absolute millisecond bound.
-  assert.ok(big.ms < small.ms * 5, `digestFor cost grew with history: ${small.ms.toFixed(2)} ms at 20k rows, ${big.ms.toFixed(2)} ms at 300k`);
+  assert.ok(median < 10, `digestFor cost grew with history: median 300k/20k ratio ${median.toFixed(2)} (${info})`);
 });
 
 // --- item 10 (B-MG-95): read-all touches only currently readable notifications -----------

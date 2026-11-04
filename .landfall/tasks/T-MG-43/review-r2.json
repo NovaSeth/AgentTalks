@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "src/http/ui/js/data.js",
+      "line": 77,
+      "rule": "REV-2",
+      "text": "Acceptance 4; previous F1 ADDRESSED (21/21 tests). New ui-t18 harness repro: delay reaction read A(before=2) before server receipt; hold reconnect newest-30 B after its cut; drop SSE, add reaction 1 and messages 3..32; deliver A then B and reconnect. reactions[1]=undefined; base retains {'+1':['nestor']}. Send order is not server-cut order, so B erases newer state. Use server revisions or serialize/refetch overlapping reads; add this regression."
+    }
+  ],
+  "run": "codex-T-MG-43-reviewer-2",
+  "sha256": "b82df31efe944ade069f0e3535d78b84eabd048ed4bb533e20a702df87c10edf"
+}

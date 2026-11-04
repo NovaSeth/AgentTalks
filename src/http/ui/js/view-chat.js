@@ -3,7 +3,7 @@
  */
 import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./actions.js";
 import { api, csrf, sessionGeneration } from "./api.js";
-import { dividerAfter } from "./counters.js";
+import { dividerAfter, highlightUnreadIds } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
 import { IMG_RE, avatarHtml, captureListPosition, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, notePinned, openModal, repinIfPinned, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior, watchListPin } from "./dom.js";
 import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconChevron, iconCopy, iconDigest, iconEdit, iconFile, iconFlame, iconGear, iconInfo, iconLink, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconUnpin, iconWrench } from "./icons.js";
@@ -16,12 +16,158 @@ import { showError, showToast } from "./toasts.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { conversationRoute, permalink, syncRoute, unreadFrom } from "./router.js";
 import { bindProfileClicks, closeProfile, ensureHeaderMembers, headerFacesHtml, mountPeoplePicker, profileFacts, renderProfile, visibleMembers } from "./view-people.js";
+import { keepPlace, placeOnOpen } from "./view-sidebar.js";
 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
 const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀", "👏", "✅", "🤔", "😢", "💯", "🙏", "👋", "⭐", "🙌"];
 
+// ------------------------------------------------- unread highlight (T-MG-44)
+// The chat-app model: a message by somebody else that the user did NOT see arrive gets a soft tint,
+// next to the "New messages" divider. "Did not see" = it was above the divider when the
+// conversation was entered, or it landed while the user was absent: the tab hidden, another view
+// over the chat column, another conversation open, the stream down (r2 F3, F4). The tint fades
+// once the server CONFIRMS the read mark (data.js calls views.readConfirmed, r2 F2) and never
+// comes back for that message, navigation included (r2 F1). Per conversation; own messages never;
+// nothing outlives the session generation (r2 F5).
+//
+// Per conversation: `ids` tinted now; `fading` mid-transition; `live` the ids that arrived while
+// the user was present (seen arriving: never tinted); `floor` the newest id on screen when the
+// conversation was entered; `read` the highest CONFIRMED read id. Every render but the entry one
+// tints the others' messages above max(floor, read) that are neither live nor fading: whatever
+// is above the floor and was not seen arriving was missed, however it got into the list (a live
+// event behind a hidden tab, a replay, the reconnect catch-up after a return).
+const FADE_MS = 3000;              // the CSS transition on .unread-hl-fade is shorter; the class leaves after it
+const unreadHl = new Map();        // convId -> { ids, fading, live, floor, read }
+let hlGeneration = -1;             // the session generation the map belongs to (F5)
+let drawnConv = null;              // the conversation whose list was drawn last: a change = a fresh entry
+
+/** The map of the CURRENT session generation: another account's state is dropped on first touch. */
+function hlMap() {
+  const gen = sessionGeneration();
+  if (gen !== hlGeneration) { unreadHl.clear(); drawnConv = null; hlGeneration = gen; }
+  return unreadHl;
+}
+
+function hlOf(convId) {
+  const map = hlMap();
+  let h = map.get(convId);
+  if (!h) { h = { ids: new Set(), fading: new Set(), live: new Set(), floor: 0, read: 0 }; map.set(convId, h); }
+  return h;
+}
+
+const newestIdIn = (list) => (list || []).reduce((n, m) => (m && typeof m.id === "number" && m.id > n ? m.id : n), 0);
+
+/** The read watermark as the SERVER reports it for the user (the membership; it moves with every
+ *  confirmed read), whatever the displayed list holds: a message at or below it is read (r3 F7). */
+const serverRead = (convId) => {
+  const n = state.memberships[convId]?.lastReadMessageId;
+  return typeof n === "number" ? n : 0;
+};
+
+/** The ONE read watermark: h.read starts at the server mark and only moves up (server state or a
+ *  confirmed read); every classification path reads it through here (B-MG-123). */
+function readMark(h, convId) {
+  h.read = Math.max(h.read, serverRead(convId));
+  return h.read;
+}
+
+/** Tints what the user missed: the others' messages above the floor and the confirmed read that
+ *  were not seen arriving and are not mid-fade. */
+function tintMissed(h, list, me, convId) {
+  for (const id of highlightUnreadIds(list, Math.max(h.floor, readMark(h, convId)), me)) {
+    if (!h.live.has(id) && !h.fading.has(id)) h.ids.add(id);
+  }
+}
+
+/** Back to the tab (the app.js visibilitychange listener): what arrived while it was hidden is
+ *  tinted on the rows already on screen. The live path already did that per message; this covers
+ *  a list redrawn meanwhile. A later render (the reconnect catch-up) classifies on its own. */
+export function noteTabVisible() {
+  const convId = state.view === "chat" ? state.activeId : null;
+  if (!convId || drawnConv !== convId) return;      // not drawn in this visit yet: the entry render decides
+  tintMissed(hlOf(convId), visibleMessages(convId), state.actor?.id, convId);
+  applyUnreadHighlightClasses(convId);
+}
+
+/** The class of a drawn row: tinted, fading, or nothing. */
+function unreadHlClass(convId, id) {
+  const h = hlMap().get(convId);
+  if (!h) return "";
+  if (h.ids.has(id)) return "unread-hl";
+  if (h.fading.has(id)) return "unread-hl-fade";
+  return "";
+}
+
+/** Rows already on screen take the classes the state holds now (a return to the tab, a fade). */
+function applyUnreadHighlightClasses(convId, alsoIds = []) {
+  if (state.view !== "chat" || state.activeId !== convId) return;
+  const el = document.getElementById("messages");
+  const h = hlMap().get(convId);
+  if (!el || !h) return;
+  for (const id of new Set([...h.ids, ...h.fading, ...alsoIds])) {
+    const node = el.querySelector(`[data-msg="${id}"]`);
+    if (!node) continue;
+    node.classList.toggle("unread-hl", h.ids.has(id));
+    node.classList.toggle("unread-hl-fade", h.fading.has(id));
+  }
+}
+
+/** The read-confirmed hook (views.readConfirmed, called by data.js once the server accepted the
+ *  read mark up to `upToId`; no id = the server moved it to the newest message). The confirmed
+ *  watermark moves; the tinted rows up to it take the fade class (a CSS transition on the
+ *  background), which leaves once the transition is over. A read message is never tinted again.
+ *  The timer belongs to this session generation: another account's rows are not touched. */
+export function fadeUnreadHighlights(convId, upToId) {
+  const h = hlOf(convId);
+  const upTo = typeof upToId === "number" ? upToId : newestIdIn(state.msgs[convId]);
+  h.read = Math.max(h.read, upTo);
+  const done = [...h.ids].filter((id) => id <= upTo);
+  if (!done.length) return;
+  for (const id of done) { h.ids.delete(id); h.fading.add(id); }
+  applyUnreadHighlightClasses(convId);
+  const gen = sessionGeneration();
+  setTimeout(() => {
+    if (gen !== sessionGeneration()) return;
+    for (const id of done) h.fading.delete(id);
+    applyUnreadHighlightClasses(convId, done);
+  }, FADE_MS);
+}
+
+/** Tests: no tint survives (production relies on the session generation, see hlMap). */
+export function resetUnreadHighlights() { unreadHl.clear(); drawnConv = null; hlGeneration = sessionGeneration(); }
+
+/** renderMessages reports the drawn list and the divider's mark. A fresh entry (another
+ *  conversation was drawn before, or none) tints the others' messages above the divider that are
+ *  not confirmed read, and sets the floor; every later render of the same conversation, whatever
+ *  restored it (openConversation, a rail place switch, a route, a hidden-tab replay, the reconnect
+ *  catch-up), tints what was missed above the floor. */
+function noteListDrawn(convId, list, mark) {
+  const me = state.actor?.id;
+  const h = hlOf(convId);
+  if (drawnConv !== convId) {
+    h.ids.clear(); h.live.clear();
+    const since = mark === null || mark === undefined ? null : Math.max(mark, readMark(h, convId));
+    for (const id of highlightUnreadIds(list, since, me)) if (!h.fading.has(id)) h.ids.add(id);
+    h.floor = newestIdIn(list);
+    drawnConv = convId;
+  } else {
+    tintMissed(h, list, me, convId);
+  }
+}
+
 // ------------------------------------------------- entering a conversation
+// T-MG-38: set only for the synchronous start of an open that is not the reader's (see below).
+let backgroundOpen = false;
+
+/** The conversation on screen went away (archived by somebody else, sse-events.js): open the
+ *  next one without moving the reader's rail place. The flag is read in openConversation's
+ *  synchronous start, before its first await, so it cannot leak into another open. */
+export function openConversationInBackground(id) {
+  backgroundOpen = true;
+  try { return openConversation(id); } finally { backgroundOpen = false; }
+}
+
 export async function openConversation(id, focusMessageId) {
   // F1: an open that resumes after the account changed must not draw, fetch or mark read.
   const gen = sessionGeneration();
@@ -38,6 +184,10 @@ export async function openConversation(id, focusMessageId) {
   // re-fetches them for this conversation and shows nothing in the meantime.
   if (previousConversation !== id) { state.convMembersFor = null; state.convMembers = []; }
   state.view = "chat";
+  // T-MG-38: a conversation the reader opens from the Wiki place returns the rail to Home, the
+  // one on screen included (review r2 F4); a background open (openConversationInBackground)
+  // moves the view but leaves the reader's place alone.
+  if (backgroundOpen) keepPlace(); else placeOnOpen("chat");
   state.activeId = id;
   rememberLastConv(id);              // per account (F2 r3)
   pushRecent(id);
@@ -825,6 +975,7 @@ export function renderMessages(position = null) {
   // id (W2-S7-A) keeps the line in place when the unread include thread replies the list does not show.
   const mark = dividerAfter(list, state.readMark[state.activeId] || 0, state.unread[state.activeId], state.actor.id,
     state.lastUnread[state.activeId]);
+  noteListDrawn(state.activeId, list, mark);
   let unreadLineShown = false;
   let lastDay = null, lastAuthor = null, lastTs = 0;
   for (const m of list) {
@@ -838,7 +989,7 @@ export function renderMessages(position = null) {
       lastAuthor = null;
     }
     const cont = m.actorId === lastAuthor && (m.ts - lastTs) < 300 && !m.deletedAt && m.kind !== "ask";
-    html += messageHtml(m, cont, { threads: idx });
+    html += messageHtml(m, cont, { threads: idx, unreadHl: unreadHlClass(state.activeId, m.id) });
     // A question has its own, distinct frame - nothing merges with it (neither it with the
     // previous message, nor the next message with it), otherwise the author gets lost.
     lastAuthor = m.kind === "ask" ? null : m.actorId;
@@ -870,13 +1021,21 @@ export function upsertMessageNode(msg) {
     // The bubble the user is writing in right now is untouchable.
     if (existingNode.querySelector(".inline-edit")) return;
     const tmp = document.createElement("div");
-    tmp.innerHTML = messageHtml(msg, existingNode.classList.contains("cont"), { threads: idx });
+    tmp.innerHTML = messageHtml(msg, existingNode.classList.contains("cont"), { threads: idx, unreadHl: unreadHlClass(state.activeId, msg.id) });
     existingNode.replaceWith(tmp.firstElementChild);
     return;
   }
   // We append ONLY at the end, and only when the list really is on screen. An insertion in the
   // middle (a replay after a break) goes through a normal render, so as not to break the order
   // or the day separators.
+  // Seen arriving (tab visible, this chat on screen) = live, never tinted; landed behind a hidden
+  // tab = missed, tinted (own messages never).
+  const hl = hlOf(state.activeId);
+  const theirs = typeof msg.id === "number" && msg.actorId !== state.actor.id && !msg.deletedAt;
+  if (theirs && !hl.live.has(msg.id)) {
+    if (document.visibilityState === "visible") hl.live.add(msg.id);
+    else if (msg.id > Math.max(hl.floor, readMark(hl, state.activeId)) && !hl.fading.has(msg.id)) hl.ids.add(msg.id);
+  }
   const list = visibleMessages(state.activeId);
   const i = list.findIndex((x) => x.id === msg.id);
   if (i !== list.length - 1 || !el.querySelector("[data-msg]")) { renderMessages(); return; }
@@ -885,7 +1044,7 @@ export function upsertMessageNode(msg) {
   if (newDay) el.insertAdjacentHTML("beforeend", `<div class="day">${dayLabel(msg.ts)}</div>`);
   const cont = !newDay && !!previousMessage && previousMessage.actorId === msg.actorId
     && (msg.ts - previousMessage.ts) < 300 && !msg.deletedAt && msg.kind !== "ask" && previousMessage.kind !== "ask";
-  el.insertAdjacentHTML("beforeend", messageHtml(msg, cont, { threads: idx }));
+  el.insertAdjacentHTML("beforeend", messageHtml(msg, cont, { threads: idx, unreadHl: unreadHlClass(state.activeId, msg.id) }));
 }
 
 /** The tooltip of a reaction chip (S12): a sentence with the names, me first as "You". */
@@ -1134,7 +1293,7 @@ export function messageHtml(m, cont, opts = {}) {
   if (animatedMsgs.size > 5000) animatedMsgs.clear();
   if (fresh) animatedMsgs.add(m.id);
   return `
-    <div class="msg ${fresh ? "enter" : ""} ${cont ? "cont" : ""} ${m.deletedAt ? "deleted" : ""} ${mentionsCurrentActor ? "mine-mention" : ""} ${isAsk ? "ask" : ""} ${m.kind === "answer" ? "answer" : ""} ${resolved ? "resolved" : ""}" data-msg="${m.id}">
+    <div class="msg ${fresh ? "enter" : ""} ${cont ? "cont" : ""} ${m.deletedAt ? "deleted" : ""} ${mentionsCurrentActor ? "mine-mention" : ""} ${isAsk ? "ask" : ""} ${m.kind === "answer" ? "answer" : ""} ${resolved ? "resolved" : ""} ${opts.unreadHl || ""}" data-msg="${m.id}">
       <button type="button" class="av-btn" data-profile="${escapeHtml(handle)}" aria-label="${t("Open the profile of @{handle}", { handle: escapeHtml(handle) })}" ${cont ? "tabindex=\"-1\"" : ""}>${avatarHtml(handle)}</button>
       <div class="body">
         <div class="head">
@@ -1238,6 +1397,7 @@ export function bindMessageEvents(scope) {
       if (state.wiki.pages.some((p) => p.slug === slug)) { openWikiPage(slug); return; }
       // A red link: the page does not exist - we open the editor for a new one under that slug.
       state.view = "wiki";
+      placeOnOpen("wiki");   // T-MG-38: a page the reader opens, even a new one, selects Wiki
       state.wiki.slug = slug;
       state.wiki.page = null;
       state.wiki.files = [];

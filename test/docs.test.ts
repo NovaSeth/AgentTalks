@@ -36,7 +36,7 @@ const file = (relative: string) =>
 function skillExamples(): Array<{ path: string; keys: string[] }> {
   const out: Array<{ path: string; keys: string[] }> = [];
   let path: string | null = null;
-  for (const l of file("../integrations/claude-skill/SKILL.md").split("\n")) {
+  for (const l of file("../integrations/claude-code-plugin/skills/agenttalks/SKILL.md").split("\n")) {
     const s = l.match(/\/api\/[A-Za-z0-9_<>/\-.]+/);
     if (s) path = s[0];
     const d = l.match(/-d '(\{.*)/);
@@ -220,7 +220,7 @@ test("the UI does not build event attributes from data", () => {
  *promises.
  */
 test("every documented response shape matches the server", async () => {
-  const skill = file("../integrations/claude-skill/SKILL.md");
+  const skill = file("../integrations/claude-code-plugin/skills/agenttalks/SKILL.md");
   const block = skill.match(/## What comes back[\s\S]*?```\n([\s\S]*?)```/);
   assert.ok(block, "response shape block not found");
 

@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/tools.mjs",
+      "line": 410,
+      "rule": "SPC-3",
+      "text": "Acceptance 3: search continuation loses matches. Reproduced against in-memory real routes with six matching messages: search({q:'needle',limit:2,skip:0/2/4/6}) returned [5,6], [5,6], [5,6], []; the completeness assertion failed (2 !== 6). The server returns its newest N matches ascending, so increasing N then slice(skip) repeatedly selects the same tail. Paginate in a consistent order and add coverage asserting every ID is reached when matches exceed limit."
+    }
+  ],
+  "run": "codex-T-MG-40-reviewer-2",
+  "sha256": "9232654391dd9d54dc226c5b97b2cf37423db38c80c6bd45a3b740b4875002e9"
+}

@@ -1,0 +1,87 @@
+{
+  "schema": 2,
+  "id": "T-MG-47",
+  "kind": "task",
+  "title": "Unread highlight: initialize the read watermark from the server on every path, incl. hidden-tab inserts (B-MG-123)",
+  "lane": null,
+  "owner": "MG",
+  "class": "trivial",
+  "classHistory": [
+    {
+      "class": "trivial",
+      "reason": "trivial: 2 files <= 2, 20 LOC <= 30, no flags",
+      "at": "2026-11-04T20:42:21.570Z"
+    }
+  ],
+  "status": "done",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T20:42:13.237Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T20:42:22.492Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-47-highlight-server-watermark",
+        "base": "8d225efd6918e1067af2aada901c4e12176ffcce",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-47"
+      }
+    },
+    {
+      "at": "2026-11-04T20:42:40.742Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "8d225efd6918"
+      }
+    },
+    {
+      "at": "2026-11-04T20:48:57.612Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T20:48:57.918Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "ceef3a5e98526893c26a27f305fef495182edf2b",
+        "class": "trivial",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T20:53:04.080Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "ceef3a5e98526893c26a27f305fef495182edf2b"
+      }
+    },
+    {
+      "at": "2026-11-04T20:53:05.605Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "1974c09c7da13aeef634ef1eca024afc6a436d75",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "4c107397b5e229320ae5d13d4c1e851e9fa0445e"
+      }
+    }
+  ],
+  "base": "8d225efd6918e1067af2aada901c4e12176ffcce",
+  "branch": "task/T-MG-47-highlight-server-watermark",
+  "mergedAt": "2026-11-04T20:53:05.605Z"
+}

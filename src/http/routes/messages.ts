@@ -100,6 +100,7 @@ export function registerMessageRoutes(router: Router): void {
       limit: int(rc.query.get("limit") ?? undefined),
       sinceTs: int(rc.query.get("sinceTs") ?? undefined),
       untilTs: int(rc.query.get("untilTs") ?? undefined),
+      beforeId: int(rc.query.get("beforeId") ?? undefined),
     });
     const authors = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
     json(res, 200, { messages: withActorHandles(messages, authors), actors: authors });

@@ -29,7 +29,7 @@ import { json, readJson, str } from "./respond.ts";
 import { tooMany } from "../core/errors.ts";
 
 const uiFile = (name: string): string => fileURLToPath(new URL(`./ui/${name}`, import.meta.url));
-const SKILL_FILE = fileURLToPath(new URL("../../integrations/claude-skill/SKILL.md", import.meta.url));
+const SKILL_FILE = fileURLToPath(new URL("../../integrations/claude-code-plugin/skills/agenttalks/SKILL.md", import.meta.url));
 
 // Small, static files - read once and kept. The server restarts when they change.
 const cache = new Map<string, string>();

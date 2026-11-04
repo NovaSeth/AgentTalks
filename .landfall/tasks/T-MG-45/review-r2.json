@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "test/plugin/wake-tools.test.ts",
+      "line": 352,
+      "rule": "COD-2",
+      "text": "F1/F2 ADDRESSED by direct reruns. Acceptance 3: chunk() now stops at the fixture's first newline, so total-budget assertions no longer discriminate. Repro: bypass budgeted() in memory; all six T-MG-45 tests pass with unchanged assertions in a direct-handler harness, while 50 newline-free 60,000-char bodies return 1,208,474 chars. Add long-first-line fixtures that force total-budget truncation and verify this mutation fails."
+    }
+  ],
+  "run": "codex-T-MG-45-reviewer-2",
+  "sha256": "e0daa5914131ca6ae3b84508fb05f10e1f5e9966dca02aa752831c01a5e1d80a"
+}

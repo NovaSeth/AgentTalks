@@ -1,52 +1,78 @@
 {
   "schema": 1,
   "task": "T-MG-38",
-  "head": "e7bc3639ab6c9ac06b2d5ad49f3837cd1328d667",
+  "head": "7bcf3369b8eff311f4a50a48bfd610828c7d312f",
   "gatesSha": "6748d3280c3d894aeee546d52b4cfeb374b94c2a6e123f58cb1ba32d325757c9",
-  "baselineSha": "4c8e159673d6eaa2d957e6bdcb94e54f841f628664f3a46e2c2ba3f06395ef18",
+  "baselineSha": "f6b308dfb6b49c47b82454834b828a0885ad99394a2ee6013a13b1884d7b962a",
   "class": "critical",
-  "startedAt": "2026-11-04T19:53:18.810Z",
-  "durationMs": 283902,
+  "startedAt": "2026-11-04T20:30:15.057Z",
+  "durationMs": 40347,
   "gates": [
     {
       "name": "test",
       "cmd": "NODE_OPTIONS=\"$NODE_OPTIONS --test-reporter=tap\" npm run test",
       "exit": 0,
-      "durationMs": 41406,
+      "durationMs": 35160,
       "result": "pass"
     },
     {
       "name": "typecheck",
       "cmd": "npm run typecheck",
       "exit": 0,
-      "durationMs": 6114,
+      "durationMs": 4292,
       "result": "pass"
     }
   ],
   "inventory": {
     "collector": "node-test",
-    "total": 1077,
+    "total": 1087,
     "added": [
+      "[\"\",\"A2A-F8: a missing atalks prints exactly one line on stderr and nothing on stdout\",1]",
+      "[\"\",\"S11: an ignore line that git does not honour (a later negation in the same .gitignore) -> refuse, no credential on disk, .gitignore unchanged, nothing trusted\",1]",
+      "[\"\",\"T-MG-41: with only the old atalk on PATH the hook falls back to it\",1]",
+      "[\"\",\"T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing\",1]",
+      "[\"\",\"T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh\",1]",
+      "[\"\",\"T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched\",1]",
       "[\"\",\"T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki\",1]",
       "[\"\",\"T38-r3 F1: Wiki chosen from Activity opens the chat with the Wiki place and its tree\",1]",
       "[\"\",\"T38-r3 F2: reopening the current page through a non-route entry selects Wiki again; a plain redraw keeps Home\",1]",
       "[\"\",\"T38-r3 F3: a route that completes after a newer place was chosen does not take the place back\",1]",
       "[\"\",\"T38-r3: placeAfterNavigation - a wiki page selects Wiki; a conversation (channel or DM) leaves Wiki for Home; the rest moves nothing\",1]",
-      "[\"\",\"T38-r3: the rule has ONE home - router.js reports navigations, app.js applies them; no settle-on-completion, no follow-on-render\",1]",
+      "[\"\",\"T38-r3: the rule has ONE home - view-sidebar.js derives the place; no navigation tracking, no settle-on-completion, no follow-on-navigation\",1]",
+      "[\"\",\"T38-r4 F4: reopening the same conversation from the Wiki place returns to Home with its channels\",1]",
+      "[\"\",\"T38-r4 F5: back from Search to the page on screen lights Wiki again (on and aria-current)\",1]",
+      "[\"\",\"T38-r4 F6: a conversation's late address cleanup does not hide the tree of a newer wiki page\",1]",
+      "[\"\",\"T38-r4 F7: another actor's edit of the page on screen refreshes it without moving the reader's place\",1]",
+      "[\"\",\"T38-r4: a page that fails to load falls back to the chat without a late jump of the place\",1]",
+      "[\"\",\"T38-r4: opening another conversation (Cmd+K, a link) from the Wiki place in the chat view returns to Home; a redraw does not\",1]",
+      "[\"\",\"T38-r4: the conversation on screen archived by somebody else opens the next one without moving the reader's place\",1]",
       "[\"\",\"T38: #/wiki with no slug is the Wiki place's own route; #/wiki/<slug> still opens a page\",1]",
       "[\"\",\"T38: collapsed-section storage keeps working for the wiki and leases sections in their new place\",1]",
       "[\"\",\"T38: every new English string of the Wiki place has a Polish translation\",1]",
       "[\"\",\"T38: setSidebarPlace keeps \\\"wiki\\\" as a third place; nonsense still falls back to Home\",1]",
       "[\"\",\"T38: the Wiki place renders the tree and the leases, no channels, no people; Home renders no wiki\",1]",
       "[\"\",\"T38: the Wiki place shows exactly the wiki tree and the claimed resources; Home shows neither\",1]",
-      "[\"\",\"T38: the rail has #rail-wiki (iconDoc) between Activity and Admin, for every signed-in actor\",1]"
+      "[\"\",\"T38: the rail has #rail-wiki (iconDoc) between Activity and Admin, for every signed-in actor\",1]",
+      "[\"\",\"a failing test gate prints the failing test name and failure, keeps the log, stops with exit 1 (T-MG-36)\",1]",
+      "[\"\",\"a failing typecheck gate prints the tsc errors and stops with exit 1 (T-MG-36)\",1]",
+      "[\"\",\"a failing-tests section longer than 150 lines still ends with the log path and STOP, exit 1 (T-MG-36)\",1]",
+      "[\"\",\"a green gate stays quiet: one OK line, no test output (T-MG-36)\",1]",
+      "[\"\",\"atalk login --local in a SUBDIRECTORY of a git repo: the token file is ignored by git (or the login refuses), never an un-ignored token\",1]",
+      "[\"\",\"atalk login --local refuses a symlinked .agenttalks.json: the link target is untouched\",1]",
+      "[\"\",\"atalk login --local refuses when .agenttalks.json is already tracked by git: nothing written\",1]",
+      "[\"\",\"atalk login --local: an ignore line git does not honour (a later negation) -> refuse, nothing written\",1]",
+      "[\"\",\"atalks and the atalk compatibility alias resolve to the same installed implementation\",1]",
+      "[\"\",\"both client names print identical atalks help, usage and error hints\",1]",
+      "[\"\",\"monitor --max-seconds 0: ends when its Claude Code process is gone, stays while it lives\",1]",
+      "[\"\",\"monitor --max-seconds 0: ends when its stdout is closed, and a closed stdin alone does not end it\",1]"
     ],
     "removed": [
       "[\"\",\"A2A-F8: a missing atalk prints exactly one line on stderr and nothing on stdout\",1]"
     ],
     "newlySkipped": [],
     "allowedBy": [
-      "D-MG-39"
+      "D-MG-39",
+      "D-MG-44"
     ],
     "weak": false,
     "tests": [
@@ -1761,6 +1787,21 @@
         "skipped": false
       },
       {
+        "id": "[\"\",\"T38-r1: a sidebar render after a wiki page opened puts the place on Wiki; a conversation opened from Wiki returns to Home; a repeat render moves nothing\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r1: app.js decides the place before drawing the rail and repaints the rail after every sidebar refresh\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r1: placeAfterNavigation - a wiki page selects Wiki; a conversation leaves Wiki for Home; DMs is untouched\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
         "id": "[\"\",\"T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki\",1]",
         "file": "",
         "skipped": false
@@ -1786,7 +1827,42 @@
         "skipped": false
       },
       {
-        "id": "[\"\",\"T38-r3: the rule has ONE home - router.js reports navigations, app.js applies them; no settle-on-completion, no follow-on-render\",1]",
+        "id": "[\"\",\"T38-r3: the rule has ONE home - view-sidebar.js derives the place; no navigation tracking, no settle-on-completion, no follow-on-navigation\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r4 F4: reopening the same conversation from the Wiki place returns to Home with its channels\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r4 F5: back from Search to the page on screen lights Wiki again (on and aria-current)\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r4 F6: a conversation's late address cleanup does not hide the tree of a newer wiki page\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r4 F7: another actor's edit of the page on screen refreshes it without moving the reader's place\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r4: a page that fails to load falls back to the chat without a late jump of the place\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r4: opening another conversation (Cmd+K, a link) from the Wiki place in the chat view returns to Home; a redraw does not\",1]",
+        "file": "",
+        "skipped": false
+      },
+      {
+        "id": "[\"\",\"T38-r4: the conversation on screen archived by somebody else opens the next one without moving the reader's place\",1]",
         "file": "",
         "skipped": false
       },
@@ -5449,7 +5525,7 @@
   },
   "artifacts": {
     "report": true,
-    "review": "missing"
+    "review": "approved"
   },
-  "result": "missing-artifact"
+  "result": "pass"
 }

@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F7",
+      "severity": "blocking",
+      "path": "src/http/ui/js/view-chat.js",
+      "line": 63,
+      "rule": "REV-6",
+      "text": "F7 NOT ADDRESSED fully (acceptance 1/4): original reproduction passes, but pinned Node harness setup(520); await open(); cancelMarkRead(); hide tab; append/upsert 512,514; show tab; noteTabVisible(); renderMessages() yields [512,514], expected []. Hidden inserts still check h.read=0, bypassing serverRead. Initialize and maintain h.read from the server watermark across every path; add this regression. That in-memory change passes all 19 tests."
+    }
+  ],
+  "run": "codex-T-MG-44-reviewer-3",
+  "sha256": "c5a4968b3512918f25cfb1f3776e7723c658d8e84c8e2f3d434a3ea4e5b09683"
+}
