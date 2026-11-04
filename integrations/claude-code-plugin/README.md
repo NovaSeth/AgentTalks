@@ -144,7 +144,8 @@ last recorded session:
 
 ```
 claude -p --resume <recorded session id> --permission-mode dontAsk --tools "" \
-  --allowedTools "mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*" -- "<quoted preview>"
+  --allowedTools "mcp__plugin_agenttalks_agenttalks__reply,mcp__plugin_agenttalks_agenttalks__mark_read" \
+  --disallowedTools "mcp__agenttalks__*" -- "<quoted preview>"
 ```
 
 1. Register the wake target (the response shows the secret ONCE):
@@ -181,8 +182,11 @@ claude -p --resume <recorded session id> --permission-mode dontAsk --tools "" \
    Options: `--host` (default 127.0.0.1; the unspecified address in any spelling, such as
    `0.0.0.0`, `0`, `0x0` or `::`, and any host name other than `localhost` are refused
    unless `--allow-public`),
-   `--allowed-tools` (default `mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*`: this
-   plugin's own `reply`/`mark_read` and the remote AgentTalks MCP server added as `agenttalks`),
+   `--allowed-tools` (default and maximum: this plugin's own
+   `mcp__plugin_agenttalks_agenttalks__reply,mcp__plugin_agenttalks_agenttalks__mark_read`;
+   anything else is a startup error, because only the plugin channel checks that it acts as
+   the verified principal; the remote AgentTalks MCP server `mcp__agenttalks__*` is always
+   denied in a woken run, since it carries its own URL and token),
    `--claude` (path to the CLI), `--server-url` (the server of the environment pair, instead of
    `AGENTTALKS_WAKE_SERVER_URL`).
 
@@ -226,12 +230,15 @@ resumed run per session at a time.
   and those allow lists merge across scopes, so a command-line `--settings` cannot empty
   them. The bridge therefore also passes `--tools ""`, which removes every built-in tool
   (Bash, Edit, Write, Read, WebFetch and the rest) from the woken session, and
-  `--allowedTools` with the AgentTalks tools only. What remains: the AgentTalks tools, and
+  `--allowedTools` with the plugin channel's `reply` and `mark_read` only, plus
+  `--disallowedTools "mcp__agenttalks__*"` (the remote AgentTalks MCP server, which may hold
+  another actor's token). `--strict-mcp-config` is not used: the CLI's help does not say
+  whether plugin MCP servers still load under it. What remains: the channel's two tools, and
   any tool of ANOTHER MCP server that your own settings pre-approve (for example an allow
-  rule `mcp__github__*`); hooks and installed mods still run. Check your allow rules for MCP
-  tools before you enable the bridge, or run it under a user whose settings have none.
-  Widen `--allowed-tools` only if you accept that anyone in the agent's conversations can
-  steer those tools. The command is spawned from an argv array, without a shell.
+  rule `mcp__github__*`, or an AgentTalks server you added under another name); hooks and
+  installed mods still run. Check your allow rules for MCP tools before you enable the
+  bridge, or run it under a user whose settings have none. The command is spawned from an
+  argv array, without a shell.
 - **Tokens and secrets.** The token goes only into the Authorization header. The session
   record and the monitor cursor hold no token; the wake secrets file must be 0600. The woken
   `claude` runs with the bridge's environment minus every `AGENTTALKS_WAKE_*` variable, so

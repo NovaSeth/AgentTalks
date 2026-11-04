@@ -28,10 +28,18 @@
  *     still runs file reads, read-only shell commands and anything a `permissions.allow` rule
  *     in the resumed session's user/project/local settings pre-approves (allow lists merge
  *     across scopes, so `--settings` cannot empty them).
- *   - `--allowedTools` pre-approves only the AgentTalks tools; under dontAsk every other MCP
- *     tool call is denied instead of waiting for an absent human.
+ *   - `--allowedTools` pre-approves ONLY the plugin channel's own tools (reply, mark_read),
+ *     which refuse to act as anyone but the verified principal (AGENTTALKS_EXPECT_*); under
+ *     dontAsk every other MCP tool call is denied instead of waiting for an absent human. A
+ *     wider list is a startup error (checkAllowedTools).
+ *   - `--disallowedTools mcp__agenttalks__*` denies the remote AgentTalks MCP server even if
+ *     the user's settings pre-approve it: it carries its own URL and bearer, possibly another
+ *     actor's on another server (codex T-MG-14 r2 F4).
+ *   - `--strict-mcp-config` is NOT used: `claude --help` (2.1.318) does not say whether
+ *     plugin MCP servers still load under it, and without the channel the run cannot answer.
  * Residual: an MCP tool of ANOTHER server that the user's own settings pre-approve (an allow
- * rule such as `mcp__github__*`) stays callable; hooks and installed mods still run.
+ * rule such as `mcp__github__*`, or a second AgentTalks server under another name) stays
+ * callable; hooks and installed mods still run.
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -52,7 +60,25 @@ export const MAX_EXP_AHEAD_SEC = 3600;
 /** D-MG-17: this plugin's own tools (a plugin MCP server's tools are named
  *  mcp__plugin_<plugin>_<server>__<tool>) and the remote AgentTalks MCP server added as
  *  `agenttalks`. Both are conversation tools only; a woken agent must be able to answer. */
-export const DEFAULT_ALLOWED_TOOLS = "mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*";
+export const DEFAULT_ALLOWED_TOOLS = "mcp__plugin_agenttalks_agenttalks__reply,mcp__plugin_agenttalks_agenttalks__mark_read";
+/** The plugin channel's own tools: the only AgentTalks tools that enforce the principal the
+ *  bridge verified (AGENTTALKS_EXPECT_*). A remote AgentTalks MCP server the user configured
+ *  (name `agenttalks`, its own URL and bearer) checks nothing of the sort: it could be
+ *  another actor on another server (codex T-MG-14 r2 F4). */
+const CHANNEL_TOOLS = new Set(["mcp__plugin_agenttalks_agenttalks__reply", "mcp__plugin_agenttalks_agenttalks__mark_read"]);
+/** Denied outright in a woken run, whatever the user's settings pre-approve. */
+export const DISALLOWED_TOOLS = "mcp__agenttalks__*";
+
+/** null when every entry names one of the channel's own tools, else the reason.
+ *  @param {string} list */
+export function checkAllowedTools(list) {
+  const entries = String(list).split(/[\s,]+/).filter(Boolean);
+  if (entries.length === 0) return "allowed tools: the list is empty";
+  const foreign = entries.filter((e) => !CHANNEL_TOOLS.has(e));
+  return foreign.length
+    ? `allowed tools: only the plugin channel's own tools (${[...CHANNEL_TOOLS].join(", ")}) may be pre-approved for a woken run, not ${foreign.join(", ")}`
+    : null;
+}
 const MAX_SEEN = 10_000;
 
 /** An IPv4 address in any form getaddrinfo/inet_aton accepts ("0", "0x0", "0.0.0.00",
@@ -303,6 +329,8 @@ export function createWakeBridge(opts) {
   const now = opts.now ?? Date.now;
   const log = opts.log ?? (() => {});
   const allowedTools = opts.allowedTools ?? DEFAULT_ALLOWED_TOOLS;
+  const toolProblem = checkAllowedTools(allowedTools);
+  if (toolProblem) throw new Error(toolProblem);
   const secrets = normalizeSecrets(opts.secrets);
   const problem = checkWakeConfig(secrets);
   if (problem) throw new Error(problem);
@@ -470,7 +498,8 @@ export function createWakeBridge(opts) {
             ? "a resumed run is still in progress" : "the session's AgentTalks identity does not match" });
         }
         const argv = ["-p", "--resume", rec.sessionId, "--permission-mode", "dontAsk",
-          "--tools", "", "--allowedTools", allowedTools, "--", wakePrompt(body)];
+          "--tools", "", "--allowedTools", allowedTools, "--disallowedTools", DISALLOWED_TOOLS,
+          "--", wakePrompt(body)];
         running.add(rec.sessionId);
         log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
         // The key stays reserved (checking) until the process exists: only a run that
