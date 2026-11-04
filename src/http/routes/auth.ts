@@ -3,7 +3,7 @@ import { bumpSessionEpoch, createActor, listActors, verifyPassword } from "../..
 import { whoIsTyping } from "../../core/presence.ts";
 import { listForActor, myMemberships } from "../../core/conversations.ts";
 import { unreadFor } from "../../core/unread.ts";
-import { unauthorized, badRequest, tooMany } from "../../core/errors.ts";
+import { unauthorized, badRequest, forbidden, tooMany } from "../../core/errors.ts";
 import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requestIsSecure, requireAuth,
   requireHumanAdmin } from "../auth.ts";
 import { securityLog } from "../../core/tokens.ts";
@@ -24,6 +24,7 @@ import {
 import type { IncomingMessage } from "node:http";
 import { createHmac } from "node:crypto";
 import type { Config } from "../../config.ts";
+import type { Ctx } from "../../core/ctx.ts";
 import type { Router } from "../router.ts";
 
 /**
@@ -106,6 +107,7 @@ function checkLoginLimit(key: string, now: number): void {
   }
   entry.count += 1;
   if (entry.count > LOGIN_MAX_ATTEMPTS) {
+    securityLog("rate_limited", { scope: "webauthn" });
     throw tooMany("za_duzo_prob",
       `za duzo prob logowania; sprobuj za ${Math.ceil((entry.resetAt - now) / 60)} min`);
   }
@@ -128,28 +130,48 @@ const LOGIN_FAIL_MAX_HANDLE = 20;
 const LOGIN_FAIL_MAX_IP = 20;
 const loginFailures = new Map<string, { count: number; resetAt: number }>();
 
-type LoginKeys = { ipHandle: string; handle: string; ip: string; handleName: string };
+type LoginKeys = {
+  ipHandle: string; handle: string; ip: string;
+  /** What a security log line may say about the typed handle: never the string itself. */
+  who: Record<string, unknown>;
+};
 
-function loginKeys(secret: string, ip: string, rawHandle: string): LoginKeys {
-  const h = rawHandle.trim().toLowerCase().slice(0, 64);
+// The same normalization getActorByHandle applies (strip leading '@', trim, lowercase). The
+// counters are keyed on the RESOLVED actor id when the handle resolves, so every spelling that
+// reaches one account shares one bucket; an unresolved handle falls back to this string.
+function normalizeLoginHandle(raw: string): string {
+  return raw.trim().replace(/^@+/, "").toLowerCase().slice(0, 64);
+}
+
+function loginKeys(ctx: Ctx, secret: string, ip: string, rawHandle: string): LoginKeys {
+  const actor = getActorByHandle(ctx, rawHandle);
+  const norm = normalizeLoginHandle(String(rawHandle));
+  const id = actor ? `id:${actor.id}` : `h:${norm}`;
+  // A typed handle field may hold a password by mistake: log the actor id, or a length and a
+  // short keyed hash, never the string.
+  const who = actor
+    ? { actorId: actor.id }
+    : { handleLen: norm.length,
+        handleHash: createHmac("sha256", secret).update(`log-handle:${norm}`).digest("hex").slice(0, 8) };
   return {
-    ipHandle: kluczLimitu(secret, `lf|${ip}|${h}`),
-    handle: kluczLimitu(secret, `lh|${h}`),
+    ipHandle: kluczLimitu(secret, `lf|${ip}|${id}`),
+    handle: kluczLimitu(secret, `lh|${id}`),
     ip: kluczLimitu(secret, `li|${ip}`),
-    handleName: h,
+    who,
   };
 }
 
 function assertLoginAllowed(keys: LoginKeys, ip: string, now: number): void {
   sprzatniecieOkien(loginFailures, now);
+  // The handle-wide cap is NOT checked here: it is applied after a failed verification only, so
+  // that nobody can lock the owner out of the right password from another address.
   const checks: Array<[string, number]> = [
-    [keys.ipHandle, LOGIN_FAIL_MAX_IP_HANDLE], [keys.handle, LOGIN_FAIL_MAX_HANDLE],
-    [keys.ip, LOGIN_FAIL_MAX_IP],
+    [keys.ipHandle, LOGIN_FAIL_MAX_IP_HANDLE], [keys.ip, LOGIN_FAIL_MAX_IP],
   ];
   for (const [key, max] of checks) {
     const e = loginFailures.get(key);
     if (e && e.resetAt > now && e.count >= max) {
-      securityLog("rate_limited", { scope: "login", handle: keys.handleName, ip });
+      securityLog("rate_limited", { scope: "login", ...keys.who, ip });
       throw tooMany("za_duzo_prob",
         `za duzo prob logowania; sprobuj za ${Math.ceil((e.resetAt - now) / 60)} min`);
     }
@@ -170,6 +192,7 @@ function checkEnrollLimit(key: string, now: number): void {
   const e = enrollAttempts.get(key);
   if (!e || e.resetAt <= now) { enrollAttempts.set(key, { count: 1, resetAt: now + 3600 }); return; }
   e.count += 1;
+  if (e.count > 20) securityLog("rate_limited", { scope: "enroll" });
   if (e.count > 20) throw tooMany("za_duzo_prob", "za duzo prob rejestracji, sprobuj pozniej");
 }
 
@@ -217,14 +240,20 @@ export function registerAuthRoutes(router: Router): void {
     const password = str(body.password) ?? "";
     const ip = clientKey(req, rc.config.trustProxy);
     const now = Math.floor(Date.now() / 1000);
-    const keys = loginKeys(rc.config.secret, ip, handle);
+    const keys = loginKeys(rc.ctx, rc.config.secret, ip, handle);
     assertLoginAllowed(keys, ip, now);
     const actor = verifyPassword(rc.ctx, handle, password);
     // One message for a bad handle and a bad password: otherwise the server's answer is an
     // oracle for "does this user exist".
     if (!actor) {
       recordLoginFailure(keys, now);
-      securityLog("login_failed", { handle: keys.handleName, ip });
+      securityLog("login_failed", { ...keys.who, ip });
+      const wide = loginFailures.get(keys.handle);
+      if (wide && wide.count > LOGIN_FAIL_MAX_HANDLE) {
+        securityLog("rate_limited", { scope: "login_handle", ...keys.who, ip });
+        throw tooMany("za_duzo_prob",
+          `za duzo prob logowania; sprobuj za ${Math.ceil((wide.resetAt - now) / 60)} min`);
+      }
       throw unauthorized("zle_dane", "nieprawidlowy uzytkownik lub haslo");
     }
     loginFailures.delete(keys.ipHandle);
@@ -241,12 +270,17 @@ export function registerAuthRoutes(router: Router): void {
     // bumping it makes every earlier copy of the cookie (a stolen one included) stop working.
     // The epoch is per ACTOR, so this signs the human out of their other devices as well.
     // Without a valid session there is nothing to revoke and nothing to protect with CSRF.
+    // The cookie is cleared first, so a failed CSRF check still removes it from this browser.
+    res.setHeader("set-cookie", clearCookie());
     if (rc.auth?.via === "cookie") {
-      assertCsrf(rc, req);
+      try {
+        assertCsrf(rc, req);
+      } catch {
+        throw forbidden("csrf", "missing or invalid X-AT-CSRF header; the session was not revoked");
+      }
       bumpSessionEpoch(rc.ctx, rc.auth.actor.id);
     }
-    res.setHeader("set-cookie", clearCookie());
-    json(res, 200, { ok: true });
+    json(res, 200, { ok: true, signedOutEverywhere: true });
   });
 
   // --- passkeys (Touch ID / Face ID) ------------------------------------------
