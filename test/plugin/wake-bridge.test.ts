@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { signWake } from "../../src/core/wake.ts";
-import { createWakeBridge, listenHost, spawnRunner } from "../../integrations/claude-code-plugin/lib/wake.mjs";
+import { createWakeBridge, listenHost, spawnRunner, DEFAULT_ALLOWED_TOOLS } from "../../integrations/claude-code-plugin/lib/wake.mjs";
 import { recordSession } from "../../integrations/claude-code-plugin/lib/sessions.mjs";
 
 const SECRET = "fake-secret-for-tests"; // SYNTH: a synthetic test value, not a credential
@@ -71,7 +71,7 @@ test("wake bridge: bad signature 401, good one spawns the runner with argv only,
   assert.equal(call.cmd, "claude");
   assert.equal(call.cwd, b.project);
   assert.deepEqual(call.argv.slice(0, 7), [
-    "-p", "--resume", SESSION, "--permission-mode", "dontAsk", "--allowedTools", "mcp__agenttalks__*",
+    "-p", "--resume", SESSION, "--permission-mode", "dontAsk", "--allowedTools", DEFAULT_ALLOWED_TOOLS,
   ]);
   assert.equal(call.argv.length, 8, "the prompt is ONE argv element");
   const prompt = call.argv[7];
@@ -122,4 +122,22 @@ test("wake bridge: a resumed run that hangs is killed at its time limit, so the 
   const started = Date.now();
   await spawnRunner(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { cwd: tmpdir(), timeoutMs: 300 });
   assert.ok(Date.now() - started < 5000, "the runner resolved after the kill");
+});
+
+/** Claude Code permission rules: `*` in an MCP tool rule matches any run of characters. */
+function ruleMatches(rules: string, tool: string): boolean {
+  const esc = (p: string) => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+  return rules.split(",").map((r) => r.trim()).filter(Boolean)
+    .some((r) => new RegExp("^" + r.split("*").map(esc).join(".*") + "$").test(tool));
+}
+
+test("wake bridge: the default allowed tools cover this plugin's own tools and the remote AgentTalks server, nothing else (D-MG-17)", () => {
+  // A plugin MCP server's tools are named mcp__plugin_<plugin>_<server>__<tool> (code.claude.com/docs/en/mcp).
+  for (const tool of ["mcp__plugin_agenttalks_agenttalks__reply", "mcp__plugin_agenttalks_agenttalks__mark_read",
+    "mcp__agenttalks__send_message"]) {
+    assert.ok(ruleMatches(DEFAULT_ALLOWED_TOOLS, tool), `${tool} is not allowed by ${DEFAULT_ALLOWED_TOOLS}`);
+  }
+  for (const tool of ["Bash", "Edit", "Write", "WebFetch", "mcp__github__create_issue", "mcp__plugin_other_agenttalks__reply"]) {
+    assert.ok(!ruleMatches(DEFAULT_ALLOWED_TOOLS, tool), `${tool} must not be allowed`);
+  }
 });

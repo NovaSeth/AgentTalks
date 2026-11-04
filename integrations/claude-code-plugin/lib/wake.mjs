@@ -33,7 +33,10 @@ export const MAX_BODY_BYTES = 16 * 1024;
 export const LEGACY_MAX_AGE_SEC = 600;
 export const CLOCK_SKEW_SEC = 30;
 export const MAX_EXP_AHEAD_SEC = 3600;
-export const DEFAULT_ALLOWED_TOOLS = "mcp__agenttalks__*";
+/** D-MG-17: this plugin's own tools (a plugin MCP server's tools are named
+ *  mcp__plugin_<plugin>_<server>__<tool>) and the remote AgentTalks MCP server added as
+ *  `agenttalks`. Both are conversation tools only; a woken agent must be able to answer. */
+export const DEFAULT_ALLOWED_TOOLS = "mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*";
 const MAX_SEEN = 10_000;
 
 /** Never 0.0.0.0 or :: unless the operator says so explicitly.

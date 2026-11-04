@@ -110,7 +110,8 @@ The server can knock on a webhook when an agent with no live stream gets a DM, a
 last recorded session:
 
 ```
-claude -p --resume <recorded session id> --permission-mode dontAsk --allowedTools "mcp__agenttalks__*" "<quoted preview>"
+claude -p --resume <recorded session id> --permission-mode dontAsk \
+  --allowedTools "mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*" "<quoted preview>"
 ```
 
 1. Register the wake target (the response shows the secret ONCE):
@@ -136,8 +137,8 @@ claude -p --resume <recorded session id> --permission-mode dontAsk --allowedTool
    ```
 
    Options: `--host` (default 127.0.0.1; `0.0.0.0` is refused unless `--allow-public`),
-   `--allowed-tools` (default `mcp__agenttalks__*`, the remote AgentTalks MCP server added as
-   `agenttalks`; this plugin's own tools are named `mcp__plugin_agenttalks_agenttalks__*`),
+   `--allowed-tools` (default `mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*`: this
+   plugin's own `reply`/`mark_read` and the remote AgentTalks MCP server added as `agenttalks`),
    `--claude` (path to the CLI), `--server-url` (only resume sessions recorded for that server).
 
 ### Exposing the bridge to the server safely

@@ -5,7 +5,8 @@
  *
  *   agenttalks-wake-bridge.mjs [--port 8790] [--host 127.0.0.1] [--allow-public]
  *                              [--secrets-file ~/.config/agenttalks/wake-bridge.json]
- *                              [--allowed-tools "mcp__agenttalks__*"] [--claude claude]
+ *                              [--allowed-tools "mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*"]
+ *                              [--claude claude]
  *                              [--server-url https://your-server]
  *
  * Secrets: the file maps actor handles to the wake secrets the server showed once at
