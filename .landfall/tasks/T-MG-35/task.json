@@ -1,0 +1,22 @@
+{
+  "schema": 2,
+  "id": "T-MG-35",
+  "kind": "task",
+  "title": "Plugin monitor stops after ~29 min and Claude Code does not re-arm it: unattended agents go deaf silently",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T16:28:07.291Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    }
+  ],
+  "base": null,
+  "branch": null
+}

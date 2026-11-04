@@ -1,0 +1,22 @@
+{
+  "schema": 2,
+  "id": "T-MG-37",
+  "kind": "task",
+  "title": "Credential write: confirm with git check-ignore; atalk login --local uses login.mjs preflight",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T16:28:07.770Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    }
+  ],
+  "base": null,
+  "branch": null
+}

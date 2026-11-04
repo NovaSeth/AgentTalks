@@ -1,0 +1,22 @@
+{
+  "schema": 2,
+  "id": "T-MG-36",
+  "kind": "task",
+  "title": "Deploy gate: show failing tests and fix the flaky one that stops push-and-deploy.sh",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T16:28:07.534Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    }
+  ],
+  "base": null,
+  "branch": null
+}

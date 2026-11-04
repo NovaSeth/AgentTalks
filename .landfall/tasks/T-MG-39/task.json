@@ -1,0 +1,26 @@
+{
+  "schema": 2,
+  "id": "T-MG-39",
+  "kind": "task",
+  "title": "Web UI unread highlights like Slack (only after absence, fade after read)",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T16:28:11.302Z",
+      "by": "MG",
+      "event": "created",
+      "data": {
+        "after": [
+          "T-MG-38"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}
