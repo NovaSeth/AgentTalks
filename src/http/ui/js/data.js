@@ -76,6 +76,46 @@ const reconciling = new Set();
 const reconcileRounds = new Map();
 const MAX_RECONCILE_ROUNDS = 3;
 const RECONCILE_PAGE = 200;
+// T-MG-46 (B-MG-121, B-MG-122): an owed range leaves `owed` only when a re-read of it succeeded. A
+// re-read that failed, or a conversation that hit MAX_RECONCILE_ROUNDS, keeps its ranges and waits for
+// a repair timer: 1, 2, 4, 8, 16, 30 s, at most REPAIR_ATTEMPTS timers in a row. While a timer is
+// pending no other trigger starts a round, except a read of that conversation that LANDED after a
+// failed re-read (the network is back, e.g. the reconnect's catch-up). Without a timer left, the next
+// landed read of the conversation resumes. convId -> { attempts, timer, failed }.
+const repairs = new Map();
+const REPAIR_ATTEMPTS = 6;
+const REPAIR_BASE_MS = 1000;
+const REPAIR_MAX_MS = 30000;
+/** convId -> the session generation its owed ranges belong to (another session owes nothing). */
+const owedGen = new Map();
+
+function scheduleRepair(convId, failed) {
+  const r = repairs.get(convId) || { attempts: 0, timer: null, failed };
+  repairs.set(convId, r);
+  r.failed = failed;
+  if (r.timer !== null || r.attempts >= REPAIR_ATTEMPTS) return;
+  const delay = Math.min(REPAIR_MAX_MS, REPAIR_BASE_MS * 2 ** r.attempts);
+  r.attempts++;
+  r.timer = setTimeout(() => { r.timer = null; reconcile(convId); }, delay);
+}
+
+/** Forgets what a conversation owes, with its round count and repair timer (its history is gone,
+ *  the session changed, or every range was re-read). */
+function dropOwed(convId) {
+  owed.delete(convId);
+  owedGen.delete(convId);
+  reconcileRounds.delete(convId);
+  const r = repairs.get(convId);
+  if (r?.timer) clearTimeout(r.timer);
+  repairs.delete(convId);
+}
+
+function oweRanges(convId, ranges) {
+  if (!ranges.length) return;
+  const gen = sessionGeneration();
+  if (owedGen.get(convId) !== gen) { dropOwed(convId); owedGen.set(convId, gen); }
+  (owed.get(convId) || owed.set(convId, []).get(convId)).push(...ranges);
+}
 
 /** Opens a flight just before its request is sent: the stamp, and what was held at that moment. */
 export function beginRead(convId) {
@@ -99,9 +139,17 @@ export function endRead(convId, f, msgs) {
   air?.delete(f);
   if (f.dirty && msgs && msgs.length) {
     const idsOf = msgs.map((m) => m.id).filter((id) => typeof id === "number");
-    if (idsOf.length) (owed.get(convId) || owed.set(convId, []).get(convId)).push([Math.min(...idsOf), Math.max(...idsOf)]);
+    if (idsOf.length) oweRanges(convId, [[Math.min(...idsOf), Math.max(...idsOf)]]);
   }
-  if (!air?.size && owed.get(convId)?.length) queueMicrotask(() => { reconcile(convId); });
+  // A re-read's own flight never starts a round: reconcile decides what follows it.
+  if (air?.size || reconciling.has(convId) || !owed.get(convId)?.length) return;
+  const r = repairs.get(convId);
+  if (r?.timer) {
+    if (!(r.failed && msgs)) return;   // waits for its timer
+    clearTimeout(r.timer);
+    r.timer = null;
+  }
+  queueMicrotask(() => { reconcile(convId); });
 }
 
 /** Whether the page of flight `f` may replace the held object `held` of message `id`. `liveMark`: a live
@@ -146,36 +194,47 @@ export function applyPage(convId, data, f, liveMark = f.sent) {
 }
 
 /** Rule 2: the owed ranges of a conversation, read again one page at a time once nothing is in the
- *  air. A re-read that overlaps a new flight owes its range again; MAX_RECONCILE_ROUNDS bounds a
- *  conversation whose reads never stop overlapping (then rule 1 alone stands). */
+ *  air. A re-read that overlaps a new flight owes its range again. A range leaves `owed` only when its
+ *  re-read succeeded (T-MG-46): a failed page puts back what it did not read, and after
+ *  MAX_RECONCILE_ROUNDS rounds in a row the conversation yields with its ranges kept; both wait for a
+ *  repair timer (scheduleRepair), so neither can loop. */
 async function reconcile(convId) {
   if (reconciling.has(convId) || flights.get(convId)?.size || !owed.get(convId)?.length) return;
-  const ranges = owed.get(convId).sort((a, b) => a[0] - b[0]);
-  owed.delete(convId);
-  if (!state.loaded[convId]) return;
+  if (repairs.get(convId)?.timer) return;   // a pending repair timer starts the next round
+  if (!state.loaded[convId] || owedGen.get(convId) !== sessionGeneration()) { dropOwed(convId); return; }
   const round = (reconcileRounds.get(convId) ?? 0) + 1;
-  if (round > MAX_RECONCILE_ROUNDS) { reconcileRounds.delete(convId); return; }
+  if (round > MAX_RECONCILE_ROUNDS) { reconcileRounds.delete(convId); scheduleRepair(convId, false); return; }
   reconcileRounds.set(convId, round);
   const merged = [];
-  for (const [lo, hi] of ranges) {
+  for (const [lo, hi] of owed.get(convId).sort((a, b) => a[0] - b[0])) {
     const last = merged[merged.length - 1];
     if (last && lo <= last[1] + 1) last[1] = Math.max(last[1], hi); else merged.push([lo, hi]);
   }
+  owed.delete(convId);
   const gen = sessionGeneration();
+  let failed = false;
+  let stale = false;
   reconciling.add(convId);
   try {
-    for (const [lo, hi] of merged) {
-      let after = lo - 1;
+    for (let i = 0; i < merged.length; i++) {
+      const hi = merged[i][1];
+      let after = merged[i][0] - 1;
       while (after < hi) {
         // Ids are global and rising, so (after, hi] holds at most hi - after messages of this conversation.
         const f = beginRead(convId);
         let data = null;
         try {
           data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${Math.min(RECONCILE_PAGE, hi - after)}`);
-          if (gen !== sessionGeneration()) return;
+          if (gen !== sessionGeneration()) { stale = true; return; }
           applyPage(convId, data, f);
-        } catch { return; }
-        finally { endRead(convId, f, data && data.messages); }
+        } catch (e) {
+          // Another session's answer, or a lost session: nothing is owed to it. Otherwise the part of
+          // this range not read yet, and the ranges after it, stay owed.
+          if (e?.sessionLost || gen !== sessionGeneration()) { stale = true; return; }
+          failed = true;
+          oweRanges(convId, [[after + 1, hi], ...merged.slice(i + 1)]);
+          return;
+        } finally { endRead(convId, f, data && data.messages); }
         const top = data.messages.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), after);
         if (top <= after) break;
         after = top;
@@ -184,7 +243,10 @@ async function reconcile(convId) {
     if (state.view === "chat" && state.activeId === convId) views.messages?.();
   } finally {
     reconciling.delete(convId);
-    if (!owed.get(convId)?.length) reconcileRounds.delete(convId);
+    if (stale) dropOwed(convId);
+    // A failed round is no overlap round: the cap counts overlaps in a row, and the timer breaks the row.
+    else if (failed) { reconcileRounds.delete(convId); scheduleRepair(convId, true); }
+    else if (!owed.get(convId)?.length) dropOwed(convId);
     else queueMicrotask(() => { reconcile(convId); });
   }
 }
