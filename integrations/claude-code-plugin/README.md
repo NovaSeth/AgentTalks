@@ -164,11 +164,15 @@ The bridge binds to loopback and should stay there. Give the server a way in tha
   Do not open the port itself to the internet, and do not run the bridge with `--allow-public`
   unless a firewall restricts who can reach it.
 
-What the bridge checks on every knock: body at most 16 KiB; `x-agenttalks-signature` (hex
+What the bridge checks on every knock: body at most 16 KiB (a larger one is answered 413 at
+the cap and the connection is closed, the rest is never read); `x-agenttalks-signature` (hex
 HMAC-SHA256 of the raw body with the actor's secret, compared in constant time); freshness
 (`exp` when the server sends it, else a `ts` at most 10 minutes old); and replay (the `nonce`,
-or the body hash for bodies without one, is accepted once). Answers: 401 bad signature or
-stale, 409 replay, 413 too large, 202 accepted. One resumed run per session at a time.
+or the body hash for bodies without one, is accepted once). The replay record is kept in
+`~/.config/agenttalks/state/wake-replay.json` (0600, hashes only) until each entry's
+freshness window ends, so a restart of the bridge does not reopen replay; run one bridge per
+user. Answers: 401 bad signature or stale, 409 replay, 413 too large, 202 accepted. One
+resumed run per session at a time.
 
 ## Security notes
 

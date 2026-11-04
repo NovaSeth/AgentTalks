@@ -8,7 +8,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
@@ -49,7 +50,7 @@ async function bridge(t: any, nowSec: () => number, o: BridgeOpts = {}) {
   const send = (body: string, signature = signWake(SECRET, body)) => fetch(`http://127.0.0.1:${port}/wake`, {
     method: "POST", headers: { "content-type": "application/json", "x-agenttalks-signature": signature }, body,
   });
-  return { send, calls, project, file, home };
+  return { send, calls, project, file, home, port, server };
 }
 
 const NOW = 1_800_000_000;
@@ -124,6 +125,57 @@ test("wake bridge: unknown actor, stale legacy body, wrong method and oversized 
   assert.equal((await b.send(legacyBody({ ts: NOW - 3600 }))).status, 401, "an old legacy body is stale");
   assert.equal((await b.send(legacyBody({ type: "other" }))).status, 400);
   assert.equal((await b.send("x".repeat(70_000))).status, 413);
+  assert.equal(b.calls.length, 0);
+});
+
+test("wake bridge: the replay record survives a restart of the bridge (Claude F4)", async (t) => {
+  const state = mkdtempSync(join(tmpdir(), "at-plugin-wstate-"));
+  const replayFile = join(state, "wake-replay.json");
+  const body = legacyBody({ exp: NOW + 300, nonce: "0123456789abcdef0123456789abcdef" });
+  const first = await bridge(t, () => NOW, { extra: { replayFile } });
+  assert.equal((await first.send(body)).status, 202);
+  assert.equal(statSync(replayFile).mode & 0o777, 0o600);
+  assert.ok(!readFileSync(replayFile, "utf8").includes(SECRET));
+  await new Promise<void>((r) => first.server.close(() => r()));
+
+  // A captured knock replayed against a RESTARTED bridge while it is still fresh.
+  const second = await bridge(t, () => NOW + 60, { extra: { replayFile } });
+  assert.equal((await second.send(body)).status, 409);
+  const legacy = legacyBody({ messageId: 77 });
+  assert.equal((await second.send(legacy)).status, 202);
+  const third = await bridge(t, () => NOW + 61, { extra: { replayFile } });
+  assert.equal((await third.send(legacy)).status, 409, "a body-hash key survives too");
+  assert.equal(second.calls.length + third.calls.length, 1);
+});
+
+/** Sends headers and part of an oversized body on a raw socket, never the rest, and returns
+ *  what the bridge answered and whether it closed the connection on its own. */
+function partialUpload(port: number, headers: string, chunk: Buffer) {
+  return new Promise<{ response: string; closedByServer: boolean; ms: number }>((resolve) => {
+    const started = Date.now();
+    const sock = connect(port, "127.0.0.1");
+    let response = "";
+    const timer = setTimeout(() => { sock.destroy(); resolve({ response, closedByServer: false, ms: Date.now() - started }); }, 3000);
+    sock.on("data", (d) => { response += d.toString("latin1"); });
+    sock.on("close", () => { clearTimeout(timer); resolve({ response, closedByServer: true, ms: Date.now() - started }); });
+    sock.on("error", () => {});
+    sock.write(headers);
+    sock.write(chunk);
+  });
+}
+
+test("wake bridge: an oversized body is answered 413 at the cap and the connection is closed, not read to the end (Claude F4)", async (t) => {
+  const b = await bridge(t, () => NOW);
+  const head = (extra: string) => `POST /wake HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n${extra}\r\n`;
+  // Declared 10 MB, 20 KB sent.
+  const declared = await partialUpload(b.port, head("Content-Length: 10000000\r\n"), Buffer.alloc(20_000, 0x78));
+  assert.match(declared.response, /^HTTP\/1\.1 413/);
+  assert.ok(declared.closedByServer, "the bridge closed the connection itself");
+  // Chunked, no length: the cap still applies while reading.
+  const chunk = Buffer.concat([Buffer.from((20_000).toString(16) + "\r\n"), Buffer.alloc(20_000, 0x78), Buffer.from("\r\n")]);
+  const chunked = await partialUpload(b.port, head("Transfer-Encoding: chunked\r\n"), chunk);
+  assert.match(chunked.response, /^HTTP\/1\.1 413/);
+  assert.ok(chunked.closedByServer, "the bridge closed the chunked upload too");
   assert.equal(b.calls.length, 0);
 });
 

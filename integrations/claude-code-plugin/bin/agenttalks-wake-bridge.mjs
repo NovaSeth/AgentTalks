@@ -24,7 +24,7 @@ import { join } from "node:path";
 import {
   createWakeBridge, listenHost, DEFAULT_ALLOWED_TOOLS, checkWakeConfig, normalizeSecrets, normalizeUrl,
 } from "../lib/wake.mjs";
-import { readSessions, sessionsDir } from "../lib/sessions.mjs";
+import { configDir, readSessions, sessionsDir } from "../lib/sessions.mjs";
 
 /** @param {string} line */
 const log = (line) => process.stderr.write(`[agenttalks-wake-bridge] ${line}\n`);
@@ -79,6 +79,8 @@ try {
     sessionsDir: store,
     allowedTools: str("allowed-tools") ?? DEFAULT_ALLOWED_TOOLS,
     claudeBin: str("claude") ?? "claude",
+    // Seen nonces and body hashes, kept until their freshness window ends (0600).
+    replayFile: join(configDir(), "state", "wake-replay.json"),
     log,
   });
   const who = secrets.map((s) => `@${s.actor} on ${s.serverUrl ?? "(any single server)"}`).join(", ");

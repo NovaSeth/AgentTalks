@@ -32,12 +32,12 @@
  * Residual: an MCP tool of ANOTHER server that the user's own settings pre-approve (an allow
  * rule such as `mcp__github__*`) stays callable; hooks and installed mods still run.
  */
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
-import { isAbsolute } from "node:path";
+import { dirname, isAbsolute } from "node:path";
 import { PREAMBLE, quoteBody, safeLabel } from "./frame.mjs";
 import { latestSessionFor, readSessions } from "./sessions.mjs";
 
@@ -213,6 +213,7 @@ export function checkWakeConfig(secrets, sessions) {
  *   runner?: (cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv }) => Promise<void>,
  *   claudeBin?: string,
  *   allowedTools?: string,
+ *   replayFile?: string | null,
  *   now?: () => number,
  *   log?: (line: string) => void,
  * }} opts
@@ -224,10 +225,40 @@ export function createWakeBridge(opts) {
   const allowedTools = opts.allowedTools ?? DEFAULT_ALLOWED_TOOLS;
   // `serverUrl` (the --server-url flag) binds the entries that name no server of their own.
   const secrets = normalizeSecrets(opts.secrets, opts.serverUrl ?? null);
-  /** replay key -> unix second after which it can be forgotten */
+  /** sha256(replay key) -> unix second after which it can be forgotten */
   const seen = new Map();
   /** Claude Code session ids with a resumed run in progress */
   const running = new Set();
+  const replayFile = opts.replayFile ?? null;
+  if (replayFile) loadReplay(replayFile);
+
+  /** The replay record outlives the process: a knock captured on the way could otherwise be
+   *  replayed after a restart while its exp (up to an hour ahead) or ts is still fresh.
+   *  @param {string} file */
+  function loadReplay(file) {
+    let v;
+    try { v = JSON.parse(readFileSync(file, "utf8")); } catch (err) {
+      if (/** @type {any} */ (err)?.code !== "ENOENT") log(`replay record ${file} unreadable, starting empty`);
+      return;
+    }
+    for (const [k, until] of Object.entries(v?.seen ?? {})) {
+      if (/^[0-9a-f]{64}$/.test(k) && typeof until === "number") seen.set(k, until);
+    }
+  }
+
+  function saveReplay() {
+    if (!replayFile) return;
+    try {
+      const dir = dirname(replayFile);
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      const tmp = `${replayFile}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+      writeFileSync(tmp, JSON.stringify({ seen: Object.fromEntries(seen) }) + "\n", { mode: 0o600 });
+      chmodSync(tmp, 0o600);
+      renameSync(tmp, replayFile);
+    } catch (err) {
+      log(`could not save the replay record (a restart reopens replay until exp): ${err instanceof Error ? err.message : err}`);
+    }
+  }
 
   /** @param {number} nowSec */
   function prune(nowSec) {
@@ -250,14 +281,25 @@ export function createWakeBridge(opts) {
     /** @type {Buffer[]} */
     const chunks = [];
     let size = 0;
-    let tooBig = false;
+    let refused = false;
+    // An unauthenticated sender must not keep the connection busy with a body the bridge
+    // will never read: answer 413 at the cap, stop reading, and close the socket once the
+    // answer is out.
+    const tooLarge = () => {
+      refused = true;
+      req.removeAllListeners("data");
+      req.pause();
+      res.writeHead(413, { "content-type": "application/json", connection: "close" });
+      res.end(JSON.stringify({ error: "body too large" }), () => req.socket.destroy());
+    };
+    if (Number(req.headers["content-length"]) > MAX_BODY_BYTES) return tooLarge();
     req.on("data", (/** @type {Buffer} */ c) => {
       size += c.length;
-      if (size > MAX_BODY_BYTES) { tooBig = true; return; }
+      if (size > MAX_BODY_BYTES) return tooLarge();
       chunks.push(c);
     });
     req.on("end", () => {
-      if (tooBig) return reply(res, 413, { error: "body too large" });
+      if (refused) return;
       const raw = Buffer.concat(chunks);
       /** @type {any} */
       let body;
@@ -293,13 +335,15 @@ export function createWakeBridge(opts) {
         }
         keepUntil = body.ts + LEGACY_MAX_AGE_SEC + CLOCK_SKEW_SEC;
       }
-      const key = typeof body.nonce === "string" && body.nonce.length > 0 && body.nonce.length <= 128
+      const plainKey = typeof body.nonce === "string" && body.nonce.length > 0 && body.nonce.length <= 128
         ? `n:${body.nonce}` : `b:${createHash("sha256").update(raw).digest("hex")}`;
+      const key = createHash("sha256").update(plainKey).digest("hex");
       if (seen.has(key)) {
         log("rejected: replay");
         return reply(res, 409, { error: "replay" });
       }
       seen.set(key, keepUntil);
+      saveReplay();
 
       // Only a session recorded for the server that holds this secret. A secret with no
       // server is usable only while every recorded session is on one server (fail closed).
