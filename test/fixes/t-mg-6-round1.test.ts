@@ -60,14 +60,16 @@ test("security lines never contain the handle string a user typed (item 2)", asy
   await s.close();
 });
 
-test("a high handle-wide failure count does not lock out the right password elsewhere (item 3)", async () => {
+// Superseded by D-MG-14 (the per-account cap applies before verification unless the browser holds
+// a valid at_dev cookie): the right password from a fresh IP without at_dev is now refused.
+test("a high handle-wide failure count refuses a browser without at_dev (item 3, D-MG-14)", async () => {
   const s = await startTestServer({ trustProxy: true });
   seed(s);
   for (const ip of ["10.0.0.1", "10.0.0.2", "10.0.0.3"]) {
     const n = ip === "10.0.0.3" ? 6 : 7;
     for (let i = 0; i < n; i++) assert.equal((await login(s, "michal", "zle" + i, ip)).status, 401);
   }
-  assert.equal((await login(s, "michal", "haslo1234", "10.0.0.9")).status, 200);
+  assert.equal((await login(s, "michal", "haslo1234", "10.0.0.9")).status, 429);
   // A source that exhausted its own IP+handle cap stays blocked.
   for (let i = 0; i < 8; i++) await login(s, "michal", "zle" + i, "10.0.0.50");
   assert.equal((await login(s, "michal", "zle", "10.0.0.50")).status, 429);

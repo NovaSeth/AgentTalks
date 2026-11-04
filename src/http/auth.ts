@@ -5,7 +5,7 @@
  * `execFile(TALK_BIN, args, { env: { TALK_SID: asSid } })` let the server (and any process
  * with access to the directory) write on somebody else's behalf.
  */
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Ctx } from "../core/ctx.ts";
 import type { Config } from "../config.ts";
 import type { Actor } from "../core/actors.ts";
@@ -52,6 +52,39 @@ export function makeCookie(
   ];
   if (secure || config.trustProxy) attrs.push("Secure");
   return attrs.join("; ");
+}
+
+export const DEVICE_COOKIE = "at_dev";
+const DEVICE_TTL_SEC = 180 * 24 * 3600;
+
+function deviceMac(config: Config, actorId: number, nonce: string): string {
+  return createHmac("sha256", config.secret).update(`dev|${actorId}|${nonce}`).digest("hex");
+}
+
+/**
+ * The device cookie (D-MG-14, OWASP Authentication Cheat Sheet): "<hmac>.<nonce>.<actorId>",
+ * set after a successful login. It grants no session, only an exemption from the per-account
+ * failure cap for THIS actor. Path is limited to the password login endpoint.
+ */
+export function makeDeviceCookie(config: Config, actorId: number, secure: boolean): string {
+  const nonce = randomBytes(16).toString("hex");
+  const attrs = [
+    `${DEVICE_COOKIE}=${deviceMac(config, actorId, nonce)}.${nonce}.${actorId}`,
+    "Path=/api/login", "HttpOnly", "SameSite=Lax", `Max-Age=${DEVICE_TTL_SEC}`,
+  ];
+  if (secure || config.trustProxy) attrs.push("Secure");
+  return attrs.join("; ");
+}
+
+/** Whether the request carries a valid device cookie issued for exactly this actor. */
+export function hasDeviceCookie(config: Config, req: Req, actorId: number): boolean {
+  const raw = parseCookies(req.headers.cookie)[DEVICE_COOKIE];
+  if (!raw) return false;
+  const [mac, nonce, idPart] = raw.split(".");
+  if (!mac || !nonce || Number(idPart) !== actorId) return false;
+  const a = Buffer.from(mac, "utf8");
+  const b = Buffer.from(deviceMac(config, actorId, nonce), "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /** Whether this request arrived over HTTPS. Behind a proxy the truth is in X-Forwarded-Proto;

@@ -4,7 +4,7 @@ import { whoIsTyping } from "../../core/presence.ts";
 import { listForActor, myMemberships } from "../../core/conversations.ts";
 import { unreadFor } from "../../core/unread.ts";
 import { unauthorized, badRequest, forbidden, tooMany } from "../../core/errors.ts";
-import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, makeCookie, requestIsSecure, requireAuth,
+import { assertCsrf, clearCookie, COOKIE_NAME, csrfFor, hasDeviceCookie, makeCookie, makeDeviceCookie, requestIsSecure, requireAuth,
   requireHumanAdmin } from "../auth.ts";
 import { securityLog } from "../../core/tokens.ts";
 import { json, readJson, str } from "../respond.ts";
@@ -131,6 +131,7 @@ const LOGIN_FAIL_MAX_IP = 20;
 const loginFailures = new Map<string, { count: number; resetAt: number }>();
 
 type LoginKeys = {
+  actorId: number | null;
   ipHandle: string; handle: string; ip: string;
   /** What a security log line may say about the typed handle: never the string itself. */
   who: Record<string, unknown>;
@@ -154,6 +155,7 @@ function loginKeys(ctx: Ctx, secret: string, ip: string, rawHandle: string): Log
     : { handleLen: norm.length,
         handleHash: createHmac("sha256", secret).update(`log-handle:${norm}`).digest("hex").slice(0, 8) };
   return {
+    actorId: actor ? actor.id : null,
     ipHandle: kluczLimitu(secret, `lf|${ip}|${id}`),
     handle: kluczLimitu(secret, `lh|${id}`),
     ip: kluczLimitu(secret, `li|${ip}`),
@@ -161,13 +163,16 @@ function loginKeys(ctx: Ctx, secret: string, ip: string, rawHandle: string): Log
   };
 }
 
-function assertLoginAllowed(keys: LoginKeys, ip: string, now: number): void {
+function assertLoginAllowed(keys: LoginKeys, ip: string, now: number, knownDevice: boolean): void {
   sprzatniecieOkien(loginFailures, now);
-  // The handle-wide cap is NOT checked here: it is applied after a failed verification only, so
-  // that nobody can lock the owner out of the right password from another address.
-  const checks: Array<[string, number]> = [
-    [keys.ipHandle, LOGIN_FAIL_MAX_IP_HANDLE], [keys.ip, LOGIN_FAIL_MAX_IP],
-  ];
+  // D-MG-14: the per-account cap applies BEFORE verification (a distributed guesser must not get
+  // to run scrypt, or succeed, past it). The only exemption is a browser holding a valid at_dev
+  // cookie for this very actor, which also skips the IP+handle cap (shared IPs); the plain
+  // per-IP cap always applies.
+  const checks: Array<[string, number]> = [[keys.ip, LOGIN_FAIL_MAX_IP]];
+  if (!knownDevice) {
+    checks.push([keys.ipHandle, LOGIN_FAIL_MAX_IP_HANDLE], [keys.handle, LOGIN_FAIL_MAX_HANDLE]);
+  }
   for (const [key, max] of checks) {
     const e = loginFailures.get(key);
     if (e && e.resetAt > now && e.count >= max) {
@@ -241,24 +246,20 @@ export function registerAuthRoutes(router: Router): void {
     const ip = clientKey(req, rc.config.trustProxy);
     const now = Math.floor(Date.now() / 1000);
     const keys = loginKeys(rc.ctx, rc.config.secret, ip, handle);
-    assertLoginAllowed(keys, ip, now);
+    const knownDevice = keys.actorId !== null && hasDeviceCookie(rc.config, req, keys.actorId);
+    assertLoginAllowed(keys, ip, now, knownDevice);
     const actor = verifyPassword(rc.ctx, handle, password);
     // One message for a bad handle and a bad password: otherwise the server's answer is an
     // oracle for "does this user exist".
     if (!actor) {
       recordLoginFailure(keys, now);
       securityLog("login_failed", { ...keys.who, ip });
-      const wide = loginFailures.get(keys.handle);
-      if (wide && wide.count > LOGIN_FAIL_MAX_HANDLE) {
-        securityLog("rate_limited", { scope: "login_handle", ...keys.who, ip });
-        throw tooMany("za_duzo_prob",
-          `za duzo prob logowania; sprobuj za ${Math.ceil((wide.resetAt - now) / 60)} min`);
-      }
+
       throw unauthorized("zle_dane", "nieprawidlowy uzytkownik lub haslo");
     }
     loginFailures.delete(keys.ipHandle);
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
-    res.setHeader("set-cookie", cookie);
+    res.setHeader("set-cookie", [cookie, makeDeviceCookie(rc.config, actor.id, requestIsSecure(req))]);
     json(res, 200, {
       actor,
       csrf: csrfFor(cookie.split(";")[0].slice(COOKIE_NAME.length + 1)),
@@ -271,6 +272,7 @@ export function registerAuthRoutes(router: Router): void {
     // The epoch is per ACTOR, so this signs the human out of their other devices as well.
     // Without a valid session there is nothing to revoke and nothing to protect with CSRF.
     // The cookie is cleared first, so a failed CSRF check still removes it from this browser.
+    // D-MG-14: forced logout of one browser accepted (no epoch bump without CSRF).
     res.setHeader("set-cookie", clearCookie());
     if (rc.auth?.via === "cookie") {
       try {
@@ -363,7 +365,7 @@ export function registerAuthRoutes(router: Router): void {
     const actor = getActor(rc.ctx, actorId);
     if (!actor || actor.disabledAt) throw unauthorized("konto_wylaczone", "to konto jest wylaczone");
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
-    res.setHeader("set-cookie", cookie);
+    res.setHeader("set-cookie", [cookie, makeDeviceCookie(rc.config, actor.id, requestIsSecure(req))]);
     json(res, 200, {
       actor,
       csrf: csrfFor(cookie.split(";")[0].slice(COOKIE_NAME.length + 1)),
