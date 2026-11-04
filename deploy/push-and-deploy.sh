@@ -23,8 +23,23 @@ step "working tree"
 [ -z "$(git status --porcelain)" ] || fail "uncommitted changes - deploy what is in git, not what is on disk"
 
 step "local tests and types"
-npm test >/dev/null || fail "tests failed"
-npm run typecheck >/dev/null || fail "tsc reports errors"
+# Output is kept, not thrown away: a red gate that cannot say WHICH test failed sends
+# people to re-run it by hand (T-MG-36). Quiet on success, the failing part on failure.
+GATE_LOG="$(mktemp "${TMPDIR:-/tmp}/agenttalks-gate.XXXXXX")"
+if ! npm test >"$GATE_LOG" 2>&1; then
+  # node:test prints a "failing tests:" section with names, files and assertion messages;
+  # without it (crash before the reporter) fall back to the end of the log.
+  if grep -q 'failing tests:' "$GATE_LOG"; then awk '/failing tests:/{p=1} p && n++ < 150' "$GATE_LOG"
+  else tail -n 60 "$GATE_LOG"; fi >&2
+  printf '  full log: %s\n' "$GATE_LOG" >&2
+  fail "tests failed"
+fi
+if ! npm run typecheck >"$GATE_LOG" 2>&1; then
+  head -n 60 "$GATE_LOG" >&2
+  printf '  full log: %s\n' "$GATE_LOG" >&2
+  fail "tsc reports errors"
+fi
+rm -f "$GATE_LOG"
 echo "  OK"
 
 step "check HEAD is pushed"
