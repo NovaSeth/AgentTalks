@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-105",
+  "status": "fixed",
+  "task": "T-MG-14",
+  "round": 3,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F4",
+  "severity": "blocking",
+  "path": "integrations/claude-code-plugin/lib/wake.mjs",
+  "line": 501,
+  "rule": "AGT-3",
+  "text": "NOT ADDRESSED in full: the exact-name repro is blocked, but the in-memory bridge/permission repro returns 202 for A/nestor while a preapproved B/bob alias (mcp__other_at__*) remains callable=true; explicitly denying that alias changes it to false. The deny rule protects only the name agenttalks. Restrict callable AgentTalks servers to the verified principal regardless of alias, or refuse the wake.",
+  "filedAt": "2026-11-04T03:23:42.067Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": "2026-11-04T03:53:14.894Z",
+  "closedBy": "T-MG-15",
+  "reason": "Fixed by T-MG-15"
+}

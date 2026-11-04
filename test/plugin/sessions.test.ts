@@ -149,3 +149,22 @@ test("sessions: pruning is by age only - many fresh records are all kept, a reco
   assert.equal(ids.length, 60, "a count limit must not push out a live session's record");
   assert.ok(!ids.includes("old-0001-session"));
 });
+
+test("sessions: a reader sees a claimed record while its content is fresh, once, and never a stale tombstone (codex r4 F11)", () => {
+  const store = mkdtempSync(join(tmpdir(), "at-plugin-sess-"));
+  const rec = { sessionId: "tomb-aaaa-bbbb-session", cwd: "/", handle: "nestor", url: "https://at.example" };
+  const name = createHash("sha256").update(rec.sessionId).digest("hex").slice(0, 32) + ".json";
+  const fresh = { ...rec, updatedAt: Date.now() };
+  // Claimed by a live pruner (this process), not yet put back.
+  writeFileSync(join(store, `${name}.${process.pid}.0a0b0c0d.tomb`), JSON.stringify(fresh));
+  assert.deepEqual(readSessions(store).map((r) => r.sessionId), [rec.sessionId]);
+  assert.equal(latestSessionFor(store, "nestor", "https://at.example")?.sessionId, rec.sessionId);
+  // Put back (link) but the tombstone not yet dropped: one record, not two.
+  writeFileSync(join(store, name), JSON.stringify(fresh));
+  assert.equal(readSessions(store).length, 1);
+  // A stale tombstone is on its way out.
+  const other = { ...rec, sessionId: "tomb-cccc-dddd-session" };
+  const otherName = createHash("sha256").update(other.sessionId).digest("hex").slice(0, 32) + ".json";
+  writeFileSync(join(store, `${otherName}.${process.pid}.0a0b0c0e.tomb`), JSON.stringify({ ...other, updatedAt: Date.now() - SESSION_TTL_MS - 1000 }));
+  assert.deepEqual(readSessions(store).map((r) => r.sessionId), [rec.sessionId]);
+});

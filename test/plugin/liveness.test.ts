@@ -18,7 +18,7 @@ import { bearer, startTestServer } from "../http-helpers.ts";
 import { waitFor } from "../helpers.ts";
 import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
-import { ensureDirect } from "../../src/core/conversations.ts";
+import { createChannel, ensureDirect, join as joinConv } from "../../src/core/conversations.ts";
 import {
   channelAlive, heartbeatFile, heartbeatFor, monitorMode, readHeartbeat,
 } from "../../integrations/claude-code-plugin/lib/launch.mjs";
@@ -152,4 +152,45 @@ test("liveness: with the channel flag but no live channel, the monitor delivers;
   const id = ((await res.json()) as any).message.id;
   await waitFor(() => out.includes(`[${id}]`), 5000);
   assert.match(err, /taking over/);
+});
+
+test("liveness: taking over from a channel that stopped with a null event cursor and a mention cursor resumes from ITS mention cursor, so a mention it never delivered is delivered (codex r4 F10)", async (t) => {
+  const s = await startTestServer();
+  t.after(() => s.close());
+  const nestor = createActor(s.ctx, { kind: "agent", handle: "nestor" });
+  const bob = createActor(s.ctx, { kind: "human", handle: "bob" });
+  const general = createChannel(s.ctx, { slug: "general", kind: "public", createdBy: bob.id });
+  joinConv(s.ctx, general.id, nestor.id);
+  const tokenN = mintToken(s.ctx, nestor.id, "t").token;
+  const tokenB = mintToken(s.ctx, bob.id, "t").token;
+  const say = async (body: string) => {
+    const res = await fetch(`${s.url}/api/conversations/${general.id}/messages`, {
+      method: "POST", headers: bearer(tokenB), body: JSON.stringify({ body }),
+    });
+    return ((await res.json()) as any).message.id as number;
+  };
+  const delivered = await say("@nestor the one the channel delivered");
+  const pending = await say("@nestor the one still held by the channel's rate limit");
+  const claude = fakeClaude(t);
+  const home = mkdtempSync(join(tmpdir(), "at-plugin-mon-"));
+  const stateDir = join(home, ".config", "agenttalks", "state");
+  mkdirSync(stateDir, { recursive: true });
+  // The channel died: its writer is gone, its last heartbeat carries its delivered cursors.
+  const dead = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+  await new Promise((r) => dead.on("exit", r));
+  writeFileSync(heartbeatFile(stateDir, claude.pid!), JSON.stringify({
+    pid: dead.pid, at: Date.now(), state: "open", lastEventId: null, mentionCursor: delivered,
+  }));
+  const mon = spawn(process.execPath, [join(PLUGIN, "scripts", "monitor.mjs"), "--max-seconds", "8"], {
+    cwd: home,
+    env: { PATH: process.env.PATH, HOME: home, AGENTTALKS_URL: s.url, AGENTTALKS_TOKEN: tokenN,
+      AGENTTALKS_CLAUDE_PID: String(claude.pid), AGENTTALKS_CHANNEL_POLL_MS: "100", AGENTTALKS_CHANNEL_GRACE_MS: "300" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => mon.kill());
+  let out = "", err = "";
+  mon.stdout!.on("data", (c) => { out += c; });
+  mon.stderr!.on("data", (c) => { err += c; });
+  await waitFor(() => out.includes(`[${pending}]`), 6000).catch(() => assert.fail(`the pending mention ${pending} was lost\n${out}\n${err}`));
+  assert.ok(!out.includes(`[${delivered}]`), "the delivered one is not pushed again");
 });

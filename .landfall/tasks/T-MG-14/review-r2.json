@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 468,
+      "rule": "AGT-3",
+      "text": "F1's plugin-option repro is fixed, but the default remote MCP path remains unbound. In-memory wake/permission repro with remote agenttalks configured as B/bob: the bridge verifies A/nestor and returns 202 woke:true, yet argv allows mcp__agenttalks__send_message without overriding that remote's URL/token. EXPECT_* is checked only by plugin entry points. Bind every allowed AgentTalks MCP server to the verified principal or refuse the wake; add this regression."
+    },
+    {
+      "id": "F5",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 195,
+      "rule": "OWA-10",
+      "text": "F3's ENOENT repro is fixed, but synchronous spawn errors leave started pending. In-memory bridge test with an environment that fits a Node launch but exceeds ARG_MAX with wake argv: E2BIG, no response after 200ms; removing the padding and retrying still returns 409. Catch synchronous spawn() throws, reject started, release checking/running, and return retryable 503. The in-memory catch mutation yields 503 then 202."
+    }
+  ],
+  "run": "codex-T-MG-14-reviewer-2",
+  "sha256": "24edae72ffe03b13e314fac8b547d597ea691e459cab31ba1386e29fd32abbc4"
+}

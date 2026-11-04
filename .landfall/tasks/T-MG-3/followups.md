@@ -1,0 +1,12 @@
+# T-MG-3 follow-ups collected from the waves (input for the final clean-up / UX fix round)
+- W2-S7-A: the "New messages" divider sits too high when unread messages include thread replies (server `unread` counts replies, the main list hides them). Fix: keep `lastUnreadMessageId` from the unread rows in state.js (applyUnreadRows) and let counters.dividerAfter prefer it.
+- W2-S7-B: the tab title counts Σ unreadBadge (mentions/DMs) while a coral sidebar badge prints `unread`; a human compares the two numbers. Make the coral badge print the same number the title counts (unreadBadge), plain unread stays a bold row without a number (Slack model).
+- W2-S7-C: on a 401 the failing caller shows its own error toast next to the "session ended, draft kept" toast. Suppress caller toasts for 401 (api.js marks the error `sessionLost: true`; showToast skips such errors).
+- W1-A: spacing and font sizes in app.css rules are still literal rem in rules no slice touched; tokenise the remainder (--base-size-*, --text-*).
+- W1-B: Primer `.Counter`, `.Label`, `.tooltipped` classes are vendored but not applied; badges/labels/tooltips should use them (or be visually identical).
+- W1-C (orchestrator, screenshots): mention highlight uses the danger/coral tint (now in S12's row).
+- W2-S2-A: Mod+. reopen after closing a thread with its "x": closeThread should record the last side panel (S8, view-chat.js closeThread).
+- W2-S1-A: data.js:268 rewrites #rail-notif aria-label to t("Notifications") on every refresh, overriding the rail's "Activity" name -> use t("Activity") (S8 owns Activity copy + aria labels).
+- W2-S1-B: the rail column is 3.4rem; the Polish "Activity" caption loses its last glyph. Widen the shell rail column to ~4rem and drop the 90 % caption scaling (S9 owns the shell/mobile grid).
+- W2-S1-C: the DMs rail badge is computed inline in app.js and refreshes only on a shell render; use counters.railBadges(state) from S7 and repaint it on unread changes (S8 or the clean-up).
+- W2-S2-B: previewing a channel you are not a member of (#bugs) shows the skeleton loader instead of its messages (pre-existing bug; the S2 join bar promises a readable preview).

@@ -13,7 +13,7 @@
  * What reaches it: lib/frame.mjs frames every message as quoted, untrusted data.
  */
 import { randomUUID } from "node:crypto";
-import { resolveIdentity, describeIdentity } from "../lib/identity.mjs";
+import { resolveIdentity, describeIdentity, expectedPrincipal, principalProblem } from "../lib/identity.mjs";
 import { createApi } from "../lib/api.mjs";
 import { createFeed } from "../lib/feed.mjs";
 import { createPusher } from "../lib/pusher.mjs";
@@ -33,9 +33,34 @@ const log = (line) => process.stderr.write(`[agenttalks-channel] ${line}\n`);
 // Claude Code starts stdio servers in the project; CLAUDE_PROJECT_DIR, when present, is the
 // more reliable answer to "which project is this session in".
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const identity = resolveIdentity({ cwd, report: log });
-log(describeIdentity(identity));
+let refused = false;
+const resolved = resolveIdentity({ cwd, report: (notice) => { refused = true; log(notice); } });
+// A woken run acts only as the principal the wake bridge verified (codex T-MG-14 r1 F1):
+// another server is refused before any request; another actor once GET /api/me says so.
+const expect = expectedPrincipal(process.env);
+const serverProblem = expect ? principalProblem(resolved, expect) : null;
+if (serverProblem) { refused = true; log(serverProblem); }
+const identity = serverProblem ? null : resolved;
+// An untrusted project file or a wrong principal: its one line says it all.
+if (!refused) log(describeIdentity(identity));
 const api = identity ? createApi(identity) : null;
+/** @type {Promise<boolean> | null} */
+let principalCheck = null;
+/** Whether this channel may act at all: always without an expectation; with one, only once
+ *  the server confirms the token is the expected actor (asked once; a failed ask is retried). */
+function principalOk() {
+  if (!expect) return Promise.resolve(true);
+  if (!api || !identity) return Promise.resolve(false);
+  if (!principalCheck) {
+    const id = identity;
+    principalCheck = api.get("/api/me").then((me) => {
+      const problem = principalProblem(id, expect, String(me?.actor?.handle ?? ""));
+      if (problem) log(problem);
+      return !problem;
+    }, (err) => { principalCheck = null; throw err; });
+  }
+  return principalCheck;
+}
 const sessionId = process.env.CLAUDE_CODE_SESSION_ID
   ? deriveSessionId(process.env.CLAUDE_CODE_SESSION_ID) : undefined;
 
@@ -74,6 +99,7 @@ const tools = {
     /** @param {any} args */
     async handler(args) {
       if (!api) return fail("AgentTalks is not configured: set AGENTTALKS_URL/AGENTTALKS_TOKEN or run `atalk login`.");
+      if (!(await principalOk().catch(() => false))) return fail("AgentTalks is not connected as the principal this run was woken for.");
       const conv = positiveInt(args?.conversation_id);
       const text = typeof args?.text === "string" ? args.text : "";
       const thread = args?.thread_id === undefined || args?.thread_id === null ? null : positiveInt(args.thread_id);
@@ -109,6 +135,7 @@ const tools = {
     /** @param {any} args */
     async handler(args) {
       if (!api) return fail("AgentTalks is not configured.");
+      if (!(await principalOk().catch(() => false))) return fail("AgentTalks is not connected as the principal this run was woken for.");
       const conv = positiveInt(args?.conversation_id);
       const msg = positiveInt(args?.message_id);
       if (!conv || !msg) return fail("conversation_id and message_id must be positive integers");
@@ -152,7 +179,7 @@ let everOpened = false;
 function beat(state) {
   if (!heartbeatPath || (state === "closed" && !everOpened)) return;
   if (state === "open") everOpened = true;
-  writeHeartbeat(heartbeatPath, state, { lastEventId: feed?.lastEventId, mentionCursor: feed?.mentionCursor });
+  writeHeartbeat(heartbeatPath, state, { lastEventId: feed?.lastEventId, mentionCursor: feed?.mentionCursor, replayFloor: feed?.replayFloor });
 }
 /** @param {"open" | "pause" | "down"} state */
 function heartbeat(state) {
@@ -196,8 +223,17 @@ function send(items, info) {
 
 async function startFeed() {
   if (!identity) {
-    log("not configured: no events will be pushed");
+    if (!refused) log("not configured: no events will be pushed");
     return;
+  }
+  if (expect) {
+    // Retried with backoff below on a network failure; a wrong actor ends it here.
+    for (let delay = 1000; ; delay = Math.min(delay * 2, 60_000)) {
+      try { if (!(await principalOk())) return; break; } catch (err) {
+        log(`identity check failed (${err instanceof Error ? err.message : "error"}), retrying in ${delay} ms`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
   }
   const pusher = createPusher({ send });
   feed = createFeed({

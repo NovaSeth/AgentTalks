@@ -21,6 +21,22 @@
  * flight, a lookup that hangs) hands over a cursor BEFORE them, and whoever resumes from it
  * gets them again by replay. A promise that rejects means "not delivered": the cursor stays.
  *
+ * The STREAM BOOTSTRAP is not delivered state (codex r4 F10). A fresh feed opens its stream
+ * from the server's newest message id (GET /api/status), and a feed with no cursor at all
+ * takes one just before the first event id it receives; both say only where the stream
+ * starts. Neither is ever reported as the event cursor directly: it enters the in-order
+ * ledger as a FLOOR entry queued behind whatever the feed must deliver first (the mentions
+ * read at start), so the event cursor never passes a mention still in flight. A stop in that
+ * window hands over the previous delivered cursors (possibly a null event cursor and the old
+ * mention cursor), and the next run reads those mentions from the mention list again.
+ *
+ * The REPLAY FLOOR (`replayFloor`) travels with them: the event cursor if there is one, else
+ * the floor this run's stream started from. It is not delivered state and never drives the
+ * skip rule; it only says where the next run's stream must start when there is no delivered
+ * event cursor, so events this run received but never delivered (a DM behind a held
+ * mention) are replayed instead of being jumped over by a newer status watermark (codex
+ * T-MG-14 r1 F2). The next run opens from min(replayFloor, its own status watermark).
+ *
  * The queue is bounded: past `maxQueue` events the feed drops the stream, finishes what it
  * holds, and reconnects from the committed cursor, so the server replays what it dropped.
  *
@@ -66,6 +82,7 @@ function isDefinitive(err) {
  *   onCursor?: (lastEventId: number | null) => void,
  *   lastEventId?: number | null,
  *   mentionCursor?: number | null,
+ *   replayFloor?: number | null,
  *   log?: (line: string) => void,
  *   fetchImpl?: typeof fetch,
  *   sse?: { initialBackoffMs?: number, maxBackoffMs?: number, idleMs?: number },
@@ -101,8 +118,16 @@ export function createFeed(opts) {
    *  reported. */
   /** @type {number | null} */
   let committed = opts.lastEventId ?? null;
-  /** Events up to here were handled by an earlier run (the cursor this feed resumed from). */
+  /** Events up to here were DELIVERED by an earlier run (the delivered cursor this feed
+   *  resumed from; never a bootstrap watermark, which is not reported until it is safe). */
   const resumedFrom = opts.lastEventId ?? null;
+  /** Where the stream starts when no delivered cursor exists yet: GET /api/status's newest
+   *  id, or just before the first event id received. Not delivered state: it becomes the
+   *  event cursor only through the ledger (a floor entry). */
+  /** @type {number | null} */
+  let floor = null;
+  /** The floor entry is queued (or not needed: the feed resumed from a delivered cursor). */
+  let floorQueued = committed !== null;
   /** The cursor the current stream was opened with: it replays every message after it.
    *  null = opened without one (only what arrives from now on). */
   /** @type {number | null} */
@@ -352,6 +377,7 @@ export function createFeed(opts) {
         delay = retryInitial;
         queue.shift();
         const id = e.id;
+        // A floor entry ("floor") is a cursor move only, behind every earlier delivery.
         track(delivery, () => { if (id !== null) commit(id); });
       }
     } finally {
@@ -359,8 +385,9 @@ export function createFeed(opts) {
     }
     if (queue.length === 0 && overflowed && !stopped) {
       overflowed = false;
-      log(`resuming the stream from ${committed ?? "now"} after a full queue`);
-      openStream(committed);
+      const from = committed ?? floor;
+      log(`resuming the stream from ${from ?? "now"} after a full queue`);
+      openStream(from);
       queue.push({ type: "notification", id: null, data: {} });
       void drain();
       return;
@@ -371,10 +398,13 @@ export function createFeed(opts) {
   /** @param {QueuedEvent} e */
   function enqueue(e) {
     if (stopped || overflowed) return;
-    if (committed === null && e.id !== null) {
-      // A fresh feed has no cursor yet: the first id it receives sets one just before it, so
-      // even the first event can be replayed if it is not handled before a stop.
-      committed = e.id - 1;
+    if (!floorQueued && e.id !== null) {
+      // No cursor yet (a server without GET /api/status): the first id received sets one just
+      // before it, so even the first event can be replayed if it is not handled before a
+      // stop - through the ledger, behind the mentions read at start (codex r4 F10).
+      floorQueued = true;
+      floor = e.id - 1;
+      queue.push({ type: "floor", id: floor, data: {} });
     }
     if (queue.length >= maxQueue) {
       // Drop the stream, finish what is queued, then reconnect from the committed cursor:
@@ -416,9 +446,15 @@ export function createFeed(opts) {
         // the SessionStart summary's job. A server without GET /api/status: no cursor.
         try {
           const st = await api.get("/api/status");
-          if (Number.isInteger(st?.lastMessageId) && st.lastMessageId >= 0) committed = st.lastMessageId;
+          if (Number.isInteger(st?.lastMessageId) && st.lastMessageId >= 0) floor = st.lastMessageId;
         } catch (err) {
           if (!isDefinitive(err)) throw err;
+        }
+        // An earlier run that delivered no event yet left where ITS stream started: never
+        // start past it, or what it received but never delivered is skipped (r1 F2).
+        const prior = opts.replayFloor;
+        if (Number.isInteger(prior) && /** @type {number} */ (prior) >= 0) {
+          floor = floor === null ? /** @type {number} */ (prior) : Math.min(floor, /** @type {number} */ (prior));
         }
       }
       if (opts.mentionCursor !== undefined && opts.mentionCursor !== null) {
@@ -438,8 +474,15 @@ export function createFeed(opts) {
           pullCursor = mentionCursor;
         } catch { /* starts from 0: at worst old mentions are pushed once */ }
       }
+      if (floor !== null && !floorQueued) {
+        // The bootstrap watermark becomes the event cursor only once the mentions read at
+        // start (queued just before) are delivered (codex r4 F10).
+        floorQueued = true;
+        queue.push({ type: "floor", id: floor, data: {} });
+        void drain();
+      }
       if (stopped) return;
-      openStream(committed);
+      openStream(committed ?? floor);
       refreshTimer = setInterval(() => {
         // notify changes publish no event, so memberships are re-read on a slow beat.
         enqueue({ type: "refresh", id: null, data: {} });
@@ -453,6 +496,9 @@ export function createFeed(opts) {
     get lastEventId() { return committed; },
     /** The last mention id delivered, with every mention before it. */
     get mentionCursor() { return mentionCursor; },
+    /** Where a successor's stream must start when it has no delivered event cursor: the
+     *  delivered cursor, else this run's floor (not delivered state; never a skip bound). */
+    get replayFloor() { return committed ?? floor ?? opts.replayFloor ?? null; },
     stop() {
       stopped = true;
       stream?.close();

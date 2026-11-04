@@ -13,7 +13,7 @@
       "at": "2026-11-04T02:50:40.826Z"
     }
   ],
-  "status": "new",
+  "status": "dispatched",
   "round": 0,
   "events": [
     {
@@ -38,8 +38,48 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T02:50:41.287Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-3-slack-primer-ui",
+        "base": "19920b832d29fb56f8882672d12901558c7005b1",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-3"
+      }
+    },
+    {
+      "at": "2026-11-04T02:51:02.832Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "19920b832d29fb56f8882672d12901558c7005b1",
+        "note": "wave 1: S0 + S0b (Primer), fable"
+      }
+    },
+    {
+      "at": "2026-11-04T03:12:19.397Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "19920b832d29fb56f8882672d12901558c7005b1",
+        "note": "wave 1 committed c18fbea (626 pass); wave 2: S1, S2, S7 in parallel, fable"
+      }
+    },
+    {
+      "at": "2026-11-04T03:36:25.075Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "19920b832d29fb56f8882672d12901558c7005b1",
+        "note": "wave 2 committed 3810b8d (656 pass); wave 3: S3, S4 in parallel, fable"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "19920b832d29fb56f8882672d12901558c7005b1",
+  "branch": "task/T-MG-3-slack-primer-ui"
 }

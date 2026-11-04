@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "dc4ad75738bba87b8a46d72f65ca1f30802acd6e",
-  "collectedAt": "2026-11-04T02:48:31.935Z",
+  "head": "a2ef7dc4c7d20efd223165447539861b5f37da62",
+  "collectedAt": "2026-11-04T03:52:36.257Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -1305,6 +1305,21 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"channel: the expected principal matches -> it connects as usual (r1 F1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"channel: the right server but the token is another actor's -> no stream, no reply (r1 F1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"channel: woken for nestor on A, plugin options for bob on B -> no request to B, no reply sent, one line (codex T-MG-14 r1 F1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"clientKey: behind a proxy, uses the RIGHT XFF entry, not the spoofable left one\",1]",
       "file": "",
       "skipped": false
@@ -1461,6 +1476,11 @@
     },
     {
       "id": "[\"\",\"ensureDirect rejects fewer than two actors and duplicates\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"entry points: an untrusted project file -> no request to its url from the hook, the monitor or the channel, and one notice line; trusted -> they connect\",1]",
       "file": "",
       "skipped": false
     },
@@ -1750,6 +1770,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"identity: an untrusted project file with its own token AND url is not used; trusted, it is; env and global identities are unaffected\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"identity: empty plugin options do not overwrite the inherited AGENTTALKS_* credentials (codex F2)\",1]",
       "file": "",
       "skipped": false
@@ -2025,6 +2050,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"liveness: taking over from a channel that stopped with a null event cursor and a mention cursor resumes from ITS mention cursor, so a mention it never delivered is delivered (codex r4 F10)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"liveness: the channel flag with a channel that never comes up (not allowlisted, policy): the monitor delivers after the grace period\",1]",
       "file": "",
       "skipped": false
@@ -2156,6 +2186,11 @@
     },
     {
       "id": "[\"\",\"migration row exceptions retain checks on incorrect mappings and old code usage\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"monitor and SessionStart hook: woken for nestor on A with bob's identity -> no request to B, no presence, no wake record (r1 F1)\",1]",
       "file": "",
       "skipped": false
     },
@@ -2385,6 +2420,21 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"property (seed 10): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 11): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 12): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"property (seed 2): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
       "file": "",
       "skipped": false
@@ -2416,6 +2466,11 @@
     },
     {
       "id": "[\"\",\"property (seed 8): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"property (seed 9): every message the agent should get is delivered exactly once across handovers, failures and restarts\",1]",
       "file": "",
       "skipped": false
     },
@@ -2480,6 +2535,21 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"restart while a member mention is still undelivered: neither the status watermark nor the first event id is delivered state, so the mention is fetched again and delivered once (server with GET /api/status) (codex r4 F10)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"restart while a member mention is still undelivered: neither the status watermark nor the first event id is delivered state, so the mention is fetched again and delivered once (server without GET /api/status) (codex r4 F10)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"restart while a mention AND a later DM are undelivered: the next run replays from the previous run's floor, not from the newest status, so the DM is not skipped (codex T-MG-14 r1 F2)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"resuming SSE delivers message_updated for an edit before the cursor\",1]",
       "file": "",
       "skipped": false
@@ -2536,6 +2606,11 @@
     },
     {
       "id": "[\"\",\"sessions: a pruner that dies holding a refreshed record leaves a tombstone the next prune restores\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sessions: a reader sees a claimed record while its content is fresh, once, and never a stale tombstone (codex r4 F11)\",1]",
       "file": "",
       "skipped": false
     },
@@ -2790,6 +2865,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"the untrusted-project notice never carries the repository's path into model context: a path with a newline and a fake approval stays out of additionalContext and the channel's output (item 3 follow-up)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"the wiki list provides a summary of each page without fetching their bodies\",1]",
       "file": "",
       "skipped": false
@@ -2885,7 +2965,22 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"wake bridge: a claude binary that cannot start is a retryable failure, not a used-up knock; the retry after fixing it wakes (codex T-MG-14 r1 F3)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"wake bridge: a resumed run that hangs is killed at its time limit, so the session is not blocked forever\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: a run that starts only AFTER the spawn wait timed out still uses up the knock - the retry gets 409, never a second run (F5 follow-up)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: a run whose start fails AFTER the spawn wait timed out frees the knock for a retry (F5 follow-up)\",1]",
       "file": "",
       "skipped": false
     },
@@ -2896,6 +2991,26 @@
     },
     {
       "id": "[\"\",\"wake bridge: a secret without a serverUrl is a startup error, whatever sessions are recorded (codex r3 F1)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: a spawn that throws synchronously (E2BIG) is a retryable 503, never a hang; the retry without it wakes, then replay 409 (codex T-MG-14 r2 F5)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: a wake that lands while a pruner holds a refreshed record as its tombstone still wakes the session (codex r4 F11)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: a woke:false answer does not use up the nonce - the retry after the session appears wakes it; a replay of a successful wake is still 409 (codex r4 F11)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake bridge: a woken run may use ONLY the wake tools server's principal-checked tools; a remote AgentTalks MCP server (configured as another actor) and the plugin channel are denied (codex T-MG-14 r2 F4, T-MG-15)\",1]",
       "file": "",
       "skipped": false
     },
@@ -2915,6 +3030,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"wake bridge: every allowed tool belongs to the principal-checked wake tools server; a wider --allowed-tools is a startup error (r2 F4, T-MG-15)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"wake bridge: every spelling of the unspecified address is refused without --allow-public (Claude F3)\",1]",
       "file": "",
       "skipped": false
@@ -2930,12 +3050,17 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"wake bridge: no wake when the session's principal cannot be resolved or does not match the secret's server and the recorded actor (item 4)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"wake bridge: the bin refuses to start with a secret that has no server URL (env pair without AGENTTALKS_WAKE_SERVER_URL)\",1]",
       "file": "",
       "skipped": false
     },
     {
-      "id": "[\"\",\"wake bridge: the default allowed tools cover this plugin's own tools and the remote AgentTalks server, nothing else (D-MG-17)\",1]",
+      "id": "[\"\",\"wake bridge: the default allowed tools are the wake tools server's read_conversation, read_thread, reply and mark_read, nothing else (D-MG-17, narrowed by codex T-MG-14 r2 F4 and T-MG-15)\",1]",
       "file": "",
       "skipped": false
     },
@@ -2955,6 +3080,11 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"wake bridge: the woken run never inherits the BRIDGE's AgentTalks credentials; it runs as the session's own principal (codex cross-review, item 4)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"wake bridge: unknown actor, stale legacy body, wrong method and oversized body are refused\",1]",
       "file": "",
       "skipped": false
@@ -2966,6 +3096,56 @@
     },
     {
       "id": "[\"\",\"wake rejects local and private addresses (SSRF)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (a): the generated config is removed also when the run cannot start (ENOENT) or the runner throws\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (a): the woken run starts in strict MCP mode with a generated config naming ONLY the principal-checked tools server; no token on disk; 0600 in a private directory; removed when the run exits\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (b): codex alias scenario - another AgentTalks MCP server under another name (other_at, B/bob, pre-approved) is neither loadable nor callable in the woken run (B-MG-105)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (c): codex DM 41 scenario - read_conversation and read_thread return the full text of message 41 (longer than 400 characters), quoted as data (B-MG-106)\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - an unresolvable identity -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - another actor behind the resolved token -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - another actor id behind the same handle -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - another server URL -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools (d): principal mismatch - no expectation at all (not a woken run) -> every tool errors, nothing beyond GET /api/me on the expected server, one stderr line\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"wake tools: the prompt names the read tools and asks for the full message before acting\",1]",
       "file": "",
       "skipped": false
     },
@@ -3081,5 +3261,5 @@
     }
   ],
   "failing": [],
-  "sha256": "494b90204aa885ebcd61a81d9faf076471788d76231c3821d30338d1990f6cf9"
+  "sha256": "ea649a6eb4954c0f6e4aa33fa783f74021c22aabfa4c17dd0f0db73122836580"
 }

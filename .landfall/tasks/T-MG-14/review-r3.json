@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 501,
+      "rule": "AGT-3",
+      "text": "NOT ADDRESSED in full: the exact-name repro is blocked, but the in-memory bridge/permission repro returns 202 for A/nestor while a preapproved B/bob alias (mcp__other_at__*) remains callable=true; explicitly denying that alias changes it to false. The deny rule protects only the name agenttalks. Restrict callable AgentTalks servers to the verified principal regardless of alias, or refuse the wake."
+    },
+    {
+      "id": "F6",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 501,
+      "rule": "REV-2",
+      "text": "The narrowed tools remove conversation reads. In-memory channel/feed repro for existing DM 41: tools/list=[reply,mark_read], read_messages returns -32602, and the fresh feed starts at 41 with delivered=[]. Text beyond the 400-character wake preview is absent from both prompt and hook summary. The wake therefore cannot read the conversation its prompt requires. Add a principal-checked read tool or fetch sufficient verified context before spawning, with a regression test."
+    }
+  ],
+  "run": "codex-T-MG-14-reviewer-3",
+  "sha256": "9261b55be07d781c74765c44f77e10d74c78586e549ad4034bda1baa3fabe385"
+}
