@@ -2,7 +2,7 @@
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
 import { ACTOR_KEY, CSRF_KEY, api, newSessionGeneration, onUnauthorized, sessionGeneration, setCsrf } from "./api.js";
-import { cancelMarkRead, ensureActors, liveMark, liveStamp, loadConversationsList, loadMessages, loadReactionsForMessage, mergePageReactions, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { cancelMarkRead, currentSeq, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, mergePageReactions, nextSeq, pageMayReplace, stampRow, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { announce, closeAccountOverlays, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
 import { actorHandle, findMsgById, mentionsMe, mergeActors, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
@@ -136,32 +136,26 @@ function captureReplayFloor() {
  *  page is shorter than the limit. A page of another session generation is dropped by api(). */
 const CATCH_UP_PAGE = 200;
 
-/** T-MG-43: the message objects a live SSE event wrote, with the stamp of that write (data.js
- *  liveStamp). Every writer replaces the object, so a later write of any kind drops the stamp. */
-const liveWritten = new WeakMap();
-
-/** `mark` = liveMark() when this conversation's catch-up began (before its newest-30 refresh). */
+/** `mark` = currentSeq() when this conversation's catch-up began (before its newest-30 refresh). */
 async function loadGapAfter(convId, floor, gen, mark) {
   let after = floor;
   for (;;) {
     const before = new Map((state.msgs[convId] || []).map((m) => [m.id, m]));
+    const sent = nextSeq();
     const data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${CATCH_UP_PAGE}`);
     if (gen !== sessionGeneration()) return;
-    // F4 (codex r3) and F6 (codex r4, B-MG-119): a held message gets the page's revision unless it
-    // CHANGED meanwhile: its object was replaced while this page was in flight (any writer: a live event,
-    // a reaction refresh, an own edit), or a live event wrote it since this conversation's catch-up began.
-    // An unchanged held object was written from a cut older than this request, so the page (cut on the
-    // server after it was sent) is at least as new; a changed one keeps its newer or live state. The page
-    // still advances the paging cursor below by every id it carried.
+    // F4 (codex r3), F6 (codex r4, B-MG-119), review-r1 F1: a held message gets the page's revision
+    // unless pageMayReplace (data.js) refuses: a write from a request sent after this page or from a
+    // later live event, a live write since this conversation's catch-up began, or an unstamped write
+    // while the page was in flight. The page still advances the paging cursor by every id it carried.
     const now = new Map((state.msgs[convId] || []).map((m) => [m.id, m]));
-    const changed = (m) => {
-      const held = now.get(m.id);
-      return held !== undefined && (held !== before.get(m.id) || (liveWritten.get(held) ?? 0) > mark);
-    };
-    for (const m of data.messages) if (!changed(m)) upsertMessage(convId, m);
+    for (const m of data.messages) {
+      if (!pageMayReplace(now.get(m.id), before.get(m.id), sent, mark)) continue;
+      upsertMessage(convId, m); stampRow(m, sent);
+    }
     mergeActors(data.actors);
     // F5 (codex r4, B-MG-118): reactions are merged for the whole page, whatever the body filter kept.
-    mergePageReactions(data.messages, data.reactions, mark);
+    mergePageReactions(data.messages, data.reactions, sent);
     const top = data.messages.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), after);
     if (data.messages.length < CATCH_UP_PAGE || top <= after) return;
     after = top;
@@ -185,7 +179,7 @@ async function catchUpLoadedHistories(gen) {
     // list had before the break is then paged in full (B-MG-116): a gap longer than 30 messages
     // would otherwise lose its oldest ones.
     const floor = gapFloors[convId] ?? newestIdOf(convId);
-    const mark = liveMark();
+    const mark = currentSeq();
     try { await loadMessages(convId, { keepTouched: true }); await loadGapAfter(convId, floor, gen, mark); } catch { continue; }
     if (gen !== sessionGeneration()) return;
     delete gapFloors[convId];
@@ -312,7 +306,7 @@ async function onMessageEvent(ev) {
   // A message for a conversation we have never opened does NOT create an array: an
   // empty-but-existing one then looked like "history already loaded", and after entering you
   // saw one message with nothing before it.
-  if (state.loaded[convId] || conversationOpen) { upsertMessage(convId, msg); liveWritten.set(msg, liveStamp()); }
+  if (state.loaded[convId] || conversationOpen) { upsertMessage(convId, msg); stampRow(msg, nextSeq(), true); }
   if (msg.id > state.sseCursor) state.sseCursor = msg.id;
   if (msg.kind === "ask" || msg.kind === "answer") refreshQuestions(convId);
   // "Looking at a conversation" is not the same as "seeing the newest": with the history

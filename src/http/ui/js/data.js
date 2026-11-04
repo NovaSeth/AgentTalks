@@ -44,41 +44,57 @@ export function reactionsOf(msgs, reactions) {
   return Object.fromEntries(msgs.filter((m) => reactions && m.id in reactions).map((m) => [m.id, reactions[m.id]]));
 }
 
-// T-MG-43 (codex T-MG-18 r4 F5, F6): live writes carry a stamp from one monotonic counter. A REST
-// page records the counter when it is sent (liveMark) and keeps away from what a live write stamped
-// after that mark: a live write follows an event whose newer revisions each bring their own event,
-// so a page cut at an unknown moment must not undo it. Everything else the page carries is applied.
-let liveSeq = 0;
-export function liveMark() { return liveSeq; }
-export function liveStamp() { return ++liveSeq; }
-/** messageId -> the stamp of the last reaction refresh triggered by a live reaction event. */
+// T-MG-43 (codex T-MG-18 r4 F5, F6; review-r1 F1): ordering stamps from one monotonic counter. A REST
+// request takes its stamp when it is SENT, a live SSE event when it ARRIVES. The server cuts a request
+// after it was sent and an event is emitted after its change, so a higher stamp is newer data,
+// whatever order the answers land in. Every stamped write records its stamp; a REST page writes only
+// over state with a lower stamp (bodies: pageMayReplace, reactions: mergePageReactions).
+let seq = 0;
+export function currentSeq() { return seq; }
+export function nextSeq() { return ++seq; }
+/** message object -> { seq, live } of the write that put it in state. Every writer replaces the
+ *  object, so an unstamped writer (view code) leaves an object without an entry. */
+const rowStamps = new WeakMap();
+export function stampRow(m, s, live = false) { rowStamps.set(m, { seq: s, live }); }
+/** Whether a REST page sent at `sent` may replace the held object `held` of a message.
+ *  `before` = the object held when the page was sent; `liveMark` = a live write stamped above it
+ *  is kept as well (the catch-up passes the stamp taken when it began, so a live revision is never
+ *  replaced by any page of that catch-up). */
+export function pageMayReplace(held, before, sent, liveMark = sent) {
+  if (held === undefined) return true;
+  const st = rowStamps.get(held);
+  // An unstamped writer: its order is unknown, so only an object untouched while the page was in flight.
+  if (st === undefined) return held === before;
+  if (st.live && st.seq > liveMark) return false;
+  return st.seq < sent;
+}
+/** messageId -> the stamp of the request whose reactions are held for it. */
 const reactionStamps = new Map();
-/** The reaction merge of a REST page sent at `mark`, independent of which bodies the page was allowed
+/** The reaction merge of a REST page sent at `sent`, independent of which bodies the page was allowed
  *  to replace (B-MG-118: an SSE message carries no reactions, so its REST reactions are still needed),
- *  except for the messages a live reaction refresh wrote after the mark. */
-export function mergePageReactions(msgs, reactions, mark) {
-  const rx = msgs.filter((m) => (reactionStamps.get(m.id) ?? 0) <= mark);
+ *  except for the messages whose reactions came from a request sent after it (review-r1 F1). */
+export function mergePageReactions(msgs, reactions, sent) {
+  const rx = msgs.filter((m) => (reactionStamps.get(m.id) ?? 0) < sent);
   mergeReactions(rx, reactionsOf(rx, reactions));
+  for (const m of rx) reactionStamps.set(m.id, sent);
 }
 
 export async function loadMessages(convId, { keepTouched = false } = {}) {
   const firstLoad = !state.loaded[convId];
-  // keepTouched (resume refresh, codex r3 F4): a message whose held object changed while the request
-  // was in flight was replaced by a live event or a newer action, so the answer (cut earlier on the
-  // server) must not put the older revision back. A reference comparison: every writer replaces the object.
+  // keepTouched (resume refresh, codex r3 F4; T-MG-43 r1): the answer replaces a held message only
+  // when pageMayReplace allows it: never over a write from a later-sent request or a later live
+  // event (an older revision must not come back), always over one from an earlier-sent request.
   const before = keepTouched ? new Map((state.msgs[convId] || []).map((m) => [m.id, m])) : null;
-  const mark = liveMark();
+  const sent = nextSeq();
   const data = await api("GET", `/api/conversations/${convId}/messages?limit=${INITIAL_BATCH_SIZE}`);
   // We MERGE rather than replace the array: assigning `state.msgs[id] = ...` erased everything
   // the user had loaded by scrolling up.
   // History enters without animation - the "slide in" is played only by a message that arrived
   // live (SSE), not by every opening of a channel.
-  const touched = (m) => {
-    const held = state.msgs[convId]?.find((h) => h.id === m.id);
-    return before !== null && held !== undefined && held !== before.get(m.id);
-  };
-  const fresh = data.messages.filter((m) => !touched(m));
-  for (const m of fresh) { upsertMessage(convId, m); animatedMsgs.add(m.id); }
+  const may = (m) => before === null
+    || pageMayReplace(state.msgs[convId]?.find((h) => h.id === m.id), before.get(m.id), sent);
+  const fresh = data.messages.filter(may);
+  for (const m of fresh) { upsertMessage(convId, m); stampRow(m, sent); animatedMsgs.add(m.id); }
   // The "history FETCHED" marker (not "there are some messages"): a single message from SSE
   // must not pretend to be a loaded conversation.
   state.loaded[convId] = true;
@@ -86,9 +102,9 @@ export async function loadMessages(convId, { keepTouched = false } = {}) {
   // conversation, a new batch says nothing about what lies ABOVE our list.
   if (firstLoad) state.hasMore[convId] = data.messages.length >= INITIAL_BATCH_SIZE;
   mergeActors(data.actors);
-  // B-MG-118: a touched message keeps its live body, not the reactions it had before (none for an
-  // SSE arrival); only a live reaction refresh since the request was sent keeps the page's away.
-  mergePageReactions(data.messages, data.reactions, mark);
+  // B-MG-118: a kept message keeps its body, not the reactions it had before (none for an SSE
+  // arrival); only reactions from a later-sent request keep the page's away.
+  mergePageReactions(data.messages, data.reactions, sent);
   // Thread replies do not stand in the main list, so a batch of 30 messages can produce a
   // screen with three. We fetch more until there is something to scroll - without that, lazy
   // loading would never start, because there simply is no scrollbar.
@@ -112,10 +128,11 @@ export async function loadOlderMessages(convId) {
   if (!oldest || loadingOlder || !state.hasMore[convId]) return;
   loadingOlder = true;
   try {
+    const sent = nextSeq();
     const data = await api("GET", `/api/conversations/${convId}/messages?before=${oldest.id}&limit=${OLDER_BATCH_SIZE}`);
-    for (const m of data.messages) { upsertMessage(convId, m); animatedMsgs.add(m.id); }
+    for (const m of data.messages) { upsertMessage(convId, m); stampRow(m, sent); animatedMsgs.add(m.id); }
     mergeActors(data.actors);
-    mergeReactions(data.messages, data.reactions);
+    mergePageReactions(data.messages, data.reactions, sent);
     state.hasMore[convId] = data.messages.length >= OLDER_BATCH_SIZE;
     const el = document.getElementById("messages");
     const beforeH = el ? el.scrollHeight : 0, beforeTop = el ? el.scrollTop : 0;
@@ -174,12 +191,20 @@ export async function refreshDigestAndLeases(force) {
 export async function loadReactionsForMessage(convId, messageId) {
   if (!convId || !messageId) return;
   try {
+    // T-MG-43: stamped when sent, like every REST read; it writes only over older-sent state, and a
+    // failed refresh writes no stamp, so it keeps no page's reactions out.
+    const before = (state.msgs[convId] || []).find((h) => h.id === messageId);
+    const sent = nextSeq();
     const data = await api("GET", `/api/conversations/${convId}/messages?before=${messageId + 1}&limit=1`);
-    mergeReactions(data.messages, data.reactions);
-    // T-MG-43: stamped only when it landed, so a failed refresh does not keep a page's reactions out.
-    for (const m of data.messages) reactionStamps.set(m.id, liveStamp());
+    mergePageReactions(data.messages, data.reactions, sent);
     mergeActors(data.actors);
-    if (state.loaded[convId]) for (const m of data.messages) upsertMessage(convId, m);
+    if (state.loaded[convId]) {
+      for (const m of data.messages) {
+        const held = (state.msgs[convId] || []).find((h) => h.id === m.id);
+        if (!pageMayReplace(held, m.id === messageId ? before : undefined, sent)) continue;
+        upsertMessage(convId, m); stampRow(m, sent);
+      }
+    }
   } catch { /* best effort */ }
 }
 
