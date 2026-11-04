@@ -1,6 +1,6 @@
 # T-MG-2 - spec and plan: the whole AgentTalks project in English
 
-Owner's words (2026-11-04): "projekt Agenttalks musi byc po angielsku caly" ("the whole AgentTalks project must be in English") (D-MG-6). Starts after the T-MG-1 fix packages (T-MG-6, T-MG-8, T-MG-10, T-MG-11) and the plugin (T-MG-12) are merged, from that merged main.
+Owner's words (2026-11-04): "projekt Agenttalks musi byc po angielsku caly" (D-MG-6). Starts after the T-MG-1 fix packages (T-MG-6, T-MG-8, T-MG-10, T-MG-11) and the plugin (T-MG-12) are merged, from that merged main.
 
 ## Current state (measured 2026-11-04 at 945674f, scratchpad en/inventory.txt)
 - Comments: already English, guarded by test/jezyk.test.ts (K1 diacritics + K2 Polish word list, quotes excluded).

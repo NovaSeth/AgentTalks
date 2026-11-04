@@ -111,343 +111,35 @@ identifiers	src/http/ui/js/api.js	"zly_sygnal"	Legacy server code key used durin
 identifiers	src/http/ui/js/api.js	"zly_target"	Legacy server code key used during rolling deployment (D-MG-15).
 identifiers	src/http/ui/js/api.js	"zly_zasob"	Legacy server code key used during rolling deployment (D-MG-15).
 
-# markdown: .landfall/decisions/D-MG-15.md
-markdown	.landfall/decisions/D-MG-15.md	"<handle:czlowiek>"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/decisions/D-MG-15.md	"PYTANIE"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/decisions/D-MG-15.md	"brak_dostepu"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/decisions/D-MG-15.md	"konflikt_wiki"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/decisions/D-MG-15.md	"token_wygasl"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/decisions/D-MG-15.md	"watek:"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/decisions/D-MG-16.md
-markdown	.landfall/decisions/D-MG-16.md	"instancja.env"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/decisions/D-MG-16.md	"widok-*"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
 
-# markdown: .landfall/decisions/D-MG-6.md
-markdown	.landfall/decisions/D-MG-6.md	"jezyk.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/decisions/D-MG-8.md
-markdown	.landfall/decisions/D-MG-8.md	"atk_zly-token-ktory-ma-przegrac"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/decisions/D-MG-8.md	"nie-to-haslo"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/decisions/D-MG-8.md	"sekret-testowy-0123456789abcdef"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/decisions/D-MG-8.md	"tajne-haslo-bramki"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
 
-# markdown: .landfall/tasks/T-MG-1/brief.md
-markdown	.landfall/tasks/T-MG-1/brief.md	"docs/audyt-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
 
-# markdown: .landfall/tasks/T-MG-1/fix-common.md
-markdown	.landfall/tasks/T-MG-1/fix-common.md	"jezyk.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-1/report.md
-markdown	.landfall/tasks/T-MG-1/report.md	"<michal:czlowiek>"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-1/review-r1-brief.md
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"akcje.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"awatary.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"czat.jpg"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"dane.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"docs/agenci.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"docs/audyt-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"docs/audyt-ux-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"docs/obrazy"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"docs/superpowers/plans/2026-08-07-agenttalks-etap-1-rdzen.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"dokumentacja.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"ikony.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"instancja.env.przyklad"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"jezyk.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"powiadomienia.jpg"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"rozmowa.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"stan.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"szukaj.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"toasty.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"ui-moduly.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"uruchom-produkcje.sh"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"widok-admin.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"widok-czat.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"widok-login.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"widok-powiadomienia.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"widok-sidebar.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"widok-wiki.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"wypchnij-i-wdroz.sh"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-brief.md	"zdarzenia-sse.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-1/review-r1-common.md
-markdown	.landfall/tasks/T-MG-1/review-r1-common.md	"docs/audyt-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r1-common.md	"docs/audyt-ux-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
 
-# markdown: .landfall/tasks/T-MG-1/review-r1-slice-a2a.md
-markdown	.landfall/tasks/T-MG-1/review-r1-slice-a2a.md	"docs/agenci.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
 
-# markdown: .landfall/tasks/T-MG-1/review-r1-slice-tests-docs.md
-markdown	.landfall/tasks/T-MG-1/review-r1-slice-tests-docs.md	"docs/agenci.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
 
-# markdown: .landfall/tasks/T-MG-1/review-r1-slice-ux.md
-markdown	.landfall/tasks/T-MG-1/review-r1-slice-ux.md	"docs/audyt-ux-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
 
-# markdown: .landfall/tasks/T-MG-1/review-r5-brief.md
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"[uwaga] talk_typing nie zna pola: sec. Zostalo ZIGNOROWANE"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"akcje.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"awatary.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"czat.jpg"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"dane.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"docs/agenci.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"docs/audyt-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"docs/audyt-ux-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"docs/obrazy"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"docs/superpowers/plans/2026-08-07-agenttalks-etap-1-rdzen.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"dokumentacja.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"ikony.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"instancja.env.przyklad"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"jezyk.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"powiadomienia.jpg"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"rozmowa.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"stan.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"szukaj.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"toasty.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"ui-moduly.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"uruchom-produkcje.sh"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"widoczneWiadomosci"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"widok-admin.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"widok-czat.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"widok-login.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"widok-powiadomienia.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"widok-sidebar.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"widok-wiki.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"widok.composer()"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"wypchnij-i-wdroz.sh"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"zapiszOtwartaEdycje/odtworz..."	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/review-r5-brief.md	"zdarzenia-sse.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-1/review-r6-brief.md
-markdown	.landfall/tasks/T-MG-1/review-r6-brief.md	"widok-czat.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-1/spec.md
-markdown	.landfall/tasks/T-MG-1/spec.md	"docs/audyt-2026-08-09.md"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
-markdown	.landfall/tasks/T-MG-1/spec.md	"jezyk.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-1/spec.md	"konflikt_wiki"	Historical filename, contract token, test fixture, or reproduction output preserved from the original record; surrounding prose translated.
 
-# markdown: .landfall/tasks/T-MG-10/brief.md
-markdown	.landfall/tasks/T-MG-10/brief.md	"<michal:czlowiek>"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-10/brief.md	"BUDZET_ZNAKOW=40000"	Exact historical command, output, or identifier preserved in task evidence.
-markdown	.landfall/tasks/T-MG-10/brief.md	"pominiete=0"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-10/findings-r1.md
-markdown	.landfall/tasks/T-MG-10/findings-r1.md	"<michal:czlowiek>"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-10/report.md
-markdown	.landfall/tasks/T-MG-10/report.md	"haslo-bramki"	Exact historical command, output, or identifier preserved in task evidence.
 
-# markdown: .landfall/tasks/T-MG-10/review-r2-brief.md
-markdown	.landfall/tasks/T-MG-10/review-r2-brief.md	"<michal:czlowiek>"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-10/review-r2-brief.md	"gasnie po N s"	Exact historical command, output, or identifier preserved in task evidence.
-markdown	.landfall/tasks/T-MG-10/review-r2-brief.md	"nie ma ..."	Exact historical command, output, or identifier preserved in task evidence.
-markdown	.landfall/tasks/T-MG-10/review-r2-brief.md	"zapisane: [slug] \\\"title\\\""	Exact historical command, output, or identifier preserved in task evidence.
 
-# markdown: .landfall/tasks/T-MG-12/brief.md
-markdown	.landfall/tasks/T-MG-12/brief.md	"jezeli AgentTalks ma dzialac live to jezeli w jakiejs sesji mam poprosic agenta o rozmowy na AT to musza byc jakies pluginy do Claude Code ktore wywoluja agentow jak cos ktos napisal w kanale ktorym sa, lub w DM lub sa wywolywani"	Quoted owner wording followed immediately by its full English translation.
 
-# markdown: .landfall/tasks/T-MG-2/slice-common.md
-markdown	.landfall/tasks/T-MG-2/slice-common.md	"\"projekt Agenttalks musi byc po angielsku caly\""	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slice-common.md	"jezyk/language"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slice-common.md	"ui-moduly"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-2/slices-en2-en7.md
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"'Powiadomienia, N nowych'"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"'Upusc, zeby zalaczyc'"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"'rozmowa prywatna'"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"'strona wiki'"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"`grep -v '^Brak nowych'`"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"awatary.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"docs/obrazy"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"dokumentacja.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"instancja.env"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"jezyk.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"rozmowa.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"toasty 'Zamknij'"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/slices-en2-en7.md	"ui-moduly.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-2/spec.md
-markdown	.landfall/tasks/T-MG-2/spec.md	"\"projekt Agenttalks musi byc po angielsku caly\""	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"<handle:czlowiek>"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"<michal:czlowiek>"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"@wszyscy"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"KORZEN"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"PYTANIE"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"`ERRORS = { brak_dostepu: ..., sesja: ... }`"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"`brak_dostepu`"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/spec.md	"`konflikt_wiki`"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/spec.md	"`odpowiedz`"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/spec.md	"`plik`"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/spec.md	"`skasowana`"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/spec.md	"`token_wygasl`"	Quoted pre-migration value in the English translation task specification; kept as evidence of the original scope.
-markdown	.landfall/tasks/T-MG-2/spec.md	"akcje.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"awatary.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"dane.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"deploy/instancja.env.przyklad"	Historical template filename in the old-to-new migration inventory.
-markdown	.landfall/tasks/T-MG-2/spec.md	"docs/obrazy"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"dokumentacja.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"ikony.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"instancja.env"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"jezyk.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"nazwaAktora"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"rozmowa.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"stan.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"szukaj.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"toasty.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"trescKomentarza"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"ui-moduly"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"uruchom-produkcje.sh"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"watek:"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"widok-*.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"wypchnij-i-wdroz.sh"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/spec.md	"zdarzenia-sse.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
-# markdown: .landfall/tasks/T-MG-2/vocabulary.md
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"\"aktor_wylaczony\""	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"\"odwolany\""	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"\"wygasl\""	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"2026-08-07-analiza-kodu-zrodlowego.md"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"<handle:czlowiek>"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"@wszyscy"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"PYTANIE"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"`odpowiedz`"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"`plik`"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"`rozmowa prywatna`"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"`skasowana`"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"`watek:<id>`"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"akcje.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"awatary.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"brak_base_url"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"cialo_za_dlugie"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"czat.jpg"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"dane.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"deploy/instancja.env.przyklad"	Historical template filename in the old-to-new migration inventory.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"docs/obrazy"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"dokumentacja.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"ikony.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"instancja.env"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"jezyk.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"multipart_niewspierany"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"nie_twoja_strona"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"powiadomienia.jpg"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"publiczny_sam"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"rozmowa.test.ts"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"sekcja"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"stan.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"szukaj.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"toasty.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"ttl_za_krotki"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"uruchom-produkcje.sh"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"widok-admin.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"widok-czat.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"widok-login.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"widok-powiadomienia.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"widok-sidebar.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"widok-wiki.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"wypchnij-i-wdroz.sh"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"zdarzenia-sse.js"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"zly_adres"	Explicit historical code, reason or tag in the migration vocabulary, paired with its English replacement.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| aktor |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| aktor_wylaczony |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| awatar |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| awatar_za_duzy |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| bez_slug |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| bez_zmian |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_adresu |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_aktora |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_czlonkow |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_dostepu |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_nazwy |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_pliku |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_rewizji |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_sessionid |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_target |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_tytulu |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| brak_uprawnien |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| cialo_za_duze |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| cykl_wiki |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| dm_nie_znika |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| dm_staly |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| handle_zajety |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| haslo_za_krotkie |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| juz_zamkniete |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| kanal_istnieje |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| konflikt_wiki |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| konto_wylaczone |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| konwersacja |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| mcp_niedostepny |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nie_admin |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nie_autor |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nie_dla_rozmow |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nie_mozna_wyjsc |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nie_siebie |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nie_twoja_sesja |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nie_znaleziono |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nieuwierzytelniony |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| nieznane_narzedzie |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| obcy_watek |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| old |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| plik |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| plik_za_duzy |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| poswiadczenie |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| puste_cialo |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| pusty_awatar |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| pusty_plik |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| pytanie |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| rewizja |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| sesja |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| skasowana |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| slug_zarezerwowany |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| strona |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| token_odwolany |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| token_wygasl |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| tresc_za_dluga |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| tylko_admin_czlowiek |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| tylko_ludzie |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| tylko_post |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| tytul_za_dlugi |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| webauthn_licznik |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| webauthn_podpis |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| wewnetrzny |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| wiadomosc |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| za_duzo_prob |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| za_duzo_strumieni |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| za_malo_uczestnikow |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zaproszenie |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zarchiwizowana |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zla_nazwa |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zle_dane |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zle_haslo |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zle_id |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zle_zaproszenie |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zly_format |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zly_json |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zly_notify |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zly_rodzaj |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zly_sygnal |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zly_target |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
-markdown	.landfall/tasks/T-MG-2/vocabulary.md	"| zly_zasob |"	Old error-code cell in the authoritative old-to-new migration vocabulary.
 
-# markdown: .landfall/tasks/T-MG-4/brief.md
-markdown	.landfall/tasks/T-MG-4/brief.md	"uwazam ze agenci ktorzy od 14 dni nic nie mowili, powinni byc fadeowani, a po 3 miesiacach archiwizowani"	Quoted owner wording followed immediately by its full English translation.
-markdown	.landfall/tasks/T-MG-4/brief.md	"w ogole teraz zuwazylem ze w sidebarze nie widac awatawrow"	Quoted owner wording followed immediately by its full English translation.
 
-# markdown: .landfall/tasks/T-MG-4/report.md
-markdown	.landfall/tasks/T-MG-4/report.md	"test/jezyk.test.ts"	Exact historical command, output, or identifier preserved in task evidence.
-markdown	.landfall/tasks/T-MG-4/report.md	"test/ui-moduly.test.ts"	Exact historical command, output, or identifier preserved in task evidence.
 
-# markdown: .landfall/tasks/T-MG-6/report.md
-markdown	.landfall/tasks/T-MG-6/report.md	"tylko_admin_czlowiek"	Exact historical command, output, or identifier preserved in task evidence.
 
-# markdown: .landfall/tasks/T-MG-7/report.md
-markdown	.landfall/tasks/T-MG-7/report.md	"konflikt_wiki"	Exact historical command, output, or identifier preserved in task evidence.
-markdown	.landfall/tasks/T-MG-7/report.md	"zla_nazwa"	Exact historical command, output, or identifier preserved in task evidence.
 
-# markdown: .landfall/tasks/T-MG-8/report.md
-markdown	.landfall/tasks/T-MG-8/report.md	"test/ui-moduly.test.ts"	Exact historical command, output, or identifier preserved in task evidence.
 
-# markdown: .landfall/tasks/T-MG-9/report.md
-markdown	.landfall/tasks/T-MG-9/report.md	"ENV_PLIK"	Historical filename, code identifier or quoted contract sample recorded before the English migration; surrounding prose is translated.
 
 # markdown: NEWS.md
 markdown	NEWS.md	"`409 konflikt_wiki`"	Historical release note quotes the status and API code returned before the English migration.

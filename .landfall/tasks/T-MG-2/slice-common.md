@@ -1,6 +1,6 @@
 # T-MG-2 English slices - common part for every codex run (read first, then your slice section)
 
-Task: translate the whole AgentTalks project to English (owner: "projekt Agenttalks musi byc po angielsku caly" ("the whole AgentTalks project must be in English")). Spec and plan: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-2/spec.md. THE single source of every rename: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-2/vocabulary.md (error codes, MCP tags, file renames, conventions). Decisions: D-MG-6, D-MG-15 (codes/tags + legacyCode), D-MG-16 (renames, env fallback, i18n-pl stays, docs translated, history untouched).
+Task: translate the whole AgentTalks project to English (owner: "projekt Agenttalks musi byc po angielsku caly"). Spec and plan: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-2/spec.md. THE single source of every rename: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-2/vocabulary.md (error codes, MCP tags, file renames, conventions). Decisions: D-MG-6, D-MG-15 (codes/tags + legacyCode), D-MG-16 (renames, env fallback, i18n-pl stays, docs translated, history untouched).
 
 Worktree: /Users/michal/Documents/Code/AgentTalks-wt/T-MG-2 (branch task/T-MG-2-english). The orchestrator commits between slices; you do NOT commit (your sandbox cannot write .git). Do not push. Work only inside the worktree.
 

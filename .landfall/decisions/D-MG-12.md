@@ -18,7 +18,7 @@ Drop 1 backlog findings
 
 ## Why
 
-A2A-RECOMMENDATION keep deferred: a fresh agent completes the entire loop through REST/MCP/CLI; documentation drift (T-MG-10) blocks it, not a missing protocol; A2A carries only message+question, losing channels/presence/leases; no non-Claude counterpart. Consistent with docs/a2a.md; revisit when a real A2A client appears.
+A2A-RECOMMENDATION keep deferred: swiezy agent przechodzi cala petle przez REST/MCP/CLI; blokuje dryf dokumentacji (T-MG-10), nie brak protokolu; A2A przenosi tylko message+question, gubi kanaly/obecnosc/dzierzawy; brak kontrahenta spoza Claude. Zgodne z docs/a2a.md; wracamy, gdy pojawi sie realny klient A2A.
 
 ## Cost if wrong
 

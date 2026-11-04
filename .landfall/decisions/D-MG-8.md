@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-8
-title: "T-MG-1: landfall secrets hits (10 in the tree, 15 in history) are false positives - paths, placeholders, tests"
+title: "T-MG-1: trafienia landfall secrets (10 w drzewie, 15 w historii) to falszywe alarmy - sciezki, placeholdery, testy"
 status: active
 kind: general
 date: 2026-11-03
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-T-MG-1: landfall secrets hits (10 in the tree, 15 in history) are false positives - paths, placeholders, tests
+T-MG-1: trafienia landfall secrets (10 w drzewie, 15 w historii) to falszywe alarmy - sciezki, placeholdery, testy
 
 ## Why
 
-Checked line by line on 2026-11-04: *_PASSWORD_FILE=/run/agenttalks/site-password and SECRETS_DIR=/etc/agenttalks are paths; atk_YOUR_TOKEN is a placeholder in examples; tajne-haslo-bramki/nie-to-haslo/sekret-testowy-0123456789abcdef/atk_zly-token-ktory-ma-przegrac are synthetic test values. Tests get a SYNTH marker during the fix round; env/docs lines cannot be marked without breaking the example, so the task secrets gate requires no NEW hits outside this list.
+Sprawdzone linia po linii 2026-11-04: *_PASSWORD_FILE=/run/agenttalks/site-password i SECRETS_DIR=/etc/agenttalks to sciezki; atk_YOUR_TOKEN to placeholder w przykladach; tajne-haslo-bramki/nie-to-haslo/sekret-testowy-0123456789abcdef/atk_zly-token-ktory-ma-przegrac to syntetyczne wartosci testow. Testy dostaja znacznik SYNTH w rundzie poprawek; linii env/docs nie da sie oznaczyc bez psucia przykladu, wiec bramka sekretow dla zadan to brak NOWYCH trafien poza ta lista.
 
 ## Cost if wrong
 
-If someone ever puts a real password on those same lines, the exception list will mask it; mitigated by a --staged scan on every commit (new lines are always scanned).
+Jesli ktos kiedys wpisze prawdziwe haslo w te same linie, lista wyjatkow je zamaskuje; lagodzi to skan --staged na kazdym commicie (nowe linie sa zawsze skanowane).
 
 ## Alternatives
 

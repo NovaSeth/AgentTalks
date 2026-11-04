@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-14
-title: "Password sign-in: per-account limit BEFORE verification + exemption for a known device (OWASP device cookie)"
+title: "Logowanie haslem: limit per konto PRZED weryfikacja + zwolnienie dla znanego urzadzenia (OWASP device cookie)"
 status: active
 kind: general
 date: 2026-11-04
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-Password sign-in: per-account limit BEFORE verification + exemption for a known device (OWASP device cookie)
+Logowanie haslem: limit per konto PRZED weryfikacja + zwolnienie dla znanego urzadzenia (OWASP device cookie)
 
 ## Why
 
-Two conflicting T-MG-6 reviews: a per-account limit before verification allows someone to lock out another person's account; after verification it allows distributed guessing (codex F6, High, reproduced: 25th attempt with the correct password -> 200). A device cookie (OWASP Authentication Cheat Sheet) reconciles both: after successful sign-in, the browser gets a signed at_dev cookie tied to the actor; the per-account limit applies before verification to everyone WITHOUT a valid at_dev for that actor. The owner on a known device is not blocked; a new device has a passkey (separate limiter) or waits for the 15 min window. Sign-out without CSRF clears the cookie only in that browser (SameSite=Lax, no epoch bump) - deliberately accepted.
+Dwie sprzeczne recenzje T-MG-6: limit per konto przed weryfikacja pozwala zablokowac cudze konto; po weryfikacji pozwala na rozproszone zgadywanie (codex F6, High, odtworzone: 25. proba z poprawnym haslem -> 200). Device cookie (OWASP Authentication Cheat Sheet) godzi oba: po udanym logowaniu przegladarka dostaje podpisane cookie at_dev wiazane z aktorem; limit per konto obowiazuje przed weryfikacja dla wszystkich BEZ waznego at_dev tego aktora. Wlasciciel na znanym urzadzeniu nie jest blokowany; nowe urzadzenie ma passkey (osobny limiter) albo czeka okno 15 min. Wylogowanie bez CSRF czysci cookie tylko w tej przegladarce (SameSite=Lax, bez podbicia epoki) - akceptowane swiadomie.
 
 ## Cost if wrong
 
-An attacker with a stolen at_dev bypasses the account limit (but still faces the IP+handle and IP limits); at_dev does not grant a session, only a limit exemption.
+Atakujacy z wykradzionym at_dev ominie limit konta (ale nadal limit IP+handle i IP); at_dev nie daje sesji, tylko zwolnienie z limitu.
 
 ## Alternatives
 

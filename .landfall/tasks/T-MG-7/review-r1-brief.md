@@ -1,4 +1,4 @@
-# Review brief: Fix A2: privacy and core data - notification/presence canRead, sessionId, savepoints, former-member editing, wiki, db (T-MG-7), round 1
+# Review brief: Fix A2: prywatnosc i dane rdzenia - powiadomienia/presence canRead, sessionId, savepointy, edycja ex-czlonka, wiki, db (T-MG-7), round 1
 <!-- Review brief (ORC-5). Rendered by `landfall review brief` from the state; the reviewer is read-only. -->
 
 Reviewer: landfall:security-reviewer (class: critical). Read-only: change no file, commit nothing, write only the review JSON (ORC-18).

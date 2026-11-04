@@ -46,10 +46,17 @@ function polish(text: string): boolean {
   return POLISH_DIACRITICS.test(text) || words.some((word) => POLISH_WORDS.has(word));
 }
 
+/** The Landfall state directory is a process record kept by the landfall CLI: decision records are
+ *  immutable once written (method rule MEM-2) and the rest is append-only task history, so records
+ *  written before the English migration stay as they were. New records are written in English.
+ *  It is not product code or documentation, so this gate does not scan it. */
+const PROCESS_RECORDS = ".landfall/";
+
 /** Include new files and exclude deleted paths during a rename, before a commit. */
 function files(): string[] {
   return [...new Set(execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-    { cwd: ROOT, encoding: "utf8" }).split("\0"))].filter((p) => p && existsSync(ROOT + p)).sort();
+    { cwd: ROOT, encoding: "utf8" }).split("\0"))]
+    .filter((p) => p && !p.startsWith(PROCESS_RECORDS) && existsSync(ROOT + p)).sort();
 }
 
 function exceptions(): Exception[] {

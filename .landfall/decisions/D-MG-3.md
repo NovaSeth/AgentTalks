@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-3
-title: "T-MG-1: E2E on a fresh checkout through node (server + HTTP + SSE + MCP + CLI); Docker only if colima starts"
+title: "T-MG-1: E2E na swiezym checkoucie przez node (serwer + HTTP + SSE + MCP + CLI); Docker tylko jesli colima wstanie"
 status: active
 kind: general
 date: 2026-11-03
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-T-MG-1: E2E on a fresh checkout through node (server + HTTP + SSE + MCP + CLI); Docker only if colima starts
+T-MG-1: E2E na swiezym checkoucie przez node (serwer + HTTP + SSE + MCP + CLI); Docker tylko jesli colima wstanie
 
 ## Why
 
-The project has no build step (Node 24+ strip-only TS), so a fresh build = a clean worktree with npm ci. The Docker daemon (colima) is off; the docker job in CI also checks the image and smoke test.
+Projekt nie ma kroku build (Node 24+ strip-only TS), wiec swiezy build = czysty worktree z npm ci. Demon Dockera (colima) jest wylaczony; obraz i smoke sprawdza tez job docker w CI.
 
 ## Cost if wrong
 
-Without Docker we cannot check image differences (Dockerfile, user, /data volume) - a possible container-only defect will pass the gate; it will then surface in CI or during deployment.
+Bez Dockera nie sprawdzimy roznic obrazu (Dockerfile, uzytkownik, wolumen /data) - mozliwy defekt tylko w kontenerze przejdzie bramke; wtedy wychodzi w CI albo przy deployu.
 
 ## Alternatives
 

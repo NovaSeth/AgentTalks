@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-16
-title: "T-MG-2 P3-P6: filenames from the table, env with fallback, i18n-pl stays, docs translated, history unchanged"
+title: "T-MG-2 P3-P6: nazwy plikow z tabeli, env z fallbackiem, i18n-pl zostaje, docs tlumaczone, historia bez zmian"
 status: active
 kind: general
 date: 2026-11-04
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-T-MG-2 P3-P6: filenames from the table, env with fallback, i18n-pl stays, docs translated, history unchanged
+T-MG-2 P3-P6: nazwy plikow z tabeli, env z fallbackiem, i18n-pl zostaje, docs tlumaczone, historia bez zmian
 
 ## Why
 
-Filenames follow tasks/T-MG-2/vocabulary.md (UI widok-* -> view-*, deploy/*, tests); the default env file is /etc/agenttalks/instance.env with fallback to instancja.env, so the VPS requires no manual step. The Polish UI translation (i18n-pl.js) is a product feature and stays (language gate allowlist). Historical documents (audits, specifications, prototype docs) are translated, not deleted. We do not rewrite git history (irreversible, PRI-17); new commits are in English.
+Nazwy plikow wg tasks/T-MG-2/vocabulary.md (UI widok-* -> view-*, deploy/*, testy); domyslny plik env /etc/agenttalks/instance.env z fallbackiem do instancja.env, wiec VPS nie wymaga recznego kroku. Polskie tlumaczenie UI (i18n-pl.js) to funkcja produktu i zostaje (allowlista bramki jezyka). Dokumenty historyczne (audyty, specyfikacje, docs prototypu) tlumaczone, nie usuwane. Historii git nie przepisujemy (nieodwracalne, PRI-17); nowe commity po angielsku.
 
 ## Cost if wrong
 
-External links to old file paths will break; README files in the repository are updated in the same step.
+Zewnetrzne linki do starych sciezek plikow przestana dzialac; README w repo aktualizowane w tym samym kroku.
 
 ## Alternatives
 

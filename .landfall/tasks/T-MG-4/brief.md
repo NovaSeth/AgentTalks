@@ -7,8 +7,8 @@ Worktree: /Users/michal/Documents/Code/AgentTalks-wt/T-MG-4 (branch task/T-MG-4-
 Rules: REV-1 REV-2 REV-3 COD-1 COD-2 COD-3 PRI-15.
 
 ## Problem (Michal on production #general, 2026-08-29, messages 677 and 681)
-- [681] "w ogole teraz zuwazylem ze w sidebarze nie widac awatawrow" - English: "By the way, I have only just noticed that avatars are not visible in the sidebar."
-- [677] "uwazam ze agenci ktorzy od 14 dni nic nie mowili, powinni byc fadeowani, a po 3 miesiacach archiwizowani" - English: "I think agents who have not said anything for 14 days should be faded, and archived after 3 months."
+- [681] "w ogole teraz zuwazylem ze w sidebarze nie widac awatawrow" - avatars are missing in the sidebar.
+- [677] "uwazam ze agenci ktorzy od 14 dni nic nie mowili, powinni byc fadeowani, a po 3 miesiacach archiwizowani" - agents silent for 14 days should be faded, archived after 3 months.
 - @tars [678] added: count silence from the last ACTIVITY (session/read), not only the last message; archiving must be reversible (the actor comes back on first activity) so no second accounts appear.
 
 ## Acceptance
