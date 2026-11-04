@@ -16,6 +16,7 @@ import { showError, showToast } from "./toasts.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { conversationRoute, permalink, syncRoute, unreadFrom } from "./router.js";
 import { bindProfileClicks, closeProfile, ensureHeaderMembers, headerFacesHtml, mountPeoplePicker, profileFacts, renderProfile, visibleMembers } from "./view-people.js";
+import { renderThreadsMain } from "./view-threads.js";
 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
@@ -155,10 +156,12 @@ export function updateOfflineBar() {
 
 // ------------------------------------------------- the side panel (S2)
 /** What the side panel shows, derived from the open flags: `null`, `{ kind: "thread", id }`,
- *  `{ kind: "details", id }` or `{ kind: "profile", id: handle }` (S6). A profile is the top-most
- *  layer, details win over the thread - the panel hosts one thing. */
+ *  `{ kind: "details", id }`, `{ kind: "pinned", id }` (S10) or `{ kind: "profile", id: handle }`
+ *  (S6). A profile is the top-most layer, pinned (opened from details or the header pill) wins
+ *  over details, details win over the thread - the panel hosts one thing. */
 export function sidePanelOf(s) {
   if (s.profileHandle) return { kind: "profile", id: s.profileHandle };
+  if (s.pinnedOpen) return { kind: "pinned", id: s.activeId };
   if (s.detailsOpen) return { kind: "details", id: s.activeId };
   if (s.threadOpen) return { kind: "thread", id: s.threadOpen };
   return null;
@@ -174,12 +177,14 @@ export async function toggleSidePanel() {
   if (open) {
     lastSidePanel = open;
     if (open.kind === "profile") closeProfile();
+    else if (open.kind === "pinned") closePinnedPanel();
     else if (open.kind === "details") { state.detailsOpen = false; renderMain(); document.getElementById("btn-details")?.focus(); }
     else closeThread();
     return;
   }
   if (!lastSidePanel || state.view !== "chat" || !state.activeId) return;
   if (lastSidePanel.kind === "profile") { state.profileHandle = lastSidePanel.id; renderMain(); return; }
+  if (lastSidePanel.kind === "pinned") { await openPinnedPanel(); return; }
   if (lastSidePanel.kind === "details") { state.detailsOpen = true; await refreshDetailsData(); renderMain(); return; }
   if (findMsgById(lastSidePanel.id)) await openThread(lastSidePanel.id);
 }
@@ -200,6 +205,7 @@ export function renderMain() {
   if (!el) return;
   if (state.view === "users") { views.users(); return; }
   if (state.view === "notifications") { views.notifications(); return; }
+  if (state.view === "threads") { renderThreadsMain(); return; }
   if (state.view === "wiki") { renderWikiMain(); return; }
   if (!state.activeId) {
     // An empty state says what to do and gives a button for it - "choose a conversation" with
@@ -222,6 +228,7 @@ export function renderMain() {
     <div class="main-col" id="main-col">
     <div class="topbar">
       ${hamburgerHtml()}
+      <button class="iconbtn topbar-back" id="btn-back" aria-label="${t("Back to the list")}" title="${t("Back to the list")}">${iconArrowDown()}</button>
       <div class="title">
         <div class="t" id="topbar-title"></div>
         ${c && c.topic ? `<div class="topic">${escapeHtml(c.topic)}</div>` : ""}
@@ -249,6 +256,7 @@ export function renderMain() {
       data-kind="${state.sidePanel ? state.sidePanel.kind : ""}">
       ${state.threadOpen ? `<div id="thread-slot"></div>` : ""}
       ${state.detailsOpen ? `<div id="details-slot"></div>` : ""}
+      ${state.pinnedOpen ? `<div id="pinned-slot"></div>` : ""}
       ${state.profileHandle ? `<div id="profile-slot"></div>` : ""}
     </aside>
   `;
@@ -256,6 +264,10 @@ export function renderMain() {
   bindProfileClicks();
   document.getElementById("btn-menu").addEventListener("click", () => {
     state.drawerOpen = !state.drawerOpen; toggleDrawerClass();
+  });
+  // S9: on a phone the conversation is a pushed screen; the arrow pops it back to the list.
+  document.getElementById("btn-back").addEventListener("click", () => {
+    state.drawerOpen = true; toggleDrawerClass();
   });
   document.getElementById("btn-details").addEventListener("click", toggleDetails);
   const joinBtn = document.getElementById("btn-join");
@@ -277,6 +289,7 @@ export function renderMain() {
   if (isMember) { renderComposer(); bindDropZone(el); }
   if (state.threadOpen) renderThread();
   if (state.detailsOpen) renderDetails();
+  if (state.pinnedOpen) renderPinned();
   if (state.profileHandle) renderProfile();
 }
 
@@ -379,7 +392,8 @@ export function renderDetails() {
         ${state.convPins.length ? `
         <div class="dt-sec" id="dt-pins">
           <h4 tabindex="-1" id="dt-pins-h">${t("Pinned")} (${state.convPins.length})</h4>
-          ${state.convPins.map(pinRow).join("")}
+          ${state.convPins.slice(0, 3).map(pinRow).join("")}
+          <button type="button" class="pillbtn slim" id="dt-pins-all">${iconPin()} ${t("Show all pinned in the panel")}</button>
         </div>` : ""}
         ${isChannel && my ? `
         <div class="dt-sec dt-danger">
@@ -390,6 +404,7 @@ export function renderDetails() {
       </div>
     </div>`;
   document.getElementById("dt-close").addEventListener("click", () => { state.detailsOpen = false; renderMain(); });
+  document.getElementById("dt-pins-all")?.addEventListener("click", () => openPinnedPanel());
   const edit = document.getElementById("dt-edit");
   if (edit) edit.addEventListener("click", () => editChannelModal(c));
   host.querySelectorAll("[data-kick]").forEach((b) =>
@@ -461,6 +476,62 @@ export function renderDetails() {
       if (next) openConversation(next.id); else renderMain();
     } catch (e) { showError(e); }
   });
+}
+
+// ------------------------------------------------------- the pinned panel (S10)
+/** Opens the pinned list in the side panel (from the header pill, Details or Mod+.). The pins are
+ *  re-fetched so a pin made on another device is here too; Details stays where it was so closing
+ *  the panel returns to it. */
+export async function openPinnedPanel() {
+  if (state.view !== "chat" || !state.activeId) return;
+  state.profileHandle = null;
+  state.pinnedOpen = true;
+  await refreshDetailsData();
+  renderMain();
+  document.getElementById("pn-h")?.focus();
+}
+
+export function closePinnedPanel() {
+  state.pinnedOpen = false;
+  renderMain();
+  (document.querySelector('[data-details="pins"]') || document.getElementById("dt-pins-h") || document.getElementById("btn-details"))?.focus();
+}
+
+/** The pinned panel: every pin of the open conversation, newest first, each a button that jumps
+ *  to the message (and flashes it). Hosted by #pinned-slot inside the side panel. */
+export function renderPinned() {
+  const host = document.getElementById("pinned-slot");
+  if (!host) return;
+  const c = state.conversations.find((x) => x.id === state.activeId);
+  if (!c) return;
+  const pins = [...state.convPins].sort((a, b) => b.messageId - a.messageId);
+  const row = (p) => {
+    const msg = findMsgById(p.messageId);
+    const who = msg ? actorHandle(msg.actorId) : (p.by || "?");
+    const excerpt = msg ? String(msg.body || "").replace(/\s+/g, " ").slice(0, 200) : t("message #{id}", { id: p.messageId });
+    const when = msg ? timeAgo(msg.ts) : "";
+    return `
+      <button type="button" class="pin-row pn-row" data-jump="${p.messageId}"
+        aria-label="${escapeHtml(t("Jump to the pinned message by @{handle}", { handle: who }))}">
+        ${avatarHtml(who, 24)}
+        <span class="pin-txt"><span class="pn-meta"><b>@${escapeHtml(who)}</b> <span class="pn-when">${escapeHtml(when)}</span></span>
+          <span class="pn-body">${escapeHtml(excerpt)}</span></span>
+      </button>`;
+  };
+  host.innerHTML = `
+    <div class="thread details pinned" role="region" aria-label="${t("Pinned")}">
+      <div class="th-head">${iconPin()} <span tabindex="-1" id="pn-h">${t("Pinned")} (${pins.length})</span>
+        <button class="iconbtn close" id="pn-close" aria-label="${t("Close the pinned list")}" title="${t("Close")}"><span aria-hidden="true">&times;</span></button></div>
+      <div class="dt-body pn-body-list" id="pn-list">
+        ${pins.length ? pins.map(row).join("") : `<p class="sb-empty">${t("Nothing is pinned here yet. Pin a message from its More menu and it stays within reach for everybody.")}</p>`}
+      </div>
+    </div>`;
+  document.getElementById("pn-close").addEventListener("click", closePinnedPanel);
+  host.querySelectorAll("[data-jump]").forEach((b) =>
+    b.addEventListener("click", () => {
+      state.pinnedOpen = false;
+      openConversation(c.id, Number(b.dataset.jump));
+    }));
 }
 
 /** The channel edit modal: topic + slug (name). */
@@ -545,8 +616,10 @@ function dmHeaderMetaHtml(others) {
     </button>${others.length > 1 ? `<span class="hdr-count">+${others.length - 1}</span>` : ""}`;
 }
 
-/** Opens Details and moves focus to one of its headings ("members" or "pins"). */
+/** Opens Details and moves focus to one of its headings ("members"); "pins" opens the pinned
+ *  panel instead (S10: the pins live in their own panel, Details only points at them). */
 async function openDetailsAt(section) {
+  if (section === "pins") { await openPinnedPanel(); return; }
   state.profileHandle = null;
   state.detailsOpen = true;
   await refreshDetailsData();
@@ -1658,6 +1731,9 @@ export function renderThread() {
 /** Closing a thread, returning focus to the bar that opened it. */
 export function closeThread() {
   const rootId = state.threadOpen;
+  // W2-S2-A: the "x" and Escape close a thread too, not only Mod+.; remember it so Mod+. brings
+  // it back (toggleSidePanel only records what IT closed).
+  if (rootId) lastSidePanel = { kind: "thread", id: rootId };
   state.threadOpen = null;
   renderMain();
   document.querySelector(`#messages [data-thread="${rootId}"]`)?.focus();

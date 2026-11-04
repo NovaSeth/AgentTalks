@@ -279,7 +279,7 @@ export async function refreshNotifications() {
     updateTitleBadge();
     const { activity } = railBadges(state);
     const rail = document.getElementById("rail-notif");
-    if (rail) rail.setAttribute("aria-label", `${t("Notifications")}${activity ? `, ${t("{n} new", { n: activity })}` : ""}`);
+    if (rail) rail.setAttribute("aria-label", `${t("Activity")}${activity ? `, ${t("{n} new", { n: activity })}` : ""}`);
     const badge = document.getElementById("rail-badge");
     if (badge) {
       badge.textContent = badgeText(activity);

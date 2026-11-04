@@ -95,10 +95,10 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .shell{height:100%;display:grid;grid-template-columns:var(--sbw) 1fr}
 /* Icon rail: persistent navigation on the far left (notifications, conversations, accounts).
    These are three destinations, so each must be visible without entering another. */
-.shell.with-rail{grid-template-columns:3.4rem var(--sbw) 1fr}
+.shell.with-rail{grid-template-columns:4rem var(--sbw) 1fr}
 /* Views without a sidebar (notifications, accounts) use two columns instead of three,
    allowing the content to fill the space. */
-.shell.with-rail.without-sidebar{grid-template-columns:3.4rem 1fr}
+.shell.with-rail.without-sidebar{grid-template-columns:4rem 1fr}
 .rail{background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;
   align-items:center;gap:.4rem;padding:.7rem 0;z-index:20}
 .rail-btn{position:relative;width:2.5rem;height:2.5rem;border-radius:11px;display:grid;place-items:center;
@@ -1218,9 +1218,141 @@ details.arch[open] summary::before{transform:rotate(90deg)}
 .flabel{font-size:.78rem;font-weight:700;color:var(--muted);letter-spacing:.02em}
 /* === S7 === */
 /* === S8 === */
+/* The shortcut sheet (Mod+/): a two-column table, keys in a kbd chip, the sentence beside it. */
+.shortcut-sheet{width:100%;border-collapse:collapse;margin:var(--base-size-8) 0 var(--base-size-12)}
+.shortcut-sheet td{padding:var(--base-size-6) var(--base-size-4);border-bottom:var(--borderWidth-thin) solid var(--line);
+  font-size:var(--text-body-size-medium);line-height:var(--text-body-lineHeight-medium);vertical-align:middle}
+.shortcut-sheet tr:last-child td{border-bottom:0}
+.shortcut-sheet .shortcut-keys{width:30%;white-space:nowrap}
+.shortcut-sheet kbd{font-family:var(--mono);font-size:var(--text-caption-size);line-height:var(--text-caption-lineHeight);
+  color:var(--ink);background:var(--surface-2);border:var(--borderWidth-thin) solid var(--line);
+  border-bottom-width:var(--borderWidth-thick);border-radius:var(--radius-xs);padding:var(--base-size-2) var(--base-size-6)}
+.shortcuts-modal .hint{color:var(--faint);font-size:var(--text-caption-size);line-height:var(--text-caption-lineHeight);margin:0 0 var(--base-size-12)}
+/* All unreads: groups with a conversation header, then one row per unread message. */
+.unreads-list{overflow-y:auto;height:100%;padding:var(--base-size-8) 0 var(--base-size-32);max-width:var(--breakpoint-medium,768px);margin:0 auto;width:100%}
+.unread-group{margin:0 var(--base-size-12) var(--base-size-16)}
+.unread-head{display:flex;align-items:center;gap:var(--base-size-8);margin:0 0 var(--base-size-4);padding:0 var(--base-size-4);
+  font-size:var(--text-body-size-medium);line-height:var(--text-body-lineHeight-medium)}
+.unread-head .unread-open{font:inherit;font-weight:var(--base-text-weight-semibold);color:var(--ink);padding:var(--base-size-4) var(--base-size-6);
+  border-radius:var(--radius-sm);background:none;border:0;cursor:pointer;width:auto;height:auto}
+.unread-head .unread-open:hover{background:var(--surface-2)}
+.unread-head .unread-count{color:var(--muted);font-size:var(--text-caption-size)}
+.unread-row{display:flex;gap:var(--base-size-8);align-items:flex-start;width:100%;margin:0 0 var(--base-size-4);
+  padding:var(--base-size-8) var(--base-size-12);border:var(--borderWidth-thin) solid transparent;border-radius:var(--radius);
+  background:var(--surface-2);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.unread-row:hover{border-color:var(--line)}
+.unread-row .unread-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:var(--base-size-2)}
+.unread-row .unread-top{font-size:var(--text-body-size-medium);line-height:var(--text-body-lineHeight-medium)}
+.unread-row .unread-where, .unread-row .unread-time{color:var(--muted);font-size:var(--text-caption-size)}
+.unread-row .unread-body{color:var(--ink);font-size:var(--text-body-size-medium);line-height:var(--text-body-lineHeight-medium);overflow-wrap:anywhere}
+.unread-row .unread-body p{margin:0}
+.unread-loading, .unread-more{color:var(--muted);font-size:var(--text-caption-size);margin:0 0 var(--base-size-4);padding:0 var(--base-size-12)}
+.unread-more .btn{width:auto}
 /* === S9 === */
+/* Mobile model: one screen at a time, not a narrow desktop. Below 760 px the rail is a bottom tab
+   bar (Home / DMs / Activity / Search), the list is the Home screen, a conversation is a pushed
+   screen whose topbar arrow pops back to the list, the thread takes the full width, and the shell
+   is as tall as the VISIBLE viewport (--vvh, set by app.js from visualViewport) so the composer
+   sits on the software keyboard instead of under it. */
+/* Desktop: the phone-only pieces stay out of the way; the switcher has Cmd+K and the sidebar box. */
+.rail-btn.rail-phone{display:none}
+.topbar-back{display:none}
+/* W2-S1-B: the rail column is 4rem now (shell grid above), so the caption keeps its full size and
+   the Polish label for Activity no longer loses its last glyph. */
+.rail-btn .rail-l{font-size:var(--text-caption-size);letter-spacing:0;max-width:none;overflow:visible}
+.shell{height:var(--vvh,100%)}
+@media (max-width:760px){
+  /* One column; content over the tab bar. The row for the bar is as tall as the bar itself. */
+  .shell, .shell.with-rail, .shell.with-rail.without-sidebar{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+  .rail{grid-row:2;grid-column:1;flex-direction:row;justify-content:space-around;align-items:stretch;gap:0;
+    padding:var(--base-size-4) var(--base-size-4) calc(var(--base-size-4) + env(safe-area-inset-bottom));
+    border-right:0;border-top:var(--borderWidth-thin) solid var(--line)}
+  /* Hit targets of at least 44 px; the label is visible here, the icon alone is a guess. */
+  .rail-btn{flex:1 1 0;width:auto;min-width:0;height:auto;min-height:var(--base-size-44);padding:var(--base-size-4) 0;gap:0}
+  .rail-btn.rail-phone{display:flex}
+  .rail .rail-btn .rail-l{display:block;font-size:var(--text-caption-size)}
+  /* While the keyboard is up, typing is the task: the bar steps aside and gives the room back. */
+  .shell.kb-open .rail{display:none}
+  /* The list and the conversation share the content cell; the list is the Home screen and slides
+     over the conversation from the left edge (no rail column beside it any more). Same
+     transform/visibility/inert contract as the drawer above: it is the same state.drawerOpen. */
+  .main{grid-row:1;grid-column:1;min-width:0}
+  .sidebar{grid-row:1;grid-column:1;position:relative;inset:auto;left:0;width:auto;height:100%;min-height:0;z-index:15;border-right:0}
+  .shell.drawer .scrim{display:none}
+  /* The pushed screen: an arrow back to the list where the hamburger stood. */
+  .topbar .hamburger{display:none}
+  .topbar-back{display:grid;width:var(--base-size-44);height:var(--base-size-44);margin-left:calc(-1 * var(--base-size-8));flex:0 0 auto}
+  .topbar-back svg{transform:rotate(90deg)}
+  .topbar #btn-details{width:var(--base-size-44);height:var(--base-size-44)}
+  /* The thread is a full screen of its own; its close control sits first, where a back arrow lives. */
+  .thread{width:100vw;max-width:100vw}
+  .thread .th-head .close{order:-1;margin-left:0;margin-right:var(--base-size-4);width:var(--base-size-44);height:var(--base-size-44)}
+}
 /* === S10 === */
+/* Threads view: one button per thread, the unread dot in a fixed gutter so rows line up; the
+   pinned panel reuses the Details frame (.thread.details) and hides the other hosts like the
+   profile does. Primer tokens for space and type. */
+.threads-list{flex:1;min-height:0;overflow-y:auto;padding:var(--base-size-8) 0;display:flex;flex-direction:column}
+.th-row{display:grid;grid-template-columns:var(--base-size-16) minmax(0,1fr);gap:var(--base-size-8);align-items:start;
+  width:100%;padding:var(--base-size-12) var(--base-size-16);border:0;border-bottom:var(--borderWidth-thin) solid var(--line);
+  background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.th-row:hover{background:var(--surface-2)}
+.th-row:focus-visible{outline:2px solid var(--focus-outlineColor);outline-offset:-2px}
+.th-row.unread .th-excerpt,.th-row.unread .th-where{font-weight:600;color:var(--fg)}
+.th-dot{display:block;width:var(--base-size-8);height:var(--base-size-8);border-radius:50%;margin-top:var(--base-size-8);background:transparent}
+.th-dot.th-unread{background:var(--accent)}
+.th-main{display:flex;flex-direction:column;gap:var(--base-size-4);min-width:0}
+.th-where{display:flex;align-items:baseline;gap:var(--base-size-8);font-size:var(--text-body-size-small);color:var(--muted);font-weight:600}
+.th-when{font-weight:500}
+.th-root{display:flex;align-items:center;gap:var(--base-size-8);min-width:0}
+.th-root .av{flex:0 0 auto}
+.th-excerpt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.th-last{display:flex;align-items:center;gap:var(--base-size-8);font-size:var(--text-body-size-small);color:var(--muted);min-width:0}
+.th-last .tl-faces{display:inline-flex;align-items:center}
+.th-last .tl-faces .av + .av{margin-left:calc(-1 * var(--base-size-4))}
+.th-count{color:var(--accent);font-weight:600;white-space:nowrap}
+.th-last-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.threads-view .topbar .t svg{width:1em;height:1em;vertical-align:-0.125em;margin-right:var(--base-size-4)}
+/* The pinned panel. */
+.main:has(#pinned-slot .thread) #thread-slot,.main:has(#pinned-slot .thread) #details-slot{display:none}
+.pn-body-list{display:flex;flex-direction:column;gap:var(--base-size-4)}
+.pn-row{display:flex;align-items:flex-start;gap:var(--base-size-8);padding:var(--base-size-8);width:100%;text-align:left}
+.pn-row .av{flex:0 0 auto}
+.pn-row .pin-txt{display:flex;flex-direction:column;gap:var(--base-size-4);min-width:0}
+.pn-meta{display:flex;align-items:baseline;gap:var(--base-size-8);font-size:var(--text-body-size-small)}
+.pn-when{color:var(--muted);font-weight:500}
+.pn-body{font-size:var(--text-body-size-medium);color:var(--fg);white-space:normal;overflow-wrap:anywhere}
+.pn-row:focus-visible{outline:2px solid var(--focus-outlineColor);outline-offset:-2px}
+#dt-pins-all{margin-top:var(--base-size-8);display:inline-flex;align-items:center;gap:var(--base-size-4)}
+#dt-pins-all svg{width:1em;height:1em}
 /* === S11 === */
+/* The search results column: a query box under the topbar, then hits grouped by conversation.
+   The group heading carries a Primer Counter; a hit is a button laid out like a message row. */
+.search-view{display:flex;flex-direction:column;min-height:0;height:100%}
+.search-bar{display:flex;gap:var(--base-size-8);align-items:center;flex:0 0 auto;
+  padding:var(--base-size-8) var(--base-size-16);border-bottom:var(--borderWidth-thin) solid var(--borderColor-default)}
+.search-bar input{flex:1;min-width:0}
+.search-bar .btn{width:auto;flex:0 0 auto}
+.search-results{flex:1;min-height:0;overflow-y:auto;padding:var(--base-size-8) 0 var(--base-size-32);
+  max-width:44rem;margin:0 auto;width:100%}
+.search-group{margin:0 0 var(--base-size-16)}
+.search-group-h{display:flex;align-items:center;gap:var(--base-size-8);margin:0 var(--base-size-16) var(--base-size-4);
+  font-size:var(--text-body-size-small);font-weight:var(--base-text-weight-semibold);color:var(--fgColor-muted);
+  text-transform:uppercase;letter-spacing:.04em}
+.search-hit{display:flex;gap:var(--base-size-12);align-items:flex-start;width:calc(100% - var(--base-size-16));
+  margin:0 var(--base-size-8) var(--base-size-4);padding:var(--base-size-8) var(--base-size-12);text-align:left;
+  border:var(--borderWidth-thin) solid transparent;border-radius:var(--borderRadius-medium);color:var(--fgColor-default)}
+.search-hit:hover{background:var(--control-transparent-bgColor-hover);border-color:var(--borderColor-muted)}
+.search-hit:focus-visible{outline:2px solid var(--focus-outlineColor);outline-offset:-2px}
+.search-hit .av{flex:0 0 auto}
+.sh-body{display:flex;flex-direction:column;gap:var(--base-size-2);min-width:0;flex:1}
+.sh-head{display:flex;align-items:baseline;gap:var(--base-size-8);font-size:var(--text-body-size-small)}
+.sh-when,.sh-thread{color:var(--fgColor-muted);font-size:var(--text-caption-size)}
+.sh-text{font-size:var(--text-body-size-medium);line-height:var(--text-body-lineHeight-medium);
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.sh-text mark,.pal-title mark{background:var(--bgColor-attention-muted);color:var(--fgColor-default);
+  border-radius:var(--borderRadius-small);padding:0 .1em}
+@media (max-width:760px){.search-bar{padding:var(--base-size-8)}}
 /* === S12 === */
 /* === S13 === */
 /* === S14 === */

@@ -71,11 +71,37 @@ export async function openNotificationsView() {
 // server now sends those as `fix`.
 const NOTIF_TEXT = {
   mention: msg("mentioned you"),
-  dm: msg("sent you a direct message"),
+  dm: msg("wrote to you privately"),
   reaction: msg("reacted to your post"),
   wiki: msg("changed a page you co-author"),
   fix: msg("fixed what you reported - confirm the symptom is gone"),
 };
+
+/** The row as one sentence (S8, M15): "@nestor mentioned you in #general", "... in a thread in
+ *  #bugs", "@nestor wrote to you privately". A DM names no place twice: "privately" is the place.
+ *  A wiki change names the page. Exported for the test and for the row's aria-label. */
+export function notifSentence(n) {
+  const who = `@${n.from ?? "?"}`;
+  const what = t(NOTIF_TEXT[n.kind] || msg("did something that concerns you - open it to see"));
+  const where = notifPlace(n);
+  return where ? `${who} ${what} ${where}` : `${who} ${what}`;
+}
+
+/** Sentence plus excerpt: the name a screen reader reads for the row button. */
+export function notifLabel(n) {
+  return n.excerpt ? `${notifSentence(n)}: ${n.excerpt}` : notifSentence(n);
+}
+
+/** "in #general", "in a thread in #bugs"; "" for a DM (the verb already says privately) and for
+ *  a wiki change (the page name is shown as the target instead). */
+function notifPlace(n) {
+  if (n.wikiSlug) return "";
+  const c = state.conversations.find((x) => x.id === n.conversationId);
+  if (!c || c.kind === "dm" || c.kind === "group") return "";
+  const where = `#${c.slug || c.id}`;
+  const m = n.messageId ? (state.msgs[c.id] || []).find((x) => x.id === n.messageId) : null;
+  return m?.threadId ? t("in a thread in {where}", { where }) : t("in {where}", { where });
+}
 
 function notifIcon(kind) {
   if (kind === "wiki") return iconDoc();
@@ -104,7 +130,7 @@ export function renderNotificationsMain() {
   el.innerHTML = `
     <div class="topbar">
       ${hamburgerHtml()}
-      <div class="title"><div class="t">${iconBell()} ${t("Notifications")}</div>
+      <div class="title"><div class="t">${iconBell()} ${t("Activity")}</div>
         <div class="topic">${state.notifUnread ? t("{n} new", { n: state.notifUnread }) : t("nothing unread")}</div></div>
       ${("Notification" in window) && Notification.permission !== "granted"
         ? `<button class="pillbtn" id="btn-notif-perm">${t("Turn on system notifications")}</button>` : ""}
@@ -113,11 +139,11 @@ export function renderNotificationsMain() {
     <div class="notif-list viewfade" id="notif-list">
       ${list.length
         ? list.map((n) => `
-        <button class="notif ${n.readAt ? "" : "fresh"}" data-notif="${n.id}">
+        <button class="notif ${n.readAt ? "" : "fresh"}" data-notif="${n.id}" aria-label="${escapeHtml(notifLabel(n))}">
           <span class="ni">${notifIcon(n.kind)}</span>
           <span class="nb">
             <span class="nh"><b>@${escapeHtml(n.from ?? "?")}</b> ${t(NOTIF_TEXT[n.kind] || msg("did something that concerns you - open it to see"))}
-              ${notifTarget(n) ? `<span class="nw">${escapeHtml(notifTarget(n))}</span>` : ""}</span>
+              ${notifPlace(n) ? `<span class="nw">${escapeHtml(notifPlace(n))}</span>` : n.wikiSlug ? `<span class="nw">${escapeHtml(notifTarget(n))}</span>` : ""}</span>
             ${n.excerpt ? `<span class="nx">${escapeHtml(n.excerpt)}</span>` : ""}
           </span>
           <span class="nt">${fmtDateTime(n.createdAt)}</span>

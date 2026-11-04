@@ -15,12 +15,14 @@ import {
 } from "./data.js";
 import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
-import { iconBell, iconChat, iconLock, iconSend, iconUsers } from "./icons.js";
+import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
 import { dmOthers, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { startDirect } from "./actions.js";
 import { buildRoute, consumeOwnPush, parseRoute, syncRoute } from "./router.js";
 import { showToast } from "./toasts.js";
-import { openSearchPalette } from "./search.js";
+import { openSearchPalette, openSearchRoute } from "./search.js";
+import { matchShortcut, openShortcutHelp, stepConversation, stepUnread } from "./shortcuts.js";
+import { openUnreadsView, renderUnreadsMain, unreadDmCount } from "./view-unreads.js";
 import { openUsersView, renderUsersMain, resetUsersError } from "./view-admin.js";
 import {
   bindMessageEvents, closeThread, openConversation, openThread, refreshDetailsData, renderComposer,
@@ -50,11 +52,10 @@ function renderShell() {
   // is nothing to pick from it - it stood there only because the shell rendered it
   // unconditionally, and it took a third of the screen width for a list that leads
   // nowhere in that view (reported by @michal).
-  const withSidebar = state.view === "chat" || state.view === "wiki";
-  // The DMs place counts every unread message in a direct or group conversation I belong to.
-  const dmUnread = state.conversations
-    .filter((c) => state.memberships[c.id] && (c.kind === "dm" || c.kind === "group"))
-    .reduce((n, c) => n + (state.unread[c.id] || 0), 0);
+  const withSidebar = state.view === "chat" || state.view === "wiki" || state.view === "unreads";
+  // The DMs place counts every unread message in a direct or group conversation I belong to
+  // (W2-S1-C: derived in one place, repainted by paintDmBadge when a row's unread changes).
+  const dmUnread = unreadDmCount(state);
   $app.innerHTML = `
     <div class="shell with-rail ${withSidebar ? "" : "without-sidebar"} ${state.drawerOpen ? "drawer" : ""}" id="shell">
       <div class="scrim" id="scrim"></div>
@@ -65,6 +66,7 @@ function renderShell() {
         ${railButton("rail-notif", t("Activity"), t("Notifications: mentions, direct messages, reactions, changes to your wiki pages"), iconBell(), state.view === "notifications",
           { id: "rail-badge", count: state.notifUnread, label: t("{n} new", { n: state.notifUnread }) })}
         ${adminHuman ? railButton("rail-users", t("Admin"), t("Accounts and access"), iconUsers(), state.view === "users") : ""}
+        ${railButton("rail-search", t("Search"), t("Search conversations, people and messages"), iconSearch(), false, undefined, t("Search"), "rail-phone")}
       </nav>
       ${withSidebar ? `<aside class="sidebar" id="sidebar" aria-label="${t("Channels, messages and wiki")}"></aside>` : ""}
       <main class="main" id="main"></main>
@@ -75,16 +77,69 @@ function renderShell() {
   document.getElementById("rail-dms").addEventListener("click", () => { syncRoute("#/dms"); goPlace("dms"); });
   const ru = document.getElementById("rail-users");
   if (ru) ru.addEventListener("click", () => { syncRoute("#/admin"); openUsersView(); });
+  // S9: the fourth phone tab. On the desktop the switcher has Cmd+K and the sidebar box, so the
+  // tab is CSS-hidden there (.rail-phone) and the rail keeps its three or four places.
+  document.getElementById("rail-search").addEventListener("click", () => openSearchPalette());
+  bindViewportKeyboard();
   if (withSidebar) renderSidebar();
+  renderMainView();
+}
+
+/** The main column of the current view. view-chat's renderMain dispatches the views it knows;
+ *  the all-unreads view (S8) is dispatched here so view-chat stays untouched. */
+function renderMainView() {
+  if (state.view === "unreads") { renderUnreadsMain(); return; }
   renderMain();
+}
+
+/** The DMs rail badge without redrawing the shell (W2-S1-C): called from the conversationRow
+ *  view, which is what the data layer repaints when a conversation's unread count changes. */
+function paintDmBadge() {
+  const badge = document.getElementById("rail-dm-badge");
+  if (!badge) return;
+  const n = unreadDmCount(state);
+  badge.textContent = n > 99 ? "99+" : String(n);
+  badge.classList.toggle("off", !n);
+  document.getElementById("rail-dms")?.setAttribute("aria-label", `${t("Direct messages")}${n ? `, ${t("{n} unread", { n })}` : ""}`);
+}
+
+// S9: the software keyboard. On a phone the layout viewport keeps its height while the keyboard
+// is up; only `visualViewport` shrinks. The shell takes the visible height (`--vvh`, read by the
+// S9 stylesheet block) so the composer sits on the keyboard instead of under it, and the tab bar
+// steps aside (`.kb-open`) while a keyboard is open: typing is what the user is doing then.
+let viewportKeyboardBound = false;
+function bindViewportKeyboard() {
+  const vv = window.visualViewport;
+  if (viewportKeyboardBound || !vv) return;
+  viewportKeyboardBound = true;
+  const apply = () => {
+    const shell = document.getElementById("shell");
+    if (!shell) return;
+    const inset = keyboardInset(vv, window.innerHeight);
+    document.documentElement.style.setProperty("--vvh", inset > 0 ? `${Math.round(vv.height)}px` : "100%");
+    shell.classList.toggle("kb-open", inset > 0);
+    // iOS scrolls the page to keep the focused field in view; the shell is already that tall.
+    if (inset > 0 && window.scrollY) window.scrollTo(0, 0);
+  };
+  vv.addEventListener("resize", apply);
+  vv.addEventListener("scroll", apply);
+  apply();
+}
+
+/** How many pixels of the window the keyboard covers; small differences (browser chrome
+ *  collapsing while scrolling) are not a keyboard and count as zero. */
+function keyboardInset(vv, innerHeight) {
+  if (!window.matchMedia("(max-width:760px)").matches) return 0;
+  const inset = innerHeight - vv.height - (vv.offsetTop || 0);
+  return inset > 120 ? inset : 0;
 }
 
 /** One rail button: icon, a short label underneath, and (when given) a count badge on the icon.
  *  The badge hides at zero - an alarm that never stops teaches people to ignore it. */
-function railButton(id, label, title, icon, on, badge, ariaName = label) {
+function railButton(id, label, title, icon, on, badge, ariaName = label, extraClass = "") {
   const count = badge?.count || 0;
   return `
-        <button class="rail-btn ${on ? "on" : ""}" id="${id}" ${on ? `aria-current="page"` : ""}
+        <button class="rail-btn ${on ? "on" : ""} ${extraClass}" id="${id}" ${on ? `aria-current="page"` : ""}
           aria-label="${ariaName}${count ? `, ${badge.label}` : ""}" title="${title}">
           <span class="rail-ico">${icon}${badge ? `<span class="rail-badge ${count ? "" : "off"}" id="${badge.id}" aria-hidden="true">${count > 99 ? "99+" : count}</span>` : ""}</span>
           <span class="rail-l">${label}</span>
@@ -134,9 +189,9 @@ function paintRail() {
 registerViews({
   render,
   shell: renderShell,
-  main: renderMain,
+  main: renderMainView,
   sidebar: renderSidebarList,
-  conversationRow: updateConvRow,
+  conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
   // refreshPresence does not have to know where the dots, the bar, the topbar and
   // the typing bubbles in the wiki live.
@@ -281,7 +336,8 @@ async function applyRoute(route) {
       if (state.actor?.isAdmin && state.actor?.kind === "human") await openUsersView();
       else renderNoAccess(route);
       return;
-    case "search": openSearchPalette(); return;
+    // S11 (W3-S3-A): a query opens the results view with it applied; no query opens the palette.
+    case "search": await openSearchRoute(route.q); return;
     default: return;
   }
 }
@@ -344,13 +400,19 @@ window.addEventListener("drop", (e) => e.preventDefault());
 // Closing the tab must not discard what the user has just written.
 window.addEventListener("beforeunload", () => saveDraft());
 
+// S8: every window-wide shortcut comes from the table in shortcuts.js (the Mod+/ sheet lists the
+// same table). Mod+. is matched here too but acted on by view-chat's own listener (S2 hook), so
+// the handler only names it. Escape stays below: it is a layer closer, not a shortcut.
 document.addEventListener("keydown", (e) => {
   if (!state.actor) return;
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-    e.preventDefault();
-    openSearchPalette();
-    return;
+  const name = matchShortcut(e);
+  if (name && name !== "sidePanel") {
+    const inModal = !!document.querySelector(".overlay");
+    if (!inModal || name === "search" || name === "help") {
+      if (runShortcut(name)) { e.preventDefault(); return; }
+    }
   }
+  if (e.key === "Tab" && !e.shiftKey && !e.defaultPrevented && composerTabToSend(e)) { e.preventDefault(); return; }
   if (e.key !== "Escape") return;
   // Modals, the lightbox and the palette handle Escape themselves - here we close
   // the layers that are not windows: the drawer, the thread and the details panel.
@@ -367,3 +429,51 @@ document.addEventListener("keydown", (e) => {
     document.getElementById("btn-details")?.focus();
   }
 });
+
+/** The conversations the Alt+arrow shortcuts walk, in sidebar order: channels first, then direct
+ *  and group conversations, each in the order the server lists them. Members only. */
+function navigableIds() {
+  const mine = state.conversations.filter((c) => state.memberships[c.id]);
+  const isDm = (c) => c.kind === "dm" || c.kind === "group";
+  return [...mine.filter((c) => !isDm(c)), ...mine.filter(isDm)].map((c) => c.id);
+}
+
+/** Runs one named shortcut; false means "nothing to do here" and the key keeps its default. */
+function runShortcut(name) {
+  switch (name) {
+    case "search": openSearchPalette(); return true;
+    case "help": openShortcutHelp(); return true;
+    case "allUnreads": openUnreadsView(); return true;
+    case "dms": syncRoute("#/dms"); goPlace("dms"); return true;
+    case "back": history.back(); return true;
+    case "forward": history.forward(); return true;
+    case "prevConversation":
+    case "nextConversation": {
+      const next = stepConversation(navigableIds(), state.activeId, name === "nextConversation" ? 1 : -1);
+      if (next == null) return false;
+      openConversation(next);
+      return true;
+    }
+    case "prevUnread":
+    case "nextUnread": {
+      const next = stepUnread(navigableIds(), state.activeId, state.unread, name === "nextUnread" ? 1 : -1);
+      if (next == null) { showToast(t("Nothing unread.")); return true; }
+      openConversation(next);
+      return true;
+    }
+    default: return false;
+  }
+}
+
+/** Tab from the message box lands on the send button (S8): the formatting bar in between is
+ *  reachable with a second Tab, but the first one goes where the hands expect. Only when there
+ *  is something to send; an empty box keeps the normal order. The composer's own popovers
+ *  consume Tab first (e.defaultPrevented), so this never steals their completion. */
+function composerTabToSend(e) {
+  const box = e.target;
+  if (!box || box.tagName !== "TEXTAREA" || !String(box.id).endsWith("-input")) return false;
+  const send = box.closest(".card")?.querySelector("button.send");
+  if (!send || send.disabled) return false;
+  send.focus();
+  return true;
+}
