@@ -391,9 +391,9 @@ test("F2: sign-out clears only the signing-out account's keys (drafts, wiki, nav
   assert.equal(b2.lastConvId(), null);
   a2.clearLocalAccountData(1);
   // The storage-layout flag (F4 r5) and its first-seen time (T-MG-16 fix round 1) are browser-level
-  // and name no account; a tombstone set holds opaque ids of finished messages, no text.
+  // and name no account.
   const left = [...storage.data.keys()].filter((k) => k.startsWith("atalks_") && k !== "atalks_storage_v"
-    && k !== "atalks_storage_v_since" && !k.startsWith("atalks_unsent_done_"));
+    && k !== "atalks_storage_v_since");
   assert.deepEqual(left, [], "nothing of either account is left");
 });
 

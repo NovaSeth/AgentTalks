@@ -413,7 +413,7 @@ test("R1: a sign-out does not let the kept legacy lists hand the account's entri
   const a2 = await tab(A);
   assert.deepEqual(unsentBodies(a2), []);
   assert.deepEqual(unsentBodies(a2, 7), []);
-  assert.ok(storage.getItem("atalks_unsent_1_7"), "the r5 list itself is not removed by the sign-out");
+  assert.equal(storage.getItem("atalks_unsent_1_7"), null, "an explicit sign-out deletes the account's r5 list (coordinator add-on)");
 });
 
 test("R1: legacy lists are collected 7 days after the new layout was first seen, after a last copy", async () => {
@@ -432,4 +432,94 @@ test("R1: legacy lists are collected 7 days after the new layout was first seen,
   const b = await tab(B);
   assert.deepEqual(unsentBodies(b), ["b1", "b2"]);
   assert.deepEqual(unsentBodies(b, 7), ["r5"]);
+});
+
+// ------------------------------------------------------------------ coordinator add-on (sign-out deletes the bodies)
+// Explicit sign-out is the one moment deletion is intended: no text of the account may stay on a
+// shared device, in the kept old lists either. Normal use keeps the non-destructive rule.
+test("R1 sign-out: no storage value holds A's text afterwards; B's entries in the same shared list survive", async () => {
+  storage.setItem("atalks_unsent_5", JSON.stringify([
+    { ownerId: 1, clientMsgId: "a1", body: "ALICE-SECRET-1", ts: 1 },
+    { ownerId: 2, clientMsgId: "b1", body: "bob one", ts: 2 },
+    { clientMsgId: "u1", body: "untagged", ts: 3 },
+  ]));
+  storage.setItem("atalks_unsent_1_7", JSON.stringify([{ clientMsgId: "a2", body: "ALICE-SECRET-2", ts: 1 }]));
+  storage.setItem("atalks_unsent_2_7", JSON.stringify([{ clientMsgId: "b2", body: "bob r5", ts: 1 }]));
+  const a = await tab(A);
+  a.state.pending[9] = [{ clientMsgId: "a3", body: "ALICE-SECRET-3", ts: 4, failed: true }];
+  a.persistUnsent(9);
+  a.state.pending[9] = [{ clientMsgId: "a4", body: "ALICE-SECRET-4", ts: 5, failed: true }];
+  a.persistUnsent(9, ["a3"]);                      // a tombstone set exists for A
+  assert.ok(storage.getItem("atalks_unsent_done_1"));
+  a.clearLocalAccountData(1);
+  const leaks = [...storage.data].filter(([, v]) => v.includes("ALICE-SECRET")).map(([k]) => k);
+  assert.deepEqual(leaks, [], "A's text is in no key");
+  assert.equal(storage.getItem("atalks_unsent_1_7"), null, "A's r5 list is deleted outright");
+  assert.equal(storage.getItem("atalks_unsent_done_1"), null, "A's tombstones go with the bodies");
+  assert.ok(![...storage.data.keys()].some((k) => /^atalks_unsent_1_\d+_/.test(k)), "A's per-message keys are gone");
+  const shared = JSON.parse(storage.getItem("atalks_unsent_5")!);
+  assert.deepEqual(shared.map((u: Any) => u.clientMsgId), ["b1", "u1"], "only A's entries left the shared list");
+  const b = await tab(B);
+  assert.deepEqual(unsentBodies(b), ["bob one"]);
+  assert.deepEqual(unsentBodies(b, 7), ["bob r5"]);
+});
+
+test("R1 sign-out: a shared list holding only A's entries is deleted", async () => {
+  oldTabPersist(1, 5, [{ clientMsgId: "a1", body: "ALICE-ONLY", ts: 1 }]);
+  const a = await tab(A);
+  a.clearLocalAccountData(1);
+  assert.equal(storage.getItem("atalks_unsent_5"), null);
+});
+
+test("R1 sign-out: an old tab of B writing the shared list at any point of A's sign-out is lost only inside A's read-to-write-back step", async () => {
+  // The accepted race (coordinator): between A's last read of the shared list and its write-back.
+  // Before that read or after that write B's entry must survive.
+  let points = 0, outside = 0;
+  for (let k = 1; ; k++) {
+    storage.data.clear();
+    oldTabPersist(1, 5, [{ clientMsgId: "a1", body: "ALICE", ts: 1 }]);
+    const a = await tab(A);
+    const ops: string[] = [];
+    let injected = false;
+    storage.after = (op, key) => {
+      ops.push(`${op} ${key}`);
+      if (injected || ops.length !== k) return;
+      injected = true;
+      const keep = storage.after; storage.after = null;
+      oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "bob", ts: 2 }]);
+      storage.after = keep;
+    };
+    a.clearLocalAccountData(1);
+    storage.after = null;
+    if (!injected) break;
+    points++;
+    const write = ops.findIndex((o) => o === "setItem atalks_unsent_5" || o === "removeItem atalks_unsent_5");
+    const read = write < 0 ? -1 : ops.slice(0, write).lastIndexOf("getItem atalks_unsent_5");
+    const inWindow = write >= 0 && k - 1 >= read && k - 1 < write;
+    if (inWindow) continue;
+    outside++;
+    const b = await tab(B);
+    assert.deepEqual(unsentBodies(b), ["bob"], `old tab of B wrote after A's storage call #${k}: ${ops[k - 1]}`);
+  }
+  assert.ok(points > 3 && outside > 3);
+});
+
+test("R1: a tombstone write that fails (quota) leaves nothing restorable: the copies in the old lists go", async () => {
+  oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "bob one", ts: 1 }, { clientMsgId: "b9", body: "bob keep", ts: 2 }]);
+  storage.setItem("atalks_unsent_2_7", JSON.stringify([{ clientMsgId: "b2", body: "bob r5", ts: 1 }]));
+  const b = await tab(B);
+  assert.deepEqual(unsentBodies(b), ["bob one", "bob keep"]);
+  const setItem = storage.setItem;
+  storage.setItem = function (key: string, value: string) {
+    if (key.startsWith("atalks_unsent_done_")) throw new Error("QuotaExceededError");
+    return setItem.call(this, key, value);
+  };
+  try {
+    b.state.pending[5] = b.state.pending[5].filter((p: Any) => p.clientMsgId !== "b1");
+    b.persistUnsent(5, ["b1"]);
+    b.state.pending[7] = []; b.persistUnsent(7, ["b2"]);
+  } finally { storage.setItem = setItem; }
+  const b2 = await tab(B);
+  assert.deepEqual(unsentBodies(b2), ["bob keep"], "the sent b1 is not restorable");
+  assert.deepEqual(unsentBodies(b2, 7), [], "nor the r5 copy of b2");
 });

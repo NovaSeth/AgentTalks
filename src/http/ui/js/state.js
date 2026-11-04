@@ -374,34 +374,61 @@ function readUnsentDone(owner) {
  *  is read right before the write, so the window in which two tabs of the SAME account can lose
  *  each other's id is one synchronous read-write (another account never writes this key). */
 function addUnsentDone(owner, ids) {
-  if (!ids.length) return;
+  if (!ids.length) return true;
   try {
     let list = [];
     try { list = JSON.parse(localStorage.getItem(UNSENT_DONE_KEY(owner)) || "[]"); } catch { /* unreadable: start over */ }
     const add = new Set(ids.map(String));
     const kept = (Array.isArray(list) ? list.map(String) : []).filter((id) => !add.has(id));
     localStorage.setItem(UNSENT_DONE_KEY(owner), JSON.stringify([...kept, ...add].slice(-UNSENT_DONE_MAX)));
-  } catch { /* full or blocked: the per-message key is still removed */ }
+    return true;
+  } catch { return false; }                // full or blocked: the caller must not fail open
+}
+
+/** Removes `owner`'s entries from the old lists: all of them (`ids` null: an explicit sign-out,
+ *  the one moment deletion is intended, so no text of the account stays on the device), or only
+ *  `ids` (a tombstone that could not be written, so the copies must not stay restorable). An r5
+ *  list of `owner` is written only by this account and is deleted outright on sign-out. A shared
+ *  pre-r5 list is written back with only `owner`'s entries left out, in one read and one write:
+ *  every other entry read is kept (an old tab of another account writing between the two is the
+ *  accepted race of a sign-out), and an emptied list is deleted. Untagged entries name no owner
+ *  and are not touched. */
+function purgeOldUnsent(owner, ids) {
+  const me = String(owner);
+  for (const { key, ownerOf } of oldUnsentLists(null)) {
+    const own = R5_UNSENT.exec(key)?.[1] === me;
+    try {
+      if (own && ids == null) { localStorage.removeItem(key); continue; }
+      const raw = localStorage.getItem(key);
+      if (raw == null) continue;
+      let list = null;
+      try { list = JSON.parse(raw); } catch { /* unreadable: holds nothing this code can attribute */ }
+      if (!Array.isArray(list)) { if (own) localStorage.removeItem(key); continue; }
+      const kept = list.filter((u) => !(u && typeof u === "object" && ownerOf(u) != null && String(ownerOf(u)) === me
+        && (ids == null || ids.has(String(u.clientMsgId)))));
+      if (kept.length === list.length) continue;
+      if (kept.length) localStorage.setItem(key, JSON.stringify(kept)); else localStorage.removeItem(key);
+    } catch { /* blocked: nothing more can be done here */ }
+  }
 }
 
 /** Sign-out: removes the persisted UI data of THIS account only (drafts, wiki drafts, the last
  *  conversation, the recent list, the Threads marks, its unsent messages). Only keys in this
  *  account's namespace are touched - removed, never read and rewritten - so another account
  *  signed in in another tab keeps all of its own, including what it writes meanwhile (F5 r5).
- *  The old unsent lists are not touched (fix round 1): the account's entries in them are
- *  tombstoned instead, so the kept lists cannot hand them back at the next sign-in. The tombstone
- *  set itself stays (opaque ids only, no text). */
+ *  An explicit sign-out is the one moment the non-destructive rule for the old unsent lists gives
+ *  way: the account's entries leave them too (purgeOldUnsent), so none of its text stays on a
+ *  shared device, and its tombstones go with the bodies they guarded. */
 export function clearLocalAccountData(actorId) {
   if (actorId == null) return;
   migrateLegacy();
   const me = String(actorId);
   try {
-    const old = [];
-    for (const list of oldUnsentLists(null)) for (const { u } of oldUnsentEntries(list, me)) old.push(u.clientMsgId);
-    addUnsentDone(me, old);
+    purgeOldUnsent(me, null);
     for (const key of storageKeys()) {
       const unsent = UNSENT_ENTRY.exec(key);
       if (key.startsWith(DRAFT_KEY(me, "")) || key.startsWith(WIKI_DRAFT_KEY(me, "")) || (unsent && unsent[1] === me)
+          || key === UNSENT_DONE_KEY(me)
           || key === LAST_CONV_KEY(me) || key === RECENT_KEY(me) || key === THREADS_SEEN_KEY(me)) {
         localStorage.removeItem(key);
       }
@@ -491,7 +518,8 @@ export function persistUnsent(convId, done = []) {
   // old list still holds is never restored. Then the removals, and every write on its own: a full
   // storage refusing one write must neither keep a sent message stored (it would come back as
   // "not sent") nor stop the other writes.
-  addUnsentDone(owner, [...gone]);
+  // A tombstone that cannot be written must not fail open: the copies in the old lists go instead.
+  if (!addUnsentDone(owner, [...gone])) purgeOldUnsent(owner, gone);
   for (const id of gone) {
     try { localStorage.removeItem(UNSENT_KEY(owner, convId, id)); } catch { /* unavailable */ }
   }
