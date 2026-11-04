@@ -2,7 +2,7 @@
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
 import { ACTOR_KEY, CSRF_KEY, api, newSessionGeneration, onUnauthorized, sessionGeneration, setCsrf } from "./api.js";
-import { cancelMarkRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { cancelMarkRead, ensureActors, loadConversationsList, loadMessages, loadReactionsForMessage, reactionsOf, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
 import { announce, closeAccountOverlays, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
 import { actorHandle, findMsgById, mentionsMe, mergeActors, mergeReactions, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
@@ -140,9 +140,14 @@ async function loadGapAfter(convId, floor, gen) {
   for (;;) {
     const data = await api("GET", `/api/conversations/${convId}/messages?after=${after}&limit=${CATCH_UP_PAGE}`);
     if (gen !== sessionGeneration()) return;
-    for (const m of data.messages) upsertMessage(convId, m);
+    // F4 (codex r3): the catch-up only INSERTS ids not held yet. A held message belongs to a live event
+    // (or an explicit reload) that may be newer than this page, which was cut on the server before the
+    // await; the page still advances the paging cursor below by every id it carried.
+    const held = new Set((state.msgs[convId] || []).map((m) => m.id));
+    const fresh = data.messages.filter((m) => !held.has(m.id));
+    for (const m of fresh) upsertMessage(convId, m);
     mergeActors(data.actors);
-    mergeReactions(data.messages, data.reactions);
+    mergeReactions(fresh, reactionsOf(fresh, data.reactions));
     const top = data.messages.reduce((n, m) => (typeof m.id === "number" && m.id > n ? m.id : n), after);
     if (data.messages.length < CATCH_UP_PAGE || top <= after) return;
     after = top;
@@ -166,7 +171,7 @@ async function catchUpLoadedHistories(gen) {
     // list had before the break is then paged in full (B-MG-116): a gap longer than 30 messages
     // would otherwise lose its oldest ones.
     const floor = gapFloors[convId] ?? newestIdOf(convId);
-    try { await loadMessages(convId); await loadGapAfter(convId, floor, gen); } catch { continue; }
+    try { await loadMessages(convId, { keepTouched: true }); await loadGapAfter(convId, floor, gen); } catch { continue; }
     if (gen !== sessionGeneration()) return;
     delete gapFloors[convId];
     if (state.view === "chat" && state.activeId === convId) views.messages?.();
