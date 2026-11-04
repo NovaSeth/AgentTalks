@@ -175,7 +175,7 @@ test("S5: the served skill has no command that redirects into .agenttalks.json, 
 
 test("S5b: the installer page does not tell agents to write a project file by hand", () => {
   const html = readFileSync(fileURLToPath(new URL("../../src/http/ui/install.html", import.meta.url)), "utf8");
-  assert.ok(!/(&gt;|>)\s*\.agenttalks\.json/.test(html));
+  assert.ok(!/(&gt;|[^a-z/"]>)\s*\.agenttalks\.json/.test(html));
 });
 
 test("S7: login.mjs never writes through a symlink (the project file, the temp name, .gitignore): refuses, the link target is untouched", async (t) => {

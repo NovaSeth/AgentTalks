@@ -41,7 +41,7 @@ export function trustProjectFile(path, opts = {}) {
   const projects = [...current.filter((e) => e.path !== real), { path: real, sha256 }];
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const tmp = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
-  writeFileSync(tmp, JSON.stringify({ projects }, null, 2), { mode: 0o600 });
+  writeFileSync(tmp, JSON.stringify({ projects }, null, 2), { mode: 0o600, flag: "wx" });
   try { chmodSync(tmp, 0o600); } catch { /* e.g. Windows - best effort */ }
   renameSync(tmp, file);
 }

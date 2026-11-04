@@ -15,7 +15,9 @@
  * The token comes from stdin or the environment, never from argv (visible in `ps` and shell
  * history), and is never printed. Exit 0 on success, 1 on any refusal, nothing written then.
  */
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createApi } from "../lib/api.mjs";
 import { trustProjectFile } from "../lib/trust.mjs";
@@ -61,6 +63,35 @@ function inGitTree(dir) {
   }
 }
 
+/** @param {string} p */
+function isLink(p) {
+  try { return lstatSync(p).isSymbolicLink(); } catch { return false; }
+}
+
+/** Whether git tracks .agenttalks.json in `dir` (false when git is absent or this is no work tree).
+ *  @param {string} dir */
+function isTracked(dir) {
+  try {
+    execFileSync("git", ["ls-files", "--error-unmatch", "--", NAME], { cwd: dir, stdio: "ignore", timeout: 5000 });
+    return true;
+  } catch { return false; }
+}
+
+/** A new file under a fresh name (flag wx: never follows or reuses an existing path), then a
+ *  rename over the target, so a link planted at the target is replaced, not written through.
+ *  @param {string} path @param {string} data @param {number} mode */
+function writeAtomic(path, data, mode) {
+  const tmp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+  try {
+    writeFileSync(tmp, data, { mode, flag: "wx" });
+    try { chmodSync(tmp, mode); } catch { /* e.g. Windows - best effort */ }
+    renameSync(tmp, path);
+  } catch (err) {
+    try { unlinkSync(tmp); } catch { /* not created */ }
+    fail(`could not write ${path} (${err instanceof Error ? err.name : "error"})`);
+  }
+}
+
 const args = parseArgs(process.argv.slice(2));
 const env = process.env;
 
@@ -96,17 +127,26 @@ if (!actor || typeof actor.handle !== "string" || actor.handle === "") {
 }
 
 const file = join(dir, NAME);
-writeFileSync(file, JSON.stringify({ url, token, writtenBy: "agenttalks-plugin-login" }, null, 2) + "\n", { mode: 0o600 });
-try { chmodSync(file, 0o600); } catch { /* e.g. Windows - best effort */ }
+const gi = join(dir, ".gitignore");
+
+// Preflight: every refusal comes before the first write.
+if (isLink(file)) fail(`${NAME} in the target directory is a symbolic link; refusing to write through it; nothing was written`);
+if (isLink(gi)) fail(".gitignore in the target directory is a symbolic link; refusing to write through it; nothing was written");
+if (isTracked(dir)) {
+  fail(`${NAME} is tracked by git here: writing the token into it would put the token in the repository. `
+    + "Remove it from the index (git rm --cached) first; nothing was written");
+}
+
+writeAtomic(file, JSON.stringify({ url, token, writtenBy: "agenttalks-plugin-login" }, null, 2) + "\n", 0o600);
 trustProjectFile(file, { env });
 
 // The token must not reach a repository: ignore the file the way `atalk login --local` does.
-const gi = join(dir, ".gitignore");
 let ignored = false;
 if (inGitTree(dir) || existsSync(gi)) {
   const current = existsSync(gi) ? readFileSync(gi, "utf8") : "";
   if (!current.split("\n").some((l) => l.trim() === NAME)) {
-    appendFileSync(gi, (current && !current.endsWith("\n") ? "\n" : "") + NAME + "\n");
+    writeAtomic(gi, current + (current && !current.endsWith("\n") ? "\n" : "") + NAME + "\n",
+      existsSync(gi) ? lstatSync(gi).mode & 0o777 : 0o644);
     ignored = true;
   }
 }
