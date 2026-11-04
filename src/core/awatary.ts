@@ -64,14 +64,14 @@ export function bajtyAwatara(filesDir: string, a: Awatar): Buffer {
 export function ustawAwatar(
   ctx: Ctx, filesDir: string, actorId: number, data: Buffer, mimeZNaglowka?: string,
 ): Awatar {
-  if (data.length === 0) throw badRequest("pusty_awatar", "awatar nie moze byc pusty");
+  if (data.length === 0) throw badRequest("empty_avatar", "awatar nie moze byc pusty");
   if (data.length > MAX_AVATAR_BYTES) {
-    throw tooLarge("awatar_za_duzy", `awatar moze miec najwyzej ${MAX_AVATAR_BYTES} B (to miniatura)`);
+    throw tooLarge("avatar_too_large", `awatar moze miec najwyzej ${MAX_AVATAR_BYTES} B (to miniatura)`);
   }
   const mime = rozpoznajObraz(data);
   if (!mime) {
     throw badRequest(
-      "zly_format",
+      "invalid_format",
       `to nie jest obrazek w obslugiwanym formacie (${Object.keys(DOZWOLONE).join(", ")}). ` +
         (mimeZNaglowka ? `Naglowek mowil "${mimeZNaglowka}", ale licza sie bajty.` : ""),
     );

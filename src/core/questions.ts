@@ -52,7 +52,7 @@ export function answer(
   const q = ctx.db.prepare("SELECT * FROM questions WHERE id = ?").get(input.questionId) as
     | { id: number; message_id: number; conversation_id: number; closed_at: number | null }
     | undefined;
-  if (!q) throw notFound("pytanie", `nie ma pytania ${input.questionId}`);
+  if (!q) throw notFound("question_not_found", `nie ma pytania ${input.questionId}`);
   assertCanRead(ctx, q.conversation_id, input.actorId);
 
   // ONE transaction for the answer message and closing the question, with a RE-CHECK of the
@@ -62,7 +62,7 @@ export function answer(
     const fresh = ctx.db
       .prepare("SELECT closed_at, message_id, conversation_id FROM questions WHERE id = ?")
       .get(q.id) as { closed_at: number | null; message_id: number; conversation_id: number };
-    if (fresh.closed_at) throw badRequest("juz_zamkniete", "na to pytanie ktos juz odpowiedzial");
+    if (fresh.closed_at) throw badRequest("already_closed", "na to pytanie ktos juz odpowiedzial");
 
     // The answer lands in the question's thread - so "what answered what" follows from the
     // structure rather than from reading in order.

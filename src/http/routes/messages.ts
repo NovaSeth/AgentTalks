@@ -69,7 +69,7 @@ export function registerMessageRoutes(router: Router): void {
     // One error for "does not exist" and "no access" - message ids are global, so different
     // answers would reveal the existence of content in other people's channels.
     if (!root || !canRead(rc.ctx, root.conversationId, actor.id)) {
-      throw notFound("wiadomosc", `nie ma wiadomosci ${rc.params.id} (albo brak dostepu)`);
+      throw notFound("message_not_found", `nie ma wiadomosci ${rc.params.id} (albo brak dostepu)`);
     }
     const messages = listThread(rc.ctx, root.threadId ?? root.id);
     const autorzy = actorsByIds(rc.ctx, messages.map((m) => m.actorId));
@@ -120,7 +120,7 @@ export function registerMessageRoutes(router: Router): void {
     const body = await readJson(req, 4096);
     const sessionId = str(body.sessionId);
     if (!sessionId) {
-      json(res, 400, { error: "brak sessionId", code: "brak_sessionid" });
+      json(res, 400, { error: "brak sessionId", code: "session_id_required" });
       return;
     }
     // Registering an EXISTING session belonging to another actor is an attempt to take over its
@@ -128,7 +128,7 @@ export function registerMessageRoutes(router: Router): void {
     const owner = rc.ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?")
       .get(sessionId) as { actor_id: number } | undefined;
     if (owner && owner.actor_id !== actor.id) {
-      throw forbidden("nie_twoja_sesja", "ta sesja nalezy do innego aktora");
+      throw forbidden("not_your_session", "ta sesja nalezy do innego aktora");
     }
     const kind = str(body.kind);
     registerSession(rc.ctx, {
@@ -159,9 +159,9 @@ export function registerMessageRoutes(router: Router): void {
     const row = rc.ctx.db
       .prepare("SELECT actor_id FROM sessions WHERE id = ?")
       .get(sessionId) as { actor_id: number } | undefined;
-    if (!row) throw notFound("sesja", `nie ma sesji ${sessionId}`);
+    if (!row) throw notFound("session_not_found", `nie ma sesji ${sessionId}`);
     if (row.actor_id !== actorId) {
-      throw forbidden("nie_twoja_sesja", "ta sesja nalezy do innego aktora");
+      throw forbidden("not_your_session", "ta sesja nalezy do innego aktora");
     }
   };
 
@@ -174,7 +174,7 @@ export function registerMessageRoutes(router: Router): void {
     const body = await readJson(req, 1024);
     const kind = str(body.kind);
     if (kind !== "typing" && kind !== "busy") {
-      json(res, 400, { error: "kind musi byc typing albo busy", code: "zly_sygnal" });
+      json(res, 400, { error: "kind musi byc typing albo busy", code: "invalid_signal" });
       return;
     }
     // `in` = where they are writing ("c:<convId>" / "w:<slug>"); stop=true clears the bubble at

@@ -46,7 +46,7 @@ function webauthnParams(req: IncomingMessage, config: Config): { rpId: string; o
   const lokalnie = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
   if (!lokalnie) {
     throw badRequest(
-      "brak_base_url",
+      "base_url_required",
       "logowanie kluczem (passkey) wymaga ustawionego AGENTTALKS_BASE_URL - bez niego " +
         "domena klucza pochodzilaby z naglowka podanego przez klienta",
     );
@@ -108,7 +108,7 @@ function checkLoginLimit(key: string, now: number): void {
   entry.count += 1;
   if (entry.count > LOGIN_MAX_ATTEMPTS) {
     securityLog("rate_limited", { scope: "webauthn" });
-    throw tooMany("za_duzo_prob",
+    throw tooMany("too_many_attempts",
       `za duzo prob logowania; sprobuj za ${Math.ceil((entry.resetAt - now) / 60)} min`);
   }
 }
@@ -177,7 +177,7 @@ function assertLoginAllowed(keys: LoginKeys, ip: string, now: number, knownDevic
     const e = loginFailures.get(key);
     if (e && e.resetAt > now && e.count >= max) {
       securityLog("rate_limited", { scope: "login", ...keys.who, ip });
-      throw tooMany("za_duzo_prob",
+      throw tooMany("too_many_attempts",
         `za duzo prob logowania; sprobuj za ${Math.ceil((e.resetAt - now) / 60)} min`);
     }
   }
@@ -198,7 +198,7 @@ function checkEnrollLimit(key: string, now: number): void {
   if (!e || e.resetAt <= now) { enrollAttempts.set(key, { count: 1, resetAt: now + 3600 }); return; }
   e.count += 1;
   if (e.count > 20) securityLog("rate_limited", { scope: "enroll" });
-  if (e.count > 20) throw tooMany("za_duzo_prob", "za duzo prob rejestracji, sprobuj pozniej");
+  if (e.count > 20) throw tooMany("too_many_attempts", "za duzo prob rejestracji, sprobuj pozniej");
 }
 
 // A limiter key per source address. Behind a proxy, X-Forwarded-For is a list that EVERY
@@ -255,7 +255,7 @@ export function registerAuthRoutes(router: Router): void {
       recordLoginFailure(keys, now);
       securityLog("login_failed", { ...keys.who, ip });
 
-      throw unauthorized("zle_dane", "nieprawidlowy uzytkownik lub haslo");
+      throw unauthorized("invalid_data", "nieprawidlowy uzytkownik lub haslo");
     }
     loginFailures.delete(keys.ipHandle);
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
@@ -291,7 +291,7 @@ export function registerAuthRoutes(router: Router): void {
 
   router.add("POST", "/api/webauthn/register/options", (req, res, rc) => {
     const { actor } = requireAuth(rc);
-    if (actor.kind !== "human") throw badRequest("tylko_ludzie", "passkey jest dla ludzi - agent ma token");
+    if (actor.kind !== "human") throw badRequest("humans_only", "passkey jest dla ludzi - agent ma token");
     const { rpId } = webauthnParams(req, rc.config);
     json(res, 200, {
       challenge: issueChallenge("register", actor.id),
@@ -308,7 +308,7 @@ export function registerAuthRoutes(router: Router): void {
   router.add("POST", "/api/webauthn/register", async (req, res, rc) => {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
-    if (actor.kind !== "human") throw badRequest("tylko_ludzie", "passkey jest dla ludzi - agent ma token");
+    if (actor.kind !== "human") throw badRequest("humans_only", "passkey jest dla ludzi - agent ma token");
     const body = await readJson(req, 64 * 1024);
     const { rpId, origins } = webauthnParams(req, rc.config);
     const id = registerCredential(rc.ctx, {
@@ -363,7 +363,7 @@ export function registerAuthRoutes(router: Router): void {
       signature: str(body.signature) ?? "",
     });
     const actor = getActor(rc.ctx, actorId);
-    if (!actor || actor.disabledAt) throw unauthorized("konto_wylaczone", "to konto jest wylaczone");
+    if (!actor || actor.disabledAt) throw unauthorized("account_disabled", "to konto jest wylaczone");
     const cookie = makeCookie(rc.ctx, rc.config, actor.id, rc.config.sessionTtlSec, requestIsSecure(req));
     res.setHeader("set-cookie", [cookie, makeDeviceCookie(rc.ctx, rc.config, actor.id, requestIsSecure(req))]);
     json(res, 200, {
@@ -424,7 +424,7 @@ export function registerAuthRoutes(router: Router): void {
     const body = await readJson(req, 4096);
     const kind = str(body.kind);
     if (kind !== "human" && kind !== "agent") {
-      throw badRequest("zly_rodzaj", "kind musi byc 'human' albo 'agent'");
+      throw badRequest("invalid_kind", "kind musi byc 'human' albo 'agent'");
     }
     const actor = createActor(rc.ctx, {
       kind,

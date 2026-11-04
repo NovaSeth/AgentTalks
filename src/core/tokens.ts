@@ -73,7 +73,7 @@ export function mintToken(
   name: string,
   ttlSec?: number | null,
 ): { token: string; info: TokenInfo } {
-  if (!getActor(ctx, actorId)) throw notFound("aktor", `nie ma aktora ${actorId}`);
+  if (!getActor(ctx, actorId)) throw notFound("actor_not_found", `nie ma aktora ${actorId}`);
   const token = PREFIX + randomBytes(32).toString("base64url");
   const now = ctx.now();
   // A short-lived token for an untrusted host (CI, a VPS executing instructions from public

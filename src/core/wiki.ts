@@ -123,11 +123,11 @@ function toPage(ctx: Ctx, r: PageRow): WikiPage {
 
 function validate(title: string, body: string): { title: string; body: string } {
   const t = String(title ?? "").trim();
-  if (!t) throw badRequest("brak_tytulu", "strona wiki musi miec tytul");
-  if (t.length > MAX_TITLE) throw badRequest("tytul_za_dlugi", `tytul do ${MAX_TITLE} znakow`);
+  if (!t) throw badRequest("title_required", "strona wiki musi miec tytul");
+  if (t.length > MAX_TITLE) throw badRequest("title_too_long", `tytul do ${MAX_TITLE} znakow`);
   const b = String(body ?? "");
   if (Buffer.byteLength(b, "utf8") > MAX_WIKI_BYTES) {
-    throw badRequest("tresc_za_dluga", `tresc strony jest za dluga (limit ${MAX_WIKI_BYTES} B)`);
+    throw badRequest("body_too_long", `tresc strony jest za dluga (limit ${MAX_WIKI_BYTES} B)`);
   }
   return { title: t, body: b };
 }
@@ -144,15 +144,15 @@ function resolveParent(
   const parent = ctx.db.prepare("SELECT id, parent_id FROM wiki_pages WHERE slug = ?").get(
     normalizeSlug(parentSlug, "nazwa strony"),
   ) as { id: number; parent_id: number | null } | undefined;
-  if (!parent) throw notFound("strona", `nie ma strony wiki "${parentSlug}" na rodzica`);
+  if (!parent) throw notFound("page_not_found", `nie ma strony wiki "${parentSlug}" na rodzica`);
   if (pageIdOrNull !== null) {
     let cur: number | null = parent.id;
     let hops = 0;
     while (cur !== null) {
       if (cur === pageIdOrNull) {
-        throw badRequest("cykl_wiki", "strona nie moze wisiec pod soba ani pod wlasnym potomkiem");
+        throw badRequest("wiki_cycle", "strona nie moze wisiec pod soba ani pod wlasnym potomkiem");
       }
-      if (++hops > 100) throw badRequest("cykl_wiki", "drzewo wiki jest za glebokie");
+      if (++hops > 100) throw badRequest("wiki_cycle", "drzewo wiki jest za glebokie");
       const row = ctx.db.prepare("SELECT parent_id FROM wiki_pages WHERE id = ?").get(cur) as
         | { parent_id: number | null }
         | undefined;
@@ -211,13 +211,13 @@ function assertNoClobber(
     if (Number(base) === current) return;
     if (current === 0) {
       throw conflict(
-        "konflikt_wiki",
+        "wiki_conflict",
         `strona "${slug}" nie istnieje, a podales baseRevision=${base}. ` +
           `Zaloz ja z baseRevision=0 albo bez tego pola.`,
       );
     }
     throw conflict(
-      "konflikt_wiki",
+      "wiki_conflict",
       Number(base) === 0
         ? `strona "${slug}" juz istnieje (${describeRevision(ctx, current)}), a baseRevision=0 znaczy ` +
           `"tylko zaloz". Przeczytaj ja (GET /api/wiki/${slug}) i powtorz zapis z baseRevision=${current}.`
@@ -232,7 +232,7 @@ function assertNoClobber(
   if (seenRevisionId(ctx, existing.id, input.actorId) >= current) return;
 
   throw conflict(
-    "konflikt_wiki",
+    "wiki_conflict",
     `strona "${slug}" ma ${describeRevision(ctx, current)}, ktorej nie czytales - ten zapis ` +
       `nadpisalby cudza prace, a autor dowiedzialby sie o tym przypadkiem. Przeczytaj ja ` +
       `(GET /api/wiki/${slug} albo wiki_read), dopisz sie do tego, co tam jest, i zapisz jeszcze raz. ` +
@@ -269,7 +269,7 @@ export function savePage(
 ): WikiPage {
   const slug = normalizeSlug(input.slug, "nazwa strony");
   if (RESERVED_SLUGS.has(slug)) {
-    throw badRequest("slug_zarezerwowany", `nazwa "${slug}" jest zarezerwowana - wybierz inna`);
+    throw badRequest("slug_reserved", `nazwa "${slug}" jest zarezerwowana - wybierz inna`);
   }
   const { title, body } = validate(input.title, input.body);
   const now = ctx.now();
@@ -344,7 +344,7 @@ export function savePage(
 /** The "I have seen it" marker: moves the actor's pointer to the page's newest revision. */
 export function markPageSeen(ctx: Ctx, slug: string, actorId: number): void {
   const id = pageId(ctx, slug);
-  if (id === null) throw notFound("strona", `nie ma strony wiki "${slug}"`);
+  if (id === null) throw notFound("page_not_found", `nie ma strony wiki "${slug}"`);
   const last = ctx.db.prepare("SELECT MAX(id) AS m FROM wiki_revisions WHERE page_id = ?")
     .get(id) as { m: number | null };
   ctx.db
@@ -552,7 +552,7 @@ export function searchWiki(ctx: Ctx, text: string, limit = 20): WikiHit[] {
 
 export function pageHistory(ctx: Ctx, slug: string): WikiRevision[] {
   const id = pageId(ctx, slug);
-  if (id === null) throw notFound("strona", `nie ma strony wiki "${slug}"`);
+  if (id === null) throw notFound("page_not_found", `nie ma strony wiki "${slug}"`);
   const rows = ctx.db
     .prepare(
       "SELECT id, actor_id, title, note, created_at FROM wiki_revisions WHERE page_id = ? ORDER BY id DESC",
@@ -604,11 +604,11 @@ export function revertPage(
 ): WikiPage {
   return tx(ctx.db, () => {
     const id = pageId(ctx, input.slug);
-    if (id === null) throw notFound("strona", `nie ma strony wiki "${input.slug}"`);
+    if (id === null) throw notFound("page_not_found", `nie ma strony wiki "${input.slug}"`);
     const rev = ctx.db
       .prepare("SELECT title, body FROM wiki_revisions WHERE id = ? AND page_id = ?")
       .get(input.revisionId, id) as { title: string; body: string } | undefined;
-    if (!rev) throw notFound("rewizja", `nie ma rewizji ${input.revisionId} dla tej strony`);
+    if (!rev) throw notFound("revision_not_found", `nie ma rewizji ${input.revisionId} dla tej strony`);
     return savePage(ctx, {
       slug: input.slug,
       title: rev.title,
@@ -638,10 +638,10 @@ export function deletePage(
   return tx(ctx.db, () => {
     const row = ctx.db.prepare("SELECT * FROM wiki_pages WHERE slug = ?")
       .get(normalizeSlug(input.slug, "nazwa strony")) as PageRow | undefined;
-    if (!row) throw notFound("strona", `nie ma strony wiki "${input.slug}"`);
+    if (!row) throw notFound("page_not_found", `nie ma strony wiki "${input.slug}"`);
     if (row.created_by !== input.actorId && !input.isAdmin) {
       throw forbidden(
-        "nie_twoja_strona",
+        "not_your_page",
         `strone "${row.slug}" zalozyl @${handleOf(ctx, row.created_by) ?? "?"} - skasowac moze ` +
           `on albo admin instancji. Chcesz usunac tresc, nie strone? Zapisz ja pusta - historia zostanie.`,
       );

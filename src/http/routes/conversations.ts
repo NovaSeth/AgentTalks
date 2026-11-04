@@ -32,10 +32,10 @@ import type { Ctx } from "../../core/ctx.ts";
 /** A handle to an actor id. Needed, because the client addresses by handle and the core by
 /**  id - and that is the right boundary: a handle is a public name, an id is a key. */
 function resolveHandles(ctx: Ctx, raw: unknown): number[] {
-  if (!Array.isArray(raw)) throw badRequest("brak_czlonkow", "podaj liste members");
+  if (!Array.isArray(raw)) throw badRequest("members_required", "podaj liste members");
   return raw.map((h) => {
     const actor = getActorByHandle(ctx, String(h));
-    if (!actor) throw notFound("aktor", `nie ma aktora @${h}`);
+    if (!actor) throw notFound("actor_not_found", `nie ma aktora @${h}`);
     return actor.id;
   });
 }
@@ -52,7 +52,7 @@ type MemberRow = {
 
 const convId = (rc: { params: Record<string, string> }): number => {
   const id = Number(rc.params.id);
-  if (!Number.isFinite(id)) throw badRequest("zle_id", "nieprawidlowy identyfikator konwersacji");
+  if (!Number.isFinite(id)) throw badRequest("invalid_id", "nieprawidlowy identyfikator konwersacji");
   return id;
 };
 
@@ -111,7 +111,7 @@ export function registerConversationRoutes(router: Router): void {
       json(res, 201, { conversation: ensureDirect(rc.ctx, ids) });
       return;
     }
-    throw badRequest("zly_rodzaj", "kind musi byc public, private, dm albo group");
+    throw badRequest("invalid_kind", "kind musi byc public, private, dm albo group");
   });
 
   router.add("GET", "/api/conversations/:id", (_req, res, rc) => {
@@ -210,12 +210,12 @@ export function registerConversationRoutes(router: Router): void {
     if (conversation?.kind === "dm" || conversation?.kind === "group") {
       // Adding a person to an existing conversation would change its membership, and thereby who
       // sees the earlier messages. The right operation is a new conversation.
-      throw badRequest("nie_dla_rozmow", "do rozmowy bezposredniej nie dodaje sie osob; zaloz nowa");
+      throw badRequest("not_for_conversations", "do rozmowy bezposredniej nie dodaje sie osob; zaloz nowa");
     }
     if (conversation?.kind === "public") {
       // Anybody joins a public channel THEMSELVES (join). Forcibly adding other people's accounts
       // is an invitation to counter spam - anybody could add any channel to anybody's unread.
-      throw badRequest("publiczny_sam",
+      throw badRequest("public_channel_open",
         "do kanalu publicznego dolacza sie samemu (POST .../join)");
     }
     const [memberId] = resolveHandles(rc.ctx, [str(body.handle) ?? ""]);
@@ -255,7 +255,7 @@ export function registerConversationRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const target = getActorByHandle(rc.ctx, String(rc.params.handle ?? ""));
-    if (!target) throw notFound("aktor", `nie ma aktora @${rc.params.handle}`);
+    if (!target) throw notFound("actor_not_found", `nie ma aktora @${rc.params.handle}`);
     removeMember(rc.ctx, {
       convId: convId(rc),
       actorId: actor.id,
@@ -271,7 +271,7 @@ export function registerConversationRoutes(router: Router): void {
     const body = await readJson(req, 1024);
     const notify = str(body.notify);
     if (notify !== "all" && notify !== "mentions" && notify !== "none") {
-      throw badRequest("zly_notify", "notify musi byc all, mentions albo none");
+      throw badRequest("invalid_notify", "notify musi byc all, mentions albo none");
     }
     const id = convId(rc);
     assertCanRead(rc.ctx, id, actor.id);

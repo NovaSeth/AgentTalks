@@ -248,7 +248,7 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   ).get(String(input.credentialId ?? "")) as
     | { actor_id: number; public_key: string; sign_count: number }
     | undefined;
-  if (!row) throw notFound("poswiadczenie", "nieznane poswiadczenie - zaloguj sie haslem i dodaj je ponownie");
+  if (!row) throw notFound("credential_not_found", "nieznane poswiadczenie - zaloguj sie haslem i dodaj je ponownie");
 
   const client = parseClientData(b64u.dec(input.clientDataJSON));
   if (client.type !== "webauthn.get") throw badRequest("webauthn", "zly typ clientData");
@@ -278,7 +278,7 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   } catch {
     ok = false;
   }
-  if (!ok) throw unauthorized("webauthn_podpis", "podpis sie nie zgadza");
+  if (!ok) throw unauthorized("webauthn_signature", "podpis sie nie zgadza");
 
   const count = authData.readUInt32BE(33);
   // The signature counter grows on devices that support it; a regression MAY mean a cloned
@@ -286,7 +286,7 @@ export function verifyAssertion(ctx: Ctx, input: AuthenticationInput): number {
   // Once either side is non-zero the counter has to strictly increase: a received 0 after a
   // stored 5 must not reset clone detection, and the stored value is never lowered.
   if ((row.sign_count > 0 || count > 0) && count <= row.sign_count) {
-    throw unauthorized("webauthn_licznik", "licznik podpisow sie cofnal - poswiadczenie odrzucone");
+    throw unauthorized("webauthn_counter", "licznik podpisow sie cofnal - poswiadczenie odrzucone");
   }
   ctx.db.prepare(
     "UPDATE webauthn_credentials SET sign_count = ?, last_used_at = ? WHERE id = ?",

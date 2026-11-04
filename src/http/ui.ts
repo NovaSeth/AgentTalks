@@ -243,7 +243,7 @@ function checkGateLimit(key: string, now: number): void {
   const e = gateAttempts.get(key);
   if (!e || e.resetAt <= now) { gateAttempts.set(key, { count: 1, resetAt: now + 900 }); return; }
   e.count += 1;
-  if (e.count > 15) throw tooMany("za_duzo_prob", "za duzo prob - sprobuj pozniej");
+  if (e.count > 15) throw tooMany("too_many_attempts", "za duzo prob - sprobuj pozniej");
 }
 
 /** Returns true when the gate STOPPED the request (sent a response). Called before routing:
@@ -275,7 +275,7 @@ export function registerUiRoutes(router: Router): void {
     const body = await readJson(req, 1024);
     const password = str(body.password) ?? "";
     if (!eq(password, rc.config.sitePassword)) {
-      json(res, 401, { error: "nieprawidlowe haslo", code: "zle_haslo" });
+      json(res, 401, { error: "nieprawidlowe haslo", code: "wrong_password" });
       return;
     }
     res.setHeader("set-cookie", gateSetCookie(rc.config));
@@ -312,7 +312,7 @@ export function registerUiRoutes(router: Router): void {
   router.add("GET", "/js/:plik", (_req, res, rc) => {
     const name = rc.params.plik ?? "";
     if (!UI_MODULE_SET.has(name)) {
-      json(res, 404, { error: "nie ma takiego pliku", code: "brak_pliku" });
+      json(res, 404, { error: "nie ma takiego pliku", code: "file_required" });
       return;
     }
     serveModule(res, name);

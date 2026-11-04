@@ -3,8 +3,14 @@
  */
 import type { Req, Res } from "./router.ts";
 import { AppError, tooLarge, badRequest } from "../core/errors.ts";
+import { legacyOf } from "../core/error-codes.ts";
 
 export function json(res: Res, status: number, body: unknown): void {
+  if (status >= 400 && body && typeof body === "object" && "code" in body && typeof body.code === "string") {
+    const legacyCode = legacyOf(body.code);
+    // D-MG-15: legacyCode until 0.4.0
+    if (legacyCode !== undefined) body = { ...body, legacyCode };
+  }
   const text = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -17,7 +23,7 @@ export function json(res: Res, status: number, body: unknown): void {
 
 /**
  * A domain error gets its status and code; everything else is a 500 and a log entry.
- * That distinction matters operationally: a 400 with the code "puste_cialo" tells the client
+ * That distinction matters operationally: a 400 with the code "empty_body" tells the client
  * what to fix, while a 500 tells the operators that something is broken. The prototype had
  * one path, and so a validation error looked like a server failure.
  */
@@ -27,7 +33,7 @@ export function fail(res: Res, err: unknown): void {
     return;
   }
   console.error("[http] nieobsluzony blad:", err);
-  json(res, 500, { error: "blad wewnetrzny serwera", code: "wewnetrzny" });
+  json(res, 500, { error: "blad wewnetrzny serwera", code: "internal" });
 }
 
 export async function readJson(req: Req, maxBytes: number): Promise<Record<string, unknown>> {
@@ -37,7 +43,7 @@ export async function readJson(req: Req, maxBytes: number): Promise<Record<strin
     const buf = chunk as Buffer;
     size += buf.length;
     if (size > maxBytes) {
-      throw tooLarge("cialo_za_duze", `cialo zadania jest za duze (limit ${maxBytes} B)`);
+      throw tooLarge("body_too_large", `cialo zadania jest za duze (limit ${maxBytes} B)`);
     }
     chunks.push(buf);
   }
@@ -46,7 +52,7 @@ export async function readJson(req: Req, maxBytes: number): Promise<Record<strin
     const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
   } catch {
-    throw badRequest("zly_json", "cialo zadania nie jest poprawnym JSON-em");
+    throw badRequest("invalid_json", "cialo zadania nie jest poprawnym JSON-em");
   }
 }
 
@@ -59,7 +65,7 @@ export async function readRaw(req: Req, maxBytes: number): Promise<Buffer> {
     const buf = chunk as Buffer;
     size += buf.length;
     if (size > maxBytes) {
-      throw tooLarge("cialo_za_duze", `cialo zadania jest za duze (limit ${maxBytes} B)`);
+      throw tooLarge("body_too_large", `cialo zadania jest za duze (limit ${maxBytes} B)`);
     }
     chunks.push(buf);
   }
@@ -93,7 +99,7 @@ export function odrzucKoperteMultipart(data: Buffer, contentType?: string): void
   // first, examples after, and in TWO languages - the report came from somebody using Python,
   // and the previous version only spoke about curl.
   throw badRequest(
-    "multipart_niewspierany",
+    "multipart_unsupported",
     "ta trasa przyjmuje SUROWE BAJTY pliku jako CALE cialo zadania - bez formularza, " +
       "bez JSON-a, bez kodowania. Naglowek content-type opisuje sam plik (np. image/png), " +
       "a nazwe podaje sie osobno w X-File-Name. " +

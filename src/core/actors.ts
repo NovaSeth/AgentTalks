@@ -61,7 +61,7 @@ export function createActor(
 ): Actor {
   const handle = normalizeHandle(input.handle);
   if (getActorByHandle(ctx, handle)) {
-    throw conflict("handle_zajety", `handle "${handle}" jest juz zajety`);
+    throw conflict("handle_taken", `handle "${handle}" jest juz zajety`);
   }
   const now = ctx.now();
   ctx.db
@@ -134,7 +134,7 @@ export function listActors(ctx: Ctx): Actor[] {
  *  the history and the identity stay. Reversible. */
 export function setDisabled(ctx: Ctx, actorId: number, disabled: boolean): Actor {
   const a = getActor(ctx, actorId);
-  if (!a) throw notFound("aktor", `nie ma aktora ${actorId}`);
+  if (!a) throw notFound("actor_not_found", `nie ma aktora ${actorId}`);
   ctx.db.prepare("UPDATE actors SET disabled_at = ? WHERE id = ?")
     .run(disabled ? ctx.now() : null, actorId);
   // Disabling an account has to close what is already open - otherwise "I disabled the
@@ -164,11 +164,11 @@ export function renameActor(
   displayName?: string,
 ): Actor {
   const a = getActor(ctx, actorId);
-  if (!a) throw notFound("aktor", `nie ma aktora ${actorId}`);
+  if (!a) throw notFound("actor_not_found", `nie ma aktora ${actorId}`);
   const handle = normalizeHandle(newHandle);
   const zajety = getActorByHandle(ctx, handle);
   if (zajety && zajety.id !== actorId) {
-    throw conflict("handle_zajety", `nazwa "${handle}" jest juz zajeta przez innego aktora`);
+    throw conflict("handle_taken", `nazwa "${handle}" jest juz zajeta przez innego aktora`);
   }
   // displayName follows the handle by default ONLY when it was a copy of it before -
   // otherwise changing the technical name would wipe a manually set display name
@@ -181,7 +181,7 @@ export function renameActor(
 
 export function setDisplayName(ctx: Ctx, actorId: number, displayName: string): Actor {
   const a = getActor(ctx, actorId);
-  if (!a) throw notFound("aktor", `nie ma aktora ${actorId}`);
+  if (!a) throw notFound("actor_not_found", `nie ma aktora ${actorId}`);
   ctx.db
     .prepare("UPDATE actors SET display_name = ? WHERE id = ?")
     .run(displayName.trim() || a.handle, actorId);
@@ -198,7 +198,7 @@ const SCRYPT_KEYLEN = 64;
  *  that a validation error does not leave a husk of an account with no password. */
 export function assertPasswordOk(password: string): void {
   if (!password || password.length < 8) {
-    throw badRequest("haslo_za_krotkie", "haslo musi miec co najmniej 8 znakow");
+    throw badRequest("password_too_short", "haslo musi miec co najmniej 8 znakow");
   }
 }
 

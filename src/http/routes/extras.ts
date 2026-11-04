@@ -41,7 +41,7 @@ function dekodujNazwe(raw: string): string {
     return decodeURIComponent(raw);
   } catch {
     throw badRequest(
-      "zla_nazwa",
+      "invalid_name",
       "naglowek X-File-Name ma nieprawidlowe kodowanie procentowe (uzyj encodeURIComponent)",
     );
   }
@@ -190,10 +190,10 @@ export function registerExtraRoutes(router: Router): void {
   router.add("GET", "/api/actors/:id/avatar", (_req, res, rc) => {
     requireAuth(rc);
     const a = pobierzAwatar(rc.ctx, Number(rc.params.id));
-    if (!a) throw notFound("awatar", `aktor ${rc.params.id} nie ma awatara`);
+    if (!a) throw notFound("avatar_not_found", `aktor ${rc.params.id} nie ma awatara`);
     let data: Buffer;
     try { data = bajtyAwatara(rc.config.filesDir, a); }
-    catch { throw notFound("awatar", "plik awatara zniknal z dysku"); }
+    catch { throw notFound("avatar_not_found", "plik awatara zniknal z dysku"); }
     res.writeHead(200, {
       // The format is verified by CONTENT at write time and limited to raster formats, so the type
       // can be returned as it is - otherwise the avatar would not be an image but a downloaded
@@ -214,7 +214,7 @@ export function registerExtraRoutes(router: Router): void {
     assertCsrf(rc, req);
     const nameHeader = req.headers["x-file-name"];
     if (typeof nameHeader !== "string" || !nameHeader.trim()) {
-      throw badRequest("brak_nazwy", "podaj naglowek X-File-Name (URL-encoded)");
+      throw badRequest("name_required", "podaj naglowek X-File-Name (URL-encoded)");
     }
     const data = await readRaw(req, rc.config.maxFileBytes);
     odrzucKoperteMultipart(data, str(req.headers["content-type"]));
@@ -257,7 +257,7 @@ export function registerExtraRoutes(router: Router): void {
   router.add("GET", "/api/files/:id/info", (_req, res, rc) => {
     const { actor } = requireAuth(rc);
     const info = getFileInfo(rc.ctx, rc.params.id, actor.id);
-    if (!info) throw notFound("plik", `nie ma pliku ${rc.params.id} (albo wygasl)`);
+    if (!info) throw notFound("file_not_found", `nie ma pliku ${rc.params.id} (albo wygasl)`);
     json(res, 200, { file: info });
   });
 
@@ -289,12 +289,12 @@ export function registerExtraRoutes(router: Router): void {
     assertCsrf(rc, req);
     const body = await readJson(req, 4096);
     const target = str(body.target);
-    if (!target) throw badRequest("brak_target", "podaj target (URL webhooka)");
+    if (!target) throw badRequest("target_required", "podaj target (URL webhooka)");
     let result;
     try {
       result = setWake(rc.ctx, actor.id, target, { allowLoopback: rc.config.allowLoopbackWake });
     } catch (err) {
-      throw badRequest("zly_target", err instanceof Error ? err.message : String(err));
+      throw badRequest("invalid_target", err instanceof Error ? err.message : String(err));
     }
     json(res, 200, result);
   });

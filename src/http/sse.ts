@@ -46,7 +46,7 @@ export function sseHandler(req: Req, res: Res, rc: RouteCtx): void {
     return;
   }
   if (rc.ctx.bus.streamCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
-    throw tooMany("za_duzo_strumieni",
+    throw tooMany("too_many_streams",
       `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych strumieni - zamknij ktorys`);
   }
   const releaseStream = rc.ctx.bus.openStream(actor.id);
@@ -195,7 +195,7 @@ export function longPollHandler(req: Req, res: Res, rc: RouteCtx): Promise<void>
   // socket), only for less time - so the same limit applies to it. Without that, a client in
   // a loop bypassed the stream limit by switching to long-poll.
   if (rc.ctx.bus.streamCount(actor.id) >= MAX_STREAMS_PER_ACTOR) {
-    throw tooMany("za_duzo_strumieni",
+    throw tooMany("too_many_streams",
       `masz juz ${MAX_STREAMS_PER_ACTOR} otwartych oczekiwan - poczekaj na ich koniec`);
   }
   const releaseStream = rc.ctx.bus.openStream(actor.id);
@@ -215,7 +215,7 @@ export function longPollHandler(req: Req, res: Res, rc: RouteCtx): Promise<void>
       // changed in the meantime must not receive a single further message.
       if (!stillAuthenticated(rc.ctx, rc.config, req, actor.id)) {
         const note = authFailureNote(rc.ctx, req);
-        reject(unauthorized(note?.code ?? "nieuwierzytelniony",
+        reject(unauthorized(note?.code ?? "unauthenticated",
           note?.message ?? "sesja albo token przestaly obowiazywac - zaloguj sie ponownie"));
         return;
       }

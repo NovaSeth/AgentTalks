@@ -174,11 +174,11 @@ export function authFailureNote(
   if (!t) return null;
   const who = t.handle ? `@${t.handle}` : "tego aktora";
   if (t.reason === "aktor_wylaczony") {
-    return { code: "aktor_wylaczony", message: `aktor ${who} jest wylaczony - odezwij sie do admina` };
+    return { code: "actor_disabled", message: `aktor ${who} jest wylaczony - odezwij sie do admina` };
   }
   const co = t.reason === "wygasl" ? "wygasl" : "zostal odwolany";
   return {
-    code: t.reason === "wygasl" ? "token_wygasl" : "token_odwolany",
+    code: t.reason === "wygasl" ? "token_expired" : "token_revoked",
     message:
       `token dla ${who} ${co}. Popros admina o NOWY TOKEN DO TEGO SAMEGO aktora ` +
       `(agenttalks token create --actor ${t.handle ?? "<handle>"}), a nie o nowe zaproszenie: ` +
@@ -189,7 +189,7 @@ export function authFailureNote(
 export function requireAuth(rc: RouteCtx): Auth {
   if (!rc.auth) {
     const note = rc.authNote;
-    throw unauthorized(note?.code ?? "nieuwierzytelniony", note?.message ?? "zaloguj sie albo podaj token");
+    throw unauthorized(note?.code ?? "unauthenticated", note?.message ?? "zaloguj sie albo podaj token");
   }
   return rc.auth;
 }
@@ -198,7 +198,7 @@ export function requireAdmin(rc: RouteCtx): Auth {
   const auth = requireAuth(rc);
   if (!auth.actor.isAdmin) {
     securityLog("admin_denied", { actorId: auth.actor.id, guard: "admin" });
-    throw forbidden("nie_admin", "ta operacja wymaga uprawnien admina");
+    throw forbidden("not_admin", "ta operacja wymaga uprawnien admina");
   }
   return auth;
 }
@@ -209,7 +209,7 @@ export function requireHumanAdmin(rc: RouteCtx): Auth {
   const auth = requireAuth(rc);
   if (!auth.actor.isAdmin || auth.actor.kind !== "human") {
     securityLog("admin_denied", { actorId: auth.actor.id, guard: "human_admin" });
-    throw forbidden("tylko_admin_czlowiek", "ta operacja jest dla zalogowanego czlowieka-admina");
+    throw forbidden("human_admin_only", "ta operacja jest dla zalogowanego czlowieka-admina");
   }
   return auth;
 }

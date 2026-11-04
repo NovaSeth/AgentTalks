@@ -190,7 +190,7 @@ export function markNotificationsRead(
   const now = ctx.now();
   if (ids && ids.length) {
     if (ids.some((id) => !Number.isInteger(id))) {
-      throw badRequest("zle_id", "ids musi byc lista liczb calkowitych");
+      throw badRequest("invalid_id", "ids musi byc lista liczb calkowitych");
     }
     const marks = ids.map(() => "?").join(",");
     const r = ctx.db

@@ -30,7 +30,7 @@ function decodeFileNameHeader(raw: string): string {
     return decodeURIComponent(raw);
   } catch {
     throw badRequest(
-      "zla_nazwa",
+      "invalid_name",
       "naglowek X-File-Name ma nieprawidlowe kodowanie procentowe (uzyj encodeURIComponent)",
     );
   }
@@ -52,7 +52,7 @@ export function registerWikiRoutes(router: Router): void {
   router.add("GET", "/api/wiki/:slug", (req, res, rc) => {
     const { actor } = requireAuth(rc);
     const page = getPage(rc.ctx, rc.params.slug);
-    if (!page) throw notFound("strona", `nie ma strony wiki "${rc.params.slug}"`);
+    if (!page) throw notFound("page_not_found", `nie ma strony wiki "${rc.params.slug}"`);
     const id = pageId(rc.ctx, rc.params.slug)!;
     const q = new URL(req.url ?? "/", "http://x").searchParams;
 
@@ -74,7 +74,7 @@ export function registerWikiRoutes(router: Router): void {
       const tresc = pageSection(page.body, section);
       if (tresc === null) {
         throw notFound(
-          "sekcja",
+          "section_not_found",
           `strona "${page.slug}" nie ma sekcji "${section}". Spis: ` +
             `GET /api/wiki/${page.slug}?outline=1`,
         );
@@ -149,7 +149,7 @@ export function registerWikiRoutes(router: Router): void {
   router.add("GET", "/api/wiki/:slug/revisions/:id", (_req, res, rc) => {
     requireAuth(rc);
     const rev = getRevision(rc.ctx, rc.params.slug, Number(rc.params.id));
-    if (!rev) throw notFound("rewizja", `nie ma rewizji ${rc.params.id} dla strony "${rc.params.slug}"`);
+    if (!rev) throw notFound("revision_not_found", `nie ma rewizji ${rc.params.id} dla strony "${rc.params.slug}"`);
     json(res, 200, { revision: rev });
   });
 
@@ -158,7 +158,7 @@ export function registerWikiRoutes(router: Router): void {
     assertCsrf(rc, req);
     const body = await readJson(req, 1024);
     const revisionId = int(body.revisionId);
-    if (revisionId === undefined) throw badRequest("brak_rewizji", "podaj revisionId");
+    if (revisionId === undefined) throw badRequest("revision_required", "podaj revisionId");
     json(res, 200, {
       page: revertPage(rc.ctx, { slug: rc.params.slug, revisionId, actorId: actor.id }),
     });
@@ -170,10 +170,10 @@ export function registerWikiRoutes(router: Router): void {
     const { actor } = requireAuth(rc);
     assertCsrf(rc, req);
     const id = pageId(rc.ctx, rc.params.slug);
-    if (id === null) throw notFound("strona", `nie ma strony wiki "${rc.params.slug}" - zaloz ja najpierw`);
+    if (id === null) throw notFound("page_not_found", `nie ma strony wiki "${rc.params.slug}" - zaloz ja najpierw`);
     const nameHeader = req.headers["x-file-name"];
     if (typeof nameHeader !== "string" || !nameHeader.trim()) {
-      throw badRequest("brak_nazwy", "podaj naglowek X-File-Name (URL-encoded)");
+      throw badRequest("name_required", "podaj naglowek X-File-Name (URL-encoded)");
     }
     const data = await readRaw(req, rc.config.maxFileBytes);
     odrzucKoperteMultipart(data, str(req.headers["content-type"]));
@@ -191,7 +191,7 @@ export function registerWikiRoutes(router: Router): void {
   router.add("GET", "/api/wiki/:slug/files", (_req, res, rc) => {
     requireAuth(rc);
     const id = pageId(rc.ctx, rc.params.slug);
-    if (id === null) throw notFound("strona", `nie ma strony wiki "${rc.params.slug}"`);
+    if (id === null) throw notFound("page_not_found", `nie ma strony wiki "${rc.params.slug}"`);
     json(res, 200, { files: listWikiFiles(rc.ctx, id) });
   });
 

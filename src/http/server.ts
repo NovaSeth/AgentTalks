@@ -69,7 +69,7 @@ export function buildRouter(): Router {
   router.add("POST", "/mcp", async (req, res, rc) => {
     if (!rc.auth || rc.auth.via !== "token") {
       // Bearer only: an MCP client is an agent, not a browser tab.
-      throw unauthorized("nieuwierzytelniony", "MCP wymaga naglowka Authorization: Bearer <token>");
+      throw unauthorized("unauthenticated", "MCP wymaga naglowka Authorization: Bearer <token>");
     }
     let mcp;
     try {
@@ -77,7 +77,7 @@ export function buildRouter(): Router {
     } catch {
       json(res, 501, {
         error: "modul MCP niedostepny - zainstaluj zaleznosci: npm install",
-        code: "mcp_niedostepny",
+        code: "mcp_unavailable",
       });
       return;
     }
@@ -88,7 +88,7 @@ export function buildRouter(): Router {
     await mcp.handleMcp(rc.ctx, rc.config, rc.auth.actor, req, res, parsed);
   });
   router.add("GET", "/mcp", (_req, res) => {
-    json(res, 405, { error: "serwer MCP jest bezstanowy - uzyj POST", code: "tylko_post" });
+    json(res, 405, { error: "serwer MCP jest bezstanowy - uzyj POST", code: "post_only" });
   });
   // The UI, the gate, public onboarding - mounted last (the most general routes).
   registerUiRoutes(router);
@@ -182,7 +182,7 @@ export function createServer(ctx: Ctx, config: Config): Server {
         if (siteGateBlocks(req, res, config, url.pathname)) return;
         const match = router.match(req.method ?? "GET", url.pathname);
         if (!match) {
-          json(res, 404, { error: "nie ma takiej sciezki", code: "nie_znaleziono" });
+          json(res, 404, { error: "nie ma takiej sciezki", code: "not_found" });
           return;
         }
         // Security headers on EVERY response, set before a handler starts writing. The reason for

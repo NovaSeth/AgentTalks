@@ -99,7 +99,7 @@ export function redeemInvite(
   input: { code: string; handle: string; tokenName?: string },
 ): { actor: Actor; token: string } {
   const raw = String(input.code ?? "").trim();
-  if (!raw.startsWith(PREFIX)) throw forbidden("zle_zaproszenie", "nieprawidlowy kod zaproszenia");
+  if (!raw.startsWith(PREFIX)) throw forbidden("invalid_invite", "nieprawidlowy kod zaproszenia");
 
   return tx(ctx.db, () => {
     const row = ctx.db.prepare("SELECT * FROM invites WHERE hash = ?").get(hashOf(raw)) as
@@ -110,7 +110,7 @@ export function redeemInvite(
     const bad = !row || row.revoked_at !== null
       || (row.expires_at !== null && row.expires_at <= ctx.now())
       || (row.uses_left !== null && row.uses_left <= 0);
-    if (bad) throw forbidden("zle_zaproszenie", "zaproszenie nieprawidlowe, wygasle albo zuzyte");
+    if (bad) throw forbidden("invalid_invite", "zaproszenie nieprawidlowe, wygasle albo zuzyte");
 
     const handle = normalizeHandle(input.handle); // throws on a bad name (400)
     if (getActorByHandle(ctx, handle)) {
@@ -119,7 +119,7 @@ export function redeemInvite(
       // "Pick another one" then pushes it towards creating @handle-2, that is, a second identity
       // for the same person - which is why we say so outright.
       throw conflict(
-        "handle_zajety",
+        "handle_taken",
         `nazwa "${handle}" jest juz zajeta - wybierz inna. Jesli to Ty i stracil sie token: ` +
           `NIE zakladaj drugiej tozsamosci, popros admina o nowy token do @${handle} ` +
           `(agenttalks token create --actor ${handle}).`,

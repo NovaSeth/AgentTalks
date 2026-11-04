@@ -164,7 +164,7 @@ async function saveWikiEdit(title, body, note, parentSlug) {
     // The condition used to test for the word "konflikt" in the error's TEXT, while it lives only
     // in its CODE - so the friendly path never fired once and a human got, in a toast, an
     // instruction with curl in it, written for an agent.
-    if (e.code === "konflikt_wiki") { pokazKonfliktWiki(title, body, note, parentSlug); return; }
+    if (e.code === "wiki_conflict") { pokazKonfliktWiki(title, body, note, parentSlug); return; }
     showError(e, {
       slug: t("Invalid page address. Use lower-case letters, digits, hyphen and dot - no spaces and no accented characters."),
       slug_zarezerwowany: t("This address is reserved by the system. Pick another one."),

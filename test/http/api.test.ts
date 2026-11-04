@@ -53,7 +53,7 @@ test("bez uwierzytelnienia API zwraca 401, nie 500", async () => {
   const s = await startTestServer();
   const r = await fetch(s.url + "/api/conversations");
   assert.equal(r.status, 401);
-  assert.equal((await r.json()).code, "nieuwierzytelniony");
+  assert.equal((await r.json()).code, "unauthenticated");
   await s.close();
 });
 
@@ -77,7 +77,7 @@ test("nieznana sciezka daje 404 z kodem", async () => {
   const s = await startTestServer();
   const r = await fetch(s.url + "/api/czegos-takiego-nie-ma");
   assert.equal(r.status, 404);
-  assert.equal((await r.json()).code, "nie_znaleziono");
+  assert.equal((await r.json()).code, "not_found");
   await s.close();
 });
 
@@ -123,7 +123,7 @@ test("blad domenowy mapuje sie na kod HTTP, nie na 500", async () => {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "" }),
   });
   assert.equal(r.status, 400);
-  assert.equal((await r.json()).code, "puste_cialo");
+  assert.equal((await r.json()).code, "empty_body");
   await s.close();
 });
 
@@ -428,7 +428,7 @@ test("nie da sie przymusowo dopisac kogos do kanalu publicznego", async () => {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ handle: "bob" }),
   });
   assert.equal(r.status, 400);
-  assert.equal((await r.json()).code, "publiczny_sam");
+  assert.equal((await r.json()).code, "public_channel_open");
   await s.close();
 });
 
@@ -513,7 +513,7 @@ test("X-File-Name ze zlym %-kodowaniem daje 400 z instrukcja, nie 500", async ()
   const zle = await wyslij("raport 50%.txt");
   assert.equal(zle.status, 400, "urwane %-kodowanie ma dac blad zadania, nie awarie serwera");
   const blad = await zle.json();
-  assert.equal(blad.code, "zla_nazwa");
+  assert.equal(blad.code, "invalid_name");
   assert.match(blad.error, /encodeURIComponent/, "komunikat ma mowic, CO zrobic");
 
   // The same name, correctly encoded, goes through and comes back in its original form - that
@@ -659,7 +659,7 @@ test("wiki przez API: zapis, odczyt, szukanie, historia, revert", async () => {
   // comment saying "fix this". A test that cannot fail protects nothing; this one checks a
   // specific response.
   assert.equal(put.status, 404);
-  assert.equal((await put.json()).code, "nie_znaleziono");
+  assert.equal((await put.json()).code, "not_found");
   const put2 = await fetch(s.url + "/api/wiki/projekt", {
     method: "PUT", headers: bearer(tokenA),
     body: JSON.stringify({ title: "Projekt", body: "wersja jeden z frazą kanarek" }),
@@ -714,7 +714,7 @@ test("wiki: slepy zapis na cudza strone -> 409 z numerem rewizji, po przeczytani
   });
   assert.equal(blind.status, 409);
   const err = await blind.json();
-  assert.equal(err.code, "konflikt_wiki");
+  assert.equal(err.code, "wiki_conflict");
   // The error has to lead to the content that would be lost: the revision id and the author.
   const page = await (await fetch(s.url + "/api/wiki/korzen", { headers: bearer(tokenB) })).json();
   assert.ok(page.page.lastRevisionId > 0);
@@ -1016,7 +1016,7 @@ test("wiki: kasowanie strony - tylko zalozyciel albo admin; dzieci nie gina", as
   // A stranger does not delete somebody else's page - writing together is not deleting.
   const obcy = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenB) });
   assert.equal(obcy.status, 403);
-  assert.equal((await obcy.json()).code, "nie_twoja_strona");
+  assert.equal((await obcy.json()).code, "not_your_page");
   // The creator deletes; the child moves into the parent's place rather than disappearing.
   const del = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenA) });
   assert.equal(del.status, 200);
@@ -1113,7 +1113,7 @@ test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => 
   });
   assert.equal(r.status, 413);
   const err = await r.json();
-  assert.equal(err.code, "cialo_za_dlugie");
+  assert.equal(err.code, "message_too_long");
   // The message has to carry the number in question - "too long" without a number forces you to
   // guess how much to cut.
   assert.match(err.error, /o 100 B za dluga/);
@@ -1194,7 +1194,7 @@ test("diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktor
   const r = await fetch(s.url + "/api/me", { headers: bearer(tokenA) });
   assert.equal(r.status, 401);
   const err = await r.json();
-  assert.equal(err.code, "token_odwolany");
+  assert.equal(err.code, "token_revoked");
   // Without that sentence an agent with no session memory draws the worst conclusion: "I will
   // redeem a new invite" - and the channel gains a second identity.
   assert.match(err.error, /ala/);
@@ -1219,7 +1219,7 @@ test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () 
   });
   assert.equal(r.status, 400);
   const err = await r.json();
-  assert.equal(err.code, "zla_nazwa");
+  assert.equal(err.code, "invalid_name");
   assert.match(err.error, /encodeURIComponent/);
 
   // A correctly encoded name (with a space and accented characters) goes through.
@@ -1316,7 +1316,7 @@ test("panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)", asyn
     method: "POST", headers: auth, body: JSON.stringify({ actorId: ala.id, ttlSec: 600 }),
   });
   assert.equal(krotki.status, 400);
-  assert.equal((await krotki.json()).code, "ttl_za_krotki");
+  assert.equal((await krotki.json()).code, "ttl_too_short");
 
   // An agent (even with a token) does not issue tokens - the panel is for a human.
   const agent = await fetch(s.url + "/api/admin/tokens", {
@@ -1528,7 +1528,7 @@ test("awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony", async 
     const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
     const zly = await wyslij(svg, "image/png");
     assert.equal(zly.status, 400, "SVG przeszedl jako awatar - to XSS w naszym origin");
-    assert.equal((await zly.json()).code, "zly_format");
+    assert.equal((await zly.json()).code, "invalid_format");
 
     // The fingerprint changes with the content, so the browser will not show the old one.
     const drugi = await (await wyslij(Buffer.concat([png, Buffer.alloc(8, 9)]))).json() as { url: string };
@@ -1673,7 +1673,7 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
     ] as Array<[string, Response]>) {
       assert.equal(res.status, 400, `${opis}: koperta multipart nie zostala odrzucona`);
       const b = await res.json() as { code: string; error: string };
-      assert.equal(b.code, "multipart_niewspierany");
+      assert.equal(b.code, "multipart_unsupported");
       // The message has to lead to the goal, not merely refuse: the body's shape AND an example in
       // more than one tool (the report came from somebody using Python, while the first version spoke
       // only about curl).
@@ -1685,7 +1685,7 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
     // Recognition by CONTENT, not by the header - the header is written by the client.
     const bezNaglowka = await wyslij(`${s.url}/api/me/avatar`, "image/png", {}, "PUT");
     assert.equal(bezNaglowka.status, 400, "koperta w przebraniu image/png przeszla");
-    assert.equal((await bezNaglowka.json() as { code: string }).code, "multipart_niewspierany");
+    assert.equal((await bezNaglowka.json() as { code: string }).code, "multipart_unsupported");
 
     // Prawdziwe surowe bajty dalej dzialaja - odmowa dotyczy OPAKOWANIA.
     const ok = await fetch(`${s.url}/api/me/avatar`, {

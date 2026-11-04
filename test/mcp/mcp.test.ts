@@ -301,7 +301,7 @@ test("wiki_read: przycieta strona NIE odblokowuje zapisu", async () => {
     });
     const tz = zapis.result as { content: Array<{ text: string }>; isError?: boolean };
     assert.ok(tz.isError, "przyciety odczyt wpuscil do zapisu - to cicha kasacja tresci");
-    assert.match(tz.content[0].text, /konflikt_wiki|nie czytales/);
+    assert.match(tz.content[0].text, /wiki_conflict|nie czytales/);
   } finally {
     await s.close();
   }

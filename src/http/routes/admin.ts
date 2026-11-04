@@ -23,7 +23,7 @@ import type { RouteCtx } from "../router.ts";
 function requireHumanAdmin(rc: RouteCtx): Auth {
   const auth = requireAuth(rc);
   if (!auth.actor.isAdmin || auth.actor.kind !== "human") {
-    throw forbidden("tylko_admin_czlowiek", "panel admina jest dla zalogowanego czlowieka-admina");
+    throw forbidden("human_admin_only", "panel admina jest dla zalogowanego czlowieka-admina");
   }
   return auth;
 }
@@ -79,7 +79,7 @@ export function registerAdminRoutes(router: Router): void {
     requireHumanAdmin(rc);
     assertCsrf(rc, req);
     const ok = revokeInvite(rc.ctx, Number(rc.params.id));
-    if (!ok) throw notFound("zaproszenie", "nie ma takiego aktywnego zaproszenia");
+    if (!ok) throw notFound("invite_not_found", "nie ma takiego aktywnego zaproszenia");
     json(res, 200, { ok: true });
   });
 
@@ -94,15 +94,15 @@ export function registerAdminRoutes(router: Router): void {
     assertCsrf(rc, req);
     const body = await readJson(req, 1024);
     const actorId = int(body.actorId);
-    if (actorId === undefined) throw badRequest("brak_aktora", "podaj actorId");
+    if (actorId === undefined) throw badRequest("actor_required", "podaj actorId");
     const cel = getActor(rc.ctx, actorId);
-    if (!cel) throw notFound("aktor", `nie ma aktora ${actorId}`);
+    if (!cel) throw notFound("actor_not_found", `nie ma aktora ${actorId}`);
     // The same threshold as in the console: an agent token below 3 months only deliberately,
     // because an expired token is not a rotation but a second account for the same person.
     const ttlSec = int(body.ttlSec) ?? null;
     if (ttlSec !== null && ttlSec > 0 && ttlSec < MIN_AGENT_TTL_SEC && body.short !== true) {
       throw badRequest(
-        "ttl_za_krotki",
+        "ttl_too_short",
         `${ttlSec} s to mniej niz 3 miesiace - minimum dla tokenu agenta. Krotszy ma sens ` +
           `dla CI i niezaufanego hosta; wtedy dodaj "short": true.`,
       );
@@ -128,7 +128,7 @@ export function registerAdminRoutes(router: Router): void {
     assertCsrf(rc, req);
     const body = await readJson(req, 1024);
     const handle = str(body.handle);
-    if (!handle) throw badRequest("brak_nazwy", "podaj nowa nazwe w polu handle");
+    if (!handle) throw badRequest("name_required", "podaj nowa nazwe w polu handle");
     json(res, 200, {
       actor: renameActor(rc.ctx, Number(rc.params.id), handle, str(body.displayName)),
     });
@@ -138,7 +138,7 @@ export function registerAdminRoutes(router: Router): void {
     const { actor } = requireHumanAdmin(rc);
     assertCsrf(rc, req);
     const targetId = Number(rc.params.id);
-    if (targetId === actor.id) throw badRequest("nie_siebie", "nie wylaczysz wlasnego konta");
+    if (targetId === actor.id) throw badRequest("not_self", "nie wylaczysz wlasnego konta");
     const disabled = setDisabled(rc.ctx, targetId, true);
     securityLog("actor_disabled", { actorId: targetId, by: actor.id });
     json(res, 200, { actor: disabled });
@@ -158,7 +158,7 @@ export function registerAdminRoutes(router: Router): void {
   router.add("GET", "/api/admin/actors/:id/activity", (_req, res, rc) => {
     requireHumanAdmin(rc);
     const targetId = Number(rc.params.id);
-    if (!getActor(rc.ctx, targetId)) throw notFound("aktor", `nie ma aktora ${rc.params.id}`);
+    if (!getActor(rc.ctx, targetId)) throw notFound("actor_not_found", `nie ma aktora ${rc.params.id}`);
     const rows = rc.ctx.db.prepare(
       `SELECT m.id, m.ts, m.kind, m.body, c.kind AS conv_kind, c.slug
          FROM messages m JOIN conversations c ON c.id = m.conversation_id

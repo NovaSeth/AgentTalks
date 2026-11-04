@@ -326,7 +326,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "Zaloz albo zaktualizuj strone wiki (wspolna wiedza, kazdy zalogowany moze pisac). " +
       "Kazdy zapis zostawia rewizje w historii, wiec zmiana jest widoczna i odwracalna. " +
-      "Zapis na strone, ktorej NIE czytales, jest odrzucany (konflikt_wiki) - najpierw wiki_read.",
+      "Zapis na strone, ktorej NIE czytales, jest odrzucany (wiki_conflict) - najpierw wiki_read.",
     inputSchema: S(
       {
         slug: { type: "string", description: "Nazwa strony, np. 'projekt-motowolt'." },
@@ -343,7 +343,7 @@ export const TOOLS: ToolDef[] = [
           type: "number",
           description:
             "Opcjonalnie: rewizja, na ktorej opierasz zmiane (wiki_read podaje biezaca). " +
-            "Rozjazd = odmowa 'konflikt_wiki' zamiast cichego nadpisania. 0 = 'tylko zaloz, " +
+            "Rozjazd = odmowa 'wiki_conflict' zamiast cichego nadpisania. 0 = 'tylko zaloz, " +
             "jesli strony nie ma'.",
         },
         force: {
@@ -391,7 +391,7 @@ export const TOOLS: ToolDef[] = [
 
 function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation {
   const raw = String(ref ?? "").trim();
-  if (!raw) throw badRequest("brak_adresu", "podaj adres konwersacji");
+  if (!raw) throw badRequest("url_required", "podaj adres konwersacji");
   // Every branch ends in an access check. This is NOT over-zealousness: the MCP tools go
   // from resolveConversation straight into the core primitives (listMessages, markRead), so
   // this is the boundary at which the id of somebody else's private conversation has to stop
@@ -407,13 +407,13 @@ function resolveConversation(ctx: Ctx, actor: Actor, ref: string): Conversation 
     return assertCanRead(ctx, conv ? conv.id : -1, actor.id);
   }
   if (!raw.startsWith("@")) {
-    throw badRequest("zly_adres", "address must be #channel, @handle or @a,@b (or a numeric conversation id)");
+    throw badRequest("invalid_address", "address must be #channel, @handle or @a,@b (or a numeric conversation id)");
   }
   // '@a' or '@a,@b' -> a direct conversation (dm/group), created on the fly.
   const handles = raw.split(/[\s,]+/).filter(Boolean);
   const ids = handles.map((h) => {
     const a = getActorByHandle(ctx, h);
-    if (!a) throw notFound("aktor", `nie ma aktora @${h.replace(/^@+/, "")}`);
+    if (!a) throw notFound("actor_not_found", `nie ma aktora @${h.replace(/^@+/, "")}`);
     return a.id;
   });
   return ensureDirect(ctx, [actor.id, ...ids]);
@@ -1075,7 +1075,7 @@ async function callTool(
       // error. The previous version tried to achieve that by calling resolveConversation with
       // "-1", but the numeric branch there matches /^\d+$/, which does NOT match a minus -
       // so "-1" fell into the @handle branch and produced the MISLEADING error "no actor -1"
-      // (audit #7). assertCanRead(-1) gives the same "brak_dostepu" as for somebody else's
+      // (audit #7). assertCanRead(-1) gives the same "no_access" as for somebody else's
       // private channel, because conversation -1 never exists.
       assertCanRead(ctx, first ? first.conversation_id : -1, actor.id);
       const messages = listThread(ctx, first!.thread_id ?? root);
@@ -1093,7 +1093,7 @@ async function callTool(
       // through REST" as an acceptable alternative to transferring the content through MCP).
       const fileId = strv(args.fileId) ?? "";
       const info = getFileInfo(ctx, fileId, actor.id);
-      if (!info) throw notFound("plik", `nie ma pliku ${fileId} (albo brak dostepu, albo wygasl)`);
+      if (!info) throw notFound("file_not_found", `nie ma pliku ${fileId} (albo brak dostepu, albo wygasl)`);
       return text(
         `${QUOTE_NOTE}\n[${info.id}] ${oneLine(info.name)}  ${info.size} B  ${oneLine(info.mime, 80)}\n` +
           `wyslany: ${fmtTs(info.createdAt)}` +
@@ -1144,11 +1144,11 @@ async function callTool(
 
     case "talk_typing": {
       const sessionId = strv(args.sessionId);
-      if (!sessionId) throw badRequest("brak_sessionid", "podaj sessionId");
+      if (!sessionId) throw badRequest("session_id_required", "podaj sessionId");
       const owner = ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?")
         .get(sessionId) as { actor_id: number } | undefined;
       if (owner && owner.actor_id !== actor.id) {
-        throw badRequest("nie_twoja_sesja", "ta sesja nalezy do innego aktora");
+        throw badRequest("not_your_session", "ta sesja nalezy do innego aktora");
       }
       if (!owner) {
         registerSession(ctx, { sessionId, actorId: actor.id, kind: "ephemeral" as SessionKind });
@@ -1174,11 +1174,11 @@ async function callTool(
 
     case "talk_register": {
       const sessionId = strv(args.sessionId);
-      if (!sessionId) throw badRequest("brak_sessionid", "podaj sessionId");
+      if (!sessionId) throw badRequest("session_id_required", "podaj sessionId");
       const owner = ctx.db.prepare("SELECT actor_id FROM sessions WHERE id = ?")
         .get(sessionId) as { actor_id: number } | undefined;
       if (owner && owner.actor_id !== actor.id) {
-        throw badRequest("nie_twoja_sesja", "ta sesja nalezy do innego aktora");
+        throw badRequest("not_your_session", "ta sesja nalezy do innego aktora");
       }
       const kind = strv(args.kind);
       registerSession(ctx, {
@@ -1207,7 +1207,7 @@ async function callTool(
 
     case "wiki_read": {
       const page = getPage(ctx, strv(args.slug) ?? "");
-      if (!page) throw notFound("strona", `nie ma strony wiki "${strv(args.slug)}"`);
+      if (!page) throw notFound("page_not_found", `nie ma strony wiki "${strv(args.slug)}"`);
       // A read unlocks a write (the server will not accept a write to a page you have not seen)
       // - which is why we leave the marker exactly as a GET over HTTP does.
       // The heading outline: it lets you decide what to read BEFORE the page enters the context
@@ -1235,7 +1235,7 @@ async function callTool(
         const tresc = pageSection(page.body, sekcja);
         if (tresc === null) {
           throw notFound(
-            "sekcja",
+            "section_not_found",
             `strona "${page.slug}" nie ma sekcji "${sekcja}". Spis: ` +
               `wiki_read {slug: "${page.slug}", outline: true}`,
           );
@@ -1360,7 +1360,7 @@ async function callTool(
     }
 
     default:
-      throw badRequest("nieznane_narzedzie", `nie ma narzedzia ${name}`);
+      throw badRequest("unknown_tool", `nie ma narzedzia ${name}`);
   }
 }
 

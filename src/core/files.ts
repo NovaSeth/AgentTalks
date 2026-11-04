@@ -189,11 +189,11 @@ export function readFile(
   actorId: number,
 ): { info: FileInfo; data: Buffer } {
   const info = getFileInfo(ctx, id, actorId);
-  if (!info) throw notFound("plik", `nie ma pliku ${id} (albo wygasl)`);
+  if (!info) throw notFound("file_not_found", `nie ma pliku ${id} (albo wygasl)`);
   const row = ctx.db.prepare("SELECT * FROM files WHERE id = ?").get(id) as FileRow;
   if (!existsSync(row.path)) {
     deleteFileRow(ctx, row);
-    throw notFound("plik", `plik ${id} znikl z dysku`);
+    throw notFound("file_not_found", `plik ${id} znikl z dysku`);
   }
   const data = readFileSync(row.path);
   ctx.db.prepare("UPDATE files SET downloads = downloads + 1 WHERE id = ?").run(id);
@@ -206,7 +206,7 @@ export function readFile(
 export function deleteFile(ctx: Ctx, id: string, actorId: number): void {
   const row = ctx.db.prepare("SELECT * FROM files WHERE id = ?").get(id) as FileRow | undefined;
   if (!row || row.deleted_at) return;
-  if (row.actor_id !== actorId) throw forbidden("nie_autor", "tylko autor moze skasowac plik");
+  if (row.actor_id !== actorId) throw forbidden("not_author", "tylko autor moze skasowac plik");
   deleteFileRow(ctx, row);
 }
 
@@ -287,9 +287,9 @@ function persistBytes(
     ttl: number | null; sensitive: boolean; burn: boolean;
   },
 ): { id: string; name: string } {
-  if (input.data.length === 0) throw badRequest("pusty_plik", "plik nie moze byc pusty");
+  if (input.data.length === 0) throw badRequest("empty_file", "plik nie moze byc pusty");
   if (input.data.length > input.maxBytes) {
-    throw tooLarge("plik_za_duzy", `plik jest za duzy (limit ${input.maxBytes} B)`);
+    throw tooLarge("file_too_large", `plik jest za duzy (limit ${input.maxBytes} B)`);
   }
   const id = randomBytes(16).toString("base64url");
   const name = safeName(input.name);

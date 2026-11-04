@@ -79,7 +79,7 @@ export function registerSession(
   },
 ): void {
   const exists = ctx.db.prepare("SELECT id FROM actors WHERE id = ?").get(input.actorId);
-  if (!exists) throw notFound("aktor", `nie ma aktora ${input.actorId}`);
+  if (!exists) throw notFound("actor_not_found", `nie ma aktora ${input.actorId}`);
   const now = ctx.now();
   // The state BEFORE the write - to decide whether anybody will see a difference.
   const przed = ctx.db

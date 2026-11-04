@@ -94,7 +94,7 @@ export const messageFromRow = (r: MsgRow): Message => ({
 
 function validateBody(body: string, maxBytes: number): string {
   const text = String(body ?? "").trim();
-  if (!text) throw badRequest("puste_cialo", "wiadomosc nie moze byc pusta");
+  if (!text) throw badRequest("empty_body", "wiadomosc nie moze byc pusta");
   const bajty = Buffer.byteLength(text, "utf8");
   if (bajty > maxBytes) {
     // The message says BY HOW MUCH it is too big and in what unit. "limit 65536 B" does not
@@ -102,7 +102,7 @@ function validateBody(body: string, maxBytes: number): string {
     // bytes is unpredictable for a human. The client also receives `maxMessageBytes` in
     // /api/me, so it can show a counter BEFORE anybody sends.
     throw tooLarge(
-      "cialo_za_dlugie",
+      "message_too_long",
       `wiadomosc jest o ${bajty - maxBytes} B za dluga (masz ${bajty} B, limit ${maxBytes} B - ` +
         `polskie znaki licza sie podwojnie). Skroc ja albo wyslij jako plik.`,
     );
@@ -256,9 +256,9 @@ function rootOfThread(ctx: Ctx, threadId: number | null, convId: number): number
   const parent = ctx.db
     .prepare("SELECT id, conversation_id, thread_id FROM messages WHERE id = ?")
     .get(threadId) as { id: number; conversation_id: number; thread_id: number | null } | undefined;
-  if (!parent) throw notFound("wiadomosc", `nie ma wiadomosci ${threadId}`);
+  if (!parent) throw notFound("message_not_found", `nie ma wiadomosci ${threadId}`);
   if (parent.conversation_id !== convId) {
-    throw badRequest("obcy_watek", "watek nalezy do innej konwersacji");
+    throw badRequest("foreign_thread", "watek nalezy do innej konwersacji");
   }
   return parent.thread_id ?? parent.id;
 }
@@ -306,13 +306,13 @@ export function listThread(ctx: Ctx, threadId: number): Message[] {
 
 export function editMessage(ctx: Ctx, id: number, actorId: number, body: string): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow | undefined;
-  if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${id}`);
+  if (!row) throw notFound("message_not_found", `nie ma wiadomosci ${id}`);
   // CURRENT access, not only authorship: an author removed from a private channel must not
   // keep rewriting it (and notifying its current members).
   const conv = assertCanRead(ctx, row.conversation_id, actorId);
-  if (row.actor_id !== actorId) throw forbidden("nie_autor", "nie jestes autorem tej wiadomosci");
-  if (conv.archivedAt) throw forbidden("zarchiwizowana", "ta konwersacja jest zarchiwizowana");
-  if (row.deleted_at) throw badRequest("skasowana", "nie da sie edytowac skasowanej wiadomosci");
+  if (row.actor_id !== actorId) throw forbidden("not_author", "nie jestes autorem tej wiadomosci");
+  if (conv.archivedAt) throw forbidden("conversation_archived", "ta konwersacja jest zarchiwizowana");
+  if (row.deleted_at) throw badRequest("message_deleted", "nie da sie edytowac skasowanej wiadomosci");
   const text = validateBody(body, MAX_BODY_BYTES);
 
   // Who was mentioned BEFORE the edit - so that we notify only those who were added, rather
@@ -363,10 +363,10 @@ export function editMessage(ctx: Ctx, id: number, actorId: number, body: string)
 
 export function deleteMessage(ctx: Ctx, id: number, actorId: number): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MsgRow | undefined;
-  if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${id}`);
+  if (!row) throw notFound("message_not_found", `nie ma wiadomosci ${id}`);
   // As in editMessage: deleting needs current read access to the conversation.
   assertCanRead(ctx, row.conversation_id, actorId);
-  if (row.actor_id !== actorId) throw forbidden("nie_autor", "nie jestes autorem tej wiadomosci");
+  if (row.actor_id !== actorId) throw forbidden("not_author", "nie jestes autorem tej wiadomosci");
 
   const message = tx(ctx.db, () => {
     // The content really disappears, so that "delete" means delete rather than "hide in the UI".
@@ -406,8 +406,8 @@ export function markFixed(
   input: { id: number; actorId: number; fixed: boolean },
 ): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow | undefined;
-  if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${input.id}`);
-  if (row.deleted_at) throw badRequest("skasowana", "skasowanej wiadomosci nie da sie oznaczyc");
+  if (!row) throw notFound("message_not_found", `nie ma wiadomosci ${input.id}`);
+  if (row.deleted_at) throw badRequest("message_deleted", "skasowanej wiadomosci nie da sie oznaczyc");
   assertCanRead(ctx, row.conversation_id, input.actorId);
   // One transaction: the state change and notifying the report's author are one event. Split
   // apart, a crash between them left the report marked as fixed, which its author would
@@ -449,13 +449,13 @@ export function resolveMessage(
   input: { id: number; actorId: number; resolved: boolean; isInstanceAdmin: boolean },
 ): Message {
   const row = ctx.db.prepare("SELECT * FROM messages WHERE id = ?").get(input.id) as MsgRow | undefined;
-  if (!row) throw notFound("wiadomosc", `nie ma wiadomosci ${input.id}`);
-  if (row.deleted_at) throw badRequest("skasowana", "skasowanej wiadomosci nie da sie rozwiazac");
+  if (!row) throw notFound("message_not_found", `nie ma wiadomosci ${input.id}`);
+  if (row.deleted_at) throw badRequest("message_deleted", "skasowanej wiadomosci nie da sie rozwiazac");
   assertCanRead(ctx, row.conversation_id, input.actorId);
   if (!input.isInstanceAdmin && row.actor_id !== input.actorId) {
     const m = getMember(ctx, row.conversation_id, input.actorId);
     if (!m || m.role !== "admin") {
-      throw forbidden("brak_uprawnien", "rozwiazac moze autor, admin kanalu albo admin instancji");
+      throw forbidden("not_permitted", "rozwiazac moze autor, admin kanalu albo admin instancji");
     }
   }
   ctx.db.prepare("UPDATE messages SET resolved_at = ?, resolved_by = ? WHERE id = ?")
