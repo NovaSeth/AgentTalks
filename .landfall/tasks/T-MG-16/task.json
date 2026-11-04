@@ -1,0 +1,40 @@
+{
+  "schema": 2,
+  "id": "T-MG-16",
+  "kind": "task",
+  "title": "UI: upgrade-safe unsent storage, error notice outside the chat view, SSE resume gap, focus after inline edit",
+  "lane": null,
+  "owner": "MG",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 4 files > 2; 250 LOC > 30",
+      "at": "2026-11-04T09:21:19.205Z"
+    }
+  ],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T09:21:05.815Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T09:21:19.205Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    }
+  ],
+  "base": null,
+  "branch": null
+}

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-108",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-3",
   "round": 7,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "Migration deletes attributable unsent messages written after upgrade. Node reproduction at a193c2e: A upgrades; unreloaded B running 1a713b8 persists b2 with ownerId=2; A.clearLocalAccountData(1); B reloads: [], expected [b2]. The base revision preserves b2; an in-memory mutation that splits tagged entries on every sweep also preserves it. Migrate entries with valid ownerId even after the version flag; discard only unattributed entries.",
   "filedAt": "2026-11-04T09:18:46.254Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-16",
   "closedAt": null,
   "closedBy": null,
   "reason": null

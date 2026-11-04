@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-110",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-3",
   "round": 7,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "U40 suppresses errors when no failed row is visible. Node reproduction using production sendMessage/upsertMessageNode: hold POST in channel 5, navigate to Wiki (activeId remains 5), reject with 503. Output: view=wiki, visibleFailedRows=0, toasts=0, failed=true. Adding a chat-view guard in memory produces one toast; the visible-chat control produces none. Suppress only when the failed row is actually visible, including checking the current view and viewport.",
   "filedAt": "2026-11-04T09:18:46.254Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-16",
   "closedAt": null,
   "closedBy": null,
   "reason": null
