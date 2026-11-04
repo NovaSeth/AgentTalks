@@ -119,7 +119,10 @@ export async function sendMessage(text, opts = {}) {
     rec.pending = false; rec.failed = true; rec.error = describeError(e);
     persistUnsent(convId);
     if (state.activeId === convId && inMainList) views.message(rec);
-    showError(e);
+    // U7: with the offline bar already up, a connection error is told twice (the bar, the
+    // "not sent" bubble with Send again) - a toast saying the same again only covers the bar.
+    const connectionLost = !state.online && !e.status && !e.code;
+    if (!connectionLost) showError(e);
     return null;
   }
 }
@@ -290,10 +293,14 @@ export async function joinChannel(id, btn) {
   } catch (e) { showError(e); if (btn) { btn.disabled = false; btn.textContent = t("Join"); } }
 }
 
-/** A direct conversation from the palette: one Enter instead of the "New conversation" modal. */
+/** A direct conversation from the palette or a #/dm/<handles> link: one Enter instead of the
+ *  "New conversation" modal. Several handles open (or create) the group with them (U19): a link
+ *  to a group nobody has started yet is an invitation, not a locked door. */
 export async function startDirect(handle) {
+  const members = (Array.isArray(handle) ? handle : [handle]).map((h) => String(h).replace(/^@/, "")).filter(Boolean);
+  if (!members.length) return;
   try {
-    const data = await api("POST", "/api/conversations", { kind: "dm", members: [handle] });
+    const data = await api("POST", "/api/conversations", { kind: members.length > 1 ? "group" : "dm", members });
     await loadConversationsList();
     views.sidebar();
     views.openConversation(data.conversation.id);

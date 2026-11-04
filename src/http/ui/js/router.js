@@ -4,7 +4,7 @@
  * Routes (spec section 1):
  *   #/c/<slug>                 a channel          #/c/<slug>/m/<id>   one message (scroll + flash)
  *   #/c/<slug>/t/<rootId>      a thread           #/dm/<handle>[,<handle>]  a direct conversation
- *   #/wiki/<slug>              a wiki page        #/activity  #/dms  #/admin  #/threads  #/unreads  #/search?q=
+ *   #/wiki/<slug>              a wiki page        #/activity  #/dms  #/admin  #/threads  #/unreads  #/people  #/search?q=
  *
  * parseRoute() turns a hash into a plain object the views can read; buildRoute() is its inverse.
  * Both are pure. syncRoute() is the one place that writes `location.hash`: it records what it
@@ -27,6 +27,8 @@ export function parseRoute(hash) {
   if (head === "admin" && parts.length === 1) return { view: "admin" };
   if (head === "threads" && parts.length === 1) return { view: "threads" };
   if (head === "unreads" && parts.length === 1) return { view: "unreads" };
+  // W6-C2-B: the directory ("Who is here") has an address; app.js opens the sidebar section.
+  if (head === "people" && parts.length === 1) return { view: "people" };
   if (head === "search" && parts.length === 1) {
     const q = new URLSearchParams(query).get("q") ?? "";
     return { view: "search", q };
@@ -59,6 +61,7 @@ export function buildRoute(route) {
     case "admin": return "#/admin";
     case "threads": return "#/threads";
     case "unreads": return "#/unreads";
+    case "people": return "#/people";
     case "search": return `#/search?q=${encodeURIComponent(route.q ?? "")}`;
     default: return "";
   }

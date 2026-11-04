@@ -6,7 +6,7 @@ import { api, csrf, sessionGeneration } from "./api.js";
 import { dividerAfter } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
 import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior } from "./dom.js";
-import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./icons.js";
+import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconDigest, iconEdit, iconFile, iconFlame, iconGear, iconInfo, iconLink, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconTrash, iconUnpin, iconWrench } from "./icons.js";
 import { renderBody } from "./markdown.js";
 import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
 import { openPlusMenu } from "./commands.js";
@@ -33,6 +33,10 @@ export async function openConversation(id, focusMessageId) {
   // W4-S6-C: the details and the pinned list describe ONE conversation; carried into the next one
   // they showed the wrong members and pins. A profile is a person's, so it may stay.
   if (previousConversation !== id) { state.detailsOpen = false; state.pinnedOpen = false; }
+  // U6: the header faces belong to ONE conversation too. Kept across a route change they drew
+  // the other channel's members (or its count) until the new fetch landed; dropped, the header
+  // re-fetches them for this conversation and shows nothing in the meantime.
+  if (previousConversation !== id) { state.convMembersFor = null; state.convMembers = []; }
   state.view = "chat";
   state.activeId = id;
   try { localStorage.setItem("atalks_last_conv", String(id)); } catch { /* private browsing */ }
@@ -62,8 +66,10 @@ export async function openConversation(id, focusMessageId) {
     state.loadingConv = id;
     renderMain();
     try { await loadMessages(id); } catch (e) { showError(e); }
-    if (gen !== sessionGeneration()) return;
+    // U14/U6: the skeleton flag goes BEFORE the abandoned-open return below: left on, a later
+    // redraw of this conversation (an SSE event, a theme switch) painted the skeleton again.
     if (state.loadingConv === id) state.loadingConv = false;
+    if (gen !== sessionGeneration()) return;
   }
   if (focusMessageId && !(state.msgs[id] || []).some((m) => m.id === focusMessageId)) {
     try {
@@ -73,6 +79,15 @@ export async function openConversation(id, focusMessageId) {
       mergeReactions(data.messages, data.reactions);
     } catch { /* best effort */ }
     if (gen !== sessionGeneration()) return;
+    // U14: a link to a message that is deleted, out of reach or never existed. The conversation
+    // opens as usual (the newest at the bottom, the address without `/m/<id>`) and one toast
+    // says why the link did not land anywhere - a skeleton or a silent channel left the human
+    // guessing.
+    if (!(state.msgs[id] || []).some((m) => m.id === focusMessageId)) {
+      focusMessageId = undefined;
+      if (routeConv) syncRoute(conversationRoute(routeConv, dmOthers(routeConv)));
+      showToast(t("That message is gone or you cannot see it."), { alert: true });
+    }
   }
   renderMain();
   const questionsReady = refreshQuestions(id);
@@ -115,10 +130,18 @@ export async function openConversation(id, focusMessageId) {
   if (state.memberships[id] && !focusMessageId) markReadDebounced(id, lastMessageId(id));
 }
 
+// U8: the root whose replies are being fetched. The panel says "Loading replies..." while this
+// names the open thread and nothing has arrived yet; once the fetch returns (or fails) an empty
+// thread says "No replies yet" instead of showing the root alone.
+let threadLoadingFor = null;
+
 export async function openThread(rootId) {
   const conversationId = state.activeId;
   state.threadOpen = rootId;
-  state.threadMsgs = [];
+  // U8: what the cache already holds (the root, replies seen on an earlier open or from the
+  // stream) is on screen at once; the fetch only completes and refreshes it.
+  state.threadMsgs = (state.msgs[conversationId] || []).filter((m) => m.id === rootId || m.threadId === rootId);
+  threadLoadingFor = rootId;
   const gen = sessionGeneration();
   const isCurrent = () => gen === sessionGeneration() && state.view === "chat" && state.activeId === conversationId && state.threadOpen === rootId;
   // Opening the panel must not replace the main composer while a send is completing.
@@ -139,6 +162,7 @@ export async function openThread(rootId) {
     mergeActors(data.actors);
     mergeReactions(data.messages, data.reactions);
   } catch (e) { if (isCurrent()) showError(e); }
+  if (threadLoadingFor === rootId) threadLoadingFor = null;
   if (isCurrent()) renderThread();
 }
 
@@ -880,7 +904,7 @@ function quickReactHtml(m) {
   return topReactions(m.conversationId).map((emoji) => {
     const safe = escapeHtml(emoji);
     const label = t("React with {emoji}", { emoji: safe });
-    return `<button class="qr" data-react="${m.id}" data-emoji="${safe}" aria-label="${label}" title="${label}">${safe}</button>`;
+    return `<button class="qr tooltipped tooltipped-n" data-react="${m.id}" data-emoji="${safe}" aria-label="${label}">${safe}</button>`;
   }).join("");
 }
 
@@ -1109,13 +1133,13 @@ export function messageHtml(m, cont, opts = {}) {
       ${!m.deletedAt ? `
       <div class="actions" role="group" aria-label="${t("Actions for the message from @{handle}", { handle: escapeHtml(handle) })}">
         ${quickReactHtml(m)}
-        <button data-addreact="${m.id}" aria-label="${t("Add a reaction")}" title="${t("Add a reaction")}">${iconAddReaction()}</button>
-        <button data-reply="${m.id}" aria-label="${t("Reply in a thread")}" title="${t("Reply in a thread")}">${iconThread()}</button>
-        ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? t("Take back the confirmation") : t("Confirm fixed")}" title="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}">${iconCheck(true)}</button>` : ""}
-        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark fixed")}" title="${m.fixedAt ? t("Take back “fixed”") : t("Mark: I fixed it, waiting for confirmation")}">${iconWrench()}</button>` : ""}
-        ${mine && m.kind === "text" ? `<button data-edit="${m.id}" aria-label="${t("Edit the message")}" title="${t("Edit")}">${iconEdit()}</button>` : ""}
+        <button data-addreact="${m.id}" class="tooltipped tooltipped-n" aria-label="${t("Add a reaction")}">${iconAddReaction()}</button>
+        <button data-reply="${m.id}" class="tooltipped tooltipped-n" aria-label="${t("Reply in a thread")}">${iconThread()}</button>
+        ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="tooltipped tooltipped-n ${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? t("Take back the confirmation") : t("Confirm fixed")}">${iconCheck(true)}</button>` : ""}
+        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="tooltipped tooltipped-n ${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark fixed")}">${iconWrench()}</button>` : ""}
+        ${mine && m.kind === "text" ? `<button data-edit="${m.id}" class="tooltipped tooltipped-n" aria-label="${t("Edit the message")}">${iconEdit()}</button>` : ""}
         <button data-more="${m.id}" data-pinned="${pinned ? "1" : ""}" data-report="${report ? "1" : ""}"
-          aria-label="${t("More actions")}" aria-haspopup="menu" title="${t("More")}">${iconMore()}</button>
+          class="tooltipped tooltipped-n" aria-label="${t("More actions")}" aria-haspopup="menu">${iconMore()}</button>
       </div>` : ""}
     </div>`;
 }
@@ -1218,32 +1242,41 @@ function openMessageMenu(messageId, anchor) {
   const mine = m.actorId === state.actor.id;
   const pinned = state.convPins.some((p) => p.messageId === messageId);
   const { report, canFix, canResolve } = reportControls(m, mine);
+  // U15: every item carries an Octicon (the same one as its hover-bar twin where it has one), the
+  // own-message group (Edit, Delete) sits below a separator with Delete in the danger colour, and
+  // the report entry says what it does in plain words.
+  const canEdit = mine && m.kind === "text" && !m.deletedAt;
   const menuItems = [
     // The report cycle in words (S5): the same two actions as the hover bar, with the consequence.
-    ...(canFix ? [{ action: "fix", label: m.fixedAt ? t("Take back “fixed”") : t("Mark fixed"),
+    ...(canFix ? [{ action: "fix", icon: iconWrench(), label: m.fixedAt ? t("Take back “fixed”") : t("Mark fixed"),
       description: m.fixedAt ? "" : t("Say you changed the code. Whoever reported it is asked to confirm the symptom is gone.") }] : []),
-    ...(canResolve ? [{ action: "resolve", label: m.resolvedAt ? t("Take back the confirmation") : t("Confirm fixed"),
+    ...(canResolve ? [{ action: "resolve", icon: iconCheck(true), label: m.resolvedAt ? t("Take back the confirmation") : t("Confirm fixed"),
       description: m.resolvedAt ? "" : t("Close the report: the symptom is gone.") }] : []),
-    { action: "pin", label: pinned ? t("Unpin from the conversation") : t("Pin in the conversation"),
+    { action: "pin", icon: pinned ? iconUnpin() : iconPin(), label: pinned ? t("Unpin from the conversation") : t("Pin in the conversation"),
       description: pinned ? t("It disappears from the pinned list.") : t("It goes to “Pinned” in the conversation details - for everybody.") },
     ...(!report && m.kind === "text" && !m.deletedAt
-      ? [{ action: "report", label: t("Treat as a report"),
-        description: t("Only then do the “I fixed it” and “I confirm it is gone” buttons appear.") }]
+      ? [{ action: "report", icon: iconFlame(), label: t("Mark as a problem"),
+        description: t("Adds the Fixed and Confirmed buttons, so whoever fixes it and whoever reported it can close it.") }]
       : []),
-    { action: "copy", label: t("Copy the text"), description: "" },
-    { action: "copylink", label: t("Copy link"), description: t("A link that opens this message, inside its thread when it has one.") },
+    { action: "copy", icon: iconCopy(), label: t("Copy the text"), description: "" },
+    { action: "copylink", icon: iconLink(), label: t("Copy link"), description: t("A link that opens this message, inside its thread when it has one.") },
     ...(state.memberships[m.conversationId] && !m.deletedAt
-      ? [{ action: "unread", label: t("Mark unread"), description: t("The conversation goes bold again from this message on.") }]
+      ? [{ action: "unread", icon: iconDigest(), label: t("Mark unread"), description: t("The conversation goes bold again from this message on.") }]
       : []),
-    ...(mine ? [{ action: "delete", label: t("Delete the message"), description: t("Irreversible for everybody."), danger: true }] : []),
+    ...(canEdit || mine ? [{ separator: true }] : []),
+    ...(canEdit ? [{ action: "edit", icon: iconEdit(), label: t("Edit the message"), description: "" }] : []),
+    ...(mine ? [{ action: "delete", icon: iconTrash(), label: t("Delete the message"), description: t("Irreversible for everybody."), danger: true }] : []),
   ];
   const pop = document.createElement("div");
   pop.className = "msg-menu";
   pop.setAttribute("role", "menu");
-  pop.innerHTML = menuItems.map((p) => `
+  pop.innerHTML = menuItems.map((p) => p.separator ? `<hr class="mm-sep" role="separator">` : `
     <button role="menuitem" data-mact="${p.action}" class="${p.danger ? "danger" : ""}">
-      <span class="mm-l">${escapeHtml(p.label)}</span>
-      ${p.description ? `<span class="mm-o">${escapeHtml(p.description)}</span>` : ""}
+      <span class="mm-i" aria-hidden="true">${p.icon}</span>
+      <span class="mm-body">
+        <span class="mm-l">${escapeHtml(p.label)}</span>
+        ${p.description ? `<span class="mm-o">${escapeHtml(p.description)}</span>` : ""}
+      </span>
     </button>`).join("");
   document.body.appendChild(pop);
   const rect = anchor.getBoundingClientRect();
@@ -1274,7 +1307,13 @@ function openMessageMenu(messageId, anchor) {
     if (action === "report") {
       reports.add(messageId);
       views.message(findMsgById(messageId));
-      showToast(t("Treating this as a report. The message now carries “I fixed it” and “I confirm”."));
+      showToast(t("Marked as a problem. The message now carries the Fixed and Confirmed buttons."));
+      return;
+    }
+    if (action === "edit") {
+      // The same message can stand in both lists (thread root): edit the copy the menu came from.
+      const scope = anchor.closest?.("#th-msgs") || anchor.closest?.("#messages") || document.getElementById("messages");
+      if (scope) startInlineEdit(messageId, scope);
       return;
     }
     if (action === "copy") {
@@ -1741,6 +1780,11 @@ export function renderThread() {
   // The panel is redrawn when the replies arrive and on every echo; what the user already typed
   // into the box, and the "also send" tick, must survive that redraw.
   const keep = { text: document.getElementById("th-input")?.value ?? "", also: !!document.getElementById("th-also")?.checked };
+  // U8: an empty reply list is one of two states and the panel says which one.
+  const loading = threadLoadingFor === state.threadOpen && !replies.length;
+  const repliesState = replies.length ? "" : loading
+    ? `<div class="th-state th-loading" role="status">${skeletonHtml()}<span class="th-state-text">${t("Loading replies...")}</span></div>`
+    : `<div class="th-state th-empty" role="status">${iconThread()}<span class="th-state-text">${t("No replies yet - be the first.")}</span></div>`;
   host.innerHTML = `
     <div class="thread" role="region" aria-label="${t("Thread")}">
       <div class="th-head">${iconThread()} ${t("Thread")}
@@ -1748,6 +1792,7 @@ export function renderThread() {
       <div class="th-msgs" id="th-msgs">
         ${root ? messageHtml(root, false, { noThreadLink: true }) : ""}
         ${replies.map((m, i) => messageHtml(m, i > 0 && replies[i - 1].actorId === m.actorId)).join("")}
+        ${repliesState}
       </div>
       <div class="composer" id="th-composer"></div>
     </div>`;

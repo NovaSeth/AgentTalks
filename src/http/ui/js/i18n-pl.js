@@ -87,7 +87,6 @@ export const PL = {
   "Loading...": "Wczytuję...",
   "Expand": "Rozwiń",
   "Collapse": "Zwiń",
-  "More": "Więcej",
   "More actions": "Więcej działań",
   "Got it": "Jasne",
   "Got it, thanks": "Jasne, dzięki",
@@ -132,13 +131,11 @@ export const PL = {
 
   // --- sidebar ---
   "To catch up on": "Do nadrobienia",
-  "What happened while you were away": "Co się działo bez Ciebie",
-  "Questions waiting for an answer": "Pytania czekające na odpowiedź",
   "Channels": "Kanały",
   "New channel": "Nowy kanał",
   "You are not on any channel yet.": "Nie jesteś jeszcze na żadnym kanale.",
   "Create a channel": "Załóż kanał",
-  "Channels you can join": "Kanały, do których możesz dołączyć",
+  "Channels you can join": "Kanały do dołączenia",
   "Direct conversations": "Rozmowy prywatne",
   "New direct conversation": "Nowa rozmowa prywatna",
   "You are not talking to anybody in private yet.": "Jeszcze z nikim nie rozmawiasz na osobności.",
@@ -330,10 +327,8 @@ export const PL = {
   "Add a reaction": "Dodaj reakcję",
   "Actions for the message from @{handle}": "Akcje wiadomości od @{handle}",
   "Take back the confirmation": "Cofnij potwierdzenie",
-  "Confirm: the symptom is gone": "Potwierdź: objaw zniknął",
   "Take back the “fixed” mark": "Cofnij oznaczenie „naprawione”",
   "Take back “fixed”": "Cofnij „naprawione”",
-  "Mark: I fixed it, waiting for confirmation": "Oznacz: naprawiłem, czeka na potwierdzenie",
   "Reply in a thread": "Odpowiedz w wątku",
   "Edit the message": "Edytuj wiadomość",
   "Delete this message?": "Usunąć tę wiadomość?",
@@ -349,12 +344,7 @@ export const PL = {
   "It disappears from the pinned list.": "Zniknie z listy przypiętych.",
   "It goes to “Pinned” in the conversation details - for everybody.":
     "Trafi do „Przypięte” w szczegółach rozmowy - dla wszystkich.",
-  "Treat as a report": "Potraktuj jako zgłoszenie",
-  "Only then do the “I fixed it” and “I confirm it is gone” buttons appear.":
-    "Dopiero wtedy pokażą się przyciski „naprawiłem” i „potwierdzam, że zniknęło”.",
   "Irreversible for everybody.": "Nieodwracalne dla wszystkich.",
-  "Treating this as a report. The message now carries “I fixed it” and “I confirm”.":
-    "Traktuję to jako zgłoszenie. Przy wiadomości są teraz „naprawiłem” i „potwierdzam”.",
   "Marked as fixed. Whoever reported it has been asked to confirm the symptom is gone.":
     "Oznaczone jako naprawione. Osoba, która to zgłosiła, dostała prośbę o potwierdzenie, że objaw zniknął.",
   "The “fixed” mark has been taken back.": "Cofnięto oznaczenie „naprawione”.",
@@ -529,7 +519,6 @@ export const PL = {
   "Mark all as read": "Oznacz wszystkie jako przeczytane",
   "mentioned you": "zawołał(a) Cię",
   "reacted to your post": "zareagował(a) na Twój wpis",
-  "changed a page you co-author": "zmienił(a) stronę, którą współtworzysz",
   "fixed what you reported - confirm the symptom is gone":
     "naprawił(a) to, co zgłosiłeś - potwierdź, czy objaw zniknął",
   "did something that concerns you - open it to see":
@@ -757,6 +746,8 @@ export const PL = {
 
   // T-MG-3 slice blocks: each slice adds its sentences ONLY inside its own marker.
   // === S1 ===
+  "While you were away": "Poza Tobą",
+  "Interface version {stamp}": "Wersja interfejsu {stamp}",
   "Search": "Szukaj",
   "Home": "Start",
   "Direct messages": "Wiadomości prywatne",
@@ -890,6 +881,7 @@ export const PL = {
   "You are all caught up": "Wszystko nadrobione",
   "Every conversation you belong to has been read. New messages will show up here.": "Każda rozmowa, do której należysz, jest przeczytana. Nowe wiadomości pojawią się tutaj.",
   "wrote to you privately": "napisał(a) do Ciebie prywatnie",
+  "changed the page": "zmienił(a) stronę",
   "Nothing unread.": "Nic nieprzeczytanego.",
   // === S9 ===
   "Back to the list": "Wróć do listy",
@@ -923,7 +915,11 @@ export const PL = {
   "Back to {name}": "Wróć do {name}",
   "Search messages": "Szukaj wiadomości",
   "Words to find, with in:#channel from:@name before:YYYY-MM-DD after:YYYY-MM-DD": "Szukane słowa, z in:#kanał from:@nazwa before:RRRR-MM-DD after:RRRR-MM-DD",
-  "Filters narrow a search down; the words to look for are still needed.": "Filtry zawężają wyszukiwanie; szukane słowa wciąż są potrzebne.",
+  "Or add in:#channel to list the latest messages there.": "Albo dodaj in:#kanał, żeby zobaczyć najnowsze wiadomości stamtąd.",
+  "List the latest in {name}": "Pokaż najnowsze w {name}",
+  "Nothing in {name} matches these filters": "Nic w {name} nie pasuje do tych filtrów",
+  "Try another author or wider dates.": "Spróbuj innego autora albo szerszych dat.",
+  "Show older": "Pokaż starsze",
   "in: takes the name of a channel or a person you can see, for example in:#general or in:@nestor.": "in: przyjmuje nazwę kanału albo osoby, które widzisz, na przykład in:#general albo in:@nestor.",
   "Check the connection and try again.": "Sprawdź połączenie i spróbuj ponownie.",
   "Nothing found for “{q}”": "Nic nie znaleziono dla „{q}”",
@@ -938,6 +934,15 @@ export const PL = {
   "{who} reacted with {emoji}": "{who}: reakcja {emoji}",
   "React with {emoji}": "Zareaguj {emoji}",
   "Delivery: {status}": "Doręczenie: {status}",
+  // fix round 2 (FX2): U8 thread states, U14 missing message, U15 More menu wording
+  "Loading replies...": "Wczytuję odpowiedzi...",
+  "No replies yet - be the first.": "Nie ma jeszcze odpowiedzi - bądź pierwszy.",
+  "That message is gone or you cannot see it.": "Tej wiadomości już nie ma albo nie masz do niej dostępu.",
+  "Mark as a problem": "Oznacz jako problem",
+  "Adds the Fixed and Confirmed buttons, so whoever fixes it and whoever reported it can close it.":
+    "Dodaje przyciski „Naprawione” i „Potwierdzone”, żeby naprawiający i zgłaszający mogli to zamknąć.",
+  "Marked as a problem. The message now carries the Fixed and Confirmed buttons.":
+    "Oznaczone jako problem. Przy wiadomości są teraz przyciski „Naprawione” i „Potwierdzone”.",
   // === S13 ===
   "Account @{handle}, {kind}{admin}{off}: {presence}": "Konto @{handle}, {kind}{admin}{off}: {presence}",
   "admin": "admin",

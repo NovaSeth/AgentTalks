@@ -15,7 +15,7 @@ import {
 } from "./data.js";
 import { $app, emptyStateHtml, escapeHtml, isScrolledToBottom, scrollToBottom, toggleDrawerClass, updateTitleBadge } from "./dom.js";
 import { onLangChange, t } from "./i18n.js";
-import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconThread, iconUsers } from "./icons.js";
+import { iconBell, iconChat, iconLock, iconSearch, iconSend, iconUsers } from "./icons.js";
 import { dmOthers, lastMessageId, rebuildMentionRe, saveDraft, state, registerViews } from "./state.js";
 import { startDirect } from "./actions.js";
 import { buildRoute, consumeOwnPush, hashOfEvent, parseRoute, syncRoute } from "./router.js";
@@ -34,7 +34,7 @@ import {
 } from "./view-chat.js";
 import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./view-login.js";
 import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./view-notifications.js";
-import { getSidebarPlace, renderSidebar, renderSidebarList, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
+import { getSidebarPlace, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { connectSSE, ensureSSE } from "./sse-events.js";
 
@@ -65,7 +65,6 @@ function renderShell() {
           { id: "rail-dm-badge", count: dmUnread, label: t("{n} unread", { n: dmUnread }) }, t("Direct messages"))}
         ${railButton("rail-notif", t("Activity"), t("Notifications: mentions, direct messages, reactions, changes to your wiki pages"), iconBell(), state.view === "notifications",
           { id: "rail-badge", count: state.notifUnread, label: t("{n} new", { n: state.notifUnread }) })}
-        ${railButton("rail-threads", t("Threads"), t("Threads you started or replied to"), iconThread(), state.view === "threads")}
         ${adminHuman ? railButton("rail-users", t("Admin"), t("Accounts and access"), iconUsers(), state.view === "users") : ""}
         ${railButton("rail-search", t("Search"), t("Search conversations, people and messages"), iconSearch(), false, undefined, t("Search"), "rail-phone")}
       </nav>
@@ -76,9 +75,8 @@ function renderShell() {
   document.getElementById("rail-notif").addEventListener("click", () => { syncRoute("#/activity"); openNotificationsView(); });
   document.getElementById("rail-chats").addEventListener("click", () => goPlace("home"));
   document.getElementById("rail-dms").addEventListener("click", () => { syncRoute("#/dms"); goPlace("dms"); });
-  // W5-S10-A: the Threads view (S10) had no visible entry; the rail button and the sidebar row
-  // under the workspace header (view-sidebar.js) both open #/threads.
-  document.getElementById("rail-threads").addEventListener("click", () => openThreadsView());
+  // W5-S10-A gave the Threads view two entries; U16 (decision) keeps ONE: the sidebar row under
+  // the workspace header (view-sidebar.js), the top section of the list. No rail or tab button.
   const ru = document.getElementById("rail-users");
   if (ru) ru.addEventListener("click", () => { syncRoute("#/admin"); openUsersView(); });
   // S9: the fourth phone tab. On the desktop the switcher has Cmd+K and the sidebar box, so the
@@ -310,13 +308,37 @@ async function afterLogin() {
   if (route.view !== "home") {
     await applyRoute(route);
   } else {
-    const lastId = Number(localStorage.getItem("atalks_last_conv"));
-    const last = state.conversations.find((c) => c.id === lastId && state.memberships[c.id]);
-    const first = last || state.conversations.find((c) => state.memberships[c.id]) || state.conversations[0];
+    const first = defaultConversation();
     if (first) await openConversation(first.id);
   }
   // Only now - the user already sees the product rather than windows about the product.
   queueWelcome(loginCount);
+}
+
+/** The conversation an empty hash opens: the last viewed one, else the first I belong to. */
+function defaultConversation() {
+  const lastId = Number(localStorage.getItem("atalks_last_conv"));
+  const last = state.conversations.find((c) => c.id === lastId && state.memberships[c.id]);
+  return last || state.conversations.find((c) => state.memberships[c.id]) || state.conversations[0];
+}
+
+/** #/people (W6-C2-B): the directory is the sidebar's "Who is here" section, so the route lands
+ *  in the conversations place with that section open, scrolled into view and focused. On a
+ *  phone the list is the Home screen, so the drawer opens. */
+async function openPeopleDirectory() {
+  setSidebarPlace("home");
+  if (!inConversations() || !state.activeId) {
+    const first = defaultConversation();
+    if (first) await openConversation(first.id);
+    else { state.view = "chat"; renderShell(); }
+  }
+  setSectionCollapsed("people", false);
+  renderSidebarList();
+  paintRail();
+  if (window.matchMedia("(max-width:760px)").matches) { state.drawerOpen = true; toggleDrawerClass(); }
+  const head = document.querySelector('[data-section="people"]');
+  head?.scrollIntoView({ block: "start" });
+  head?.focus();
 }
 
 // ------------------------------------------------------------------- routes (S3)
@@ -342,9 +364,9 @@ async function applyRoute(route) {
         if (route.threadId && state.view === "chat" && state.activeId === c.id) await openThread(route.threadId);
         return;
       }
-      // A link to a person I have not written to yet starts the conversation (one handle only:
-      // a group is created from the "+" next to Direct messages, with the people picker).
-      if (route.handles.length === 1) { await startDirect(route.handles[0]); return; }
+      // A link to people I have not written to yet starts the conversation: one handle opens a DM,
+      // several open a group (U19: nothing forbids it, so no lock screen; startDirect takes both).
+      if (route.handles.length >= 1) { await startDirect(route.handles); return; }
       renderNoAccess(route);
       return;
     }
@@ -360,6 +382,7 @@ async function applyRoute(route) {
     // W5-S10-B, W5-S8-A: a page loaded at #/threads or #/unreads (F5, a bookmark, Back) shows it.
     case "threads": await openThreadsView(); return;
     case "unreads": await openUnreadsView(); return;
+    case "people": await openPeopleDirectory(); return;
     default: return;
   }
 }

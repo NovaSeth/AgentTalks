@@ -13,7 +13,7 @@ import { startDirect } from "./actions.js";
 import { api, sessionGeneration } from "./api.js";
 import { ensureActors } from "./data.js";
 import { avatarHtml, escapeHtml, timeAgo } from "./dom.js";
-import { iconChat, iconClose, iconGear } from "./icons.js";
+import { iconChat, iconClose, iconGear, iconUsers } from "./icons.js";
 import { t } from "./i18n.js";
 import { handleOnline, state, views } from "./state.js";
 import { showError } from "./toasts.js";
@@ -310,27 +310,40 @@ export function mountPeoplePicker(host, opts = {}) {
  *  after a fetch so the header can redraw with the faces. The faces are decoration: the fetch
  *  waits for the first paint so it never competes with the message load, and without a frame
  *  scheduler (node) the header simply stays without faces until Details is opened. */
+// U6: the conversation whose member fetch is in flight. `state.convMembersFor` is set only AFTER
+// the fetch succeeds: marking it before left the header believing it had the list while the
+// list was empty (a bare "0" pill) whenever the open was abandoned mid-way, with nothing ever
+// retrying because the mark said "done".
+let membersInFlight = null;
+
 export function ensureHeaderMembers(convId, onReady) {
-  if (!convId || state.convMembersFor === convId) return;
+  if (!convId || state.convMembersFor === convId || membersInFlight === convId) return;
   if (typeof requestAnimationFrame !== "function") return;
-  state.convMembersFor = convId;
+  membersInFlight = convId;
   requestAnimationFrame(() => {
-    if (state.activeId !== convId) { state.convMembersFor = null; return; }
+    if (state.activeId !== convId) { membersInFlight = null; return; }
     const gen = sessionGeneration();
     api("GET", `/api/conversations/${convId}`).then(async (d) => {
-      if (state.activeId !== convId) return;
-      state.convMembers = d.members || [];
-      if (state.convMembers.some((m) => !state.actorsCache[m.actorId])) await ensureActors({ force: true });
-      if (gen !== sessionGeneration()) return;
+      if (state.activeId !== convId || gen !== sessionGeneration()) return;
+      const members = d.members || [];
+      if (members.some((m) => !state.actorsCache[m.actorId])) await ensureActors({ force: true });
+      if (gen !== sessionGeneration() || state.activeId !== convId) return;
+      state.convMembers = members;
+      state.convMembersFor = convId;
       onReady?.();
-    }).catch(() => { state.convMembersFor = null; });
+    }).catch(() => {}).finally(() => { if (membersInFlight === convId) membersInFlight = null; });
   });
 }
 
 /** Stacked faces + a count for a channel header. `members` are the rows of GET /:id, @system
- *  hidden; up to `max` faces, the count is of all visible members. */
-export function headerFacesHtml(members, cache, max = 6) {
+ *  hidden; up to `max` faces, the count is of all visible members. An empty list draws nothing:
+ *  a lone "0" before the members arrive is false (U6). The people Octicon says what the number is.
+ *  U17: three faces at most and a "+N" chip for the rest on every width - six squeezed faces
+ *  overlapped their initials on a phone; the count after the chip is still the total. */
+export function headerFacesHtml(members, cache, max = 3) {
   const rows = visibleMembers(members, cache);
+  if (!rows.length) return "";
   const faces = rows.slice(0, max).map((m) => avatarHtml(cache?.[m.actorId]?.handle || "?", 22)).join("");
-  return `<span class="hdr-faces" aria-hidden="true">${faces}</span><span class="hdr-count">${rows.length}</span>`;
+  const more = rows.length > max ? `<span class="hdr-more">+${rows.length - max}</span>` : "";
+  return `${iconUsers()}<span class="hdr-faces" aria-hidden="true">${faces}${more}</span><span class="hdr-count">${rows.length}</span>`;
 }

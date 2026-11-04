@@ -15,9 +15,9 @@
  * since S0 keep working.
  */
 import { commandSuggestions } from "./commands.js";
-import { avatarHtml, escapeHtml, trackOverlay } from "./dom.js";
+import { avatarHtml, escapeHtml, trackOverlay, watchDockHeight } from "./dom.js";
 import { rememberEmoji, searchEmoji } from "./emoji.js";
-import { iconAddReaction, iconPlus, iconSend } from "./icons.js";
+import { iconAddReaction, iconBold, iconCode, iconCodeSquare, iconItalic, iconLink, iconListUnordered, iconPlus, iconQuote, iconSend, iconStrikethrough } from "./icons.js";
 import { lang, t } from "./i18n.js";
 import { state } from "./state.js";
 
@@ -108,15 +108,16 @@ export function insertAtCaret(ta, insert) {
 }
 
 // ------------------------------------------------------------- markup
+// U2: Octicons (D-MG-18), not text glyphs - "</>" and "[ ]" were not guessable and read as code.
 const FORMATS = [
-  { id: "bold", marker: "**", glyph: "<b>B</b>", label: () => t("Bold"), key: "b" },
-  { id: "italic", marker: "_", glyph: "<i>I</i>", label: () => t("Italic"), key: "i" },
-  { id: "strike", marker: "~~", glyph: "<s>S</s>", label: () => t("Strikethrough"), key: "" },
-  { id: "code", marker: "`", glyph: "<code>&lt;&gt;</code>", label: () => t("Code"), key: "" },
-  { id: "codeblock", marker: "```", glyph: "<code>&lt;/&gt;</code>", label: () => t("Code block"), key: "" },
-  { id: "link", marker: "[", glyph: "<span>[&nbsp;]</span>", label: () => t("Link"), key: "k" },
-  { id: "list", marker: "- ", glyph: "<span>&#8801;</span>", label: () => t("Bulleted list"), key: "" },
-  { id: "quote", marker: "> ", glyph: "<span>&gt;</span>", label: () => t("Quote"), key: "" },
+  { id: "bold", marker: "**", icon: iconBold, label: () => t("Bold"), key: "b" },
+  { id: "italic", marker: "_", icon: iconItalic, label: () => t("Italic"), key: "i" },
+  { id: "strike", marker: "~~", icon: iconStrikethrough, label: () => t("Strikethrough"), key: "" },
+  { id: "code", marker: "`", icon: iconCode, label: () => t("Code"), key: "" },
+  { id: "codeblock", marker: "```", icon: iconCodeSquare, label: () => t("Code block"), key: "" },
+  { id: "link", marker: "[", icon: iconLink, label: () => t("Link"), key: "k" },
+  { id: "list", marker: "- ", icon: iconListUnordered, label: () => t("Bulleted list"), key: "" },
+  { id: "quote", marker: "> ", icon: iconQuote, label: () => t("Quote"), key: "" },
 ];
 
 /**
@@ -138,7 +139,7 @@ export function composerCardHtml(o) {
         // a Primer tooltip in its place says where files go instead of leaving a silent gap.
         : `<span class="attach-note tooltipped tooltipped-n" role="img" tabindex="0" aria-label="${escapeHtml(t("Files go to the conversation: attach them in the main message box"))}">${iconPlus()}</span>`}
         <div class="fmtbar" role="toolbar" aria-label="${t("Formatting")}">
-          ${FORMATS.map((f) => `<button type="button" class="fmt" data-fmt="${f.id}" aria-label="${escapeHtml(f.label())}" title="${escapeHtml(f.label())}${f.key ? ` (Ctrl+${f.key.toUpperCase()})` : ""}">${f.glyph}</button>`).join("")}
+          ${FORMATS.map((f) => `<button type="button" class="fmt" data-fmt="${f.id}" aria-label="${escapeHtml(f.label())}" title="${escapeHtml(f.label())}${f.key ? ` (Ctrl+${f.key.toUpperCase()})` : ""}">${f.icon()}</button>`).join("")}
         </div>
         <span class="cspacer"></span>
         <button type="button" class="iconbtn emoji" id="${p}-emoji" aria-label="${t("Insert an emoji")}" title="${t("Emoji")}">${iconAddReaction()}</button>
@@ -164,6 +165,11 @@ export function bindFormatting(ta, card) {
     b.addEventListener("pointerdown", (e) => e.preventDefault());
     b.addEventListener("click", () => apply(b.dataset.fmt));
   });
+  // U1: the main box floats over the list; its measured height becomes the list's bottom padding
+  // (--dock-h on .main), so the last message and a failed message's "Send again" row stay visible.
+  // The thread box has no dock, so this is a no-op there.
+  const dock = card?.closest?.(".dock");
+  if (dock) watchDockHeight(dock);
   return (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return false;
     const f = FORMATS.find((x) => x.key && x.key === e.key.toLowerCase());

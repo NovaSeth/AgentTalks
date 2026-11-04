@@ -19,7 +19,7 @@ import { askQuestion, claimLease, fixMsg, releaseLease, resolveMsg } from "./act
 import { api } from "./api.js";
 import { ensureActors, refreshDigestAndLeases } from "./data.js";
 import { avatarHtml, escapeHtml, leaseCountdown, openModal, timeAgo, trackOverlay } from "./dom.js";
-import { iconFile, iconPlus, iconQuestion } from "./icons.js";
+import { iconFile, iconQuestion, iconTag } from "./icons.js";
 import { t } from "./i18n.js";
 import { findMsgById, state, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
@@ -241,7 +241,8 @@ export function openPlusMenu(anchor, o = {}) {
   const items = [
     { action: "attach", icon: iconFile(), label: t("Attach a file"), description: t("Images show inline, everything else as a download.") },
     { action: "ask", icon: iconQuestion(), label: t("Ask a tracked question"), description: t("It stays marked as open until somebody answers.") },
-    { action: "claim", icon: iconPlus(), label: t("Claim a resource"), description: t("Tell the others you are touching something shared.") },
+    // U18: the tag Octicon, not the plus of the trigger button - a plus inside the plus menu read as "add".
+    { action: "claim", icon: iconTag(), label: t("Claim a resource"), description: t("Tell the others you are touching something shared.") },
   ];
   const pop = document.createElement("div");
   pop.className = "msg-menu plus-menu";

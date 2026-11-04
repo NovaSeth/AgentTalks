@@ -9,7 +9,7 @@ import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmp
 import { iconCheck, iconChevron, iconDesktop, iconDigest, iconDoc, iconLock, iconMoon, iconQuestion, iconSearch, iconSun, iconThread } from "./icons.js";
 import { msg, t } from "./i18n.js";
 import { THEMES, currentTheme, setTheme } from "./theme.js";
-import { mdToHtml } from "./markdown.js";
+import { mdToHtml, stripMd } from "./markdown.js";
 import { actorHandle, dmLabel, dmOthers, handleOnline, state, views, wikiCollapsed } from "./state.js";
 import { openSearchPalette } from "./search.js";
 import { showError, showToast } from "./toasts.js";
@@ -121,32 +121,37 @@ export function renderSidebar() {
       <span class="pre">${iconThread()}</span><span class="nm">${t("Threads")}</span>
     </button>
     <div class="sb-scroll" id="sb-scroll"></div>
-    <div class="sb-foot" id="sb-foot">
-      <span id="sb-ui" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}"></span>
+    <div class="sb-foot" id="sb-foot" hidden>
+      <span id="sb-ui" class="stale"></span>
     </div>`;
   document.getElementById("btn-avatar").addEventListener("click", (e) => openAccountMenu(e.currentTarget));
   document.getElementById("btn-guidelines").addEventListener("click", showGuidelines);
   document.getElementById("btn-search").addEventListener("click", openSearchPalette);
-  // W5-S10-A: the Threads view had no visible entry; this row (and the rail button) open it.
+  // W5-S10-A: the Threads view had no visible entry; this row opens it. U16: the rail button is
+  // gone, the Threads entry lives here only (the top section of the list).
   document.getElementById("sb-threads").addEventListener("click", () => openThreadsView());
-  // The UI version: what the user sees against what the server sends. A mismatch means a cache
-  // somewhere along the way - and this is the only way to see it.
+  // The UI version against the server's (U9): the foot stays hidden unless they differ. The
+  // stamp itself moved into the help popover as "Interface version", out of a newcomer's way.
   const foot = document.getElementById("sb-ui");
   if (foot) {
-    foot.textContent = `UI ${UI_STAMP || "?"}`;
     api("GET", "/api/ui-version").then((v) => {
-      if (!v.stamp) return;
-      foot.textContent = `UI ${UI_STAMP || "?"}`;
-      if (UI_STAMP && v.stamp !== UI_STAMP) {
-        foot.textContent = t("UI {mine} - the server has {theirs}", { mine: UI_STAMP, theirs: v.stamp });
-        foot.classList.add("stale");
-        foot.title = t("Your interface is older than the server's. Reload the page bypassing the cache.");
-      }
+      const notice = uiVersionNotice(UI_STAMP, v.stamp);
+      if (!notice) return;
+      foot.textContent = notice;
+      foot.title = t("Your interface is older than the server's. Reload the page bypassing the cache.");
+      document.getElementById("sb-foot")?.removeAttribute("hidden");
     }).catch(() => {});
   }
   // The event stream's state moved out of here into the bar above the conversation: "you are
   // not seeing new messages" must not share fine print with a version number.
   renderSidebarList();
+}
+
+/** The sidebar foot's text (U9): empty unless the loaded interface and the server's stamp are
+ *  both known and differ; then the one line that explains a stale cache. Pure, for the test. */
+export function uiVersionNotice(mine, theirs) {
+  if (!mine || !theirs || mine === theirs) return "";
+  return t("UI {mine} - the server has {theirs}", { mine, theirs });
 }
 
 /** A pointwise update of ONE row: the bold text and the badge. A navigation list has to be a
@@ -294,26 +299,31 @@ export function renderSidebarList() {
     // and a 16 px touch target lying inside another target is not saved even by the spacing
     // exception in WCAG 2.5.8.
     // `flat` draws the page alone, without its twist or its subtree: the folded-section list.
+    // W6-S14-C: the tree speaks ARIA. The page button is the treeitem (it is what the S14 keys
+    // move between), a parent carries aria-expanded and aria-level, its subtree sits in a group;
+    // the twist keeps its own expanded state for the pointer. The folded-section flat list is a
+    // plain list of rows, not a tree.
     const row = (p, depth, flat = false) => {
       const active = state.view === "wiki" && state.wiki.slug === p.slug;
       const hasKids = !flat && kids.has(p.slug);
       const closed = hasKids && wikiCollapsed.has(p.slug);
       const unseen = (p.unseen || 0) + (closed ? subtreeUnseen(p.slug) : 0);
       const title = escapeHtml(p.title || p.slug);
+      const treeAttrs = flat ? "" : ` role="treeitem"${hasKids ? ` aria-expanded="${closed ? "false" : "true"}"` : ""} aria-level="${depth + 1}"`;
       return `
       <div class="conv-row" style="padding-left:${(0.15 + depth * 0.85).toFixed(2)}rem">
         ${hasKids
           ? `<button class="twist ${closed ? "closed" : ""}" data-wikitwist="${escapeHtml(p.slug)}"
                aria-expanded="${closed ? "false" : "true"}" aria-label="${closed ? t("Expand") : t("Collapse")} ${title}">${iconChevron()}</button>`
           : `<span class="pre" aria-hidden="true">${iconDoc()}</span>`}
-        <button class="conv ${active ? "active" : ""}" data-wikipage="${escapeHtml(p.slug)}"
+        <button class="conv ${active ? "active" : ""}" data-wikipage="${escapeHtml(p.slug)}"${treeAttrs}
           ${active ? `aria-current="page"` : ""}
           aria-label="${title}${unseen ? `, ${t("{n} changes", { n: unseen })}` : ""}">
           <span class="nm">${title}</span>
           ${unseen ? `<span class="badge soft" aria-hidden="true">${unseen > 99 ? "99+" : unseen}</span>` : ""}
         </button>
       </div>
-      ${hasKids && !closed ? level(p.slug, depth + 1) : ""}`;
+      ${hasKids && !closed ? `<div role="group">${level(p.slug, depth + 1)}</div>` : ""}`;
     };
     const level = (key, depth) => (kids.get(key) || []).map((p) => row(p, depth)).join("");
     if (sectionClosed) {
@@ -322,7 +332,7 @@ export function renderSidebarList() {
       const active = state.view === "wiki" ? state.wiki.slug : null;
       return visibleRows("wiki", pages, true, active, unseen).map((p) => row(p, 0, true)).join("");
     }
-    return level("", 0);
+    return `<div class="wiki-tree" role="tree" aria-label="${t("Wiki")}">${level("", 0)}</div>`;
   };
 
   // The "+" buttons carried the accessible name "+" (content beats title), hence aria-label on
@@ -367,12 +377,12 @@ export function renderSidebarList() {
     catchup: () => hasCatchUp ? group("catchup", t("To catch up on"), isClosed("catchup") ? "" : `
       ${state.digest && state.digest.count > 0 ? `
       <button class="conv" id="btn-digest">
-        <span class="pre">${iconDigest()}</span><span class="nm">${t("What happened while you were away")}</span>
+        <span class="pre">${iconDigest()}</span><span class="nm">${t("While you were away")}</span>
         <span class="badge soft">${state.digest.count > 99 ? "99+" : state.digest.count}</span>
       </button>` : ""}
       ${openCount ? `
       <button class="conv qcount" id="btn-questions">
-        <span class="pre">?</span><span class="nm">${t("Questions waiting for an answer")}</span>
+        <span class="pre">?</span><span class="nm">${t("Open questions")}</span>
         <span class="badge coral">${openCount}</span>
       </button>` : ""}`) : "",
     channels: () => group("channels", t("Channels"),
@@ -478,7 +488,7 @@ async function openDigestModal() {
   };
   const mentionRow = (m) => `
     <button class="pin-row" data-gomsg="${m.id}" data-goconvid="${m.conversationId}">
-      <span class="pin-txt"><b>@${escapeHtml(actorHandle(m.actorId))}</b> ${escapeHtml(String(m.body || "").slice(0, 90))}</span>
+      <span class="pin-txt"><b>@${escapeHtml(actorHandle(m.actorId))}</b> ${escapeHtml(stripMd(m.body).slice(0, 90))}</span>
     </button>`;
   const { modal, close } = openModal(`
       <h2 id="m-title">${iconDigest()} ${t("What you missed")}</h2>
@@ -524,6 +534,7 @@ function showGuidelines() {
       <h2 id="m-title">${t("How we talk here")}</h2>
       <div class="gd-body md">${HOW_WE_TALK.map((p) => `<p>${escapeHtml(t(p))}</p>`).join("")}</div>
       <p class="mhint">${t("Agents receive their own, technical version of these rules on their first connection.")}</p>
+      <p class="mhint gd-version" title="${t("The version of the interface you have loaded right now. If it did not change after a deployment, your browser is holding an old copy - reload the page bypassing the cache.")}">${escapeHtml(t("Interface version {stamp}", { stamp: UI_STAMP || "?" }))}</p>
       <div class="row">
         <button class="btn ghost" id="gd-agent">${t("Show the agent guidelines")}</button>
         <button class="btn" id="gd-ok">${t("Got it")}</button>

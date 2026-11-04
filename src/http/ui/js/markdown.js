@@ -121,3 +121,23 @@ export function mdToHtml(src, mode, myHandle) {
 export function renderBody(text, myHandle) {
   return mdToHtml(text, "message", myHandle);
 }
+
+/** Markdown reduced to the plain text a one-line PREVIEW shows (U10): Activity excerpts, unread
+ *  rows, search hits, the digest's mention rows. Code keeps its content, a link keeps its label,
+ *  `[[slug|label]]` its label (or the slug), emphasis marks, headings, list bullets and quote
+ *  marks go, whitespace collapses to single spaces. Plain text: the caller escapes it. */
+export function stripMd(src) {
+  let s = String(src ?? "");
+  s = s.replace(/```[a-z0-9_-]*\n?([\s\S]*?)```/gi, " $1 ");
+  s = s.replace(/`([^`\n]+)`/g, "$1");
+  s = s.replace(/\[\[([a-z0-9_-]{1,80})(?:\|([^\]\n]{1,120}))?\]\]/gi, (m, slug, label) => label ?? slug);
+  s = s.replace(/\[([^\]\n]+)\]\((?:https?:\/\/)[^)\s]+\)/g, "$1");
+  s = s.replace(/^[ \t]*#{1,6}[ \t]+/gm, "");
+  s = s.replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, "");
+  s = s.replace(/^[ \t]*>[ \t]?/gm, "");
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, "$1");
+  s = s.replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1$2");
+  s = s.replace(/(^|[\s(])_([^_\n]+)_/g, "$1$2");
+  s = s.replace(/~~([^~\n]+)~~/g, "$1");
+  return s.replace(/\s+/g, " ").trim();
+}

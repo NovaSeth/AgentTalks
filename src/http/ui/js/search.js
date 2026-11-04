@@ -12,6 +12,7 @@ import { ensureActors } from "./data.js";
 import { avatarHtml, escapeHtml, timeAgo, trackOverlay } from "./dom.js";
 import { iconDoc, iconSearch } from "./icons.js";
 import { t } from "./i18n.js";
+import { stripMd } from "./markdown.js";
 import { actorHandle, dmLabel, dmOthers, mergeActors, recentConversations, state } from "./state.js";
 import { openConversation } from "./view-chat.js";
 import { openSearchView } from "./view-search.js";
@@ -306,7 +307,7 @@ export function openSearchPalette(opts = {}) {
           label: rowLabel("message", { name: `@${who}`, where }),
           html: `${avatarHtml(who, 22)}
                  <span class="pal-title">@${escapeHtml(who)} <span class="pal-where">${escapeHtml(where)} · ${timeAgo(m.ts)}</span></span>
-                 <span class="pal-snip">${highlightHtml(snippetAround(m.body, queryTerms(parsed.text), 140), queryTerms(parsed.text))}</span>`,
+                 <span class="pal-snip">${highlightHtml(snippetAround(stripMd(m.body), queryTerms(parsed.text), 140), queryTerms(parsed.text))}</span>`,
           go: () => openConversation(m.conversationId, m.id),
         });
       }

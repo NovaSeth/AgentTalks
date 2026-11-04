@@ -359,7 +359,7 @@ export function renderWikiMain(loading) {
       </div>
       ${!w.editing && !w.revision && (page || w.draft) ? `<button class="pillbtn" id="wiki-edit">${iconEdit()} ${t("Edit")}</button>` : ""}
       ${!w.editing && !w.revision && page && (page.createdBy === state.actor.handle || state.actor.isAdmin)
-        ? `<button class="iconbtn" id="wiki-delete" aria-label="${t("Delete page")}" title="${t("Delete page")}">${iconTrash()}</button>` : ""}
+        ? `<button class="iconbtn danger" id="wiki-delete" aria-label="${t("Delete page")}" title="${t("Delete page")}">${iconTrash()}</button>` : ""}
     </div>
     <div class="wiki-body viewfade">
       <div class="wiki-content" id="wiki-content"></div>

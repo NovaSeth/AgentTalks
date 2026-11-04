@@ -9,7 +9,7 @@ import { loadMessages } from "./data.js";
 import { avatarHtml, emptyStateHtml, escapeHtml, fmtTime, hamburgerHtml, toggleDrawerClass } from "./dom.js";
 import { iconCheck, iconChat } from "./icons.js";
 import { t } from "./i18n.js";
-import { mdToHtml } from "./markdown.js";
+import { stripMd } from "./markdown.js";
 import { syncRoute } from "./router.js";
 import { actorHandle, dmLabel, state, views } from "./state.js";
 
@@ -47,7 +47,7 @@ export { unreadDmCount } from "./counters.js";
 
 /** Screen reader name of one row: "@who in #where: excerpt". */
 function rowLabel(m, c) {
-  const excerpt = String(m.body || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  const excerpt = stripMd(m.body).slice(0, 120);
   return `@${actorHandle(m.actorId)} ${t("in {where}", { where: convName(c) })}${excerpt ? `: ${excerpt}` : ""}`;
 }
 
@@ -58,7 +58,7 @@ function rowHtml(m, c) {
           ${avatarHtml(handle, 28)}
           <span class="unread-main">
             <span class="unread-top"><b>@${escapeHtml(handle)}</b>${m.threadId ? ` <span class="unread-where">${t("in a thread")}</span>` : ""} <span class="unread-time">${fmtTime(m.ts)}</span></span>
-            <span class="unread-body md">${mdToHtml(m.body, "message", state.actor?.handle)}</span>
+            <span class="unread-body">${escapeHtml(stripMd(m.body))}</span>
           </span>
         </button>`;
 }

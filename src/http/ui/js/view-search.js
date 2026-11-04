@@ -11,21 +11,49 @@ import { api, sessionGeneration } from "./api.js";
 import { avatarHtml, emptyStateHtml, escapeHtml, fmtDateTime, skeletonHtml, toggleDrawerClass } from "./dom.js";
 import { iconSearch } from "./icons.js";
 import { t } from "./i18n.js";
+import { stripMd } from "./markdown.js";
 import { buildRoute, syncRoute } from "./router.js";
-import { highlightHtml, matchesFrom, openSearchPalette, parseQuery, queryTerms, searchParams, snippetAround } from "./search.js";
+import { highlightHtml, matchesFrom, openSearchPalette, parseQuery, queryTerms, resolveIn, searchParams, snippetAround } from "./search.js";
 import { actorHandle, dmLabel, dmOthers, mergeActors, state, views } from "./state.js";
 import { openConversation } from "./view-chat.js";
 
 /** The current search: the query, what it parsed to, and what the server answered. Module-local
- *  rather than on `state`: nothing outside this view reads it. */
-let current = { q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null, gen: -1 };
+ *  rather than on `state`: nothing outside this view reads it. `olderBefore` is the id to page
+ *  from in a filter-only listing (U11), null when the conversation's start was reached. */
+let current = { q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null, gen: -1, olderBefore: null };
 
 /** Every search carries a sequence number and the session generation it started in (F1): an
  *  older answer (a newer query was typed, or the account changed under it) is dropped before
  *  it touches `current`, the actor directory or the DOM. */
 let searchSeq = 0;
 
-const emptySearch = () => ({ q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null, gen: sessionGeneration() });
+const emptySearch = () => ({ q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null, gen: sessionGeneration(), olderBefore: null });
+
+/** A filter-only page size: the server caps a page at 500; 200 leaves room for from: to thin it. */
+const FILTER_PAGE = 200;
+
+const hasFilter = (parsed) => !!(parsed.in || parsed.from || parsed.before !== null || parsed.after !== null);
+
+/** The client side of a filter-only query (U11): no words, so nothing for the FTS index; the
+ *  conversation's messages are listed newest first with from:, before: and after: applied here.
+ *  Deleted messages are left out (the search index never returns them either). Pure. */
+export function applyFilters(messages, parsed) {
+  return (messages || [])
+    .filter((m) => m && !m.deletedAt)
+    .filter((m) => matchesFrom(m, parsed.from))
+    .filter((m) => parsed.before === null || (m.ts || 0) <= parsed.before)
+    .filter((m) => parsed.after === null || (m.ts || 0) >= parsed.after)
+    .sort((a, b) => ((b.ts || 0) - (a.ts || 0)) || ((b.id || 0) - (a.id || 0)));
+}
+
+/** The `in:` token for a conversation: `#slug` for a channel, `@handle` for a one-to-one
+ *  direct conversation, null for a group (no single name to filter by). */
+function inTokenFor(c) {
+  if (!c) return null;
+  if (c.slug) return `#${c.slug}`;
+  const others = dmOthers(c);
+  return others.length === 1 ? `@${others[0].handle}` : null;
+}
 
 /** Hits grouped by conversation. Groups are ordered by their newest hit, and the hits inside a
  *  group newest first: the server already returns the newest page, so the top is "most recent". */
@@ -51,7 +79,9 @@ export async function openSearchView(q) {
   const my = ++searchSeq;
   const gen = sessionGeneration();
   const fresh = () => my === searchSeq && gen === sessionGeneration();
-  current = { q: query, parsed, loading: !!parsed.text, messages: [], unresolvedIn: false, error: null, gen };
+  const filterOnly = !parsed.text && hasFilter(parsed);
+  const inConv = filterOnly ? resolveIn(parsed.in, state.conversations) : null;
+  current = { q: query, parsed, loading: !!parsed.text || !!inConv, messages: [], unresolvedIn: false, error: null, gen, olderBefore: null };
   state.view = "search";
   state.drawerOpen = false;
   state.threadOpen = null;
@@ -60,6 +90,14 @@ export async function openSearchView(q) {
   // `views.search` (registered in app.js, W5-S11-A), which is renderSearchMain below.
   views.shell();
   toggleDrawerClass();
+  if (filterOnly) {
+    // U11: filters alone list the conversation (what a human who typed them expects); `in:` naming nothing I
+    // can see is reported, and no `in:` at all keeps the hint with a suggestion.
+    if (parsed.in && !inConv) { current.unresolvedIn = true; renderSearchMain(); return; }
+    if (!inConv) return;
+    await loadFilterPage(inConv.id, parsed, null, fresh, query);
+    return;
+  }
   if (!parsed.text) return;
   const params = searchParams(parsed, state.conversations);
   if (params.unresolvedIn) {
@@ -81,6 +119,26 @@ export async function openSearchView(q) {
   if (state.view === "search" && current.q === query) renderSearchMain();
 }
 
+/** One page of a filter-only listing: the conversation's newest messages (older than `before`
+ *  when paging), filtered on the client and appended to what is shown. A full page means there
+ *  may be older ones: the view offers "Show older". */
+async function loadFilterPage(convId, parsed, before, fresh, query) {
+  let data = null, error = null;
+  const qs = `limit=${FILTER_PAGE}${before ? `&before=${before}` : ""}`;
+  try { data = await api("GET", `/api/conversations/${convId}/messages?${qs}`); }
+  catch (e) { error = e; }
+  if (!fresh()) return;
+  if (data) {
+    mergeActors(data.actors);
+    const page = data.messages || [];
+    current.messages = applyFilters([...current.messages, ...page], parsed);
+    current.olderBefore = page.length >= FILTER_PAGE ? Math.min(...page.map((m) => m.id)) : null;
+  }
+  current.error = error;
+  current.loading = false;
+  if (state.view === "search" && current.q === query) renderSearchMain();
+}
+
 const conversationName = (c) => c ? (c.slug ? `#${c.slug}` : dmLabel(c)) : t("a conversation you left");
 
 /** The main column of the search view: the box with the query, a summary line, the groups. */
@@ -89,13 +147,14 @@ export function renderSearchMain() {
   if (!el || state.view !== "search") return;
   // Results kept from another account's session are never drawn (F1).
   if (current.gen !== sessionGeneration()) current = emptySearch();
-  const { q, parsed, loading, messages, unresolvedIn, error } = current;
+  const { q, parsed, loading, messages, unresolvedIn, error, olderBefore } = current;
   const groups = groupByConversation(messages);
   const terms = queryTerms(parsed.text);
   const back = state.activeId && state.conversations.find((c) => c.id === state.activeId);
+  const listing = !parsed.text && !!parsed.in;
   const summary = loading ? t("Searching...")
-    : !parsed.text ? t("Add a word to search for")
-      : unresolvedIn ? t("No conversation named {name}", { name: parsed.in })
+    : unresolvedIn ? t("No conversation named {name}", { name: parsed.in })
+      : !parsed.text && !listing ? t("Add a word to search for")
         : error ? t("The search did not go through")
           : t("{n} results", { n: messages.length });
   el.innerHTML = `
@@ -111,7 +170,7 @@ export function renderSearchMain() {
           placeholder="${t("Words to find, with in:#channel from:@name before:YYYY-MM-DD after:YYYY-MM-DD")}">
         <button class="btn" type="submit">${t("Search")}</button>
       </form>
-      <div class="search-results viewfade" id="search-results">${resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q })}</div>
+      <div class="search-results viewfade" id="search-results">${resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q, listing, olderBefore, suggest: inTokenFor(back) })}</div>
     </div>`;
   document.getElementById("search-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -120,6 +179,16 @@ export function renderSearchMain() {
   });
   document.getElementById("search-back")?.addEventListener("click", () => openConversation(back.id));
   const results = document.getElementById("search-results");
+  // U11: the suggestion adds in: for the conversation you came from; "Show older" pages the
+  // filter-only listing from its oldest row.
+  results.querySelector("[data-suggest-in]")?.addEventListener("click", (e) =>
+    openSearchView(`${q} in:${e.currentTarget.dataset.suggestIn}`));
+  results.querySelector("[data-older]")?.addEventListener("click", (e) => {
+    e.currentTarget.disabled = true;
+    const conv = resolveIn(parsed.in, state.conversations);
+    const my = ++searchSeq, gen = sessionGeneration();
+    if (conv) loadFilterPage(conv.id, parsed, olderBefore, () => my === searchSeq && gen === sessionGeneration(), q);
+  });
   results.querySelectorAll("[data-hit]").forEach((b) => b.addEventListener("click", () => {
     openConversation(Number(b.dataset.conv), Number(b.dataset.hit));
   }));
@@ -135,15 +204,22 @@ export function renderSearchMain() {
   if (!loading) document.getElementById("search-q").focus();
 }
 
-function resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q }) {
+function resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q, listing, olderBefore, suggest }) {
   if (loading) return skeletonHtml();
-  if (!parsed.text) {
-    return emptyStateHtml(iconSearch(2.4), t("Add a word to search for"),
-      t("Filters narrow a search down; the words to look for are still needed."));
-  }
   if (unresolvedIn) {
     return emptyStateHtml(iconSearch(2.4), t("No conversation named {name}", { name: parsed.in }),
       t("in: takes the name of a channel or a person you can see, for example in:#general or in:@nestor."));
+  }
+  if (!parsed.text && !listing) {
+    // No words and no place: the hint stays, with the one click that turns the filters into a
+    // listing of the conversation you came from (U11).
+    return emptyStateHtml(iconSearch(2.4), t("Add a word to search for"),
+      t("Or add in:#channel to list the latest messages there."))
+      + (suggest && hasFilter(parsed) ? `<p class="search-suggest"><button class="btn slim" data-suggest-in="${escapeHtml(suggest)}">${escapeHtml(t("List the latest in {name}", { name: suggest }))}</button></p>` : "");
+  }
+  if (listing && !error && !groups.length) {
+    return emptyStateHtml(iconSearch(2.4), t("Nothing in {name} matches these filters", { name: `#${parsed.in}` }),
+      t("Try another author or wider dates."));
   }
   if (error) {
     return emptyStateHtml(iconSearch(2.4), t("The search did not go through"),
@@ -169,12 +245,12 @@ function resultsHtml(groups, terms, { loading, parsed, unresolvedIn, error, q })
           <span class="sh-body">
             <span class="sh-head"><b>@${escapeHtml(who)}</b><span class="sh-when">${fmtDateTime(m.ts)}</span>
               ${m.threadId ? `<span class="sh-thread">${t("in a thread")}</span>` : ""}</span>
-            <span class="sh-text">${highlightHtml(snippetAround(m.body, terms), terms)}</span>
+            <span class="sh-text">${highlightHtml(snippetAround(stripMd(m.body), terms), terms)}</span>
           </span>
         </button>`;
         }).join("")}
       </section>`;
-  }).join("");
+  }).join("") + (listing && olderBefore ? `<p class="search-older"><button class="btn slim" data-older="${olderBefore}">${escapeHtml(t("Show older"))}</button></p>` : "");
 }
 
 // ------------------------------------------------------------- Mod+F in a conversation

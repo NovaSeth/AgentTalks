@@ -172,10 +172,9 @@ test("W5-S8-C: Mod+. is run by runShortcut, not by view-chat's own listener", as
   assert.doesNotMatch(chat, /e\.key !== "\."/);
 });
 
-test("W5-S10-A: a rail button and a sidebar row under the header open the Threads view", async () => {
+test("W5-S10-A (U16 decision: one entry): the sidebar row under the header opens the Threads view, the rail has none", async () => {
   const app = src("app.js");
-  assert.match(app, /railButton\("rail-threads"/, "the rail has a Threads place");
-  assert.match(app, /getElementById\("rail-threads"\)[^\n]*openThreadsView/, "the button opens #/threads");
+  assert.doesNotMatch(app, /railButton\("rail-threads"/, "U16: no rail Threads place; the sidebar row is the entry");
   const sidebar = src("view-sidebar.js");
   const head = sidebar.slice(sidebar.indexOf('<div class="sb-head">'), sidebar.indexOf('<div class="sb-scroll"'));
   assert.match(head, /id="sb-threads"/, "the row sits under the workspace header, above the list");

@@ -4,9 +4,9 @@
 import { api } from "./api.js";
 import { refreshNotifications } from "./data.js";
 import { emptyStateHtml, escapeHtml, fmtDateTime, hamburgerHtml, openModal, toggleDrawerClass } from "./dom.js";
-import { iconBell, iconChat, iconDoc, iconWrench } from "./icons.js";
+import { iconBell, iconChat, iconCheck, iconDoc, iconWrench } from "./icons.js";
 import { msg, t } from "./i18n.js";
-import { mdToHtml } from "./markdown.js";
+import { mdToHtml, stripMd } from "./markdown.js";
 import { dmLabel, state, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 import { openWikiPage } from "./view-wiki.js";
@@ -82,7 +82,9 @@ const NOTIF_TEXT = {
   mention: msg("mentioned you"),
   dm: msg("wrote to you privately"),
   reaction: msg("reacted to your post"),
-  wiki: msg("changed a page you co-author"),
+  // W6-S14-A: the page is the target ("changed the page Runbook"); a click opens it, there is
+  // no diff route to promise.
+  wiki: msg("changed the page"),
   fix: msg("fixed what you reported - confirm the symptom is gone"),
 };
 
@@ -92,13 +94,13 @@ const NOTIF_TEXT = {
 export function notifSentence(n) {
   const who = `@${n.from ?? "?"}`;
   const what = t(NOTIF_TEXT[n.kind] || msg("did something that concerns you - open it to see"));
-  const where = notifPlace(n);
+  const where = n.wikiSlug ? notifTarget(n) : notifPlace(n);
   return where ? `${who} ${what} ${where}` : `${who} ${what}`;
 }
 
 /** Sentence plus excerpt: the name a screen reader reads for the row button. */
 export function notifLabel(n) {
-  return n.excerpt ? `${notifSentence(n)}: ${n.excerpt}` : notifSentence(n);
+  return n.excerpt ? `${notifSentence(n)}: ${stripMd(n.excerpt)}` : notifSentence(n);
 }
 
 /** "in #general", "in a thread in #bugs"; "" for a DM (the verb already says privately) and for
@@ -136,14 +138,16 @@ export function renderNotificationsMain() {
   const el = document.getElementById("main");
   if (!el) return;
   const list = state.notifications;
+  // U5: the two actions carry an icon and a name; on a phone the S8 CSS hides the label, so the
+  // title keeps its room and nothing leaves the viewport.
   el.innerHTML = `
-    <div class="topbar">
+    <div class="topbar notif-topbar">
       ${hamburgerHtml()}
       <div class="title"><div class="t">${iconBell()} ${t("Activity")}</div>
         <div class="topic">${state.notifUnread ? t("{n} new", { n: state.notifUnread }) : t("nothing unread")}</div></div>
       ${("Notification" in window) && Notification.permission !== "granted"
-        ? `<button class="pillbtn" id="btn-notif-perm">${t("Turn on system notifications")}</button>` : ""}
-      <button class="btn ghost" id="btn-notif-read" ${state.notifUnread ? "" : "disabled"}>${t("Mark all as read")}</button>
+        ? `<button class="pillbtn notif-act" id="btn-notif-perm" aria-label="${t("Turn on system notifications")}" title="${t("Turn on system notifications")}">${iconBell()}<span class="notif-act-l">${t("Turn on system notifications")}</span></button>` : ""}
+      <button class="btn ghost notif-act" id="btn-notif-read" aria-label="${t("Mark all as read")}" title="${t("Mark all as read")}" ${state.notifUnread ? "" : "disabled"}>${iconCheck()}<span class="notif-act-l">${t("Mark all as read")}</span></button>
     </div>
     <div class="notif-list viewfade" id="notif-list">
       ${list.length
@@ -153,7 +157,7 @@ export function renderNotificationsMain() {
           <span class="nb">
             <span class="nh"><b>@${escapeHtml(n.from ?? "?")}</b> ${t(NOTIF_TEXT[n.kind] || msg("did something that concerns you - open it to see"))}
               ${notifPlace(n) ? `<span class="nw">${escapeHtml(notifPlace(n))}</span>` : n.wikiSlug ? `<span class="nw">${escapeHtml(notifTarget(n))}</span>` : ""}</span>
-            ${n.excerpt ? `<span class="nx">${escapeHtml(n.excerpt)}</span>` : ""}
+            ${n.excerpt ? `<span class="nx">${escapeHtml(stripMd(n.excerpt))}</span>` : ""}
           </span>
           <span class="nt">${fmtDateTime(n.createdAt)}</span>
         </button>`).join("")

@@ -193,6 +193,16 @@ const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:no
  *  @param opts.persistent a window that CANNOT be dismissed with Escape or a backdrop
  *         click. Reserved for content shown once and unrecoverable (an invite
  *         code): a reflexive Escape cost the whole operation there. */
+// U13: while a modal is open the app behind it is inert - the backdrop dims it, and inert also
+// takes it out of the Tab order and the accessibility tree (the composer stayed focusable behind
+// the passkey offer). Counted, because a modal can open over another (confirm over a form).
+let openModals = 0;
+function setAppInert(open) {
+  openModals = Math.max(0, openModals + (open ? 1 : -1));
+  const app = document.getElementById("app");
+  if (app) app.inert = openModals > 0;
+}
+
 export function openModal(html, opts = {}) {
   const returnTo = document.activeElement;
   const ov = document.createElement("div");
@@ -200,6 +210,7 @@ export function openModal(html, opts = {}) {
   ov.innerHTML = `<div class="modal ${opts.modalClass ?? ""}" role="dialog" aria-modal="true"
     aria-labelledby="m-title" ${opts.style ? `style="${opts.style}"` : ""}>${html}</div>`;
   document.body.appendChild(ov);
+  setAppInert(true);
 
   const onKey = (e) => {
     if (e.key === "Escape" && !ov.dataset.persistent) { e.preventDefault(); close(); return; }
@@ -217,6 +228,8 @@ export function openModal(html, opts = {}) {
     untrack();
     document.removeEventListener("keydown", onKey, true);
     ov.remove();
+    // The app is usable again before focus returns into it: an inert element refuses focus.
+    setAppInert(false);
     // A caller with listeners of its own (confirmModal's Escape, the news queue) learns that the
     // window is gone; `forced` = the account teardown closed it, not the user.
     opts.onClose?.({ forced: !!how?.forced });
@@ -330,6 +343,24 @@ export function sidebarEmptyHtml(text, action) {
 export function skeletonHtml() {
   return Array.from({ length: 5 }).map(() => `
     <div class="skeleton"><div class="sk-line w40"></div><div class="sk-line w80"></div></div>`).join("");
+}
+
+// ------------------------------------------------------- the floating dock
+/** U1: the dock (composer, presence bar, jump pill) floats over the message list, so the list
+ *  needs a bottom padding equal to the dock's height, whatever the composer grows to (a draft of
+ *  five lines, a file preview, the reply bar). A ResizeObserver writes `--dock-h` on the dock's
+ *  parent (.main); app.css reads it in .messages. One observer per dock element. */
+export function watchDockHeight(dock) {
+  if (!dock || dock.dataset.dockWatched || typeof ResizeObserver !== "function") return;
+  dock.dataset.dockWatched = "1";
+  const host = dock.parentElement;
+  if (!host) return;
+  const apply = () => {
+    const h = Math.ceil(dock.getBoundingClientRect().height);
+    host.style.setProperty("--dock-h", `${h}px`);
+  };
+  new ResizeObserver(apply).observe(dock);
+  apply();
 }
 
 // ------------------------------------------------------- reading position
