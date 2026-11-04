@@ -10,7 +10,7 @@ import { fakeAt } from "../plugin/fake-at.ts";
 
 // T-MG-21 fix round 2, F2 / F6 / F3: ONE trust-list lock protocol for both writers (plugin
 // login.mjs and `atalk login --local`); the same scenario table runs against both.
-//  F2: a lock is evicted only when its owner is provably dead (same host, pid gone), never by age.
+//  F2: (round 3 spec change) a lock is NEVER evicted automatically; a dead owner's lock times out with a message naming the fix.
 //  F6: the lock is taken FIRST - a lock timeout leaves zero writes and an existing credential alone.
 //  F3: a failing trust-list write leaves no *.tmp behind and rolls the credential back.
 
@@ -79,7 +79,7 @@ const deadPid = () => spawnSync(process.execPath, ["-e", ""]).pid;
 const tmpLeft = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []).filter((n) => n.endsWith(".tmp"));
 
 for (const impl of [plugin, atalk]) {
-  test(`R2-F2 [${impl.name}]: a lock held by a LIVE process is never evicted by age; a lock naming a DEAD pid is`, async (t) => {
+  test(`R2-F2 [${impl.name}]: a lock is never evicted: not by age, not for a LIVE owner, not for a DEAD pid (round 3)`, async (t) => {
     const h = await impl.start();
     t.after(() => h.close());
     const owner = liveOwner(t);
@@ -90,22 +90,26 @@ for (const impl of [plugin, atalk]) {
     writeFileSync(a.lock, body);
     const ra = await h.run(a, { AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS: "400" });
     assert.equal(ra.code, 1, ra.err);
-    assert.match(ra.err, /locked by another login/);
+    assert.match(ra.err, /locked by pid \d+ on .*\(running\)/);
     assert.equal(existsSync(a.file), false, "no credential");
     assert.equal(existsSync(a.list), false, "no trust list");
     assert.equal(readFileSync(a.lock, "utf8"), body, "the live owner's lock is untouched");
 
+    // round 3: a DEAD owner's lock is NOT evicted either; login times out, writes nothing, says "not running"
     const b = newEnv();
     mkdirSync(b.conf, { recursive: true });
     const other = { path: "/somewhere/else/.agenttalks.json", sha256: "ab".repeat(32) };
-    writeFileSync(b.list, JSON.stringify({ projects: [other] }));
-    writeFileSync(b.lock, JSON.stringify({ pid: deadPid(), host: hostname(), at: Date.now() }));
-    const rb = await h.run(b, {});
-    assert.equal(rb.code, 0, rb.err);
-    const projects = JSON.parse(readFileSync(b.list, "utf8")).projects;
-    assert.equal(projects.length, 2);
-    assert.deepEqual(projects[0], other);
-    assert.equal(existsSync(b.lock), false, "lock released");
+    const listBody = JSON.stringify({ projects: [other] });
+    writeFileSync(b.list, listBody);
+    const deadBody = JSON.stringify({ pid: deadPid(), host: hostname(), at: Date.now() });
+    writeFileSync(b.lock, deadBody);
+    const rb = await h.run(b, { AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS: "400" });
+    assert.equal(rb.code, 1, rb.err);
+    assert.ok(rb.err.includes(b.lock), "the message names the lock path");
+    assert.match(rb.err, /not running/);
+    assert.equal(existsSync(b.file), false, "no credential");
+    assert.equal(readFileSync(b.list, "utf8"), listBody, "trust list unchanged");
+    assert.equal(readFileSync(b.lock, "utf8"), deadBody, "the lock is still there, untouched");
 
     // other host, and unreadable content: both count as held
     for (const content of [JSON.stringify({ pid: deadPid(), host: "some-other-host.invalid", at: 1 }), "not json {"]) {

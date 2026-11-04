@@ -41,7 +41,7 @@ async function setup() {
   return { s, token: mintToken(s.ctx, ala.id, "t").token };
 }
 
-test("R1-F2: atalk login --local waits for a held trust-list lock and keeps the other entries; a lock whose owner is dead is cleared", async () => {
+test("R1-F2: atalk login --local waits for a held trust-list lock and keeps the other entries; a dead owner's lock is not cleared", async () => {
   const { s, token } = await setup();
   const cfg = mkdtempSync(join(tmpdir(), "atalk-lock-cfg-"));
   const dir = mkdtempSync(join(tmpdir(), "atalk-lock-dir-"));
@@ -64,10 +64,18 @@ test("R1-F2: atalk login --local waits for a held trust-list lock and keeps the 
   assert.equal(existsSync(lock), false, "lock released");
   releaser.kill();
 
-  // stale: at = now - 60 s
+  // round 3 (spec change): a lock whose owner is dead is NOT cleared automatically
   const dir2 = mkdtempSync(join(tmpdir(), "atalk-lock-dir-"));
   const cfg2 = mkdtempSync(join(tmpdir(), "atalk-lock-cfg-"));
-  mkdirSync(cfg2, { recursive: true });
+  const lock2 = join(cfg2, "trusted-projects.json.lock");
+  const body2 = JSON.stringify({ pid: spawnSync(process.execPath, ["-e", ""]).pid, host: hostname(), at: Date.now() });
+  writeFileSync(lock2, body2);
+  const r2 = await run(["login", "--url", s.url, "--token", token, "--local"], { AGENTTALKS_CONFIG_DIR: cfg2, AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS: "300" }, dir2);
+  assert.equal(r2.code, 1, r2.err);
+  assert.match(r2.err, /not running/);
+  assert.equal(existsSync(join(cfg2, "trusted-projects.json")), false);
+  assert.equal(readFileSync(lock2, "utf8"), body2);
+});
   writeFileSync(join(cfg2, "trusted-projects.json.lock"), JSON.stringify({ pid: spawnSync(process.execPath, ["-e", ""]).pid, host: hostname(), at: Date.now() }));
   const r2 = await run(["login", "--url", s.url, "--token", token, "--local"], { AGENTTALKS_CONFIG_DIR: cfg2 }, dir2);
   assert.equal(r2.code, 0, r2.err);

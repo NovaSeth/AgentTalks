@@ -309,7 +309,7 @@ test("R1-F1: a file swapped in between login's rename and the trust step -> exit
   assert.equal(list.length, 0);
 });
 
-test("R1-F2: a fresh lock held by someone else -> login waits, then both the old and the new entry are present; a lock whose owner is dead is cleared", async (t) => {
+test("R1-F2: a fresh lock held by someone else -> login waits, then both the old and the new entry are present; a dead owner's lock is not cleared", async (t) => {
   const fake: FakeAt = await fakeAt();
   t.after(() => fake.close());
   const s = setup();
@@ -332,8 +332,10 @@ test("R1-F2: a fresh lock held by someone else -> login waits, then both the old
   const s2 = setup();
   mkdirSync(s2.conf, { recursive: true });
   writeFileSync(s2.trustFile + ".lock", deadLockBody(Date.now()));
-  const r2 = await login(s2, ["--url", fake.url, "--token", "-"], TOKEN + "\n");
-  assert.equal(r2.code, 0, r2.stderr);
+  const r2 = await login(s2, ["--url", fake.url, "--token", "-"], TOKEN + "\n", { AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS: "300" });
+  assert.equal(r2.code, 1, r2.stderr); // round 3 (spec change): never evicted
+  assert.match(r2.stderr, /not running/);
+  assert.ok(existsSync(s2.trustFile + ".lock"), "lock still there");
 });
 
 test("R1-F3: non-regular outputs are refused before any write; a failing trust step leaves no new credential", async (t) => {
@@ -368,7 +370,7 @@ test("R1-F3: non-regular outputs are refused before any write; a failing trust s
   writeFileSync(d.trustFile + ".lock", lockBody(Date.now()));
   const rd = await login(d, ["--url", fake.url, "--token", "-"], TOKEN + "\n", { AGENTTALKS_LOGIN_LOCK_TIMEOUT_MS: "200" });
   assert.equal(rd.code, 1);
-  assert.match(rd.stderr, /locked by another login/);
+  assert.match(rd.stderr, /locked by pid \d+ on .*\(running\)/);
   assert.equal(existsSync(d.file), false, "no credential left behind");
 
   const e = setup();
