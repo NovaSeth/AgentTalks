@@ -88,9 +88,11 @@ export function createWakeTools(o) {
   const expect = expectedPrincipal(o.env);
   const idRaw = o.env.AGENTTALKS_EXPECT_ACTOR_ID;
   const expectId = typeof idRaw === "string" && /^\d+$/.test(idRaw.trim()) ? Number(idRaw.trim()) : null;
-  let logged = false;
-  /** Says why, once per process. @param {string} line */
-  const refuse = (line) => { if (!logged) { logged = true; o.log(line); } };
+  /** @type {Set<string>} */
+  const told = new Set();
+  /** Says why, once per process and per kind of failure (default: the one refusal reason).
+   *  @param {string} line @param {string} [kind] */
+  const refuse = (line, kind = "refusal") => { if (!told.has(kind)) { told.add(kind); o.log(line); } };
   /** @type {string | null} */
   let startProblem = null;
   if (!expect) startProblem = "AgentTalks wake tools: no expected principal (AGENTTALKS_EXPECT_*): this server serves woken runs only.";
@@ -115,7 +117,21 @@ export function createWakeTools(o) {
         }
         if (problem) refuse(problem);
         return !problem;
-      }, () => { check = null; return false; });
+      }, (/** @type {any} */ err) => {
+        // B-MG-107: say why, from the status code alone (never the token or the server's text).
+        // A refused token (401/403) is final; a server or network failure is asked again next time.
+        const status = Number(err?.status) || 0;
+        if (status === 401 || status === 403) {
+          refuse(`AgentTalks wake tools: the server refused the token (HTTP ${status}); the tools stay unavailable.`, "auth");
+          return false;
+        }
+        refuse(status
+          ? `AgentTalks wake tools: the server could not check the identity (HTTP ${status}); the tools will try again.`
+          : "AgentTalks wake tools: the server could not be reached to check the identity; the tools will try again.",
+        status ? "server" : "network");
+        check = null;
+        return false;
+      });
     }
     return check;
   }
