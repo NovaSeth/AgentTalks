@@ -119,7 +119,7 @@ test("filter: never my own message; message_updated never pushes; deleted never 
   assert.equal(classify(msgEvent({ actorId: ME.id, conversationId: 3 }), s), null);
   assert.equal(classify(msgEvent({ conversationId: 3 }, "message_updated"), s), null);
   assert.equal(classify(msgEvent({ conversationId: 3, deletedAt: 5 }), s), null);
-  assert.equal(classify({ type: "reaction", conversationId: 3, messageId: 1 }, s), null);
+  assert.equal(classify({ type: "reaction", conversationId: 3, messageId: 1 } as any, s), null);
 });
 
 test("filter: replies in threads I started or replied in", () => {

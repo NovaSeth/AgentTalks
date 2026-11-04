@@ -1,5 +1,5 @@
 // @ts-check
-/**
+/*
  * Framing other actors' messages as untrusted data before they enter a model's context.
  *
  * A push channel into an agent's session is a prompt-injection path: anyone who can post in
