@@ -172,3 +172,37 @@ test("F1 (codex 3): a failed page followed by a reconnect keeps the floor", asyn
   await settle();
   assert.deepEqual(ids(5), range(31));
 });
+
+// ---- fix round 2 (codex review-r2 F2, F3): floors are captured at every break, retried at every resume
+test("F2 (codex): a second break after a successful catch-up recaptures the floor", async (t) => {
+  server5 = range(31).map((i) => msg(i));
+  await resume(t);
+  await settle();
+  assert.deepEqual(ids(5), range(31));
+  last().drop(2);
+  for (let i = 32; i <= 62; i++) server5.push(msg(i));
+  for (let i = 33; i <= 62; i++) store.upsertMessage(5, msg(i));   // a refresh during the second break
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  assert.deepEqual(ids(5), range(62));
+});
+
+test("F3 (codex): a retained floor is retried although an SSE event advanced the live cursor", async (t) => {
+  twoLoaded();
+  server5 = range(31).map((i) => msg(i));
+  failAfterOnce = true;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  sse.connectSSE(); last().open(); last().drop(2);
+  t.mock.timers.tick(1000);
+  let delivered = false;
+  onRequest = (p) => { if (!delivered && p.includes("/conversations/4/")) { delivered = true; live(msg(31)); } };
+  last().open();
+  await settle();
+  last().drop(2);
+  t.mock.timers.tick(2000);
+  assert.equal(last().url, "/api/events?after=31");
+  last().open();
+  await settle();
+  assert.deepEqual(ids(5), range(31));
+});
