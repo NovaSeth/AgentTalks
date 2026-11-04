@@ -18,6 +18,7 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createApi } from "../lib/api.mjs";
 import { trustProjectFile } from "../lib/trust.mjs";
@@ -72,7 +73,17 @@ function isLink(p) {
  *  @param {string} dir */
 function isTracked(dir) {
   try {
-    execFileSync("git", ["ls-files", "--error-unmatch", "--", NAME], { cwd: dir, stdio: "ignore", timeout: 5000 });
+    // The repository is untrusted input: no program its config names may run (fsmonitor,
+    // hooks), the config of the cwd is not consulted, and the env is minimal.
+    execFileSync("git", [
+      "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+      "-C", dir, "ls-files", "--error-unmatch", "--", NAME,
+    ], {
+      cwd: tmpdir(),
+      env: { PATH: process.env.PATH ?? "", HOME: tmpdir(), GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" },
+      stdio: "ignore",
+      timeout: 5000,
+    });
     return true;
   } catch { return false; }
 }
