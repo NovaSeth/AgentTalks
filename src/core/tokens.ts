@@ -35,6 +35,15 @@ type TokenRow = {
 
 const PREFIX = "atk_";
 
+/**
+ * One structured line for a security-relevant event: the fixed prefix "security:" followed by
+ * JSON, so a log shipper can grep and parse it. NEVER pass a secret in `fields` (password,
+ * token, cookie, invite code): log ids and handles only.
+ */
+export function securityLog(event: string, fields: Record<string, unknown> = {}): void {
+  console.warn(`security: ${JSON.stringify({ event, ...fields })}`);
+}
+
 const toInfo = (r: TokenRow): TokenInfo => ({
   id: r.id,
   actorId: r.actor_id,
@@ -77,6 +86,7 @@ export function mintToken(
   const row = ctx.db
     .prepare("SELECT * FROM tokens WHERE hash = ?")
     .get(hashOf(token)) as TokenRow;
+  securityLog("token_minted", { actorId, tokenId: row.id, expires: expiresAt !== null });
   return { token, info: toInfo(row) };
 }
 
@@ -143,7 +153,9 @@ export function revokeToken(ctx: Ctx, tokenId: number): boolean {
   const r = ctx.db
     .prepare("UPDATE tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
     .run(ctx.now(), tokenId);
-  return Number(r.changes ?? 0) > 0;
+  const changed = Number(r.changes ?? 0) > 0;
+  if (changed) securityLog("token_revoked", { tokenId });
+  return changed;
 }
 
 export function listTokens(ctx: Ctx, actorId: number): TokenInfo[] {

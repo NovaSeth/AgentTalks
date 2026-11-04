@@ -30,6 +30,7 @@ import { getActorByHandle } from "./actors.ts";
 export const WAKE_MIN_INTERVAL = 60;
 export const WAKE_MAX_FAILURES = 5;
 export const WAKE_TIMEOUT_MS = 10_000;
+export const WAKE_BODY_TTL_SEC = 300;
 
 export type WakeConfig = {
   kind: "webhook";
@@ -105,11 +106,13 @@ export function clearWake(ctx: Ctx, actorId: number): void {
  *  say so AT WRITE TIME - a silent send looks like success. */
 export function isWakeable(ctx: Ctx, actorId: number): boolean {
   const r = ctx.db
-    .prepare("SELECT wake_kind, wake_target, wake_disabled_at FROM actors WHERE id = ?")
+    .prepare("SELECT wake_kind, wake_target, wake_disabled_at, disabled_at FROM actors WHERE id = ?")
     .get(actorId) as
-    | { wake_kind: string | null; wake_target: string | null; wake_disabled_at: number | null }
+    | { wake_kind: string | null; wake_target: string | null; wake_disabled_at: number | null;
+        disabled_at: number | null }
     | undefined;
-  return !!r?.wake_kind && !!r.wake_target && !r.wake_disabled_at;
+  // A disabled ACTOR is not wakeable even though its webhook is still registered.
+  return !!r?.wake_kind && !!r.wake_target && !r.wake_disabled_at && !r.disabled_at;
 }
 
 export function getWake(ctx: Ctx, actorId: number): WakeConfig | null {
@@ -183,15 +186,18 @@ export function registerWake(
       const row = ctx.db
         .prepare(
           `SELECT wake_kind, wake_target, wake_secret, wake_failures, wake_disabled_at,
-                  wake_last_at, handle FROM actors WHERE id = ?`,
+                  wake_last_at, handle, disabled_at FROM actors WHERE id = ?`,
         )
         .get(actorId) as
         | { wake_kind: string | null; wake_target: string | null; wake_secret: string | null;
             wake_failures: number; wake_disabled_at: number | null;
-            wake_last_at: number | null; handle: string }
+            wake_last_at: number | null; handle: string; disabled_at: number | null }
         | undefined;
       if (!row?.wake_kind || !row.wake_target || !row.wake_secret) continue;
       if (row.wake_disabled_at) continue;
+      // Read right here, immediately before sending: a disabled actor gets no private content
+      // through its still-registered webhook.
+      if (row.disabled_at) continue;
       const now = ctx.now();
       if (row.wake_last_at && now - row.wake_last_at < WAKE_MIN_INTERVAL) continue;
 
@@ -212,6 +218,10 @@ export function registerWake(
         messageId: msg.id,
         preview: msg.body.slice(0, 200),
         ts: msg.ts,
+        // Replay protection for receivers: both fields sit inside the signed body. A receiver
+        // rejects a body whose exp has passed and one whose nonce it has already seen.
+        exp: now + WAKE_BODY_TTL_SEC,
+        nonce: randomBytes(16).toString("hex"),
       });
 
       void send(row.wake_target, body, signWake(row.wake_secret, body))
@@ -261,6 +271,8 @@ export function isBlockedIp(ip: string, allowLoopback = false): boolean {
     /^172\.(1[6-9]|2\d|3[01])\./.test(s) ||
     /^169\.254\./.test(s) ||                       // link-local, including 169.254.169.254 (metadata)
     /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(s) || // 100.64/10 CGNAT
+    /^0{0,3}64:ff9b:/.test(s) ||                   // NAT64 64:ff9b::/96 and 64:ff9b:1::/48
+    /^0{0,3}2002:/.test(s) ||                      // 6to4 2002::/16
     /^fe80:/.test(s) ||                            // IPv6 link-local
     /^f[cd][0-9a-f]{2}:/.test(s)                   // IPv6 ULA
   );

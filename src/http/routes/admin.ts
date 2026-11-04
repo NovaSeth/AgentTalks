@@ -15,6 +15,7 @@ import { listTokens, MIN_AGENT_TTL_SEC, mintToken, revokeToken } from "../../cor
 import { actorLiveness } from "../../core/presence.ts";
 import { badRequest, forbidden, notFound } from "../../core/errors.ts";
 import { assertCsrf, requireAuth, type Auth } from "../auth.ts";
+import { securityLog } from "../../core/tokens.ts";
 import { int, json, readJson, str } from "../respond.ts";
 import type { Router } from "../router.ts";
 import type { RouteCtx } from "../router.ts";
@@ -70,6 +71,7 @@ export function registerAdminRoutes(router: Router): void {
       // serious enough to stay in the console.
       note: str(body.note) ?? null,
     });
+    securityLog("invite_minted", { inviteId: info.id, by: actor.id });
     json(res, 201, { code, invite: info });
   });
 
@@ -137,13 +139,17 @@ export function registerAdminRoutes(router: Router): void {
     assertCsrf(rc, req);
     const targetId = Number(rc.params.id);
     if (targetId === actor.id) throw badRequest("nie_siebie", "nie wylaczysz wlasnego konta");
-    json(res, 200, { actor: setDisabled(rc.ctx, targetId, true) });
+    const disabled = setDisabled(rc.ctx, targetId, true);
+    securityLog("actor_disabled", { actorId: targetId, by: actor.id });
+    json(res, 200, { actor: disabled });
   });
 
   router.add("POST", "/api/admin/actors/:id/enable", (req, res, rc) => {
-    requireHumanAdmin(rc);
+    const { actor } = requireHumanAdmin(rc);
     assertCsrf(rc, req);
-    json(res, 200, { actor: setDisabled(rc.ctx, Number(rc.params.id), false) });
+    const enabled = setDisabled(rc.ctx, Number(rc.params.id), false);
+    securityLog("actor_enabled", { actorId: enabled.id, by: actor.id });
+    json(res, 200, { actor: enabled });
   });
 
   /** An actor's recent activity. We show content ONLY from public channels - private

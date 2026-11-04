@@ -5,12 +5,12 @@
  * `execFile(TALK_BIN, args, { env: { TALK_SID: asSid } })` let the server (and any process
  * with access to the directory) write on somebody else's behalf.
  */
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Ctx } from "../core/ctx.ts";
 import type { Config } from "../config.ts";
 import type { Actor } from "../core/actors.ts";
 import { getActor, sessionEpoch } from "../core/actors.ts";
-import { tokenTrouble, verifyToken } from "../core/tokens.ts";
+import { securityLog, tokenTrouble, verifyToken } from "../core/tokens.ts";
 import { forbidden, unauthorized } from "../core/errors.ts";
 import type { Req, RouteCtx } from "./router.ts";
 
@@ -52,6 +52,39 @@ export function makeCookie(
   ];
   if (secure || config.trustProxy) attrs.push("Secure");
   return attrs.join("; ");
+}
+
+export const DEVICE_COOKIE = "at_dev";
+const DEVICE_TTL_SEC = 180 * 24 * 3600;
+
+function deviceMac(config: Config, actorId: number, nonce: string): string {
+  return createHmac("sha256", config.secret).update(`dev|${actorId}|${nonce}`).digest("hex");
+}
+
+/**
+ * The device cookie (D-MG-14, OWASP Authentication Cheat Sheet): "<hmac>.<nonce>.<actorId>",
+ * set after a successful login. It grants no session, only an exemption from the per-account
+ * failure cap for THIS actor. Path is limited to the password login endpoint.
+ */
+export function makeDeviceCookie(config: Config, actorId: number, secure: boolean): string {
+  const nonce = randomBytes(16).toString("hex");
+  const attrs = [
+    `${DEVICE_COOKIE}=${deviceMac(config, actorId, nonce)}.${nonce}.${actorId}`,
+    "Path=/api/login", "HttpOnly", "SameSite=Lax", `Max-Age=${DEVICE_TTL_SEC}`,
+  ];
+  if (secure || config.trustProxy) attrs.push("Secure");
+  return attrs.join("; ");
+}
+
+/** Whether the request carries a valid device cookie issued for exactly this actor. */
+export function hasDeviceCookie(config: Config, req: Req, actorId: number): boolean {
+  const raw = parseCookies(req.headers.cookie)[DEVICE_COOKIE];
+  if (!raw) return false;
+  const [mac, nonce, idPart] = raw.split(".");
+  if (!mac || !nonce || Number(idPart) !== actorId) return false;
+  const a = Buffer.from(mac, "utf8");
+  const b = Buffer.from(deviceMac(config, actorId, nonce), "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /** Whether this request arrived over HTTPS. Behind a proxy the truth is in X-Forwarded-Proto;
@@ -142,8 +175,33 @@ export function requireAuth(rc: RouteCtx): Auth {
 
 export function requireAdmin(rc: RouteCtx): Auth {
   const auth = requireAuth(rc);
-  if (!auth.actor.isAdmin) throw forbidden("nie_admin", "ta operacja wymaga uprawnien admina");
+  if (!auth.actor.isAdmin) {
+    securityLog("admin_denied", { actorId: auth.actor.id, guard: "admin" });
+    throw forbidden("nie_admin", "ta operacja wymaga uprawnien admina");
+  }
   return auth;
+}
+
+/** Admin operations that create or change HUMAN accounts: an admin flag on an agent is not
+ *  enough, the caller has to be a human admin (the same guard as /api/admin). */
+export function requireHumanAdmin(rc: RouteCtx): Auth {
+  const auth = requireAuth(rc);
+  if (!auth.actor.isAdmin || auth.actor.kind !== "human") {
+    securityLog("admin_denied", { actorId: auth.actor.id, guard: "human_admin" });
+    throw forbidden("tylko_admin_czlowiek", "ta operacja jest dla zalogowanego czlowieka-admina");
+  }
+  return auth;
+}
+
+/**
+ * Re-checks, right before something private is delivered, that the credential which started a
+ * long wait still holds: the same check SSE does on every ping. Returns null when the request
+ * no longer authenticates, or authenticates as somebody else. The long-poll uses it, and so
+ * can the MCP talk_read wait.
+ */
+export function stillAuthenticated(ctx: Ctx, config: Config, req: Req, actorId: number): Auth | null {
+  const now = authenticate(ctx, config, req);
+  return now && now.actor.id === actorId ? now : null;
 }
 
 /**
