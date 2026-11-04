@@ -49,6 +49,7 @@ export function createApi(identity, opts = {}) {
   return {
     get: (/** @type {string} */ p) => call("GET", p),
     post: (/** @type {string} */ p, /** @type {unknown} */ b) => call("POST", p, b ?? {}),
+    put: (/** @type {string} */ p, /** @type {unknown} */ b) => call("PUT", p, b ?? {}),
     del: (/** @type {string} */ p) => call("DELETE", p),
   };
 }

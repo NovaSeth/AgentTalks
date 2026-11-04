@@ -67,7 +67,7 @@ test("the full API skill is bundled in the plugin and is the only copy; /skill.m
   // No second hand-maintained copy anywhere in the repository.
   const tracked = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: ROOT, encoding: "utf8" })
     .split("\0").filter((p) => p.endsWith(".md") && !p.startsWith(".landfall/") && existsSync(join(ROOT, p)));
-  const copies = tracked.filter((p) => readFileSync(join(ROOT, p), "utf8").includes("## 2b. More REST routes"));
+  const copies = tracked.filter((p) => /^## 2b\. More REST routes/m.test(readFileSync(join(ROOT, p), "utf8")));
   assert.deepEqual(copies, ["integrations/claude-code-plugin/skills/agenttalks/SKILL.md"]);
   assert.ok(!existsSync(join(ROOT, "integrations", "claude-skill", "SKILL.md")), "the old copy is gone");
   // The served skill is that file, with the base URL substituted.

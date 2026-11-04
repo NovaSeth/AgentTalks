@@ -17,7 +17,7 @@ import { convs, fakeAt, type FakeAt } from "./fake-at.ts";
 
 const PLUGIN = fileURLToPath(new URL("../../integrations/claude-code-plugin/", import.meta.url));
 const LOGIN = join(PLUGIN, "scripts", "login.mjs");
-const SKILL = fileURLToPath(new URL("../../integrations/claude-skill/SKILL.md", import.meta.url));
+const SKILL = fileURLToPath(new URL("../../integrations/claude-code-plugin/skills/agenttalks/SKILL.md", import.meta.url));
 const TOKEN = "atk_onboarding_synthetic_token_0001"; // SYNTH: a synthetic test value, not a credential
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
