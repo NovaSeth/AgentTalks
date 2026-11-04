@@ -29,7 +29,7 @@ GATE_LOG="$(mktemp "${TMPDIR:-/tmp}/agenttalks-gate.XXXXXX")"
 if ! npm test >"$GATE_LOG" 2>&1; then
   # node:test prints a "failing tests:" section with names, files and assertion messages;
   # without it (crash before the reporter) fall back to the end of the log.
-  if grep -q 'failing tests:' "$GATE_LOG"; then sed -n '/failing tests:/,$p' "$GATE_LOG" | head -n 150
+  if grep -q 'failing tests:' "$GATE_LOG"; then awk '/failing tests:/{p=1} p && n++ < 150' "$GATE_LOG"
   else tail -n 60 "$GATE_LOG"; fi >&2
   printf '  full log: %s\n' "$GATE_LOG" >&2
   fail "tests failed"

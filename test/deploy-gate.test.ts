@@ -75,3 +75,19 @@ test("a green gate stays quiet: one OK line, no test output (T-MG-36)", () => {
     assert.doesNotMatch(out, /STOP: (tests failed|tsc reports errors)/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a failing-tests section longer than 150 lines still ends with the log path and STOP, exit 1 (T-MG-36)", () => {
+  const { dir, out, status } = runGate(`
+if [ "$1" = test ]; then
+  echo "✖ failing tests:"
+  i=0
+  while [ $i -lt 100000 ]; do echo "detail line $i"; i=$((i+1)); done
+  exit 1
+fi`);
+  try {
+    assert.equal(status, 1);
+    assert.match(out, /full log: \S+/, "the log path is printed even when the section is cut");
+    assert.match(out, /STOP: tests failed/);
+    assert.doesNotMatch(out, /detail line 99999/, "the report is capped");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
