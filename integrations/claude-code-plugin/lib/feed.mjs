@@ -221,7 +221,8 @@ export function createFeed(opts) {
     for (const m of r.messages ?? []) {
       if (state && typeof m?.id === "number" && state.memberships.has(Number(m.conversationId))) {
         serverMentioned.add(m.id);
-        if (serverMentioned.size > SEEN_MAX) serverMentioned.delete(serverMentioned.values().next().value);
+        const oldest = serverMentioned.size > SEEN_MAX ? serverMentioned.values().next().value : undefined;
+        if (oldest !== undefined) serverMentioned.delete(oldest);
       } else {
         await consider(m, { serverMention: true });
       }
