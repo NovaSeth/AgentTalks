@@ -9,14 +9,15 @@ import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
 import { createChannel } from "../../src/core/conversations.ts";
 
-const KEYS = ["AGENTTALKS_URL", "ATALKS_URL", "AGENTTALKS_TOKEN", "ATALKS_TOKEN"];
+const CFG_DIR = mkdtempSync(join(tmpdir(), "atalk-cfg-"));
+const KEYS = ["AGENTTALKS_URL", "ATALKS_URL", "AGENTTALKS_TOKEN", "ATALKS_TOKEN", "AGENTTALKS_CONFIG_DIR"];
 
 async function run(argv: string[], env: Record<string, string>, cwd?: string):
   Promise<{ code: number; err: string }> {
   const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   const oldCwd = process.cwd();
   for (const k of KEYS) delete process.env[k];
-  Object.assign(process.env, env);
+  Object.assign(process.env, { AGENTTALKS_CONFIG_DIR: CFG_DIR }, env);
   if (cwd) process.chdir(cwd);
   const realErr = process.stderr.write.bind(process.stderr);
   let err = "";
