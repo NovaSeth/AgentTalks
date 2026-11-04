@@ -153,3 +153,53 @@ export function untrustedProjectNotice(path) {
   const safe = (/** @type {string} */ s) => s.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "?");
   return `${UNTRUSTED_PROJECT_CONTEXT} File: ${JSON.stringify(safe(path))}`;
 }
+
+/**
+ * A server URL in one comparable form: scheme and host lowercased, the default port dropped
+ * (the URL parser does both), the path kept without trailing slashes (two servers can share
+ * an origin under different paths), query and fragment dropped. null for anything that is
+ * not an absolute http(s) URL.
+ * @param {unknown} url @returns {string | null}
+ */
+export function normalizeUrl(url) {
+  if (typeof url !== "string" || !url.trim()) return null;
+  let u;
+  try { u = new URL(url.trim()); } catch { return null; }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  return u.origin + u.pathname.replace(/\/+$/, "");
+}
+
+/**
+ * The principal a woken run must act as (codex T-MG-14 r1 F1): the wake bridge verified it
+ * and names it in AGENTTALKS_EXPECT_SERVER_URL / AGENTTALKS_EXPECT_ACTOR (not secrets).
+ * Claude Code substitutes the plugin options into the channel server's env at launch, which
+ * the bridge cannot scrub, so every entry point checks its own resolved identity against
+ * this. null when neither is set (an ordinary session). Either one set makes it binding; a
+ * missing or invalid half never matches.
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ serverUrl: string | null, actor: string | null } | null}
+ */
+export function expectedPrincipal(env) {
+  const url = firstSet(env, ["AGENTTALKS_EXPECT_SERVER_URL"]);
+  const actor = firstSet(env, ["AGENTTALKS_EXPECT_ACTOR"]);
+  if (url === undefined && actor === undefined) return null;
+  return { serverUrl: normalizeUrl(url), actor: actor ?? null };
+}
+
+/**
+ * Null when `identity` (and, once known, the token's actor `handle`) is the expected
+ * principal; else ONE line saying why the entry point does not connect.
+ * @param {Identity | null} identity
+ * @param {{ serverUrl: string | null, actor: string | null }} expect
+ * @param {string} [handle]
+ */
+export function principalProblem(identity, expect, handle) {
+  const who = `@${String(expect.actor ?? "?").replace(/[^A-Za-z0-9_.-]/g, "?")}`;
+  const where = expect.serverUrl ?? "an invalid server URL";
+  const lead = `AgentTalks is not connected: this run was woken for ${who} on ${where}, but`;
+  if (!expect.serverUrl || !expect.actor) return `${lead} the expectation is incomplete.`;
+  if (!identity) return `${lead} no AgentTalks identity resolves here.`;
+  if (normalizeUrl(identity.url) !== expect.serverUrl) return `${lead} the identity here is for another server.`;
+  if (handle !== undefined && handle !== expect.actor) return `${lead} the identity here is another actor.`;
+  return null;
+}

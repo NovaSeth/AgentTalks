@@ -438,7 +438,8 @@ test("wake bridge: the woken run never inherits the BRIDGE's AgentTalks credenti
   writeFileSync(projectFile, JSON.stringify({ url: A, token: NESTOR_TOKEN }));
   writeFileSync(join(b.home, ".config", "agenttalks", "trusted-projects.json"), JSON.stringify({ projects: [{
     path: realpathSync(projectFile), sha256: createHash("sha256").update(readFileSync(projectFile)).digest("hex") }] }));
-  const bobEnv = { PATH: "/usr/bin:/bin", HOME: b.home, AGENTTALKS_URL: B, AGENTTALKS_TOKEN: BOB_TOKEN,
+  const bobEnv = { PATH: "/usr/bin:/bin", HOME: b.home, AGENTTALKS_EXPECT_SERVER_URL: B, AGENTTALKS_EXPECT_ACTOR: "bob",
+    AGENTTALKS_URL: B, AGENTTALKS_TOKEN: BOB_TOKEN,
     ATALKS_URL: B, ATALKS_TOKEN: BOB_TOKEN, AGENTTALKS_PLUGIN_URL: B, AGENTTALKS_PLUGIN_TOKEN: BOB_TOKEN };
   const withBob = await bridge(t, () => NOW, {
     secrets: [{ actor: "nestor", secret: SECRET, serverUrl: A }],
@@ -452,6 +453,10 @@ test("wake bridge: the woken run never inherits the BRIDGE's AgentTalks credenti
   const env = withBob.calls[0].env ?? {};
   assert.ok(!JSON.stringify(env).includes(BOB_TOKEN), `Bob's token reached the woken run: ${JSON.stringify(env)}`);
   assert.ok(!Object.values(env).includes(B), "nor B's url");
+  // The verified principal rides along (not secret), so the channel the woken claude starts
+  // with ITS plugin options refuses to act as anyone else (codex T-MG-14 r1 F1).
+  assert.equal(env.AGENTTALKS_EXPECT_SERVER_URL, A);
+  assert.equal(env.AGENTTALKS_EXPECT_ACTOR, "nestor");
   // What the woken session resolves from its own directory: @nestor on A, nothing else.
   assert.deepEqual(resolveIdentity({ env, cwd: withBob.calls[0].cwd, home: b.home }),
     { url: A, token: NESTOR_TOKEN, source: "project" });

@@ -16,7 +16,7 @@
  */
 import { hostname } from "node:os";
 import { basename } from "node:path";
-import { resolveIdentity, UNTRUSTED_PROJECT_CONTEXT } from "../lib/identity.mjs";
+import { resolveIdentity, UNTRUSTED_PROJECT_CONTEXT, expectedPrincipal, principalProblem } from "../lib/identity.mjs";
 import { createApi } from "../lib/api.mjs";
 import { PREAMBLE, header, quoteBody, safeLabel } from "../lib/frame.mjs";
 import { deriveSessionId, recordSession, sessionsDir } from "../lib/sessions.mjs";
@@ -105,6 +105,21 @@ async function main() {
     return;
   }
   if (!identity || !claudeSession) return;
+  // A woken run acts only as the principal the wake bridge verified (codex T-MG-14 r1 F1):
+  // another server -> no request at all; another actor -> nothing after GET /api/me (no
+  // presence, no wake record).
+  const expect = expectedPrincipal(process.env);
+  if (expect) {
+    const serverProblem = principalProblem(identity, expect);
+    if (serverProblem) { process.stderr.write(`[agenttalks-hook] ${serverProblem}\n`); return; }
+    let handle;
+    try { handle = String((await createApi(identity, { timeoutMs: 3000 }).get("/api/me"))?.actor?.handle ?? ""); } catch {
+      process.stderr.write("[agenttalks-hook] could not verify the identity this run was woken for: not connecting\n");
+      return;
+    }
+    const actorProblem = principalProblem(identity, expect, handle);
+    if (actorProblem) { process.stderr.write(`[agenttalks-hook] ${actorProblem}\n`); return; }
+  }
   const sessionId = deriveSessionId(claudeSession);
 
   if (mode === "end") {

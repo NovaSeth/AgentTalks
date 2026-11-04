@@ -19,8 +19,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { resolveIdentity, describeIdentity } from "../lib/identity.mjs";
+import { resolveIdentity, describeIdentity, expectedPrincipal, principalProblem } from "../lib/identity.mjs";
 import { createFeed } from "../lib/feed.mjs";
+import { createApi } from "../lib/api.mjs";
 import { frameLine } from "../lib/frame.mjs";
 import {
   channelAlive, claudeAncestor, heartbeatFile, monitorMode, readHeartbeat, removeHeartbeat,
@@ -52,6 +53,19 @@ if (!identity) {
   // An untrusted project file: its one notice line (already printed) says it all.
   if (!refused) log("no AgentTalks identity (AGENTTALKS_TOKEN, .agenttalks.json or ~/.config/agenttalks/atalk.json): nothing to watch");
   process.exit(0);
+}
+// A woken run acts only as the principal the wake bridge verified (codex T-MG-14 r1 F1).
+const expect = expectedPrincipal(process.env);
+if (expect) {
+  const serverProblem = principalProblem(identity, expect);
+  if (serverProblem) { log(serverProblem); process.exit(0); }
+  let handle;
+  try { handle = String((await createApi(identity, { timeoutMs: 5000 }).get("/api/me"))?.actor?.handle ?? ""); } catch (err) {
+    log(`could not verify the identity this run was woken for (${err instanceof Error ? err.message : "error"}): not connecting`);
+    process.exit(0);
+  }
+  const actorProblem = principalProblem(identity, expect, handle);
+  if (actorProblem) { log(actorProblem); process.exit(0); }
 }
 log(describeIdentity(identity));
 const mode = monitorMode();

@@ -42,7 +42,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute } from "node:path";
 import { PREAMBLE, quoteBody, safeLabel } from "./frame.mjs";
 import { readSessions } from "./sessions.mjs";
-import { resolveIdentity } from "./identity.mjs";
+import { normalizeUrl as normalizeIdentityUrl, resolveIdentity } from "./identity.mjs";
 import { createApi } from "./api.mjs";
 
 export const MAX_BODY_BYTES = 16 * 1024;
@@ -145,6 +145,8 @@ export const MAX_RUN_MS = 15 * 60 * 1000;
 const CREDENTIAL_VARS = new Set([
   "AGENTTALKS_URL", "AGENTTALKS_TOKEN", "ATALKS_URL", "ATALKS_TOKEN",
   "AGENTTALKS_PLUGIN_URL", "AGENTTALKS_PLUGIN_TOKEN",
+  // set fresh for each run by the bridge (the verified principal), never inherited
+  "AGENTTALKS_EXPECT_SERVER_URL", "AGENTTALKS_EXPECT_ACTOR",
 ]);
 
 /**
@@ -226,11 +228,7 @@ export const spawnRunner = (cmd, argv, opts) => {
  * @param {unknown} url @returns {string | null}
  */
 export function normalizeUrl(url) {
-  if (typeof url !== "string" || !url.trim()) return null;
-  let u;
-  try { u = new URL(url.trim()); } catch { return null; }
-  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-  return u.origin + u.pathname.replace(/\/+$/, "");
+  return normalizeIdentityUrl(url);
 }
 
 /**
@@ -465,7 +463,10 @@ export function createWakeBridge(opts) {
         log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
         // The key stays reserved (checking) until the process exists: only a run that
         // STARTED uses up the knock; one that cannot start leaves the retry open (r1 F3).
-        const run = runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env });
+        // The verified principal goes along: the channel server Claude Code starts in the
+        // woken session (with ITS plugin options) refuses to act as anyone else (r1 F1).
+        const runEnv = { ...env, AGENTTALKS_EXPECT_SERVER_URL: server, AGENTTALKS_EXPECT_ACTOR: body.actor };
+        const run = runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env: runEnv });
         void Promise.resolve(run).catch(() => {}).finally(() => running.delete(rec.sessionId));
         try {
           await (run?.started ?? Promise.resolve());

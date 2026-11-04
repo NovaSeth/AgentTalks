@@ -243,3 +243,10 @@ resumed run per session at a time.
   the verifying secret, and asks that server (`GET /api/me`) that the token belongs to the
   recorded actor. Any mismatch, or an identity it cannot resolve or verify, answers
   `woke:false`. A session whose identity came only from environment variables cannot be woken.
+  Claude Code still puts the plugin options into the channel server's environment when it
+  starts the woken session, so the bridge also passes the verified principal along
+  (`AGENTTALKS_EXPECT_SERVER_URL`, `AGENTTALKS_EXPECT_ACTOR`, not secrets). When these are
+  set, the channel server, the monitor and the hooks connect only if their own identity is
+  that server and, by `GET /api/me`, that actor; otherwise they print one line on stderr and
+  stay offline, and the channel's tools refuse. A run is also refused if the
+  binary cannot start (`503 woke:false`, retryable).
