@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "path": "docs/agents.md",
+      "line": 36,
+      "rule": null,
+      "text": "Brief point 4: the one-hour CI token example still omits --short. Running `node bin/agenttalks.js help` confirms shorter lifetimes require it; src/cli/main.ts:350 rejects this command without it. Update the example to `agenttalks token create --actor nestor --name ci --ttl 3600 --short`."
+    }
+  ],
+  "run": "codex-T-MG-17-reviewer-1",
+  "sha256": "f565b7beccba280d4b62a404033aef3469fcf0bbe77c13db132669de77df29ca"
+}

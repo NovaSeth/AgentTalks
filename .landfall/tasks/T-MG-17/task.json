@@ -13,7 +13,7 @@
       "at": "2026-11-04T10:34:51.624Z"
     }
   ],
-  "status": "new",
+  "status": "done",
   "round": 0,
   "events": [
     {
@@ -35,8 +35,76 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T10:34:52.109Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-17-docs-refresh",
+        "base": "de5d3dbec5e7ca2dcf4972bd42f0b6837b25f51f",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-17"
+      }
+    },
+    {
+      "at": "2026-11-04T10:35:22.062Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "de5d3dbec5e7ca2dcf4972bd42f0b6837b25f51f",
+        "note": "docs refresh + prototype leftovers removal"
+      }
+    },
+    {
+      "at": "2026-11-04T10:42:38.249Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
+      }
+    },
+    {
+      "at": "2026-11-04T10:47:48.278Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T10:47:48.532Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:b803fcb7f17ed923"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T10:47:48.532Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "10de18cb69f96d3c690d77cb58a8bce8930f705a",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T10:48:28.277Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "10de18cb69f96d3c690d77cb58a8bce8930f705a"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "de5d3dbec5e7ca2dcf4972bd42f0b6837b25f51f",
+  "branch": "task/T-MG-17-docs-refresh"
 }
