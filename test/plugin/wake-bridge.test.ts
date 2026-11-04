@@ -8,7 +8,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +19,7 @@ import { signWake } from "../../src/core/wake.ts";
 import { createWakeBridge, listenHost, spawnRunner, DEFAULT_ALLOWED_TOOLS, checkWakeConfig } from "../../integrations/claude-code-plugin/lib/wake.mjs";
 import { recordSession } from "../../integrations/claude-code-plugin/lib/sessions.mjs";
 
+const BIN = fileURLToPath(new URL("../../integrations/claude-code-plugin/bin/agenttalks-wake-bridge.mjs", import.meta.url));
 const SECRET = "fake-secret-for-tests"; // SYNTH: a synthetic test value, not a credential
 const SESSION = "4f1c2b8e-1111-2222-3333-444455556666";
 
@@ -231,32 +234,76 @@ test("wake bridge: a secret bound to server A never resumes a session recorded f
   assert.equal(only.calls.length, 0);
 });
 
-test("wake bridge: a secret with no server URL wakes nobody once sessions from several servers are recorded (fail closed)", async (t) => {
-  // The codex scenario: sessions on A and B, only A's secret configured, serverUrl omitted.
-  const b = await bridge(t, () => NOW, {
-    secrets: new Map([["nestor", SECRET]]),
-    records: [{ sessionId: SESSION_A, url: A, updatedAt: 1 }, { sessionId: SESSION_B, url: B, updatedAt: 2 }],
-  });
-  const res = await b.send(legacyBody());
-  assert.equal(res.status, 202);
-  const out = (await res.json()) as any;
-  assert.equal(out.woke, false);
-  assert.match(out.reason, /server/);
-  assert.equal(b.calls.length, 0, "an unbound secret must not resume B's session");
-
-  // With a single server recorded, an unbound secret still works (the old one-server setup).
-  const one = await bridge(t, () => NOW, { secrets: new Map([["nestor", SECRET]]),
-    records: [{ sessionId: SESSION_A, url: A, updatedAt: 1 }] });
-  assert.equal((await one.send(legacyBody())).status, 202);
-  assert.equal(one.calls[0]?.argv[2], SESSION_A);
+test("wake bridge: a secret without a serverUrl is a startup error, whatever sessions are recorded (codex r3 F1)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "at-plugin-wake-"));
+  for (const secrets of [new Map([["nestor", SECRET]]), { nestor: SECRET }, [{ actor: "nestor", secret: SECRET }],
+    [{ actor: "nestor", secret: SECRET, serverUrl: A }, { actor: "bob", secret: SECRET, serverUrl: "" }],
+    [{ actor: "nestor", secret: SECRET, serverUrl: "not a url" }]]) {
+    assert.throws(() => createWakeBridge({ secrets, sessionsDir: dir } as any), /serverUrl/, JSON.stringify([...Object.entries(secrets)]));
+  }
+  assert.match(String(checkWakeConfig([{ actor: "nestor", secret: "x" }] as any)), /serverUrl/);
+  assert.match(String(checkWakeConfig([])), /no wake secret/);
+  assert.equal(checkWakeConfig([{ actor: "nestor", secret: "x", serverUrl: A }]), null);
 });
 
-test("wake bridge: the startup check refuses an unbound secret when sessions from several servers exist", () => {
-  const rec = (url: string) => ({ sessionId: "s", cwd: "/", handle: "nestor", url, updatedAt: 1 });
-  assert.equal(checkWakeConfig([{ actor: "nestor", secret: "x", serverUrl: A }], [rec(A), rec(B)]), null);
-  assert.equal(checkWakeConfig([{ actor: "nestor", secret: "x" }], [rec(A)]), null);
-  assert.match(String(checkWakeConfig([{ actor: "nestor", secret: "x" }], [rec(A), rec(B)])), /serverUrl/);
-  assert.match(String(checkWakeConfig([], [])), /no wake secret/);
+test("wake bridge: codex scenario - A recorded, 49 newer B sessions, an A-signed knock never resumes a B session (codex r3 F1)", async (t) => {
+  const many = Array.from({ length: 49 }, (_, i) => ({ sessionId: `session-b${String(i).padStart(4, "0")}-1111`, url: B, updatedAt: 10 + i }));
+  // A still recorded: A's knock resumes A's session, never the newest B one.
+  const withA = await bridge(t, () => NOW, {
+    secrets: [{ actor: "nestor", secret: SECRET, serverUrl: A }],
+    records: [{ sessionId: SESSION_A, url: A, updatedAt: 1 }, ...many],
+  });
+  assert.equal((await withA.send(legacyBody())).status, 202);
+  assert.deepEqual(withA.calls.map((c) => c.argv[2]), [SESSION_A]);
+  // A gone from the store (pruned, or never recorded): nobody is woken.
+  const onlyB = await bridge(t, () => NOW, {
+    secrets: [{ actor: "nestor", secret: SECRET, serverUrl: A }],
+    records: many,
+  });
+  const res = await onlyB.send(legacyBody());
+  assert.equal(res.status, 202);
+  assert.equal(((await res.json()) as any).woke, false);
+  assert.equal(onlyB.calls.length, 0, "server A's secret must not resume a session of server B");
+});
+
+test("wake bridge: the server URL is compared as a normalized origin and path", async (t) => {
+  const b = await bridge(t, () => NOW, {
+    secrets: [{ actor: "nestor", secret: SECRET, serverUrl: "HTTPS://A.Example:443/" }],
+    records: [{ sessionId: SESSION_B, url: "https://a.example/other", updatedAt: 3 },
+      { sessionId: SESSION_A, url: "https://a.example", updatedAt: 1 }],
+  });
+  assert.equal((await b.send(legacyBody())).status, 202);
+  assert.deepEqual(b.calls.map((c) => c.argv[2]), [SESSION_A], "a different path is a different server");
+});
+
+test("wake bridge: the bin refuses to start with a secret that has no server URL (env pair without AGENTTALKS_WAKE_SERVER_URL)", async () => {
+  const home = mkdtempSync(join(tmpdir(), "at-plugin-wbin-"));
+  const run = (extra: Record<string, string>) => new Promise<{ code: number | null; err: string }>((resolve) => {
+    const child = spawn(process.execPath, [BIN, "--port", "18941"], {
+      env: { PATH: process.env.PATH, HOME: home, AGENTTALKS_WAKE_ACTOR: "nestor", AGENTTALKS_WAKE_SECRET: SECRET, ...extra },
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let err = "";
+    child.stderr.on("data", (c) => { err += c; });
+    const kill = setTimeout(() => child.kill(), 3000);
+    child.on("exit", (code) => { clearTimeout(kill); resolve({ code, err }); });
+  });
+  const bad = await run({});
+  assert.equal(bad.code, 1);
+  assert.match(bad.err, /AGENTTALKS_WAKE_SERVER_URL/);
+  // A file entry without serverUrl is refused the same way.
+  writeFileSync(join(home, "w.json"), JSON.stringify({ secrets: [{ actor: "bob", secret: SECRET }] }), { mode: 0o600 });
+  const bad2 = await new Promise<{ code: number | null; err: string }>((resolve) => {
+    const child = spawn(process.execPath, [BIN, "--port", "18941", "--secrets-file", join(home, "w.json")], {
+      env: { PATH: process.env.PATH, HOME: home }, stdio: ["ignore", "ignore", "pipe"],
+    });
+    let err = "";
+    child.stderr.on("data", (c) => { err += c; });
+    const kill = setTimeout(() => child.kill(), 3000);
+    child.on("exit", (code) => { clearTimeout(kill); resolve({ code, err }); });
+  });
+  assert.equal(bad2.code, 1);
+  assert.match(bad2.err, /serverUrl/);
 });
 
 test("wake bridge: listens on 127.0.0.1 by default and refuses a public bind without consent", () => {

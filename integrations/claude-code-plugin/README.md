@@ -155,10 +155,12 @@ claude -p --resume <recorded session id> --permission-mode dontAsk --tools "" \
    ```
 
    For one agent, `AGENTTALKS_WAKE_ACTOR` + `AGENTTALKS_WAKE_SECRET` +
-   `AGENTTALKS_WAKE_SERVER_URL` work too. A secret without a server URL (the older
-   `{ "secrets": { "my-agent": "..." } }` form, or no `AGENTTALKS_WAKE_SERVER_URL`) is accepted
-   only while every recorded session is on one server; with sessions from several servers the
-   bridge refuses to start, and wakes nobody if such sessions appear later.
+   `AGENTTALKS_WAKE_SERVER_URL` work too. Every secret needs its server URL: a secret without
+   one (the older `{ "secrets": { "my-agent": "..." } }` form, a list entry without
+   `serverUrl`, or the environment pair without `AGENTTALKS_WAKE_SERVER_URL`) is a startup
+   error. The bridge never guesses the server from the recorded sessions. URLs are compared
+   normalized (scheme and host lowercased, default port and trailing slashes dropped; the
+   path counts).
 
 3. Start the bridge (it listens on 127.0.0.1:8790 by default):
 
@@ -171,7 +173,8 @@ claude -p --resume <recorded session id> --permission-mode dontAsk --tools "" \
    unless `--allow-public`),
    `--allowed-tools` (default `mcp__plugin_agenttalks_agenttalks__*,mcp__agenttalks__*`: this
    plugin's own `reply`/`mark_read` and the remote AgentTalks MCP server added as `agenttalks`),
-   `--claude` (path to the CLI), `--server-url` (the server for secrets that name none).
+   `--claude` (path to the CLI), `--server-url` (the server of the environment pair, instead of
+   `AGENTTALKS_WAKE_SERVER_URL`).
 
 ### Exposing the bridge to the server safely
 

@@ -39,7 +39,7 @@ import { createServer } from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
 import { dirname, isAbsolute } from "node:path";
 import { PREAMBLE, quoteBody, safeLabel } from "./frame.mjs";
-import { latestSessionFor, readSessions } from "./sessions.mjs";
+import { readSessions } from "./sessions.mjs";
 
 export const MAX_BODY_BYTES = 16 * 1024;
 export const LEGACY_MAX_AGE_SEC = 600;
@@ -169,26 +169,40 @@ export const spawnRunner = (cmd, argv, opts) => new Promise((resolve) => {
  * A wake secret belongs to ONE actor on ONE server: the server that issued it at
  * `PUT /api/wake`. A knock signed with it may only resume a session recorded for that
  * server, or a server that knows the secret of @nestor on A could inject a prompt into
- * @nestor's session on B.
- * @typedef {{ actor: string, secret: string, serverUrl?: string | null }} WakeSecret
+ * @nestor's session on B. The binding is CONFIGURED, never inferred: every secret names its
+ * serverUrl, and a secret without one is a startup error. (Inferring it from the recorded
+ * sessions - "only one server is recorded, so it must be that one" - breaks as soon as the
+ * store changes: prune A's last record and A's secret starts resuming B's sessions.)
+ * @typedef {{ actor: string, secret: string, serverUrl: string | null }} WakeSecret
  */
 
-/** @param {unknown} url */
+/**
+ * A server URL in one comparable form: scheme and host lowercased, the default port dropped
+ * (the URL parser does both), the path kept without trailing slashes (two servers can share
+ * an origin under different paths), query and fragment dropped. null for anything that is
+ * not an absolute http(s) URL.
+ * @param {unknown} url @returns {string | null}
+ */
 export function normalizeUrl(url) {
-  return typeof url === "string" && url.trim() ? url.trim().replace(/\/+$/, "") : null;
+  if (typeof url !== "string" || !url.trim()) return null;
+  let u;
+  try { u = new URL(url.trim()); } catch { return null; }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  return u.origin + u.pathname.replace(/\/+$/, "");
 }
 
 /**
- * Accepts the list form ([{ serverUrl, actor, secret }]) and the older handle -> secret map
- * (a Map or a plain object), whose entries are not bound to a server.
- * @param {unknown} input @param {string | null} [defaultServerUrl] @returns {WakeSecret[]}
+ * Accepts the list form ([{ serverUrl, actor, secret }]). The older handle -> secret map (a
+ * Map or a plain object) names no server: its entries come out with serverUrl null, which
+ * checkWakeConfig refuses.
+ * @param {unknown} input @returns {WakeSecret[]}
  */
-export function normalizeSecrets(input, defaultServerUrl = null) {
+export function normalizeSecrets(input) {
   /** @type {WakeSecret[]} */
   const out = [];
   const add = (/** @type {unknown} */ actor, /** @type {unknown} */ secret, /** @type {unknown} */ url) => {
     if (typeof actor === "string" && actor && typeof secret === "string" && secret) {
-      out.push({ actor, secret, serverUrl: normalizeUrl(url) ?? normalizeUrl(defaultServerUrl) });
+      out.push({ actor, secret, serverUrl: normalizeUrl(url) });
     }
   };
   if (Array.isArray(input)) {
@@ -201,23 +215,19 @@ export function normalizeSecrets(input, defaultServerUrl = null) {
   return out;
 }
 
-/** The distinct servers the recorded sessions belong to. @param {Array<{ url: string }>} sessions */
-function serversOf(sessions) {
-  return new Set(sessions.map((s) => normalizeUrl(s.url)).filter(Boolean));
-}
-
 /**
- * Startup check: null when the configuration is usable, else the reason. A secret without a
- * server URL is ambiguous as soon as sessions from more than one server are recorded.
- * @param {WakeSecret[]} secrets @param {Array<{ url: string }>} sessions
+ * Startup check: null when the configuration is usable, else the reason. Every secret must
+ * name the server that issued it.
+ * @param {WakeSecret[]} secrets
  */
-export function checkWakeConfig(secrets, sessions) {
+export function checkWakeConfig(secrets) {
   if (secrets.length === 0) return "no wake secret configured";
   const unbound = secrets.filter((s) => !s.serverUrl);
-  if (unbound.length && serversOf(sessions).size > 1) {
-    return `the wake secret for ${unbound.map((s) => "@" + s.actor).join(", ")} has no serverUrl, `
-      + `but sessions from ${serversOf(sessions).size} servers are recorded: give every secret the serverUrl `
-      + `of the server that issued it ({ "secrets": [{ "serverUrl": "https://...", "actor": "...", "secret": "..." }] })`;
+  if (unbound.length) {
+    return `the wake secret for ${unbound.map((s) => "@" + s.actor).join(", ")} has no valid serverUrl: `
+      + `give every secret the http(s) URL of the server that issued it `
+      + `({ "secrets": [{ "serverUrl": "https://...", "actor": "...", "secret": "..." }] }, `
+      + `or AGENTTALKS_WAKE_SERVER_URL with AGENTTALKS_WAKE_ACTOR/AGENTTALKS_WAKE_SECRET)`;
   }
   return null;
 }
@@ -226,7 +236,6 @@ export function checkWakeConfig(secrets, sessions) {
  * @param {{
  *   secrets: WakeSecret[] | Map<string, string>,
  *   sessionsDir: string,
- *   serverUrl?: string,
  *   runner?: (cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv }) => Promise<void>,
  *   claudeBin?: string,
  *   allowedTools?: string,
@@ -241,8 +250,9 @@ export function createWakeBridge(opts) {
   const now = opts.now ?? Date.now;
   const log = opts.log ?? (() => {});
   const allowedTools = opts.allowedTools ?? DEFAULT_ALLOWED_TOOLS;
-  // `serverUrl` (the --server-url flag) binds the entries that name no server of their own.
-  const secrets = normalizeSecrets(opts.secrets, opts.serverUrl ?? null);
+  const secrets = normalizeSecrets(opts.secrets);
+  const problem = checkWakeConfig(secrets);
+  if (problem) throw new Error(problem);
   /** sha256(replay key) -> unix second after which it can be forgotten */
   const seen = new Map();
   /** Claude Code session ids with a resumed run in progress */
@@ -363,16 +373,11 @@ export function createWakeBridge(opts) {
       seen.set(key, keepUntil);
       saveReplay();
 
-      // Only a session recorded for the server that holds this secret. A secret with no
-      // server is usable only while every recorded session is on one server (fail closed).
-      if (!match.serverUrl) {
-        const problem = checkWakeConfig([match], readSessions(opts.sessionsDir));
-        if (problem) {
-          log(`not waking: ${problem}`);
-          return reply(res, 202, { ok: true, woke: false, reason: "the secret is not bound to a server and sessions from several servers are recorded" });
-        }
-      }
-      const rec = latestSessionFor(opts.sessionsDir, body.actor, match.serverUrl ?? undefined);
+      // Only a session recorded for the server that holds this secret (every secret has one:
+      // checked at construction), compared in normalized form.
+      const server = /** @type {string} */ (match.serverUrl);
+      const rec = readSessions(opts.sessionsDir)
+        .find((r) => r.handle === body.actor && normalizeUrl(r.url) === server) ?? null;
       if (!rec) return reply(res, 202, { ok: true, woke: false, reason: "no recorded session" });
       // The record is our own file, but its values go into argv: a session id that looks like
       // a flag, or a cwd that is not an existing absolute directory, is refused.
