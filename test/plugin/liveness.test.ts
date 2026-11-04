@@ -20,7 +20,7 @@ import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
 import { ensureDirect } from "../../src/core/conversations.ts";
 import {
-  channelAlive, heartbeatFile, monitorMode, readHeartbeat,
+  channelAlive, heartbeatFile, heartbeatFor, monitorMode, readHeartbeat,
 } from "../../integrations/claude-code-plugin/lib/launch.mjs";
 
 const PLUGIN = fileURLToPath(new URL("../../integrations/claude-code-plugin/", import.meta.url));
@@ -47,6 +47,14 @@ test("liveness: a heartbeat counts only while fresh and while its writer is aliv
   writeFileSync(file, "{ not json");
   assert.equal(channelAlive(file), false);
   void t;
+});
+
+test("liveness: only a dead token closes the heartbeat; a stream the feed closes to rebuild it only pauses it", () => {
+  assert.equal(heartbeatFor("open"), "open");
+  assert.equal(heartbeatFor("reconnecting"), "pause");
+  // The feed closes its stream on a full queue and reopens it from the cursor: no takeover.
+  assert.equal(heartbeatFor("closed"), "pause");
+  assert.equal(heartbeatFor("unauthorized"), "down");
 });
 
 test("liveness: the monitor mode is 'standby' only with the channel flag, never just 'off'", async (t) => {

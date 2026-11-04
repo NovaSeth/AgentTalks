@@ -141,6 +141,16 @@ export function writeHeartbeat(file, state, cursors = {}) {
   } catch { /* best effort: without a heartbeat the monitor delivers, which is the safe side */ }
 }
 
+/** What a stream state means for the heartbeat. Only a rejected token is final ("down"): a
+ *  reconnect, or the feed closing its stream to reopen it from the cursor after a full queue,
+ *  just stops the refresh ("pause"), and the heartbeat goes stale only if that lasts.
+ *  @param {string} streamState @returns {"open" | "pause" | "down"} */
+export function heartbeatFor(streamState) {
+  if (streamState === "open") return "open";
+  if (streamState === "unauthorized") return "down";
+  return "pause";
+}
+
 /** @param {string} file */
 export function removeHeartbeat(file) {
   try { rmSync(file, { force: true }); } catch { /* already gone */ }

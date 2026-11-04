@@ -20,7 +20,7 @@ import { createPusher } from "../lib/pusher.mjs";
 import { frameMany } from "../lib/frame.mjs";
 import { createStdioServer } from "../lib/mcp.mjs";
 import { deriveSessionId } from "../lib/sessions.mjs";
-import { HEARTBEAT_REFRESH_MS, claudeAncestor, heartbeatFile, writeHeartbeat } from "../lib/launch.mjs";
+import { HEARTBEAT_REFRESH_MS, claudeAncestor, heartbeatFile, heartbeatFor, writeHeartbeat } from "../lib/launch.mjs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -206,8 +206,8 @@ async function startFeed() {
       else if (state === "reconnecting") log(`stream interrupted, reconnecting in ${/** @type {any} */ (info)?.delayMs ?? "?"} ms`);
       else if (state === "open") log("stream open");
       // The heartbeat says "this channel delivers": only while the stream is open. During a
-      // reconnect it is not refreshed and goes stale; a dead token removes it at once.
-      heartbeat(state === "open" ? "open" : state === "reconnecting" ? "pause" : "down");
+      // reconnect it is not refreshed and goes stale; a dead token closes it at once.
+      heartbeat(heartbeatFor(state));
     },
   });
   // The first contact can fail (server down while the session starts): retry with backoff
