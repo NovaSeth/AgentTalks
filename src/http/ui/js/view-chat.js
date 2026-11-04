@@ -9,11 +9,13 @@ import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, esc
 import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconThread, iconWrench } from "./icons.js";
 import { renderBody } from "./markdown.js";
 import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
+import { openPlusMenu } from "./commands.js";
 import { t } from "./i18n.js";
-import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, isReport, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, trimConversationCache, pushRecent, saveDraft, state, upsertMessage, visibleMessages, views, reports } from "./state.js";
+import { actorHandle, actorKind, actorOnline, animatedMsgs, canManageActive, isReport, isReportChannel, dmLabel, dmMembersCache, dmOthers, findMsgById, handleOnline, lastMessageId, loadDraft, mentionsMe, mergeActors, mergeReactions, trimConversationCache, pushRecent, saveDraft, state, upsertMessage, visibleMessages, views, reports } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { conversationRoute, permalink, syncRoute, unreadFrom } from "./router.js";
+import { bindProfileClicks, closeProfile, ensureHeaderMembers, headerFacesHtml, mountPeoplePicker, profileFacts, renderProfile, visibleMembers } from "./view-people.js";
 
 // A popular set for the "add a reaction" popover - every value goes through the same API as
 // any other reaction, so the palette is only a UI convenience.
@@ -152,9 +154,11 @@ export function updateOfflineBar() {
 }
 
 // ------------------------------------------------- the side panel (S2)
-/** What the side panel shows, derived from the open flags: `null`, `{ kind: "thread", id }` or
- *  `{ kind: "details", id }`. Details win when both are open - the panel hosts one thing. */
+/** What the side panel shows, derived from the open flags: `null`, `{ kind: "thread", id }`,
+ *  `{ kind: "details", id }` or `{ kind: "profile", id: handle }` (S6). A profile is the top-most
+ *  layer, details win over the thread - the panel hosts one thing. */
 export function sidePanelOf(s) {
+  if (s.profileHandle) return { kind: "profile", id: s.profileHandle };
   if (s.detailsOpen) return { kind: "details", id: s.activeId };
   if (s.threadOpen) return { kind: "thread", id: s.threadOpen };
   return null;
@@ -169,11 +173,13 @@ export async function toggleSidePanel() {
   const open = sidePanelOf(state);
   if (open) {
     lastSidePanel = open;
-    if (open.kind === "details") { state.detailsOpen = false; renderMain(); document.getElementById("btn-details")?.focus(); }
+    if (open.kind === "profile") closeProfile();
+    else if (open.kind === "details") { state.detailsOpen = false; renderMain(); document.getElementById("btn-details")?.focus(); }
     else closeThread();
     return;
   }
   if (!lastSidePanel || state.view !== "chat" || !state.activeId) return;
+  if (lastSidePanel.kind === "profile") { state.profileHandle = lastSidePanel.id; renderMain(); return; }
   if (lastSidePanel.kind === "details") { state.detailsOpen = true; await refreshDetailsData(); renderMain(); return; }
   if (findMsgById(lastSidePanel.id)) await openThread(lastSidePanel.id);
 }
@@ -220,6 +226,7 @@ export function renderMain() {
         <div class="t" id="topbar-title"></div>
         ${c && c.topic ? `<div class="topic">${escapeHtml(c.topic)}</div>` : ""}
       </div>
+      <div class="topbar-meta" id="topbar-meta"></div>
       <button class="iconbtn ${state.detailsOpen ? "on" : ""}" id="btn-details" aria-label="${t("Conversation details")}"
         aria-expanded="${state.detailsOpen}" aria-controls="details-slot" title="${t("Conversation details")}">${iconInfo()}</button>
     </div>
@@ -242,9 +249,11 @@ export function renderMain() {
       data-kind="${state.sidePanel ? state.sidePanel.kind : ""}">
       ${state.threadOpen ? `<div id="thread-slot"></div>` : ""}
       ${state.detailsOpen ? `<div id="details-slot"></div>` : ""}
+      ${state.profileHandle ? `<div id="profile-slot"></div>` : ""}
     </aside>
   `;
   bindSidePanelKeys();
+  bindProfileClicks();
   document.getElementById("btn-menu").addEventListener("click", () => {
     state.drawerOpen = !state.drawerOpen; toggleDrawerClass();
   });
@@ -268,6 +277,7 @@ export function renderMain() {
   if (isMember) { renderComposer(); bindDropZone(el); }
   if (state.threadOpen) renderThread();
   if (state.detailsOpen) renderDetails();
+  if (state.profileHandle) renderProfile();
 }
 
 // ----------------------------------------------- the conversation details panel
@@ -286,6 +296,7 @@ export async function refreshDetailsData() {
       api("GET", `/api/conversations/${id}/pins`).catch(() => ({ pins: [] })),
     ]);
     state.convMembers = convData.members || [];
+    state.convMembersFor = id; // the header (S6) shares this fetch, see ensureHeaderMembers
     state.convPins = pinsData.pins || [];
     // The actor cache knows only the authors of messages - a member who has written nothing
     // would show as "@?"; we fetch the directory once.
@@ -310,8 +321,10 @@ export function renderDetails() {
     const removable = isChannel && (manage || m.actorId === state.actor.id);
     return `
       <div class="dm-row">
-        ${avatarHtml(handle, 26)}
-        <span class="dm-name">@${escapeHtml(handle)}</span>
+        <button type="button" class="dm-who" data-profile="${escapeHtml(handle)}" aria-label="${t("Open the profile of @{handle}", { handle: escapeHtml(handle) })}">
+          ${avatarHtml(handle, 26)}
+          <span class="dm-name">@${escapeHtml(handle)}</span>
+        </button>
         <span class="kindtag ${a.kind || "agent"}">${a.kind === "human" ? t("human") : t("agent")}</span>
         ${m.role === "admin" ? `<span class="roletag">admin</span>` : ""}
         <span class="ppresence ${online ? "on" : ""}"></span>
@@ -343,9 +356,9 @@ export function renderDetails() {
           </div>
           ${c.topic ? `<p class="dt-topic">${escapeHtml(c.topic)}</p>` : ""}
         </div>` : ""}
-        <div class="dt-sec">
-          <h4>${t("Members")} (${state.convMembers.length})</h4>
-          ${state.convMembers.map(memberRow).join("") || `<p class="sb-empty">${t("none")}</p>`}
+        <div class="dt-sec" id="dt-members">
+          <h4 tabindex="-1" id="dt-members-h">${t("Members")} (${visibleMembers(state.convMembers, state.actorsCache).length})</h4>
+          ${visibleMembers(state.convMembers, state.actorsCache).map(memberRow).join("") || `<p class="sb-empty">${t("none")}</p>`}
           ${c.kind === "private" ? `
           <div class="dt-add">
             <label class="sr-only" for="dt-add-input">${t("Who to add to the conversation")}</label>
@@ -364,8 +377,8 @@ export function renderDetails() {
           <p class="dt-hint">${t("When this conversation may call you (push / waking an agent): every message, mentions and DMs only, or never.")}</p>
         </div>` : ""}
         ${state.convPins.length ? `
-        <div class="dt-sec">
-          <h4>${t("Pinned")} (${state.convPins.length})</h4>
+        <div class="dt-sec" id="dt-pins">
+          <h4 tabindex="-1" id="dt-pins-h">${t("Pinned")} (${state.convPins.length})</h4>
           ${state.convPins.map(pinRow).join("")}
         </div>` : ""}
         ${isChannel && my ? `
@@ -479,16 +492,66 @@ export function renderTopbar() {
   const c = state.conversations.find((x) => x.id === state.activeId);
   if (!c || state.view !== "chat") return;
   const isDirect = c.kind === "dm" || c.kind === "group";
+  const meta = document.getElementById("topbar-meta");
   if (isDirect) {
     // The participants from the server (`others`) are available from the first frame, so the
     // header has a name and a presence dot before the first message arrives.
     const others = dmOthers(c);
     const online = others.length > 0 && others.some((o) => handleOnline(o.handle));
     bar.innerHTML = `<span class="ppresence big ${online ? "on" : ""}"></span> ${escapeHtml(dmLabel(c))}`;
+    // S6: the other side's face, kind, presence and "doing" line; the face opens the profile.
+    if (meta) meta.innerHTML = dmHeaderMetaHtml(others);
   } else {
     const pre = c.kind === "private" ? `${iconLock(true)} ` : "# ";
     bar.innerHTML = `${pre}${escapeHtml(c.slug || t("unnamed"))}`;
+    // S6: stacked faces + member count (opens Details at Members) and a pins pill. The members
+    // arrive once per conversation; the first paint shows the pill alone, the fetch redraws.
+    if (meta) {
+      meta.innerHTML = channelHeaderMetaHtml(c);
+      ensureHeaderMembers(c.id, renderTopbar);
+    }
   }
+  meta?.querySelectorAll("[data-details]").forEach((b) =>
+    b.addEventListener("click", () => openDetailsAt(b.dataset.details)));
+}
+
+function channelHeaderMetaHtml(c) {
+  const haveMembers = state.convMembersFor === c.id;
+  const faces = haveMembers
+    ? `<button type="button" class="hdr-members" data-details="members"
+        aria-label="${t("{n} members - open the member list", { n: visibleMembers(state.convMembers, state.actorsCache).length })}"
+        title="${t("Members")}">${headerFacesHtml(state.convMembers, state.actorsCache)}</button>`
+    : "";
+  const pins = state.convPins.length
+    ? `<button type="button" class="hdr-pill" data-details="pins" aria-label="${t("{n} pinned - show them", { n: state.convPins.length })}"
+        title="${t("Pinned")}">${iconPin()} ${state.convPins.length}</button>`
+    : "";
+  return `${faces}${pins}`;
+}
+
+function dmHeaderMetaHtml(others) {
+  if (!others.length) return "";
+  const o = others[0];
+  const online = handleOnline(o.handle);
+  const row = state.presence.find((p) => String(p.handle).toLowerCase() === String(o.handle).toLowerCase() && p.doing)
+    || null;
+  const facts = profileFacts({ id: -1, handle: o.handle, kind: o.kind }, row ? [row] : []);
+  return `
+    <button type="button" class="hdr-dm" data-profile="${escapeHtml(o.handle)}" aria-label="${t("Open the profile of @{handle}", { handle: escapeHtml(o.handle) })}">
+      ${avatarHtml(o.handle, 24)}
+      <span class="kindtag ${o.kind || "agent"}">${o.kind === "human" ? t("human") : t("agent")}</span>
+      <span class="hdr-dm-state">${online ? t("online now") : t("offline")}</span>
+      ${facts.doing ? `<span class="hdr-dm-doing">${iconGear()} <i>${escapeHtml(facts.doing)}</i></span>` : ""}
+    </button>${others.length > 1 ? `<span class="hdr-count">+${others.length - 1}</span>` : ""}`;
+}
+
+/** Opens Details and moves focus to one of its headings ("members" or "pins"). */
+async function openDetailsAt(section) {
+  state.profileHandle = null;
+  state.detailsOpen = true;
+  await refreshDetailsData();
+  renderMain();
+  document.getElementById(section === "pins" ? "dt-pins-h" : "dt-members-h")?.focus();
 }
 
 // -------------------------------------------------------- the presence bar
@@ -594,14 +657,17 @@ export function renderMessages() {
   const openEdit = saveOpenEdit(el);
   const keepAtBottom = isScrolledToBottom();
   const scrollTop = el.scrollTop;
-  const list = visibleMessages(state.activeId);
-  if (!list.length) {
+  const all = visibleMessages(state.activeId);
+  const c = state.conversations.find((x) => x.id === state.activeId);
+  // S5: the "N open" pill in the header and, when it is pressed, the list narrowed to the open
+  // reports of this channel (client-side; "Show all" is the way back).
+  renderReportPill(c, all);
+  const list = state.reportFilter && isReportChannel(c) ? all.filter((m) => openReport(m, c)) : all;
+  if (!all.length) {
     el.innerHTML = emptyStateHtml(iconChat(2.2), t("Quiet so far"),
       t("Nobody has written anything here yet. Start with the first sentence - agents and humans will see it the same way."));
     return;
   }
-
-  const c = state.conversations.find((x) => x.id === state.activeId);
   if (c && (c.kind === "dm" || c.kind === "group") && !dmMembersCache[c.id]) {
     const others = [...new Set((state.msgs[c.id] || []).map((m) => m.actorId))].filter((id) => id !== state.actor.id);
     if (others.length) dmMembersCache[c.id] = others;
@@ -609,8 +675,12 @@ export function renderMessages() {
 
   // Older messages load themselves as you scroll up; the button stays as an escape route (say,
   // when a batch did not fill the screen and there is nothing to scroll).
-  let html = state.hasMore[state.activeId]
-    ? `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>` : "";
+  let html = state.reportFilter && list !== all
+    ? `<div class="report-filter" role="status">${t("Showing only the open reports of this channel.")}
+        <button type="button" class="linkbtn" data-report-showall>${t("Show all")}</button></div>`
+      + (list.length ? "" : `<p class="report-none">${t("No open reports here - everything has been confirmed.")}</p>`)
+    : "";
+  if (state.hasMore[state.activeId] && !state.reportFilter) html += `<button class="loadmore" id="btn-loadmore">${t("Older messages")}</button>`;
   const idx = threadIndex(state.activeId);
   // The divider position comes from counters.js: with a read mark it is the mark; on a first
   // visit (mark 0) the server's unread count says where the new part begins (S7).
@@ -766,6 +836,53 @@ function deliveryHtml(m) {
    an edit, a read) redraws the whole list, and without this memory every bubble
    replayed its "slide in" from scratch. */
 
+/** Which report controls a message carries (S5, A5). `report`: the message is in the report
+ *  cycle - the trace (fixedAt/resolvedAt), the explicit "Treat as a report", or the channel rule
+ *  (a bug/issue/incident channel treats every top-level text as a report, G19). "Mark fixed" is
+ *  for everybody but the author; "Confirm fixed" for the author, the instance admin or a channel
+ *  admin, and only once somebody has marked it fixed (or to take a confirmation back). Before
+ *  the channel rule the wrench and the check hung next to EVERY message from somebody else,
+ *  including in a private conversation about lunch; the rule puts them where reports live. */
+/** An open report: in the report cycle and not confirmed yet (in-flight entries do not count). */
+function openReport(m, c) {
+  return isReport(m, c) && !m.resolvedAt && !m.pending && !m.failed;
+}
+
+/** The "N open" pill next to the title (S5, A5): only in a bug/issue/incident channel, counting
+ *  the LOADED top-level reports without resolvedAt. Pressing it narrows the list; the element is
+ *  created once per header and found by id afterwards. */
+function renderReportPill(c, all) {
+  const inChannel = isReportChannel(c);
+  if (!inChannel && state.reportFilter) state.reportFilter = false;   // the filter is per report channel
+  let pill = document.getElementById("report-pill");
+  if (!pill) {
+    const host = document.getElementById("topbar-title")?.closest(".title");
+    if (!host?.insertAdjacentElement) return;
+    pill = document.createElement("button");
+    pill.id = "report-pill"; pill.type = "button"; pill.className = "pillbtn report-pill";
+    pill.addEventListener("click", () => { state.reportFilter = !state.reportFilter; renderMessages(); });
+    host.insertAdjacentElement("afterend", pill);
+  }
+  const open = inChannel ? all.filter((m) => openReport(m, c)).length : 0;
+  const show = inChannel && (open > 0 || state.reportFilter);
+  pill.hidden = !show;
+  if (!show) return;
+  pill.innerHTML = `${iconWrench()} ${t("{n} open", { n: open })}`;
+  pill.setAttribute("aria-pressed", String(state.reportFilter));
+  pill.classList.toggle("on", state.reportFilter);
+  const tip = state.reportFilter ? t("Showing only the open reports. Click to show everything.") : t("Reports nobody has confirmed as fixed yet. Click to show only those.");
+  pill.title = tip; pill.setAttribute("aria-label", `${t("{n} open", { n: open })} - ${tip}`);
+}
+
+function reportControls(m, mine) {
+  const myMem = state.memberships[m.conversationId];
+  const report = isReport(m);
+  const canResolve = report && !m.deletedAt && m.kind !== "answer" && !!(m.fixedAt || m.resolvedAt)
+    && (mine || state.actor.isAdmin || (myMem && myMem.role === "admin"));
+  const canFix = report && !mine && m.kind === "text" && !m.deletedAt;
+  return { report, canFix, canResolve };
+}
+
 function messageHtml(m, cont, opts = {}) {
   const handle = actorHandle(m.actorId);
   const kind = actorKind(m.actorId);
@@ -804,17 +921,7 @@ function messageHtml(m, cont, opts = {}) {
   // "confirmed" by whoever reported it (or an admin). One badge for both would read as a
   // verification while meaning "somebody claims they did it".
   const fixed = !!m.fixedAt && !resolved;
-  // Resolving is for the author, the instance admin, or a channel admin (as on the server).
-  const myMem = state.memberships[m.conversationId];
-  // ...but we SHOW it only next to a message that is a report: either it is already circulating
-  // in that cycle (it has fixedAt/resolvedAt), or somebody explicitly said "treat as a report".
-  // Previously the wrench and the check hung next to EVERY message from somebody else, including
-  // in a private conversation about lunch - and an accidental click sent somebody a request to
-  // confirm something they had never reported.
-  const report = isReport(m);
-  const canResolve = report && !m.deletedAt && m.kind !== "answer"
-    && (mine || state.actor.isAdmin || (myMem && myMem.role === "admin"));
-  const canFix = report && !mine && m.kind === "text" && !m.deletedAt;
+  const { report, canFix, canResolve } = reportControls(m, mine);
   const pinned = state.convPins.some((p) => p.messageId === m.id);
   const fresh = !animatedMsgs.has(m.id);
   // The set grew for the whole life of the tab. A reset past a threshold costs one unnecessary
@@ -857,8 +964,8 @@ function messageHtml(m, cont, opts = {}) {
       </div>
       ${!m.deletedAt ? `
       <div class="actions" role="group" aria-label="${t("Actions for the message from @{handle}", { handle: escapeHtml(handle) })}">
-        ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}" title="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}">${iconCheck(true)}</button>` : ""}
-        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark as fixed")}" title="${m.fixedAt ? t("Take back “fixed”") : t("Mark: I fixed it, waiting for confirmation")}">${iconWrench()}</button>` : ""}
+        ${canResolve ? `<button data-resolve="${m.id}" data-on="${resolved ? "1" : ""}" class="${resolved ? "on" : ""}" aria-pressed="${resolved}" aria-label="${resolved ? t("Take back the confirmation") : t("Confirm fixed")}" title="${resolved ? t("Take back the confirmation") : t("Confirm: the symptom is gone")}">${iconCheck(true)}</button>` : ""}
+        ${canFix ? `<button data-fix="${m.id}" data-on="${m.fixedAt ? "1" : ""}" class="${m.fixedAt ? "on" : ""}" aria-pressed="${!!m.fixedAt}" aria-label="${m.fixedAt ? t("Take back the “fixed” mark") : t("Mark fixed")}" title="${m.fixedAt ? t("Take back “fixed”") : t("Mark: I fixed it, waiting for confirmation")}">${iconWrench()}</button>` : ""}
         <button data-reply="${m.id}" aria-label="${t("Reply in a thread")}" title="${t("Reply in a thread")}">${iconThread()}</button>
         ${mine && m.kind === "text" ? `<button data-edit="${m.id}" aria-label="${t("Edit the message")}" title="${t("Edit")}">${iconEdit()}</button>` : ""}
         <button data-more="${m.id}" data-pinned="${pinned ? "1" : ""}" data-report="${report ? "1" : ""}"
@@ -885,6 +992,8 @@ export function bindMessageEvents(scope) {
     if ((b = closest("[data-resolve]"))) { resolveMsg(Number(b.dataset.resolve), !b.dataset.on); return; }
     if ((b = closest("[data-fix]"))) { fixMsg(Number(b.dataset.fix), !b.dataset.on); return; }
     if ((b = closest("[data-more]"))) { openMessageMenu(Number(b.dataset.more), b); return; }
+    if ((b = closest("[data-report-showall]"))) { state.reportFilter = false; renderMessages(); return; }
+    if ((b = closest("[data-eph-close]"))) { b.closest(".msg")?.remove(); return; }
     if ((b = closest("[data-delete]"))) {
       const id = Number(b.dataset.delete);
       if (await confirmModal({
@@ -962,8 +1071,13 @@ function openMessageMenu(messageId, anchor) {
   if (!m) return;
   const mine = m.actorId === state.actor.id;
   const pinned = state.convPins.some((p) => p.messageId === messageId);
-  const report = isReport(m);
+  const { report, canFix, canResolve } = reportControls(m, mine);
   const menuItems = [
+    // The report cycle in words (S5): the same two actions as the hover bar, with the consequence.
+    ...(canFix ? [{ action: "fix", label: m.fixedAt ? t("Take back “fixed”") : t("Mark fixed"),
+      description: m.fixedAt ? "" : t("Say you changed the code. Whoever reported it is asked to confirm the symptom is gone.") }] : []),
+    ...(canResolve ? [{ action: "resolve", label: m.resolvedAt ? t("Take back the confirmation") : t("Confirm fixed"),
+      description: m.resolvedAt ? "" : t("Close the report: the symptom is gone.") }] : []),
     { action: "pin", label: pinned ? t("Unpin from the conversation") : t("Pin in the conversation"),
       description: pinned ? t("It disappears from the pinned list.") : t("It goes to “Pinned” in the conversation details - for everybody.") },
     ...(!report && m.kind === "text" && !m.deletedAt
@@ -1004,6 +1118,8 @@ function openMessageMenu(messageId, anchor) {
     if (!b) return;
     const action = b.dataset.mact;
     close();
+    if (action === "fix") { fixMsg(messageId, !m.fixedAt); return; }
+    if (action === "resolve") { resolveMsg(messageId, !m.resolvedAt); return; }
     if (action === "pin") { togglePin(messageId, !pinned); return; }
     if (action === "report") {
       reports.add(messageId);
@@ -1298,7 +1414,8 @@ export function renderComposer() {
     autosize();
   });
   send.addEventListener("click", submit);
-  attachBtn.addEventListener("click", () => fileInput.click());
+  // S5: the "+" is a menu (attach, ask a tracked question, claim a resource); commands.js owns it.
+  attachBtn.addEventListener("click", (e) => openPlusMenu(e.currentTarget, { attach: () => fileInput.click() }));
   fileInput.addEventListener("change", () => {
     addFiles([...fileInput.files]);
     fileInput.value = "";
@@ -1631,18 +1748,16 @@ export async function openNewConversationModal(initialTab) {
       });
       body.querySelector("#nc-slug").focus();
     } else {
-      const others = state.actorsList.filter((a) => a.handle !== state.actor.handle);
+      // S6: a people picker (search, chips, faces, kind tag) instead of a <select multiple>;
+      // @system is never offered (filterPeople's default).
       body.innerHTML = `
-        <div class="field"><label for="nc-who">${t("To whom")}</label>
-          <select id="nc-who" multiple size="6" class="who-select">
-            ${others.map((a) => `<option value="${escapeHtml(a.handle)}">@${escapeHtml(a.handle)} ${a.kind === "human" ? `- ${t("human")}` : `- ${t("agent")}`}</option>`).join("")}
-          </select>
+        <div class="field"><span class="flabel" id="nc-who-label">${t("To whom")}</span>
+          <div id="nc-who" aria-labelledby="nc-who-label"></div>
         </div>
         <p class="mhint">${t("One person is a direct conversation, several is a group. You approach an agent exactly as you approach a human.")}</p>
-        <div class="row"><button class="btn ghost" id="nc-cancel">${t("Cancel")}</button><button class="btn" id="nc-create">${t("Start")}</button></div>`;
-      body.querySelector("#nc-cancel").addEventListener("click", close);
-      body.querySelector("#nc-create").addEventListener("click", async () => {
-        const selHandles = [...body.querySelector("#nc-who").selectedOptions].map((o) => o.value);
+        <div class="row"><button class="btn ghost" id="nc-cancel">${t("Cancel")}</button><button class="btn" id="nc-create" disabled>${t("Start")}</button></div>`;
+      const startBtn = body.querySelector("#nc-create");
+      const start = async (selHandles) => {
         if (!selHandles.length) return;
         try {
           const data = await api("POST", "/api/conversations", { kind: selHandles.length > 1 ? "group" : "dm", members: selHandles });
@@ -1651,8 +1766,15 @@ export async function openNewConversationModal(initialTab) {
           views.sidebar();
           openConversation(data.conversation.id);
         } catch (e) { showError(e); }
+      };
+      const picker = mountPeoplePicker(body.querySelector("#nc-who"), {
+        id: "nc-pp",
+        onChange: (chosen) => { startBtn.disabled = chosen.length === 0; },
+        onSubmit: (chosen) => start(chosen.map((a) => a.handle)),
       });
-      body.querySelector("#nc-who").focus();
+      body.querySelector("#nc-cancel").addEventListener("click", close);
+      startBtn.addEventListener("click", () => start(picker.selected()));
+      picker.focus();
     }
   };
   tabs.forEach((btn) => btn.addEventListener("click", () => showTab(btn.dataset.tab)));

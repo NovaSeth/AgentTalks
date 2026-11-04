@@ -3,6 +3,7 @@
  * deleting. Drawing goes through the `views` registry.
  */
 import { api } from "./api.js";
+import { parseCommand, runCommand } from "./commands.js";
 import { loadConversationsList, markReadDebounced, mySessionId, refreshQuestions } from "./data.js";
 import { iconCheck } from "./icons.js";
 import { t } from "./i18n.js";
@@ -19,6 +20,21 @@ function pendingList(convId) { return state.pending[convId] || (state.pending[co
 
 export async function sendMessage(text, opts = {}) {
   const convId = opts.conversationId ?? state.activeId;
+  // S5: a slash command RUNS instead of being posted, from any box. `asText` is the confirmed
+  // "send '/foo' as text" from the toast; a retry (clientMsgId) is never parsed again; the
+  // "also send to the channel" copy of a command (threadId: null) is silently skipped, the
+  // thread box already ran it.
+  if (!opts.asText && !opts.clientMsgId && parseCommand(text)) {
+    const r = await runCommand(text, {
+      conversationId: convId, threadId: opts.threadId ?? undefined,
+      silent: "threadId" in opts && opts.threadId === null,
+      sendAsText: (raw) => sendMessage(raw, { ...opts, asText: true }),
+    });
+    if (r.handled) {
+      if (r.keepText) { restoreComposer(convId, opts, text); return null; }
+      return r.message ?? (opts.threadId ? findMsgById(opts.threadId) : null) ?? { ephemeral: true };
+    }
+  }
   const composer = !opts.threadId && !opts.clientMsgId && state.activeId === convId
     ? document.getElementById("composer-input") : null;
   const composerText = composer?.value;
@@ -91,6 +107,28 @@ export async function sendMessage(text, opts = {}) {
     showError(e);
     return null;
   }
+}
+
+/** A command that did not run (unknown, incomplete, refused) gives the text back to the main
+ *  box: the composer clears the field BEFORE it calls sendMessage, and the words must not
+ *  vanish while the toast asks what to do. The thread box restores its own text on null. */
+function restoreComposer(convId, opts, text) {
+  if (opts.threadId || state.activeId !== convId) return;
+  const ta = document.getElementById("composer-input");
+  if (ta && !ta.value.trim()) { ta.value = text; ta.dispatchEvent(new Event("input")); ta.focus(); }
+}
+
+/** A tracked question (S5, restores M7): POST /ask creates the message and the question row in
+ *  one transaction. The badge and the Catch up count come from refreshQuestions. */
+export async function askQuestion(convId, body) {
+  try {
+    const data = await api("POST", `/api/conversations/${convId}/ask`, { body, sessionId: mySessionId || undefined });
+    upsertMessage(convId, data.message);
+    state.openQuestions[data.message.id] = data.question;
+    if (state.activeId === convId) { views.message(data.message); views.scrollToBottom(true); }
+    refreshQuestions(convId);
+    return data.message;
+  } catch (e) { showError(e); return null; }
 }
 
 export function retryPending(convId, clientMsgId) {

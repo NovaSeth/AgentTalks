@@ -1107,7 +1107,115 @@ details.arch[open] summary::before{transform:rotate(90deg)}
   .fmtbar{display:none}
 }
 /* === S5 === */
+/* Slash commands in the one autocomplete popover: name + hint on the first line, a one-line
+   description under it - the command menu shape every chat tool uses. */
+.mention-pop .cmd-row{flex-direction:column;align-items:flex-start;gap:var(--base-size-2)}
+.mention-pop .cmd-name{font-weight:var(--base-text-weight-semibold);font-family:var(--mono);font-size:var(--text-body-size-small)}
+.mention-pop .cmd-hint{font-weight:var(--base-text-weight-normal);color:var(--muted);font-family:inherit}
+.mention-pop .cmd-desc{font-size:var(--text-caption-size);color:var(--muted);line-height:var(--text-caption-lineHeight);white-space:normal}
+/* The ephemeral row: only this tab sees it, so it is visibly NOT a message - a dashed frame
+   with a quiet "Only visible to you" head and a dismiss button, no avatar, no actions. */
+.msg.ephemeral{grid-template-columns:1fr;border:var(--borderWidth-thin) dashed var(--borderColor-muted);
+  border-radius:var(--borderRadius-medium);background:var(--bgColor-muted);padding:var(--base-size-8) var(--base-size-12);
+  margin:var(--base-size-4) var(--base-size-8)}
+.msg.ephemeral:hover{background:var(--bgColor-muted)}
+.msg.ephemeral .head{display:flex;align-items:center;justify-content:space-between;gap:var(--base-size-8)}
+.msg.ephemeral .head .author{color:var(--muted);font-size:var(--text-caption-size);font-weight:var(--base-text-weight-medium);text-transform:uppercase;letter-spacing:.02em}
+.msg.ephemeral .eph-close{width:var(--control-xsmall-size);height:var(--control-xsmall-size);display:grid;place-items:center;
+  border-radius:var(--borderRadius-medium);color:var(--muted);font-size:var(--text-body-size-medium)}
+.msg.ephemeral .eph-close:hover,.msg.ephemeral .eph-close:focus-visible{background:var(--control-transparent-bgColor-hover);color:var(--ink)}
+.msg.ephemeral .text p{margin:0 0 var(--base-size-4)}
+.msg.ephemeral .text .av{display:inline-flex;vertical-align:middle;margin:0 var(--base-size-4)}
+.msg.ephemeral .eph-sub{color:var(--muted);font-size:var(--text-body-size-small)}
+.msg.ephemeral .eph-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--base-size-4)}
+.msg.ephemeral .eph-list li{display:flex;align-items:center;gap:var(--base-size-8)}
+/* The "N open" pill next to the title: a wrench and a count; pressed = the list is filtered. */
+.topbar .report-pill{gap:var(--base-size-4);padding:0 var(--base-size-8);height:var(--control-xsmall-size);
+  font-size:var(--text-body-size-small);color:var(--fgColor-attention);border-color:var(--borderColor-attention-muted);
+  background:var(--bgColor-attention-muted)}
+.topbar .report-pill svg{width:var(--base-size-12);height:var(--base-size-12)}
+.topbar .report-pill.on{background:var(--bgColor-attention-emphasis);color:var(--fgColor-onEmphasis);border-color:transparent}
+.topbar .report-pill[hidden]{display:none}
+.report-filter{display:flex;align-items:center;gap:var(--base-size-8);flex-wrap:wrap;margin:var(--base-size-8) var(--base-size-12);
+  padding:var(--base-size-8) var(--base-size-12);border-radius:var(--borderRadius-medium);
+  background:var(--bgColor-attention-muted);color:var(--fgColor-default);font-size:var(--text-body-size-small)}
+.report-none{margin:var(--base-size-8) var(--base-size-12);color:var(--muted);font-size:var(--text-body-size-small)}
+.linkbtn{color:var(--fgColor-accent);font:inherit;text-decoration:underline;padding:0}
+.linkbtn:hover,.linkbtn:focus-visible{color:var(--fgColor-accent);text-decoration:none}
+/* The + menu reuses the message menu card; the icon sits before the label. */
+.plus-menu .mm-l{display:inline-flex;align-items:center;gap:var(--base-size-8)}
+.plus-menu .mm-l svg{width:var(--base-size-16);height:var(--base-size-16);color:var(--muted)}
+/* "How we talk here": the body scrolls inside the flex column (M7) - without min-height the
+   flex child grows past the modal and the overflow rule never fires. */
+.gd-body{min-height:0}
 /* === S6 === */
+/* People: header meta (faces, count, pins pill, DM presence line), the profile panel, the picker.
+   Primer tokens for space and type; agent faces square-cornered, human ones round (A8), only in
+   the places this slice draws. */
+.topbar-meta{display:flex;align-items:center;gap:var(--base-size-8);flex:0 0 auto;min-width:0}
+.hdr-members,.hdr-pill,.hdr-dm{display:inline-flex;align-items:center;gap:var(--base-size-4);height:28px;
+  padding:0 var(--base-size-8);border-radius:var(--borderRadius-medium);border:var(--borderWidth-thin) solid var(--line);
+  background:var(--surface-2);color:var(--fg);font:inherit;font-size:var(--text-body-size-small);font-weight:600;cursor:pointer}
+.hdr-members:hover,.hdr-pill:hover,.hdr-dm:hover{border-color:var(--accent);color:var(--accent)}
+.hdr-members:focus-visible,.hdr-pill:focus-visible,.hdr-dm:focus-visible,.dm-who:focus-visible,.pp-row:focus-visible{
+  outline:2px solid var(--focus-outlineColor);outline-offset:2px}
+.hdr-faces{display:inline-flex;align-items:center}
+.hdr-faces .av{box-shadow:0 0 0 2px var(--surface-2)}
+.hdr-faces .av + .av{margin-left:calc(-1 * var(--base-size-8))}
+.hdr-count{font-variant-numeric:tabular-nums}
+.hdr-pill svg{width:1em;height:1em}
+.hdr-dm-state{color:var(--muted);font-weight:500}
+.hdr-dm-doing{display:inline-flex;align-items:center;gap:var(--base-size-4);color:var(--muted);font-weight:500;
+  max-width:28ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr-dm-doing svg{width:1em;height:1em;flex:0 0 auto}
+@media (max-width:760px){.hdr-dm-doing,.hdr-dm-state{display:none}}
+/* Details: the name + face of a member row is a button that opens the profile. */
+.dm-who{display:inline-flex;align-items:center;gap:var(--base-size-8);background:none;border:0;padding:0;
+  color:inherit;font:inherit;cursor:pointer;min-width:0;border-radius:var(--borderRadius-small)}
+.dm-who:hover .dm-name{color:var(--accent);text-decoration:underline}
+/* The profile panel, hosted by the side panel like Details. */
+.main:has(#profile-slot .thread) #thread-slot,.main:has(#profile-slot .thread) #details-slot{display:none}
+.pf-body{display:flex;flex-direction:column;gap:var(--base-size-12)}
+.pf-card{display:flex;align-items:center;gap:var(--base-size-16);padding:var(--base-size-8) 0}
+.pf-card.agent .av{border-radius:var(--borderRadius-medium)}
+.pf-names{display:flex;flex-direction:column;gap:var(--base-size-4);min-width:0}
+.pf-handle{font-family:var(--round);font-weight:800;font-size:var(--text-title-size-medium);line-height:1.2;
+  overflow:hidden;text-overflow:ellipsis}
+.pf-display{color:var(--muted);font-size:var(--text-body-size-medium)}
+.pf-names .kindtag,.pf-names .roletag{align-self:flex-start}
+.pf-presence,.pf-doing,.pf-wake{display:flex;align-items:center;gap:var(--base-size-8);font-size:var(--text-body-size-medium)}
+.pf-presence .ppresence{display:inline-block;width:var(--base-size-8);height:var(--base-size-8);border-radius:50%;background:var(--faint)}
+.pf-presence .ppresence.on{background:var(--green)}
+.pf-offline{color:var(--muted)}
+.pf-doing svg{width:1em;height:1em;color:var(--muted);flex:0 0 auto}
+.pf-doing i{color:var(--fg)}
+.pf-wake{color:var(--muted)}
+.pf-actions .btn{display:inline-flex;align-items:center;gap:var(--base-size-8)}
+.pf-actions .btn svg{width:1em;height:1em}
+/* The people picker: chips, a search box, a list of matches. */
+.pp{display:flex;flex-direction:column;gap:var(--base-size-8)}
+.pp-chips{display:flex;flex-wrap:wrap;gap:var(--base-size-4)}
+.pp-chips:empty{display:none}
+.pp-chip{display:inline-flex;align-items:center;gap:var(--base-size-4);padding:0 var(--base-size-4);height:26px;
+  border-radius:var(--borderRadius-full);background:var(--surface-2);border:var(--borderWidth-thin) solid var(--line);
+  font-size:var(--text-body-size-small);font-weight:600}
+.pp-chip.agent .av{border-radius:var(--borderRadius-small)}
+.pp-x{display:inline-grid;place-items:center;width:18px;height:18px;border:0;border-radius:50%;background:none;
+  color:var(--muted);cursor:pointer;padding:0}
+.pp-x:hover{background:var(--line);color:var(--fg)}
+.pp-x svg{width:12px;height:12px}
+.pp-input{width:100%}
+.pp-list{display:flex;flex-direction:column;max-height:14rem;overflow:auto;border:var(--borderWidth-thin) solid var(--line);
+  border-radius:var(--borderRadius-medium);padding:var(--base-size-4)}
+.pp-row{display:flex;align-items:center;gap:var(--base-size-8);width:100%;padding:var(--base-size-4) var(--base-size-8);
+  border:0;border-radius:var(--borderRadius-small);background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.pp-row:hover,.pp-row.active{background:var(--surface-2)}
+.pp-row.active{box-shadow:inset 2px 0 0 var(--accent)}
+.pp-handle{font-weight:600}
+.pp-name{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.pp-row .kindtag{margin-left:auto}
+.pp-empty{color:var(--muted);font-size:var(--text-body-size-small);margin:var(--base-size-4) var(--base-size-8)}
+.flabel{font-size:.78rem;font-weight:700;color:var(--muted);letter-spacing:.02em}
 /* === S7 === */
 /* === S8 === */
 /* === S9 === */

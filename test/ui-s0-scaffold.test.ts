@@ -26,8 +26,10 @@ test("S0: the new modules exist and export their public names", async () => {
   // browser in test/ui-start.test.ts executes it, here the re-export is checked textually.
   const composer = readFileSync(UI + "composer.js", "utf8");
   assert.match(composer, /export \{ renderComposer \} from "\.\/view-chat\.js"/, "composer.js re-exports renderComposer");
-  const people = await import(UI + "view-people.js");
-  assert.equal(typeof people.renderPeople, "function");
+  // view-people.js (S6) imports dom.js, which touches `document` at load; its exports run with a
+  // stubbed browser in test/ui-s6-people.test.ts, here the export is checked textually.
+  const people = readFileSync(UI + "view-people.js", "utf8");
+  assert.match(people, /export function renderPeople\(/, "view-people.js exports renderPeople");
   const counters = await import(UI + "counters.js");
   assert.equal(typeof counters.countUnread, "function");
 });

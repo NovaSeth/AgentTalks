@@ -14,6 +14,7 @@
  * `renderComposer` stays re-exported from view-chat.js: callers that imported it from here
  * since S0 keep working.
  */
+import { commandSuggestions } from "./commands.js";
 import { avatarHtml, escapeHtml } from "./dom.js";
 import { rememberEmoji, searchEmoji } from "./emoji.js";
 import { iconAddReaction, iconPlus, iconSend } from "./icons.js";
@@ -131,7 +132,7 @@ export function composerCardHtml(o) {
       <label class="sr-only" for="${p}-input">${escapeHtml(o.label)}</label>
       <textarea id="${p}-input" rows="1" placeholder="${escapeHtml(o.placeholder)}"></textarea>
       <div class="row cfoot">
-        ${o.files ? `<button class="attach" id="${p}-attach" type="button" aria-label="${t("Attach files")}" title="${t("Attach files")}">${iconPlus()}</button>
+        ${o.files ? `<button class="attach" id="${p}-attach" type="button" aria-haspopup="menu" aria-label="${t("Add: a file, a tracked question or a claim")}" title="${t("Add: a file, a tracked question or a claim")}">${iconPlus()}</button>
         <input type="file" id="${p}-file" multiple style="display:none" aria-label="${t("Choose files to send")}">` : ""}
         <div class="fmtbar" role="toolbar" aria-label="${t("Formatting")}">
           ${FORMATS.map((f) => `<button type="button" class="fmt" data-fmt="${f.id}" aria-label="${escapeHtml(f.label())}" title="${escapeHtml(f.label())}${f.key ? ` (Ctrl+${f.key.toUpperCase()})` : ""}">${f.glyph}</button>`).join("")}
@@ -258,10 +259,16 @@ export function createAutocomplete(ta, providers) {
     const caret = ta.selectionStart ?? ta.value.length;
     let tok = completeToken(ta.value, caret, "@"), tokKind = "@";
     if (!tok) { tok = completeToken(ta.value, caret, "#"); tokKind = "#"; }
+    // S5: "/" at the start of the box opens the command list through this same engine (one
+    // popover, the same keys: arrows, Tab/Enter complete, Esc closes). commands.js owns the rows.
+    let cmd = null;
+    if (!tok) { cmd = commandSuggestions(ta.value, caret); if (cmd) { tok = { start: cmd.start, query: "" }; tokKind = "/"; } }
     if (!tok) { close(); return; }
     const mySeq = ++seq;
     let found;
-    if (tokKind === "@") {
+    if (cmd) {
+      found = cmd.items;
+    } else if (tokKind === "@") {
       let actors = [];
       try { actors = await providers.actors(); } catch { /* offline: the list simply stays closed */ }
       // The sequence guard (M10): a slower answer to an older keystroke must not re-open the
@@ -282,7 +289,7 @@ export function createAutocomplete(ta, providers) {
       pop.setAttribute("role", "listbox");
       document.body.appendChild(pop);
     }
-    pop.innerHTML = items.map((a, i) => kind === "#"
+    pop.innerHTML = items.map((a, i) => a.html ? a.html : kind === "#"
       ? `<button type="button" role="option" data-mi="${i}" class="${i === index ? "sel" : ""}">
           <span class="mention-all-ic">#</span>
           <span class="mh">#${escapeHtml(a.slug)}</span>

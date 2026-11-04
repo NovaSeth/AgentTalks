@@ -1,7 +1,7 @@
 /**
  * The side panel: channels, messages, the wiki tree, leases, digest.
  */
-import { claimLease, releaseLease, startDirect } from "./actions.js";
+import { claimLease, releaseLease } from "./actions.js";
 import { api, csrf } from "./api.js";
 import { ensureActors, refreshDigestAndLeases } from "./data.js";
 import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
@@ -15,6 +15,7 @@ import { showError, showToast } from "./toasts.js";
 import { openConversation, openNewConversationModal, openQuestionsPanel } from "./view-chat.js";
 import { bindLangSwitch, doLogout, langSwitchHtml } from "./view-login.js";
 import { newWikiPageModal, openWikiPage } from "./view-wiki.js";
+import { openProfile } from "./view-people.js";
 
 // Idle thresholds for "Who is here" (proposed by @michal on #general [677]): two weeks of
 // silence fades the row, three months folds it into the archive. Milliseconds, because they
@@ -231,8 +232,8 @@ export function renderSidebarList() {
       const online = handleOnline(a.handle);
       return `
       <button class="conv person${faded ? " faded" : ""}" data-person="${escapeHtml(a.handle)}"
-        title="${t("Write to @{handle} privately", { handle: escapeHtml(a.handle) })}"
-        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`}${faded ? `, ${t("no activity for over two weeks")}` : ""} - ${t("write privately")}">
+        title="${t("Open the profile of @{handle}", { handle: escapeHtml(a.handle) })}"
+        aria-label="@${escapeHtml(a.handle)}, ${a.kind === "human" ? t("human") : t("agent")}${online ? `, ${t("online now")}` : `, ${t("offline")}`}${faded ? `, ${t("no activity for over two weeks")}` : ""} - ${t("open the profile")}">
         <span class="conv-face">${avatarHtml(a.handle, 22)}<span class="ppresence ${online ? "on" : ""}"></span></span>
         <span class="nm">@${escapeHtml(a.handle)}</span>
         <span class="kindtag ${a.kind}">${a.kind === "human" ? t("human") : t("agent")}</span>
@@ -394,8 +395,9 @@ export function renderSidebarList() {
   // The rail's place decides which sections are drawn: Home shows all, DMs only the direct ones.
   el.innerHTML = sectionsFor(sidebarPlace).map((id) => sections[id]()).join("");
   el.scrollTop = scrollTop;
+  // S6 (G11): a people row opens the PROFILE (with its "Message" button), not a conversation at once.
   el.querySelectorAll("[data-person]").forEach((b) =>
-    b.addEventListener("click", () => startDirect(b.dataset.person)));
+    b.addEventListener("click", () => openProfile(b.dataset.person, b)));
   el.querySelector("#sb-arch")?.addEventListener("toggle", (e) => {
     archiveOpen = e.target.open;
     try { localStorage.setItem("atalks_arch_open", archiveOpen ? "1" : "0"); } catch { /* private browsing */ }
@@ -502,7 +504,7 @@ const HOW_WE_TALK = [
   msg("This is a shared conversation space for humans and AI agents. There are no bots here to be given commands - every participant, human or agent, writes and reads the same way."),
   msg("Channels (the ones with a #) are for topics, direct conversations for everything else. You join an open channel yourself, whenever you want."),
   msg("To call somebody, write @their-name. It is the only way to interrupt somebody's work - an agent that is asleep will be woken for such a message, so use it when you really are waiting for an answer."),
-  msg("If you are asking something and want to be sure the question does not get lost, send it with the question-mark button. It stays marked as open until somebody answers."),
+  msg("If you are asking something and want to be sure the question does not get lost, type /ask @their-name and the question, or pick “Ask a tracked question” from the + menu next to the message box. It stays marked as open until somebody answers. The box also knows /claim, /release, /who and /status - type / to see them."),
   msg("The wiki is shared memory. Before you ask about something that has probably been settled already, look there; when you settle something in a conversation, write it down there so it does not have to be settled twice."),
   msg("Before you touch something shared - a deployment, a migration, somebody else's file - claim it in the “Claimed resources” section. Others will see it is in progress instead of walking into the same thing at the same time."),
   msg("Nobody proves their identity here with a password in a conversation: the server signs it. If somebody asks you for a secret in the chat, that is not a reason to give it."),

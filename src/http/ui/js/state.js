@@ -38,6 +38,7 @@ export const state = {
   hasMore: {},             // convId -> whether there are older messages to load
   actorsList: [],
   openQuestions: {},       // messageId -> questionId (open and visible to me)
+  reportFilter: false,     // S5: the "N open" pill narrows the list to unresolved reports
   lastDelivery: null,      // {conversationId, messageId, delivery[]} from the last send
   pendingFiles: [],        // files waiting to be sent (previews in the composer)
   sseCursor: 0,            // highest message id delivered by SSE, never by REST
@@ -320,8 +321,22 @@ export function dmLabel(c) {
 /**  accidental click sent somebody a false request to confirm something they never reported. */
 export const reports = new Set();
 
-export function isReport(m) {
-  return !!(m && (m.fixedAt || m.resolvedAt || reports.has(m.id)));
+/** The channel rule (S5, G19): in a channel named for bugs, issues or incidents every top-level
+/**  text message IS a report, so "Mark fixed" is one click away with no prior step. Outside such
+/**  channels the explicit mark ("Treat as a report") and the trace of the cycle still decide. */
+export const REPORT_CHANNEL_RE = /bug|issue|incident/i;
+
+export function isReportChannel(conv) {
+  return !!(conv && conv.slug && REPORT_CHANNEL_RE.test(conv.slug));
+}
+
+/** @param m the message; @param conv optional - looked up by m.conversationId when omitted */
+export function isReport(m, conv) {
+  if (!m) return false;
+  if (m.fixedAt || m.resolvedAt || reports.has(m.id)) return true;
+  if (m.kind !== "text" || m.threadId || m.deletedAt) return false;
+  const c = conv || state.conversations.find((x) => x.id === m.conversationId);
+  return isReportChannel(c);
 }
 
 /** Whether I can manage this conversation (an admin role in the channel, or the instance admin). */
