@@ -13,8 +13,8 @@
       "at": "2026-11-04T20:23:15.309Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "done",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-04T20:23:11.766Z",
@@ -69,8 +69,99 @@
         "base": "56aeb7a22d25",
         "note": "cross-provider review r1"
       }
+    },
+    {
+      "at": "2026-11-04T21:00:38.471Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T21:00:43.269Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 1
+      }
+    },
+    {
+      "at": "2026-11-04T21:00:43.535Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:designer",
+        "base": "56aeb7a22d25",
+        "note": "fix round 1"
+      }
+    },
+    {
+      "at": "2026-11-04T21:03:38.943Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T21:03:39.339Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "56aeb7a22d25",
+        "note": "scoped re-review r2"
+      }
+    },
+    {
+      "at": "2026-11-04T21:07:09.840Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T21:07:15.481Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "ef92a46cbdbc120de07f8a25f63e730fdb4806a7",
+        "class": "standard",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T21:08:13.979Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "ef92a46cbdbc120de07f8a25f63e730fdb4806a7"
+      }
+    },
+    {
+      "at": "2026-11-04T21:08:15.292Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "3c7c25ba8282c019af44b11d8d694c0af04ce1a4",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "5289dfa21a6ba4940a442d7aa0a6628099cf56c9"
+      }
     }
   ],
   "base": "56aeb7a22d25b4f78c54343252b24b7ace765b13",
-  "branch": "task/T-MG-46-reconcile-owed-ranges"
+  "branch": "task/T-MG-46-reconcile-owed-ranges",
+  "mergedAt": "2026-11-04T21:08:15.292Z"
 }

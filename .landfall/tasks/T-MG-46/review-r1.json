@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "src/http/ui/js/data.js",
+      "line": 246,
+      "rule": "REV-2",
+      "text": "Acceptance 5: stale cleanup deletes the new session's owed ranges. In-memory ui-t18 repro: hold reconcile; switch session; send A then B for message 1, cut B before an edit and A after it, land A then B; release old reconcile; tick 60s. FAIL: body='m1', reactions=undefined, expected 'new-session-latest' and '+1'. The repro passes on 56aeb7a. Scope cleanup to the captured generation, preserve and schedule newer debt, and add this regression test."
+    }
+  ],
+  "run": "codex-T-MG-46-reviewer-1",
+  "sha256": "62a7afd70d326590c8bdc02f461bcc956f7d669fe4db614d19dfff619d2a4be6"
+}

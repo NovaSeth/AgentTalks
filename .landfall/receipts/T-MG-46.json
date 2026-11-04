@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "task": "T-MG-46",
+  "class": "standard",
+  "tier": null,
+  "startedAt": "2026-11-04T20:23:18.363Z",
+  "endedAt": "2026-11-04T21:07:11.817Z",
+  "wallMs": 2633454,
+  "tokens": {
+    "input": 165837,
+    "output": 104205,
+    "cacheRead": 23745729,
+    "cacheWrite": 357793
+  },
+  "costMicroUsd": 8048520,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 64,
+        "output": 9884,
+        "cacheRead": 11934419,
+        "cacheWrite": 19430
+      },
+      "costMicroUsd": 2740260
+    },
+    {
+      "agentType": "landfall:designer",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 154,
+        "output": 80556,
+        "cacheRead": 10023534,
+        "cacheWrite": 338363
+      },
+      "costMicroUsd": 5308260
+    }
+  ],
+  "external": [
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-46-reviewer-1",
+      "model": null,
+      "tokens": {
+        "input": 73122,
+        "output": 6669,
+        "cacheRead": 658048,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 194819,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-46-reviewer-2",
+      "model": null,
+      "tokens": {
+        "input": 92497,
+        "output": 7096,
+        "cacheRead": 1129728,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 197396,
+      "exit": 0
+    }
+  ],
+  "rounds": 1,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": true
+}
