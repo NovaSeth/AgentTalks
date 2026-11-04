@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { waitFor } from "../helpers.ts";
 import { startTestServer } from "../http-helpers.ts";
+import { fakeAt } from "./fake-at.ts";
 import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
 import { deriveSessionId } from "../../integrations/claude-code-plugin/lib/sessions.mjs";
@@ -232,6 +233,50 @@ test("acceptance 4: a heartbeat answered with 500 logs one line and the monitor 
   const lines = run.stderr().split("\n").filter((l) => /heartbeat/i.test(l));
   assert.equal(lines.length, 1, run.stderr());
   assert.doesNotMatch(run.stderr(), /tok\b/);
+});
+
+test("acceptance 4: delivery continues while every heartbeat fails (an event after 2+ failed beats is printed once)", async (t) => {
+  const fake = await fakeAt();
+  t.after(() => fake.close());
+  fake.sessionsStatus = 500;
+  fake.conversations = { status: 200, body: { conversations: [{ id: 3, kind: "public", slug: "general", others: [] }], memberships: [{ conversationId: 3, notify: "mentions" }] } };
+  const claude = fakeClaude(t, false);
+  await new Promise((r) => setTimeout(r, 200));
+  const run = spawnPlugin(t, MONITOR, ["--max-seconds", "20"], {
+    AGENTTALKS_URL: fake.url, AGENTTALKS_TOKEN: "tok", CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION,
+    AGENTTALKS_CLAUDE_PID: String(claude.pid), AGENTTALKS_HEARTBEAT_MS: "200", AGENTTALKS_MONITOR: "on",
+  });
+  let out = "";
+  run.child.stdout!.on("data", (c) => { out += c; });
+  const beats = () => fake.requests.filter((r) => r === "POST /api/sessions").length;
+  await waitFor(() => fake.streams() === 1, 5000);
+  await waitFor(() => beats() >= 2, 4000);
+  fake.emit({ id: 901, conversationId: 3, actorId: 9, body: "hello @nestor please look", threadId: null, actorHandle: "bob" });
+  await waitFor(() => /^\[901\]/m.test(out), 4000);
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(out.split("\n").filter((l) => /^\[901\]/.test(l)).length, 1, out);
+  assert.equal(run.child.exitCode, null, "still running");
+  const lines = run.stderr().split("\n").filter((l) => /heartbeat/i.test(l));
+  assert.equal(lines.length, 1, run.stderr());
+});
+
+test("F1 the channel's beat survives stream reconnects: a stream recycled faster than the interval still beats", async (t) => {
+  const fake = await fakeAt();
+  t.after(() => fake.close());
+  fake.sessionsStatus = 200;
+  const claude = fakeClaude(t, true);
+  await new Promise((r) => setTimeout(r, 200));
+  const c = await channel(t, fake.url, {
+    CLAUDE_CODE_SESSION_ID: CLAUDE_SESSION, AGENTTALKS_CLAUDE_PID: String(claude.pid), AGENTTALKS_HEARTBEAT_MS: "100",
+  });
+  c.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
+  await waitFor(() => fake.streams() === 1, 5000);
+  const cutter = setInterval(() => fake.cut(), 40);
+  t.after(() => clearInterval(cutter));
+  await new Promise((r) => setTimeout(r, 700));
+  clearInterval(cutter);
+  const beats = fake.requests.filter((r) => r === "POST /api/sessions").length;
+  assert.ok(beats >= 4, `expected at least 4 beats across reconnects, got ${beats}`);
 });
 
 test("channel beats when it delivers: a session ended by the server is re-registered", async (t) => {

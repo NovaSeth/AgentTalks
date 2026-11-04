@@ -40,6 +40,8 @@ export type FakeAt = {
   cut(): void;
   streams(): number;
   requests: string[];
+  /** The answer to POST /api/sessions (default 404, as for any unknown route). */
+  sessionsStatus?: number;
   close(): Promise<void>;
 };
 
@@ -88,6 +90,10 @@ export async function fakeAt(opts: { me?: { id: number; handle: string } } = {})
       open.add(res);
       res.on("close", () => open.delete(res));
       return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/sessions" && fake.sessionsStatus !== undefined) {
+      req.resume();
+      return sendJson(res, { status: fake.sessionsStatus });
     }
     if (url.pathname === "/api/me") {
       return sendJson(res, { status: 200, body: fake.meBody ?? { actor: me, conversations: [], unread: [] } });

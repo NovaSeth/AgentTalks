@@ -237,9 +237,10 @@ function heartbeat(state) {
   }
   // "pause" (reconnecting): not refreshed, so it goes stale unless the stream comes back.
 }
-// Presence heartbeat (lib/heartbeat.mjs): this server delivers while its stream is open, so it
-// keeps the session fresh then; a reconnecting or stopped stream stops the beat (the monitor,
-// if it takes over, starts its own).
+// Presence heartbeat (lib/heartbeat.mjs): this server is the delivering side for its whole
+// life, so the beat starts once (first open stream) and keeps its schedule across reconnects: a
+// reconnect neither restarts nor postpones the next beat. It stops only when delivery ends for
+// good (the token was rejected) or at exit (the monitor, if it takes over, starts its own).
 /** @type {ReturnType<typeof startHeartbeat> | null} */
 let presenceTimer = null;
 /** @param {boolean} on */
@@ -306,7 +307,8 @@ async function startFeed() {
       // The heartbeat says "this channel delivers": only while the stream is open. During a
       // reconnect it is not refreshed and goes stale; a dead token closes it at once.
       heartbeat(heartbeatFor(state));
-      presenceBeat(state === "open");
+      if (state === "open") presenceBeat(true);
+      else if (state === "unauthorized" || state === "closed") presenceBeat(false);
     },
   });
   // The first contact can fail (server down while the session starts): retry with backoff
