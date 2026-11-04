@@ -1,7 +1,7 @@
 /**
  * The channel server: a hand-written stdio MCP server (JSON-RPC 2.0, one JSON message per
  * line) that declares the `claude/channel` capability, pushes framed events as
- * `notifications/claude/channel`, and offers the `reply` and `mark_read` tools.
+ * `notifications/claude/channel`, and offers the `reply`, `mark_read` and `typing` tools.
  *
  * The test spawns the real entry point the plugin manifest names, the same way Claude Code
  * does, and talks to it over its stdin/stdout against a live test server.
@@ -83,7 +83,7 @@ test("channel server: MCP handshake, tools/list, a pushed DM arrives framed, rep
 
   const list = await rpc.request("tools/list");
   const names = list.result.tools.map((x: any) => x.name).sort();
-  assert.deepEqual(names, ["mark_read", "reply"]);
+  assert.deepEqual(names, ["mark_read", "reply", "typing"]);
   const reply = list.result.tools.find((x: any) => x.name === "reply");
   assert.deepEqual(reply.inputSchema.required.sort(), ["conversation_id", "text"]);
 

@@ -14,12 +14,11 @@
  * A hook must never break or slow the session: every failure is silent (exit 0, nothing on
  * stdout), and every request has a timeout. Errors go to stderr without the token.
  */
-import { hostname } from "node:os";
-import { basename } from "node:path";
 import { resolveIdentity, UNTRUSTED_PROJECT_CONTEXT, expectedPrincipal, principalProblem } from "../lib/identity.mjs";
 import { createApi } from "../lib/api.mjs";
 import { PREAMBLE, header, quoteBody, safeLabel } from "../lib/frame.mjs";
 import { deriveSessionId, recordSession, sessionsDir } from "../lib/sessions.mjs";
+import { presenceBody } from "../lib/heartbeat.mjs";
 
 export const MAX_CONTEXT_CHARS = 1500;
 /** The whole SessionStart run, all requests included, ends within this (the hook timeout is 15 s). */
@@ -137,13 +136,7 @@ async function main() {
   const api = createApi(identity, { timeoutMs: budget });
   /** @type {Promise<string>} */
   const outOfTime = new Promise((r) => { setTimeout(r, budget, "timeout").unref(); });
-  const presence = api.post("/api/sessions", {
-    sessionId,
-    label: process.env.AGENTTALKS_LABEL || basename(cwd),
-    kind: "durable",
-    cwd,
-    host: hostname(),
-  }).catch((err) => { process.stderr.write(`[agenttalks-hook] presence not registered: ${err instanceof Error ? err.message : "failed"}\n`); });
+  const presence = api.post("/api/sessions", presenceBody({ sessionId, cwd })).catch((err) => { process.stderr.write(`[agenttalks-hook] presence not registered: ${err instanceof Error ? err.message : "failed"}\n`); });
   /** @type {any[] | null} */
   let questions = null;
   /** @type {Map<number, any> | null} */
