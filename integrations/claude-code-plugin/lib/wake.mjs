@@ -509,21 +509,29 @@ export function createWakeBridge(opts) {
         const runEnv = { ...env, AGENTTALKS_EXPECT_SERVER_URL: server, AGENTTALKS_EXPECT_ACTOR: body.actor };
         const run = runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env: runEnv });
         void Promise.resolve(run).catch(() => {}).finally(() => running.delete(rec.sessionId));
+        const started = run?.started ?? Promise.resolve();
+        const TIMED_OUT = Symbol("timed out");
         /** @type {ReturnType<typeof setTimeout> | undefined} */
         let startTimer;
         try {
-          // Bounded: nothing may hold the reservation forever (r2 F5).
-          await Promise.race([
-            run?.started ?? Promise.resolve(),
-            new Promise((_, reject) => {
-              startTimer = setTimeout(() => reject(new Error("the run did not start in time")), opts.startTimeoutMs ?? START_TIMEOUT_MS);
-            }),
+          // Bounded: the ANSWER never waits forever (r2 F5).
+          const outcome = await Promise.race([
+            started,
+            new Promise((resolve) => { startTimer = setTimeout(() => resolve(TIMED_OUT), opts.startTimeoutMs ?? START_TIMEOUT_MS); }),
           ]);
+          if (outcome === TIMED_OUT) {
+            // Not known yet whether it starts: the knock stays RESERVED (a retry is 409) until
+            // the process reports. A late 'spawn' uses it up, so no retry can start a second
+            // run; only a start that provably failed frees it (F5 follow-up).
+            started.then(() => { seen.set(key, keepUntil); checking.delete(key); saveReplay(); },
+              () => { checking.delete(key); running.delete(rec.sessionId); });
+            log("the resumed run has not started yet: answering 503, the knock stays reserved");
+            return reply(res, 503, { ok: false, woke: false, reason: "spawn pending" });
+          }
         } catch (err) {
+          // It provably never started (a throw, or 'error' before 'spawn'): the retry is open.
           checking.delete(key);
-          // A run that is merely slow to start keeps its session busy until it settles; one
-          // that failed to start frees it now.
-          if (!(err instanceof Error && err.message === "the run did not start in time")) running.delete(rec.sessionId);
+          running.delete(rec.sessionId);
           log(`could not start the resumed run: ${err instanceof Error ? err.message : err}`);
           return reply(res, 503, { ok: false, woke: false, reason: "spawn failed" });
         }

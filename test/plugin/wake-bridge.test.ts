@@ -554,3 +554,42 @@ test("wake bridge: a spawn that throws synchronously (E2BIG) is a retryable 503,
   assert.deepEqual(await retry.json(), { ok: true, woke: true });
   assert.equal((await b.send(body)).status, 409);
 });
+
+test("wake bridge: a run that starts only AFTER the spawn wait timed out still uses up the knock - the retry gets 409, never a second run (F5 follow-up)", async (t) => {
+  let spawns = 0;
+  const slowRunner = () => {
+    spawns++;
+    const run: any = new Promise<void>((r) => setTimeout(r, 600));
+    run.started = new Promise<void>((r) => setTimeout(r, 250)); // 'spawn' arrives late
+    return run;
+  };
+  const b = await bridge(t, () => NOW, { extra: { runner: slowRunner, startTimeoutMs: 100 } });
+  const body = legacyBody({ exp: NOW + 300, nonce: "51051051051051051051051051051051" });
+  const first = await b.send(body);
+  assert.equal(first.status, 503);
+  assert.deepEqual(await first.json(), { ok: false, woke: false, reason: "spawn pending" });
+  assert.equal((await b.send(body)).status, 409, "pending: still reserved");
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal((await b.send(body)).status, 409, "it started after all: the knock is used up");
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal((await b.send(body)).status, 409, "and stays used up after the run ends");
+  assert.equal(spawns, 1, "no second run");
+});
+
+test("wake bridge: a run whose start fails AFTER the spawn wait timed out frees the knock for a retry (F5 follow-up)", async (t) => {
+  let spawns = 0;
+  const failing = () => {
+    spawns++;
+    const run: any = new Promise<void>((r) => setTimeout(r, 300));
+    run.started = new Promise<void>((_, reject) => setTimeout(() => reject(new Error("EACCES")), 250));
+    run.started.catch(() => {});
+    return run;
+  };
+  const b = await bridge(t, () => NOW, { extra: { runner: failing, startTimeoutMs: 100 } });
+  const body = legacyBody({ exp: NOW + 300, nonce: "fa11fa11fa11fa11fa11fa11fa11fa11" });
+  assert.equal((await b.send(body)).status, 503);
+  await new Promise((r) => setTimeout(r, 500));
+  const retry = await b.send(body);
+  assert.equal(retry.status, 503, "retryable again (this runner always fails), not a replay");
+  assert.equal(spawns, 2);
+});
