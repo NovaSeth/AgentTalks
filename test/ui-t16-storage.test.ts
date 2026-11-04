@@ -56,7 +56,8 @@ async function tab(actor: Any) {
   return s;
 }
 const unsentBodies = (s: Any, conv = 5) => s.visibleMessages(conv).filter((m: Any) => m.failed).map((m: Any) => m.body);
-const unsentKeys = () => [...storage.data.keys()].filter((k) => k.startsWith("atalks_unsent_")).sort();
+/** The per-message keys only (not the old lists, not the tombstone set). */
+const unsentKeys = () => [...storage.data.keys()].filter((k) => /^atalks_unsent_\d+_\d+_.+$/.test(k)).sort();
 /** The write of a tab still running the pre-r5 code (1a713b8): the shared per-conversation list,
  *  every entry tagged with its writer (copied from that revision's persistUnsent). */
 function oldTabPersist(owner: number, convId: number, pending: Any[], done: string[] = []) {
@@ -82,7 +83,7 @@ test("F7 (codex repro): an old tab's attributable unsent write after the upgrade
   assert.deepEqual(unsentBodies(b), ["b2"], "B gets its own message back");
   const a2 = await tab(A);
   assert.deepEqual(unsentBodies(a2), [], "and nobody else does");
-  assert.equal(storage.getItem("atalks_unsent_5"), null, "the legacy shared list is gone");
+  assert.ok(storage.getItem("atalks_unsent_5"), "the legacy shared list is only read, never removed (fix round 1)");
 });
 
 test("F7: every sweep moves tagged entries to their owners and still drops the unattributed ones", async () => {
@@ -98,7 +99,9 @@ test("F7: every sweep moves tagged entries to their owners and still drops the u
   assert.deepEqual(unsentBodies(b, 7), ["tagged for B"]);
   const a = await tab(A);
   assert.deepEqual(unsentBodies(a, 7), ["tagged for A"], "the marker does not hand A the untagged entries");
-  assert.ok(![...storage.data.values()].some((v) => v.includes("no owner") || v.includes("bad owner")), "unattributed entries are deleted");
+  assert.ok(!unsentKeys().some((k) => /_u[12]$/.test(k)), "unattributed entries are never imported (fix round 1: the list is kept, shown to nobody)");
+  const c = await tab({ id: 12, handle: "c" });
+  assert.deepEqual(unsentBodies(c, 7), [], "nor shown to a third account");
 });
 
 // ------------------------------------------------------------------ F8
@@ -183,7 +186,8 @@ test("F8: one key per message; a write never rewrites another message's key", as
   storage.after = null;
   assert.ok(!written.includes("setItem atalks_unsent_1_5_m1"), "the sent message is not written again");
   assert.ok(written.includes("removeItem atalks_unsent_1_5_m1"));
-  assert.ok(written.every((w) => w.endsWith("_m1") || w.endsWith("_m2")), "only the conversation's own message keys are touched");
+  assert.ok(written.every((w) => w.endsWith("_m1") || w.endsWith("_m2") || w === "setItem atalks_unsent_done_1"),
+    "only the conversation's own message keys and the account's tombstone set are touched");
   assert.deepEqual(unsentKeys(), ["atalks_unsent_1_5_m2"]);
 });
 
@@ -251,4 +255,181 @@ test("F8: a sign-out removes only this account's message keys", async () => {
   c.state.pending[5] = [{ clientMsgId: "c1", body: "c1", ts: 1, failed: true }]; c.persistUnsent(5);
   a.clearLocalAccountData(1);
   assert.deepEqual(unsentKeys(), ["atalks_unsent_12_5_c1", "atalks_unsent_2_5_b1"], "actor 1's prefix does not reach actor 12");
+});
+
+// ------------------------------------------------------------------ fix round 1 (codex review-r1 F1, F2)
+// The migration is non-destructive: a legacy shared list (atalks_unsent_<conv>) and an r5 list
+// (atalks_unsent_<actor>_<conv>) are only read and copied into per-message keys that do not exist
+// yet; a message sent or discarded through the new code leaves a tombstone
+// (atalks_unsent_done_<actor>) that every import and restore honours.
+const DAY = 24 * 3600 * 1000;
+
+test("R1 F1 (codex repro): an old tab's write while A's sign-out sweep reads the shared list keeps [b1, b2]", async () => {
+  // Codex injected after the third read of atalks_unsent_5 (the old code's check-then-remove);
+  // here after the n-th read for every n the sweep reaches.
+  let points = 0;
+  for (let n = 1; ; n++) {
+    storage.data.clear();
+    oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }]);
+    const a = await tab(A);
+    let reads = 0, injected = false;
+    storage.after = (op, key) => {
+      if (injected || op !== "getItem" || key !== "atalks_unsent_5" || ++reads !== n) return;
+      injected = true; storage.after = null;
+      oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }, { clientMsgId: "b2", body: "b2", ts: 2 }]);
+    };
+    a.clearLocalAccountData(1);
+    storage.after = null;
+    if (!injected) break;
+    points++;
+    const b = await tab(B);
+    assert.deepEqual(unsentBodies(b), ["b1", "b2"], `old tab wrote after read #${n}`);
+  }
+  assert.ok(points >= 2, "the sign-out sweep reads the shared list");
+});
+
+test("R1 F1: an old tab's write after EVERY storage call of A's sign-out sweep keeps [b1, b2]", async () => {
+  let points = 0;
+  for (let k = 1; ; k++) {
+    storage.data.clear();
+    oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }]);
+    const a = await tab(A);
+    let calls = 0, injected = false;
+    storage.after = () => {
+      if (injected || ++calls !== k) return;
+      injected = true; storage.after = null;
+      oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }, { clientMsgId: "b2", body: "b2", ts: 2 }]);
+    };
+    a.clearLocalAccountData(1);
+    storage.after = null;
+    if (!injected) break;
+    points++;
+    const b = await tab(B);
+    assert.deepEqual(unsentBodies(b), ["b1", "b2"], `old tab wrote after A's storage call #${k}`);
+  }
+  assert.ok(points > 3);
+});
+
+test("R1 F2 (codex repro): a paused migration cannot resurrect a message B already sent", async () => {
+  oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }]);
+  const a = await freshTab();
+  const b = await freshTab();
+  let injected = false;
+  storage.after = (op, key) => {
+    if (injected || op !== "getItem" || key !== "atalks_unsent_2_5_b1" || storage.data.has(key)) return;
+    injected = true; storage.after = null;
+    b.state.actor = B; b.claimLocalData(2);              // B migrates b1 ...
+    b.state.pending[5] = []; b.persistUnsent(5, ["b1"]); // ... and sends it
+  };
+  a.state.actor = A; a.claimLocalData(1);              // A resumes and writes its stale copy
+  storage.after = null;
+  assert.ok(injected, "A read the absent per-message key");
+  const b2 = await tab(B);
+  assert.deepEqual(unsentBodies(b2), [], "the sent b1 never comes back as not sent");
+});
+
+test("R1 F2: B's claim and send after EVERY storage call of A's migration never resurrect b1", async () => {
+  for (const upgraded of [false, true]) {
+    let points = 0;
+    for (let k = 1; ; k++) {
+      storage.data.clear();
+      if (upgraded) storage.setItem("atalks_storage_v", "2");
+      oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }]);
+      const a = await freshTab();
+      const b = await freshTab();
+      let calls = 0, injected = false;
+      storage.after = () => {
+        if (injected || ++calls !== k) return;
+        injected = true; storage.after = null;
+        b.state.actor = B; b.claimLocalData(2);
+        b.state.pending[5] = []; b.persistUnsent(5, ["b1"]);
+      };
+      a.state.actor = A; a.claimLocalData(1);
+      storage.after = null;
+      if (!injected) break;
+      points++;
+      const b2 = await tab(B);
+      assert.deepEqual(unsentBodies(b2), [], `point #${k} (upgraded: ${upgraded})`);
+    }
+    assert.ok(points > 3);
+  }
+});
+
+test("R1: the legacy lists are only read: a sweep neither deletes nor rewrites them", async () => {
+  oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }]);
+  storage.setItem("atalks_unsent_2_7", JSON.stringify([{ clientMsgId: "r1", body: "r5", ts: 1 }]));
+  const before = { shared: storage.getItem("atalks_unsent_5"), r5: storage.getItem("atalks_unsent_2_7") };
+  const writes: string[] = [];
+  storage.after = (op, key) => { if (op === "setItem" || op === "removeItem") writes.push(`${op} ${key}`); };
+  const a = await tab(A);
+  a.clearLocalAccountData(1);
+  await tab(B);
+  storage.after = null;
+  assert.ok(!writes.some((w) => / atalks_unsent_(5|2_7)$/.test(w)), writes.join(", "));
+  assert.equal(storage.getItem("atalks_unsent_5"), before.shared);
+  assert.equal(storage.getItem("atalks_unsent_2_7"), before.r5);
+});
+
+test("R1: a sent or discarded message leaves a tombstone, bounded to the 500 newest ids", async () => {
+  const b = await tab(B);
+  b.state.pending[5] = [{ clientMsgId: "m1", body: "one", ts: 1, failed: true }];
+  b.persistUnsent(5);
+  b.state.pending[5] = []; b.persistUnsent(5, ["m1"]);
+  assert.deepEqual(JSON.parse(storage.getItem("atalks_unsent_done_2")!), ["m1"]);
+  assert.equal(storage.getItem("atalks_unsent_2_5_m1"), null);
+  // A stale copy of m1 (another tab's late write) is not restored, and is removed.
+  storage.setItem("atalks_unsent_2_5_m1", JSON.stringify({ clientMsgId: "m1", body: "one", ts: 1 }));
+  const b2 = await tab(B);
+  assert.deepEqual(unsentBodies(b2), []);
+  assert.equal(storage.getItem("atalks_unsent_2_5_m1"), null);
+  b2.persistUnsent(5, Array.from({ length: 600 }, (_, i) => `x${i}`));
+  const done = JSON.parse(storage.getItem("atalks_unsent_done_2")!);
+  assert.equal(done.length, 500);
+  assert.equal(done[499], "x599", "the newest ids are kept");
+});
+
+test("R1: an old tab's list is imported for each entry's owner only; unattributed entries are never shown", async () => {
+  await tab(A);                                    // the flag is set: a later sweep
+  storage.setItem("atalks_unsent_7", JSON.stringify([
+    { clientMsgId: "t1", body: "tagged for A", ts: 1, ownerId: 1 },
+    { clientMsgId: "u1", body: "no owner", ts: 1 },
+  ]));
+  const b = await tab(B);
+  assert.deepEqual(unsentBodies(b, 7), []);
+  const c = await tab({ id: 12, handle: "c" });
+  assert.deepEqual(unsentBodies(c, 7), []);
+  const a = await tab(A);
+  assert.deepEqual(unsentBodies(a, 7), ["tagged for A"]);
+  assert.ok(!unsentKeys().some((k) => k.endsWith("_u1")), "the untagged entry is not copied anywhere");
+});
+
+test("R1: a sign-out does not let the kept legacy lists hand the account's entries back", async () => {
+  oldTabPersist(1, 5, [{ clientMsgId: "a1", body: "a1", ts: 1 }]);
+  storage.setItem("atalks_unsent_1_7", JSON.stringify([{ clientMsgId: "a2", body: "a2", ts: 1 }]));
+  const a = await tab(A);
+  assert.deepEqual(unsentBodies(a), ["a1"]);
+  assert.deepEqual(unsentBodies(a, 7), ["a2"]);
+  a.clearLocalAccountData(1);
+  const a2 = await tab(A);
+  assert.deepEqual(unsentBodies(a2), []);
+  assert.deepEqual(unsentBodies(a2, 7), []);
+  assert.ok(storage.getItem("atalks_unsent_1_7"), "the r5 list itself is not removed by the sign-out");
+});
+
+test("R1: legacy lists are collected 7 days after the new layout was first seen, after a last copy", async () => {
+  oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }]);
+  await tab(A);
+  const since = Number(storage.getItem("atalks_storage_v_since"));
+  assert.ok(since > 0 && Math.abs(Date.now() - since) < 60000, "the first-seen time is stored with the flag");
+  await tab(A);
+  assert.ok(storage.getItem("atalks_unsent_5"), "kept within the 7 days");
+  storage.setItem("atalks_storage_v_since", String(Date.now() - 8 * DAY));
+  oldTabPersist(2, 5, [{ clientMsgId: "b1", body: "b1", ts: 1 }, { clientMsgId: "b2", body: "b2", ts: 2 }]);
+  storage.setItem("atalks_unsent_2_7", JSON.stringify([{ clientMsgId: "r1", body: "r5", ts: 3 }]));
+  await tab(A);                                    // A's sweep copies for B, then collects
+  assert.equal(storage.getItem("atalks_unsent_5"), null);
+  assert.equal(storage.getItem("atalks_unsent_2_7"), null);
+  const b = await tab(B);
+  assert.deepEqual(unsentBodies(b), ["b1", "b2"]);
+  assert.deepEqual(unsentBodies(b, 7), ["r5"]);
 });

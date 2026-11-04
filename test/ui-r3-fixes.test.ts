@@ -390,8 +390,11 @@ test("F2: sign-out clears only the signing-out account's keys (drafts, wiki, nav
   assert.equal(b2.loadWikiDraft("home"), null);
   assert.equal(b2.lastConvId(), null);
   a2.clearLocalAccountData(1);
-  // The storage-layout flag (F4 r5) is browser-level and names no account.
-  assert.deepEqual([...storage.data.keys()].filter((k) => k.startsWith("atalks_") && k !== "atalks_storage_v"), [], "nothing of either account is left");
+  // The storage-layout flag (F4 r5) and its first-seen time (T-MG-16 fix round 1) are browser-level
+  // and name no account; a tombstone set holds opaque ids of finished messages, no text.
+  const left = [...storage.data.keys()].filter((k) => k.startsWith("atalks_") && k !== "atalks_storage_v"
+    && k !== "atalks_storage_v_since" && !k.startsWith("atalks_unsent_done_"));
+  assert.deepEqual(left, [], "nothing of either account is left");
 });
 
 test("F2: legacy un-namespaced keys go once to the actor the old marker names, and the marker goes", async () => {
@@ -407,7 +410,8 @@ test("F2: legacy un-namespaced keys go once to the actor the old marker names, a
   assert.equal(b.lastConvId(), null);
   assert.equal(storage.getItem("atalks_owner"), null, "the marker is gone");
   assert.equal(storage.getItem("atalks_draft_5"), null, "the legacy key is gone");
-  assert.equal(storage.getItem("atalks_unsent_5"), null, "the shared legacy list is gone");
+  // T-MG-16 fix round 1: an old unsent list is only read (copied per message), never removed early.
+  assert.ok(storage.getItem("atalks_unsent_5"), "the shared legacy list is only read");
   assert.deepEqual(storedIds(1, 5), ["old"], "the legacy unsent entry is A's (in A's key, F5 r5)");
   assert.deepEqual(storedIds(2, 5), [], "and not B's");
   const a = await tab("a7", A);

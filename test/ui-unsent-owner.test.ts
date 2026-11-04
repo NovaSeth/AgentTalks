@@ -180,7 +180,8 @@ test("(b) B persists after A wrote: A's entry stays, is not re-owned, is not sho
   ui.st.state.pending[5] = [{ clientMsgId: "m-b", body: "b-text", ts: 2, failed: true, error: null }];
   ui.st.persistUnsent(5);
   // F5 (r5): one key per account; the pre-r5 shared list was split by ownerId at sign-in.
-  assert.equal(store["atalks_unsent_5"], undefined, "no shared list is left");
+  // T-MG-16 fix round 1: the shared list is only read (copied per message), and B's write leaves it as it was.
+  assert.equal(store["atalks_unsent_5"], JSON.stringify([entry("m-a", "a-text", 1)]), "the shared list is only read, never rewritten");
   assert.deepEqual(storedIds(1, 5), ["m-a"], "A's entry stays A's, untouched by B's write");
   assert.deepEqual(storedIds(2, 5), ["m-b"], "B's entry only in B's key");
   assert.equal(store["atalks_owner"], undefined, "persistUnsent never writes the owner marker (the migration removed it, F2 r3)");

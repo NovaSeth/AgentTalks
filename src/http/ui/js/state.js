@@ -217,7 +217,6 @@ const THREADS_SEEN_KEY = (owner) => `atalks_threads_seen_${owner}`;
 // other one's entry. With one key per message no write ever rewrites another message: listing is a
 // scan of the prefix, and migration and cleanup add or remove single keys.
 const UNSENT_KEY = (owner, convId, clientMsgId) => `atalks_unsent_${owner}_${convId}_${clientMsgId}`;
-const UNSENT_PREFIX = (owner) => `atalks_unsent_${owner}_`;
 const UNSENT_ENTRY = /^atalks_unsent_(\d+)_(\d+)_(.+)$/;
 // Written before r3 (and by a tab still running that code): one marker for the whole browser and
 // un-namespaced keys; before r5 one unsent list per conversation shared by every account; in r5
@@ -233,6 +232,20 @@ const R5_UNSENT = /^atalks_unsent_(\d+)_(\d+)$/;
 // is dropped, never claimed.
 const STORAGE_VERSION_KEY = "atalks_storage_v";
 const STORAGE_VERSION = "2";
+// T-MG-16 fix round 1 (codex F1, F2): localStorage has no compare-and-set across tabs, and a tab
+// still running older code keeps rewriting its whole unsent list. So the old unsent lists are
+// never deleted or rewritten while such a tab may be alive: every sweep only READS them and COPIES
+// an entry into its owner's per-message key when that key does not exist yet. A message sent or
+// discarded through this code leaves its clientMsgId in the owner's tombstone set, and no import
+// or restore brings a tombstoned message back, so a late or stale copy cannot resurrect it.
+const UNSENT_DONE_KEY = (owner) => `atalks_unsent_done_${owner}`;
+const UNSENT_DONE_MAX = 500;
+// The first time this layout saw the browser, stored next to the flag. The old lists are collected
+// 7 days after it (an old tab left unreloaded for a week is the accepted limit), each after a last
+// copy of its entries. A check "every entry is copied, then remove" would be the same unguarded
+// read-then-delete that lost F1's b2, so the age alone decides.
+const STORAGE_SINCE_KEY = "atalks_storage_v_since";
+const LEGACY_UNSENT_TTL_MS = 7 * 24 * 3600 * 1000;
 
 /** The account whose namespace this tab reads and writes: the signed-in actor, or during a lost
  *  session the one the in-memory drafts are kept for. null = no account: nothing is stored. */
@@ -256,8 +269,9 @@ function storageKeys() {
  *  legacy key or marker an old tab wrote since: unattributed data is quarantined, never handed to
  *  whoever signs in next (F4 r5). Unsent lists are the exception that every run handles: an entry
  *  names its writer, so a pre-r5 shared list is split by each entry's `ownerId` and an r5 list by
- *  its key into one key per message (moveUnsentList, F7/F8 r7); only an entry with no owner is
- *  deleted (the marker vouches for it on the first run only). A legacy wiki
+ *  its key into one key per message (importUnsentLists, F7/F8 r7, fix round 1); the lists
+ *  themselves are only read, and an entry with no owner is never imported (the marker vouches for
+ *  it on the first run only). A legacy wiki
  *  slug that itself starts with digits and "_" reads as namespaced and is left alone (it belongs
  *  to nobody visible). */
 function migrateLegacy() {
@@ -282,65 +296,112 @@ function migrateLegacy() {
       } else if (key === "atalks_last_conv") move(key, LAST_CONV_KEY);
       else if (key === "atalks_recent") move(key, RECENT_KEY);
       else if (key === LEGACY_THREADS_SEEN_KEY) move(key, THREADS_SEEN_KEY);
-      else if ((m = LEGACY_UNSENT.exec(key))) {
-        // F7 (r7): EVERY sweep, not only the first: an unreloaded old tab keeps writing this list
-        // after the upgrade, and an entry tagged with its writer is still that writer's. Only the
-        // first run lets the old marker vouch for an untagged entry.
-        moveUnsentList(key, m[1], (u) => (u.ownerId != null ? String(u.ownerId) : owner));
-      } else if ((m = R5_UNSENT.exec(key))) {
-        const listOwner = m[1];
-        moveUnsentList(key, m[2], () => listOwner);
-      }
     }
     localStorage.removeItem(LEGACY_OWNER_KEY);
     if (firstRun) localStorage.setItem(STORAGE_VERSION_KEY, STORAGE_VERSION);
+    let since = Number(localStorage.getItem(STORAGE_SINCE_KEY));
+    if (!(since > 0)) { since = Date.now(); localStorage.setItem(STORAGE_SINCE_KEY, String(since)); }
+    // F7 (r7) and fix round 1: EVERY sweep copies, for every owner (an unreloaded old tab keeps
+    // writing after the upgrade, and an entry tagged with its writer is still that writer's); only
+    // the first run lets the old marker vouch for an untagged entry. A late copy is harmless: the
+    // restore drops whatever is tombstoned.
+    importUnsentLists(owner, null, Date.now() - since > LEGACY_UNSENT_TTL_MS);
   } catch { /* private browsing */ }
 }
 
-/** An unsent LIST of an older layout into one key per message. `ownerOf(entry)` names the account
- *  an entry belongs to: the pre-r5 shared list `atalks_unsent_<conv>` carries the writer in each
- *  entry's `ownerId` (8c92d64; on the first run the old marker vouches for an entry written before
- *  that, 4aa92d5), the r5 list `atalks_unsent_<actor>_<conv>` in its key. An entry with no valid
- *  owner is dropped. A message key that already exists wins (it is the newer write). The list is
- *  read again before every write: when another tab has meanwhile migrated it (gone) or an old tab
- *  rewrote it (changed), this run stops or starts over on the new value, so it does not write back
- *  a message the other tab has already sent and removed. The list is removed only while it still
- *  holds the value that was moved. */
-function moveUnsentList(key, convId, ownerOf) {
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const raw = localStorage.getItem(key);
-    if (raw == null) return;
-    let list = [];
-    try { list = JSON.parse(raw); } catch { /* unreadable: nothing to move */ }
-    let changed = false;
-    for (const u of Array.isArray(list) ? list : []) {
-      if (!u || typeof u !== "object" || !u.clientMsgId || typeof u.body !== "string") continue;
-      const who = ownerOf(u);
-      if (who == null || !/^\d+$/.test(who)) continue;
-      if (localStorage.getItem(key) !== raw) { changed = true; break; }
-      const target = UNSENT_KEY(who, convId, u.clientMsgId);
+/** The old unsent lists in storage, each with its conversation and a function naming the account
+ *  of an entry: the pre-r5 shared list `atalks_unsent_<conv>` carries the writer in each entry's
+ *  `ownerId` (8c92d64; an entry written before that, 4aa92d5, has only the old marker, which
+ *  vouches for it on the first run alone), the r5 list `atalks_unsent_<actor>_<conv>` in its key.
+ *  An owner that is not a valid actor id is no owner: such an entry is never imported. */
+function oldUnsentLists(markerOwner) {
+  const lists = [];
+  for (const key of storageKeys()) {
+    let m;
+    if ((m = LEGACY_UNSENT.exec(key))) {
+      lists.push({ key, convId: m[1], ownerOf: (u) => (u.ownerId != null ? String(u.ownerId) : markerOwner) });
+    } else if ((m = R5_UNSENT.exec(key))) {
+      const listOwner = m[1];
+      lists.push({ key, convId: m[2], ownerOf: () => listOwner });
+    }
+  }
+  return lists;
+}
+
+/** The valid entries of one old list with their owner (only `only`'s when it is given). */
+function oldUnsentEntries({ key, ownerOf }, only) {
+  let list = [];
+  try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* unreadable: nothing in it */ }
+  const out = [];
+  for (const u of Array.isArray(list) ? list : []) {
+    if (!u || typeof u !== "object" || !u.clientMsgId || typeof u.body !== "string") continue;
+    const who = ownerOf(u);
+    if (who == null || !/^\d+$/.test(String(who))) continue;
+    if (only != null && String(who) !== only) continue;
+    out.push({ who: String(who), u });
+  }
+  return out;
+}
+
+/** Copies the entries of the old lists into per-message keys: only into a key that does not exist
+ *  (an existing one is the newer write) and never for a tombstoned clientMsgId. The lists are only
+ *  read; with `collect` (the 7 days are over) each is removed after its copy. */
+function importUnsentLists(markerOwner, only, collect) {
+  const tombstones = new Map();
+  const doneOf = (who) => { if (!tombstones.has(who)) tombstones.set(who, readUnsentDone(who)); return tombstones.get(who); };
+  for (const list of oldUnsentLists(markerOwner)) {
+    for (const { who, u } of oldUnsentEntries(list, only)) {
+      if (doneOf(who).has(String(u.clientMsgId))) continue;
+      const target = UNSENT_KEY(who, list.convId, u.clientMsgId);
       if (localStorage.getItem(target) != null) continue;
       const entry = { ...u };
       delete entry.ownerId;                  // the key names the owner now
-      localStorage.setItem(target, JSON.stringify(entry));
+      try { localStorage.setItem(target, JSON.stringify(entry)); } catch { /* full: the list still holds it */ }
     }
-    if (changed || localStorage.getItem(key) !== raw) continue;
-    localStorage.removeItem(key);
-    return;
+    if (collect) localStorage.removeItem(list.key);
   }
+}
+
+/** The account's tombstones: clientMsgIds of messages sent or discarded through this code. */
+function readUnsentDone(owner) {
+  try {
+    const ids = JSON.parse(localStorage.getItem(UNSENT_DONE_KEY(owner)) || "[]");
+    return new Set(Array.isArray(ids) ? ids.map(String) : []);
+  } catch { return new Set(); }
+}
+
+/** Adds ids to the account's tombstones, newest last, keeping the UNSENT_DONE_MAX newest. The set
+ *  is read right before the write, so the window in which two tabs of the SAME account can lose
+ *  each other's id is one synchronous read-write (another account never writes this key). */
+function addUnsentDone(owner, ids) {
+  if (!ids.length) return;
+  try {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem(UNSENT_DONE_KEY(owner)) || "[]"); } catch { /* unreadable: start over */ }
+    const add = new Set(ids.map(String));
+    const kept = (Array.isArray(list) ? list.map(String) : []).filter((id) => !add.has(id));
+    localStorage.setItem(UNSENT_DONE_KEY(owner), JSON.stringify([...kept, ...add].slice(-UNSENT_DONE_MAX)));
+  } catch { /* full or blocked: the per-message key is still removed */ }
 }
 
 /** Sign-out: removes the persisted UI data of THIS account only (drafts, wiki drafts, the last
  *  conversation, the recent list, the Threads marks, its unsent messages). Only keys in this
  *  account's namespace are touched - removed, never read and rewritten - so another account
- *  signed in in another tab keeps all of its own, including what it writes meanwhile (F5 r5). */
+ *  signed in in another tab keeps all of its own, including what it writes meanwhile (F5 r5).
+ *  The old unsent lists are not touched (fix round 1): the account's entries in them are
+ *  tombstoned instead, so the kept lists cannot hand them back at the next sign-in. The tombstone
+ *  set itself stays (opaque ids only, no text). */
 export function clearLocalAccountData(actorId) {
   if (actorId == null) return;
   migrateLegacy();
   const me = String(actorId);
   try {
+    const old = [];
+    for (const list of oldUnsentLists(null)) for (const { u } of oldUnsentEntries(list, me)) old.push(u.clientMsgId);
+    addUnsentDone(me, old);
     for (const key of storageKeys()) {
-      if (key.startsWith(DRAFT_KEY(me, "")) || key.startsWith(WIKI_DRAFT_KEY(me, "")) || key.startsWith(UNSENT_PREFIX(me))
+      const unsent = UNSENT_ENTRY.exec(key);
+      if (key.startsWith(DRAFT_KEY(me, "")) || key.startsWith(WIKI_DRAFT_KEY(me, "")) || (unsent && unsent[1] === me)
           || key === LAST_CONV_KEY(me) || key === RECENT_KEY(me) || key === THREADS_SEEN_KEY(me)) {
         localStorage.removeItem(key);
       }
@@ -426,8 +487,11 @@ export function persistUnsent(convId, done = []) {
   const owner = storageOwner();
   if (owner == null) return;               // no known account: writing an unattributed entry would leak it
   const gone = new Set(done);
-  // Removals first and every write on its own: a full storage refusing one write must neither
-  // keep a sent message stored (it would come back as "not sent") nor stop the other writes.
+  // The tombstones first (fix round 1): a copy of a finished message that a paused migration or an
+  // old list still holds is never restored. Then the removals, and every write on its own: a full
+  // storage refusing one write must neither keep a sent message stored (it would come back as
+  // "not sent") nor stop the other writes.
+  addUnsentDone(owner, [...gone]);
   for (const id of gone) {
     try { localStorage.removeItem(UNSENT_KEY(owner, convId, id)); } catch { /* unavailable */ }
   }
@@ -460,14 +524,20 @@ export function preserveUnsent() {
 }
 
 /** Sign-in: this account's stored unsent messages (its own keys only) come back as failed
- *  bubbles, merged with what the tab still holds, oldest first (storage keys have no order). */
+ *  bubbles, merged with what the tab still holds, oldest first (storage keys have no order).
+ *  Restore = the account's per-message keys minus its tombstones, after a last import of the
+ *  account's entries from the old lists (an old tab may have written since the sweep). A
+ *  tombstoned key is a stale copy of a finished message and is removed. */
 function restoreUnsent(actorId) {
   const me = String(actorId);
   const found = [];
   try {
+    importUnsentLists(null, me, false);
+    const done = readUnsentDone(me);
     for (const key of storageKeys()) {
       const m = UNSENT_ENTRY.exec(key);
       if (!m || m[1] !== me) continue;
+      if (done.has(m[3])) { localStorage.removeItem(key); continue; }
       let u = null;
       try { u = JSON.parse(localStorage.getItem(key) || "null"); } catch { continue; }
       if (!u || typeof u.body !== "string" || u.clientMsgId !== m[3]) continue;
