@@ -81,7 +81,11 @@ export function buildRouter(): Router {
       });
       return;
     }
-    await mcp.handleMcp(rc.ctx, rc.config, rc.auth.actor, req, res);
+    // Caps BEFORE the SDK sees the body: it would otherwise buffer whatever arrives (a 60 MB
+    // body, or a batch of 20 000 calls, each one a tool run).
+    const parsed = await readMcpBody(req, res);
+    if (parsed === undefined) return;
+    await mcp.handleMcp(rc.ctx, rc.config, rc.auth.actor, req, res, parsed);
   });
   router.add("GET", "/mcp", (_req, res) => {
     json(res, 405, { error: "serwer MCP jest bezstanowy - uzyj POST", code: "tylko_post" });
@@ -89,6 +93,55 @@ export function buildRouter(): Router {
   // The UI, the gate, public onboarding - mounted last (the most general routes).
   registerUiRoutes(router);
   return router;
+}
+
+/** POST /mcp body cap and JSON-RPC batch cap. */
+const MCP_MAX_BODY = 1024 * 1024;
+const MCP_MAX_BATCH = 50;
+
+/** Reads and parses the /mcp body. Answers 413/400 itself and returns undefined when the
+ *  request is refused. */
+async function readMcpBody(
+  req: import("node:http").IncomingMessage,
+  res: import("node:http").ServerResponse,
+): Promise<unknown | undefined> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  let tooBig = Number(req.headers["content-length"] ?? 0) > MCP_MAX_BODY;
+  await new Promise<void>((resolve) => {
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > MCP_MAX_BODY) tooBig = true;
+      // Over the cap we keep draining (so the client can read the answer) but store nothing.
+      if (!tooBig) chunks.push(c);
+    });
+    req.on("end", () => resolve());
+    req.on("error", () => resolve());
+    req.on("close", () => resolve());
+  });
+  if (tooBig) {
+    json(res, 413, {
+      error: "request body over 1 MB: send a smaller message or split the work into several calls",
+      code: "body_too_large",
+    });
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    json(res, 400, { error: "request body is not valid JSON", code: "bad_json" });
+    return undefined;
+  }
+  if (Array.isArray(parsed) && parsed.length > MCP_MAX_BATCH) {
+    json(res, 400, {
+      error: `JSON-RPC batch of ${parsed.length} calls; the limit is ${MCP_MAX_BATCH}. ` +
+        `Send fewer calls per request.`,
+      code: "batch_too_large",
+    });
+    return undefined;
+  }
+  return parsed;
 }
 
 /** Whether the request came from this machine. The presence of X-Forwarded-For means it went

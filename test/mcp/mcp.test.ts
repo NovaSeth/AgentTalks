@@ -264,7 +264,7 @@ test("talk_read: odcinek, budzet znakow i kursor po ostatniej POKAZANEJ wiadomos
 
   // An explicit `limit` sets the page size - this is the field MCP was missing.
   const maly = await wynik({ afterId: 0, limit: 3 });
-  assert.match(maly, /^3 nowych w \d+ rozmow/);
+  assert.match(maly, /^3 nowych w \d+ rozmow/m);
   await s.close();
 });
 
@@ -334,7 +334,7 @@ test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", 
     });
     const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
 
-    assert.match(t, /^3 nowych w 3 rozmowach:/);
+    assert.match(t, /^3 nowych w 3 rozmowach:/m);
     const kolejnosc = [...t.matchAll(/^=== (.+?) \((\d+) nowych(.*?)\) ===$/gm)];
     assert.equal(kolejnosc.length, 3);
     assert.match(kolejnosc[0][1], /^\[dm:/, "rozmowa osobista ma byc pierwsza");
@@ -344,7 +344,7 @@ test("talk_read grupuje po rozmowach i stawia na gorze to, co czeka na Ciebie", 
     assert.equal(kolejnosc[2][3], "", "kanal bez wzmianki nie udaje pilnego");
 
     // A mention is marked on the line, so that it can be found by eye.
-    assert.match(t, /^> \[\d+\].*zerknij prosze$/m);
+    assert.match(t, /^\* \[\d+\].*\n> @bob zerknij prosze$/m);
     // The conversation name is in the block header, so it does not repeat on every line.
     assert.equal((t.match(/#general/g) ?? []).length, 1);
   } finally {
@@ -389,7 +389,7 @@ test("talk_read: limit obowiazuje takze na sciezce long-poll", async () => {
 
     const r = await wolanie;
     const t = (r.result as { content: Array<{ text: string }> }).content[0].text;
-    const ile = Number(t.match(/^(\d+) nowych/)![1]);
+    const ile = Number(t.match(/^(\d+) nowych/m)![1]);
     assert.ok(ile <= 2, `long-poll oddal ${ile} wiadomosci mimo limit: 2:\n${t.slice(0, 300)}`);
     assert.match(t, /To nie wszystko - powtorz talk_read z afterId=/);
   } finally {
