@@ -52,7 +52,44 @@ let sidebarPlace = "home";
 
 export function sectionsFor(place) { return PLACES[place] || SECTIONS_HOME; }
 export function getSidebarPlace() { return sidebarPlace; }
-export function setSidebarPlace(place) { sidebarPlace = PLACES[place] ? place : "home"; }
+// A place picked on purpose (the rail, a route) is the baseline for what counts as a navigation
+// from here on: the page or conversation on screen at that moment never moves it again.
+export function setSidebarPlace(place) { sidebarPlace = PLACES[place] ? place : "home"; followed = navigationKey(); }
+
+/** The place after a NAVIGATION into `view` (T-MG-38, acceptance 4). A wiki page you open puts
+ *  the rail on Wiki, so the tree of the page you are reading is visible. A conversation opened
+ *  from the Wiki place returns to Home: the Wiki place lists no conversations, so the row you
+ *  landed in would be nowhere in the sidebar. DMs keeps itself, as it always did: it does list
+ *  the conversation you are most likely in. Pure; `followPlace` applies it. */
+export function placeAfterNavigation(place, view) {
+  if (view === "wiki") return "wiki";
+  if (view === "chat" && place === "wiki") return "home";
+  return place;
+}
+
+// What the reader last navigated to, as `view:key`. Only a CHANGE of it moves the place: every
+// path to a page or a conversation (a route, a sidebar row, a [[link]], a search result, Cmd+K)
+// ends in a render of the sidebar, but so does a presence tick, and a redraw of the same page
+// must not drag a reader who chose Home from the rail back to Wiki. Views without a list of
+// their own (Activity, Admin) are not recorded: leaving one for the place you were in before is
+// no navigation.
+let followed = null;
+
+function navigationKey() {
+  return state.view === "wiki" ? `wiki:${state.wiki.slug}`
+    : state.view === "chat" ? `chat:${state.activeId}` : null;
+}
+
+/** Settles the place for the current view; true when it changed (the rail needs a repaint). */
+export function followPlace() {
+  const key = navigationKey();
+  if (key === null || key === followed) return false;
+  followed = key;
+  const next = placeAfterNavigation(sidebarPlace, state.view);
+  if (next === sidebarPlace) return false;
+  sidebarPlace = next;
+  return true;
+}
 
 // Which sections are folded is remembered per browser under ONE key, as an object of
 // `sectionId -> true`; absent means open. Only `true` is kept so the stored object never grows
@@ -198,6 +235,7 @@ export function updatePresenceDots() {
 }
 
 export function renderSidebarList() {
+  followPlace();   // T-MG-38: every path to a page or a conversation ends here
   const el = document.getElementById("sb-scroll");
   if (!el) return;
   // The container scrolls itself: without remembering the position, every rebuild would throw

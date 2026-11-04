@@ -35,7 +35,7 @@ import {
 } from "./view-chat.js";
 import { maybeOfferPasskey, renderLogin, tryRestoreSession } from "./view-login.js";
 import { openNotificationsView, renderNotificationsMain, showNewsModal } from "./view-notifications.js";
-import { getSidebarPlace, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
+import { followPlace, getSidebarPlace, renderSidebar, renderSidebarList, setSectionCollapsed, setSidebarPlace, updateConvRow, updatePresenceDots } from "./view-sidebar.js";
 import { openWikiPage, renderWikiMain } from "./view-wiki.js";
 import { connectSSE, ensureSSE } from "./sse-events.js";
 
@@ -53,6 +53,9 @@ function renderShell() {
   const adminHuman = state.actor?.isAdmin && state.actor?.kind === "human";
   const withSidebar = hasSidebar();
   const inConv = inConversations();
+  // T-MG-38: a conversation or a wiki page opened through a full render (openConversation calls
+  // views.render) settles the rail place BEFORE the rail is drawn from it.
+  followPlace();
   // The DMs place counts every unread message in a direct or group conversation I belong to
   // (W2-S1-C: derived in one place, repainted by paintDmBadge when a row's unread changes;
   // W5-S8-B: that place is counters.railBadges, the one source of both rail badges).
@@ -202,30 +205,14 @@ function paintRail() {
 // The only place where the data and action layers "learn about" the views. Any
 // other route (importing a view inside actions.js) would close a cycle: the view
 // calls the action, the action redraws the view.
-/** T-MG-38: a wiki page you open puts the rail on the Wiki place, so the tree of the page you are
- *  reading is visible: from a sidebar row, a [[link]], a `#/wiki/<slug>` deep link, a search
- *  result or a notification alike. Every one of those goes through openWikiPage, which sets the
- *  view and the slug and then asks for the sidebar - this hook is that one funnel. It acts on the
- *  TRANSITION (into the wiki view, or to another page), not on the state: a presence tick redraws
- *  the sidebar too, and must not drag a reader who chose Home from the rail back to Wiki.
- *  A conversation opened from the Wiki place keeps the place, as DMs does today: Home is one
- *  click away, and the place you chose is yours until you choose another. */
-let followedWiki = null;
-function renderSidebarFollowingWiki() {
-  const here = state.view === "wiki" ? state.wiki.slug : null;
-  if (here !== null && here !== followedWiki && getSidebarPlace() !== "wiki") {
-    setSidebarPlace("wiki");
-    paintRail();
-  }
-  followedWiki = here;
-  renderSidebarList();
-}
-
 registerViews({
   render,
   shell: renderShell,
   main: renderMain,
-  sidebar: renderSidebarFollowingWiki,
+  // T-MG-38: a sidebar refresh may move the rail place (view-sidebar's followPlace: a wiki page
+  // opened by any path lights Wiki, a conversation opened from Wiki returns to Home), so the
+  // rail is repainted with it. paintRail is three class toggles; cheap on a presence tick.
+  sidebar: () => { renderSidebarList(); paintRail(); },
   conversationRow: (id) => { updateConvRow(id); paintDmBadge(); },
   // Presence touches four places at once - they are glued together here so that
   // refreshPresence does not have to know where the dots, the bar, the topbar and
