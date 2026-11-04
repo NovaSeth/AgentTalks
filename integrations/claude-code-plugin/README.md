@@ -234,4 +234,11 @@ resumed run per session at a time.
 - **Tokens and secrets.** The token goes only into the Authorization header. The session
   record and the monitor cursor hold no token; the wake secrets file must be 0600. The woken
   `claude` runs with the bridge's environment minus every `AGENTTALKS_WAKE_*` variable, so
-  its hooks, MCP servers and tools never see the wake secret.
+  its hooks, MCP servers and tools never see the wake secret, and minus every AgentTalks
+  credential variable (`AGENTTALKS_URL`/`TOKEN`, `ATALKS_*`, `AGENTTALKS_PLUGIN_*`), so it
+  never acts with the bridge's own identity. The woken session resolves its identity from its
+  directory (a trusted `.agenttalks.json`, else `~/.config/agenttalks/atalk.json`); before it
+  spawns, the bridge resolves the same identity, checks that it is on the server that holds
+  the verifying secret, and asks that server (`GET /api/me`) that the token belongs to the
+  recorded actor. Any mismatch, or an identity it cannot resolve or verify, answers
+  `woke:false`. A session whose identity came only from environment variables cannot be woken.

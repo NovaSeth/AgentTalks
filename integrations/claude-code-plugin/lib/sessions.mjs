@@ -37,7 +37,7 @@ export function sessionsDir(home = homedir()) {
 }
 
 /**
- * @typedef {{ sessionId: string, cwd: string, handle: string, url: string, updatedAt: number }} SessionRecord
+ * @typedef {{ sessionId: string, cwd: string, handle: string, url: string, updatedAt: number, actorId?: number }} SessionRecord
  */
 
 /** @param {any} r @returns {r is SessionRecord} */

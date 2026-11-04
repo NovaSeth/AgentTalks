@@ -38,9 +38,12 @@ import { spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { isIPv4, isIPv6 } from "node:net";
+import { homedir } from "node:os";
 import { dirname, isAbsolute } from "node:path";
 import { PREAMBLE, quoteBody, safeLabel } from "./frame.mjs";
 import { readSessions } from "./sessions.mjs";
+import { resolveIdentity } from "./identity.mjs";
+import { createApi } from "./api.mjs";
 
 export const MAX_BODY_BYTES = 16 * 1024;
 export const LEGACY_MAX_AGE_SEC = 600;
@@ -137,19 +140,37 @@ export function wakePrompt(body) {
  *  as running and block every later wake for it. */
 export const MAX_RUN_MS = 15 * 60 * 1000;
 
+/** The AgentTalks credential variables (lib/identity.mjs): the bridge's own never reach a
+ *  woken run. */
+const CREDENTIAL_VARS = new Set([
+  "AGENTTALKS_URL", "AGENTTALKS_TOKEN", "ATALKS_URL", "ATALKS_TOKEN",
+  "AGENTTALKS_PLUGIN_URL", "AGENTTALKS_PLUGIN_TOKEN",
+]);
+
 /**
  * The environment of the woken claude: the bridge's own, minus the wake secrets the bridge
- * was configured with (AGENTTALKS_WAKE_*). The woken session's hooks, MCP servers and tools
- * run under it, so they must not see the secret that authenticates knocks. Everything else
- * stays: PATH and HOME, claude's own credentials, and the AgentTalks identity variables the
- * plugin's channel server uses to answer.
+ * was configured with (AGENTTALKS_WAKE_*) and minus every AgentTalks credential variable.
+ * The woken session's hooks, MCP servers and tools run under it, so they must not see the
+ * secret that authenticates knocks, and they must not act with the BRIDGE's AgentTalks
+ * identity (another actor, maybe on another server) instead of the session's own: the
+ * woken session resolves its identity from its own directory (a trusted project file, the
+ * global file), which the bridge checks before it spawns (item 4). Everything else stays:
+ * PATH and HOME, claude's own credentials.
  * @param {NodeJS.ProcessEnv} env @returns {NodeJS.ProcessEnv}
  */
 export function wakeEnv(env) {
   /** @type {NodeJS.ProcessEnv} */
   const out = {};
-  for (const [k, v] of Object.entries(env)) if (!k.startsWith("AGENTTALKS_WAKE_")) out[k] = v;
+  for (const [k, v] of Object.entries(env)) {
+    if (!k.startsWith("AGENTTALKS_WAKE_") && !CREDENTIAL_VARS.has(k)) out[k] = v;
+  }
   return out;
+}
+
+/** Who a token belongs to, asked of the server it is for. @param {{ url: string, token: string }} id */
+async function whoamiOnServer(id) {
+  const me = await createApi(id, { timeoutMs: 5000 }).get("/api/me");
+  return { handle: String(me?.actor?.handle ?? ""), id: Number(me?.actor?.id) };
 }
 
 /** @type {(cmd: string, argv: string[], opts: { cwd: string, env?: NodeJS.ProcessEnv, timeoutMs?: number }) => Promise<void>} */
@@ -242,6 +263,7 @@ export function checkWakeConfig(secrets) {
  *   allowedTools?: string,
  *   replayFile?: string | null,
  *   env?: NodeJS.ProcessEnv,
+ *   whoami?: (id: { url: string, token: string }) => Promise<{ handle: string, id?: number }>,
  *   now?: () => number,
  *   log?: (line: string) => void,
  * }} opts
@@ -258,6 +280,9 @@ export function createWakeBridge(opts) {
   const seen = new Map();
   /** Claude Code session ids with a resumed run in progress */
   const running = new Set();
+  /** Replay keys of knocks being checked right now (the identity check awaits the server). */
+  const checking = new Set();
+  const whoami = opts.whoami ?? whoamiOnServer;
   const replayFile = opts.replayFile ?? null;
   if (replayFile) loadReplay(replayFile);
 
@@ -367,7 +392,7 @@ export function createWakeBridge(opts) {
       const plainKey = typeof body.nonce === "string" && body.nonce.length > 0 && body.nonce.length <= 128
         ? `n:${body.nonce}` : `b:${createHash("sha256").update(raw).digest("hex")}`;
       const key = createHash("sha256").update(plainKey).digest("hex");
-      if (seen.has(key)) {
+      if (seen.has(key) || checking.has(key)) {
         log("rejected: replay");
         return reply(res, 409, { error: "replay" });
       }
@@ -390,16 +415,42 @@ export function createWakeBridge(opts) {
       if (running.has(rec.sessionId)) {
         return reply(res, 202, { ok: true, woke: false, reason: "a resumed run is still in progress" });
       }
-      const argv = ["-p", "--resume", rec.sessionId, "--permission-mode", "dontAsk",
-        "--tools", "", "--allowedTools", allowedTools, "--", wakePrompt(body)];
-      seen.set(key, keepUntil);
-      saveReplay();
-      running.add(rec.sessionId);
-      log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
-      void runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env: wakeEnv(opts.env ?? process.env) })
-        .catch(() => {})
-        .finally(() => running.delete(rec.sessionId));
-      return reply(res, 202, { ok: true, woke: true });
+      // The woken run acts as the session's OWN principal, never the bridge's (item 4): its
+      // environment carries no AgentTalks credentials, so it resolves its identity from its
+      // directory exactly as below. That identity must be on the server that holds this
+      // secret and belong to the recorded actor (asked of that server), or nothing runs.
+      const env = wakeEnv(opts.env ?? process.env);
+      const home = typeof env.HOME === "string" && env.HOME ? env.HOME : homedir();
+      const id = resolveIdentity({ env, cwd: rec.cwd, home });
+      if (!id || normalizeUrl(id.url) !== server) {
+        log(`not waking @${safeLabel(body.actor)}: the session's AgentTalks identity is not on the knocking server`);
+        return reply(res, 202, { ok: true, woke: false, reason: "the session's AgentTalks identity does not match" });
+      }
+      checking.add(key);
+      void (async () => {
+        let me = null;
+        try { me = await whoami({ url: id.url, token: id.token }); } catch { me = null; }
+        const recordedId = /** @type {any} */ (rec).actorId;
+        const matches = me && me.handle === rec.handle && me.handle === body.actor
+          && (typeof recordedId !== "number" || me.id === recordedId);
+        if (!matches || running.has(rec.sessionId)) {
+          checking.delete(key);
+          if (!matches) log(`not waking @${safeLabel(body.actor)}: the session's AgentTalks identity is another actor or unverifiable`);
+          return reply(res, 202, { ok: true, woke: false, reason: matches
+            ? "a resumed run is still in progress" : "the session's AgentTalks identity does not match" });
+        }
+        const argv = ["-p", "--resume", rec.sessionId, "--permission-mode", "dontAsk",
+          "--tools", "", "--allowedTools", allowedTools, "--", wakePrompt(body)];
+        seen.set(key, keepUntil);
+        checking.delete(key);
+        saveReplay();
+        running.add(rec.sessionId);
+        log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
+        void runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env })
+          .catch(() => {})
+          .finally(() => running.delete(rec.sessionId));
+        reply(res, 202, { ok: true, woke: true });
+      })();
     });
   });
 }

@@ -142,7 +142,7 @@ async function main() {
 
   try {
     recordSession(sessionsDir(), {
-      sessionId: claudeSession, cwd, handle: me.actor.handle, url: identity.url, updatedAt: Date.now(),
+      sessionId: claudeSession, cwd, handle: me.actor.handle, actorId: me.actor.id, url: identity.url, updatedAt: Date.now(),
     });
   } catch (err) {
     process.stderr.write(`[agenttalks-hook] could not record the session: ${err instanceof Error ? err.message : err}\n`);

@@ -8,7 +8,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { resolveIdentity } from "../../integrations/claude-code-plugin/lib/identity.mjs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
@@ -26,13 +28,27 @@ const SESSION = "4f1c2b8e-1111-2222-3333-444455556666";
 type BridgeOpts = {
   secrets?: unknown;
   records?: Array<{ sessionId: string; url: string; handle?: string; updatedAt: number }>;
+  /** The identity the woken session resolves from its files (global atalk.json in the
+   *  bridge's HOME); null for none. Default: @nestor on the first secret's server. */
+  identity?: { url: string; token: string } | null;
+  /** Laid over the bridge's environment (PATH, HOME = the test home). */
+  env?: Record<string, string>;
   extra?: Record<string, unknown>;
 };
+
+/** Who each synthetic token belongs to (GET /api/me, injected). */
+const NESTOR_TOKEN = "atk_nestor_" + "SYNTH"; // SYNTH: a synthetic test value, not a credential
+const BOB_TOKEN = "atk_bob_" + "SYNTH"; // SYNTH: a synthetic test value, not a credential
+const OWNERS: Record<string, string> = { [NESTOR_TOKEN]: "nestor", [BOB_TOKEN]: "bob" };
 
 async function bridge(t: any, nowSec: () => number, o: BridgeOpts = {}) {
   const home = mkdtempSync(join(tmpdir(), "at-plugin-wake-"));
   const file = join(home, "claude-sessions");
   const project = mkdtempSync(join(tmpdir(), "at-plugin-wproj-"));
+  const firstServer = (Array.isArray(o.secrets) ? (o.secrets[0] as any)?.serverUrl : undefined) ?? "https://at.example";
+  const identity = o.identity === undefined ? { url: firstServer, token: NESTOR_TOKEN } : o.identity;
+  mkdirSync(join(home, ".config", "agenttalks"), { recursive: true });
+  if (identity) writeFileSync(join(home, ".config", "agenttalks", "atalk.json"), JSON.stringify(identity));
   for (const r of o.records ?? [{ sessionId: SESSION, url: "https://at.example", updatedAt: 1 }]) {
     recordSession(file, { cwd: project, handle: "nestor", ...r, updatedAt: Date.now() - 1_000_000 + r.updatedAt });
   }
@@ -41,6 +57,8 @@ async function bridge(t: any, nowSec: () => number, o: BridgeOpts = {}) {
     secrets: o.secrets ?? [{ actor: "nestor", secret: SECRET, serverUrl: "https://at.example" }],
     sessionsDir: file,
     now: () => nowSec() * 1000,
+    env: { PATH: "/usr/bin:/bin", HOME: home, ...o.env },
+    whoami: async (id: { url: string; token: string }) => ({ handle: OWNERS[id.token] ?? "someone-else" }),
     runner: (cmd: string, argv: string[], opts: { cwd: string; env?: Record<string, string | undefined> }) => {
       calls.push({ cmd, argv, cwd: opts.cwd, env: opts.env });
       return Promise.resolve();
@@ -184,18 +202,20 @@ test("wake bridge: an oversized body is answered 413 at the cap and the connecti
 
 test("wake bridge: the woken claude gets the environment without the bridge's wake secrets (Claude F5)", async (t) => {
   const env = {
-    PATH: "/usr/bin:/bin", HOME: "/home/agent", LANG: "C.UTF-8",
+    PATH: "/usr/bin:/bin", LANG: "C.UTF-8",
     AGENTTALKS_WAKE_SECRET: "wake-secret-SYNTH", AGENTTALKS_WAKE_ACTOR: "nestor", AGENTTALKS_WAKE_SERVER_URL: A,
     AGENTTALKS_URL: "https://at.example", AGENTTALKS_TOKEN: "atk_identity_SYNTH", ANTHROPIC_API_KEY: "sk-SYNTH",
   };
-  const b = await bridge(t, () => NOW, { extra: { env } });
+  const b = await bridge(t, () => NOW, { env });
   assert.equal((await b.send(legacyBody())).status, 202);
   const got = b.calls[0].env ?? {};
   for (const k of Object.keys(got)) assert.ok(!k.startsWith("AGENTTALKS_WAKE_"), `${k} reached the woken run`);
   assert.equal(got.PATH, env.PATH);
-  assert.equal(got.HOME, env.HOME);
-  // The agent's own identity and claude's credentials are what the woken session needs.
-  assert.equal(got.AGENTTALKS_TOKEN, env.AGENTTALKS_TOKEN);
+  assert.equal(got.HOME, b.home);
+  // claude's own credentials stay; the BRIDGE's AgentTalks identity does not (item 4): the
+  // woken session resolves its own from its directory.
+  assert.equal(got.AGENTTALKS_TOKEN, undefined);
+  assert.equal(got.AGENTTALKS_URL, undefined);
   assert.equal(got.ANTHROPIC_API_KEY, env.ANTHROPIC_API_KEY);
 
   // spawnRunner hands exactly that environment to the child.
@@ -404,4 +424,61 @@ test("wake bridge: a woke:false answer does not use up the nonce - the retry aft
   recordSession(b2.file, { sessionId: SESSION, cwd: b2.project, handle: "nestor", url: "https://at.example", updatedAt: Date.now() });
   assert.equal(((await (await b2.send(legacy)).json()) as any).woke, true);
   assert.equal((await b2.send(legacy)).status, 409);
+});
+
+test("wake bridge: the woken run never inherits the BRIDGE's AgentTalks credentials; it runs as the session's own principal (codex cross-review, item 4)", async (t) => {
+  // @nestor's session on server A; the bridge itself runs with @bob's credentials for B.
+  const b = await bridge(t, () => NOW, {
+    secrets: [{ actor: "nestor", secret: SECRET, serverUrl: A }],
+    records: [{ sessionId: SESSION_A, url: A, updatedAt: 1 }],
+    identity: null,
+  });
+  // The session's identity: a trusted project file in its directory (atalk login --local).
+  const projectFile = join(b.project, ".agenttalks.json");
+  writeFileSync(projectFile, JSON.stringify({ url: A, token: NESTOR_TOKEN }));
+  writeFileSync(join(b.home, ".config", "agenttalks", "trusted-projects.json"), JSON.stringify({ projects: [{
+    path: realpathSync(projectFile), sha256: createHash("sha256").update(readFileSync(projectFile)).digest("hex") }] }));
+  const bobEnv = { PATH: "/usr/bin:/bin", HOME: b.home, AGENTTALKS_URL: B, AGENTTALKS_TOKEN: BOB_TOKEN,
+    ATALKS_URL: B, ATALKS_TOKEN: BOB_TOKEN, AGENTTALKS_PLUGIN_URL: B, AGENTTALKS_PLUGIN_TOKEN: BOB_TOKEN };
+  const withBob = await bridge(t, () => NOW, {
+    secrets: [{ actor: "nestor", secret: SECRET, serverUrl: A }],
+    records: [],
+    extra: { sessionsDir: b.file, env: bobEnv },
+  });
+  const res = await withBob.send(legacyBody());
+  assert.equal(res.status, 202);
+  assert.deepEqual(await res.json(), { ok: true, woke: true });
+  assert.equal(withBob.calls.length, 1);
+  const env = withBob.calls[0].env ?? {};
+  assert.ok(!JSON.stringify(env).includes(BOB_TOKEN), `Bob's token reached the woken run: ${JSON.stringify(env)}`);
+  assert.ok(!Object.values(env).includes(B), "nor B's url");
+  // What the woken session resolves from its own directory: @nestor on A, nothing else.
+  assert.deepEqual(resolveIdentity({ env, cwd: withBob.calls[0].cwd, home: b.home }),
+    { url: A, token: NESTOR_TOKEN, source: "project" });
+});
+
+test("wake bridge: no wake when the session's principal cannot be resolved or does not match the secret's server and the recorded actor (item 4)", async (t) => {
+  const reasonOf = async (b: Awaited<ReturnType<typeof bridge>>) => {
+    const r = await b.send(legacyBody());
+    assert.equal(r.status, 202);
+    const v = (await r.json()) as any;
+    assert.equal(v.woke, false);
+    assert.equal(b.calls.length, 0);
+    return String(v.reason);
+  };
+  const secrets = [{ actor: "nestor", secret: SECRET, serverUrl: A }];
+  const records = [{ sessionId: SESSION_A, url: A, updatedAt: 1 }];
+  // Only B's identity can be resolved (the global file names B).
+  assert.match(await reasonOf(await bridge(t, () => NOW, { secrets, records, identity: { url: B, token: NESTOR_TOKEN } })), /identity/);
+  // Server A, but the token belongs to @bob.
+  assert.match(await reasonOf(await bridge(t, () => NOW, { secrets, records, identity: { url: A, token: BOB_TOKEN } })), /identity/);
+  // Nothing resolvable at all.
+  assert.match(await reasonOf(await bridge(t, () => NOW, { secrets, records, identity: null })), /identity/);
+  // The server cannot say who the token is: refused, not guessed.
+  const down = await bridge(t, () => NOW, { secrets, records, extra: { whoami: async () => { throw new Error("HTTP 503"); } } });
+  assert.match(await reasonOf(down), /identity/);
+  // The matching case still wakes.
+  const ok = await bridge(t, () => NOW, { secrets, records });
+  assert.equal(((await (await ok.send(legacyBody())).json()) as any).woke, true);
+  assert.equal(ok.calls.length, 1);
 });
