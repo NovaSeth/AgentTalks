@@ -13,7 +13,7 @@
       "at": "2026-11-03T23:24:42.214Z"
     }
   ],
-  "status": "implemented",
+  "status": "done",
   "round": 0,
   "events": [
     {
@@ -130,8 +130,53 @@
       "data": {
         "report": "done"
       }
+    },
+    {
+      "at": "2026-11-04T00:56:55.647Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:469917e480700f46",
+          "risk-path:b3be0a31f9e13857",
+          "files-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T00:56:55.647Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "408c7cbe548801d308bf43e970efabe7e60ec641",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:57:24.948Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "408c7cbe548801d308bf43e970efabe7e60ec641"
+      }
+    },
+    {
+      "at": "2026-11-04T00:57:25.384Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "408c7cbe548801d308bf43e970efabe7e60ec641",
+        "target": "main",
+        "batch": null,
+        "adopted": true,
+        "verify": "072ec4311f59a79ff4856d06bdff16199327eedb"
+      }
     }
   ],
   "base": "877e20e3136a48edfa5112bbcb4031d18c7bc179",
-  "branch": "task/T-MG-1-weryfikacja"
+  "branch": "task/T-MG-1-weryfikacja",
+  "mergedAt": "2026-11-04T00:57:25.384Z"
 }
