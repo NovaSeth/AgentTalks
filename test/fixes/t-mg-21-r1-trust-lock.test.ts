@@ -76,8 +76,3 @@ test("R1-F2: atalk login --local waits for a held trust-list lock and keeps the 
   assert.equal(existsSync(join(cfg2, "trusted-projects.json")), false);
   assert.equal(readFileSync(lock2, "utf8"), body2);
 });
-  writeFileSync(join(cfg2, "trusted-projects.json.lock"), JSON.stringify({ pid: spawnSync(process.execPath, ["-e", ""]).pid, host: hostname(), at: Date.now() }));
-  const r2 = await run(["login", "--url", s.url, "--token", token, "--local"], { AGENTTALKS_CONFIG_DIR: cfg2 }, dir2);
-  assert.equal(r2.code, 0, r2.err);
-  assert.equal(JSON.parse(readFileSync(join(cfg2, "trusted-projects.json"), "utf8")).projects.length, 1);
-});
