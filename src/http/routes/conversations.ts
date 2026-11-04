@@ -1,5 +1,6 @@
 /** Conversations: listing, creating, membership, read markers, open questions. */
 import { actorsByIds, getActor, getActorByHandle } from "../../core/actors.ts";
+import { unresolvedMentions } from "../../core/mentions.ts";
 import {
   myMemberships,
   archiveConversation,
@@ -181,7 +182,12 @@ export function registerConversationRoutes(router: Router): void {
           return { handle: a?.handle ?? "?", ...live, wakeable, reachable: live.online || wakeable };
         });
     }
-    json(res, 201, { message, ...(delivery ? { delivery } : {}) });
+    const unresolved = unresolvedMentions(rc.ctx, message.body);
+    json(res, 201, {
+      message,
+      ...(delivery ? { delivery } : {}),
+      ...(unresolved.length ? { unresolvedMentions: unresolved } : {}),
+    });
   });
 
   router.add("POST", "/api/conversations/:id/read", async (req, res, rc) => {

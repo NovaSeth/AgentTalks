@@ -23,6 +23,7 @@ import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { parseArgs } from "./main.ts";
 import { assertNodeVersion } from "../version.ts";
+import { oneLine, quote, QUOTE_NOTE } from "../core/untrusted.ts";
 
 const CONFIG_DIR = join(homedir(), ".config", "agenttalks");
 const CONFIG_FILE = join(CONFIG_DIR, "atalk.json");
@@ -32,6 +33,54 @@ const CONFIG_FILE = join(CONFIG_DIR, "atalk.json");
 const LOCAL_CONFIG_NAME = ".agenttalks.json";
 
 type ClientConfig = { url: string; token: string };
+
+/** Marker written by `atalk login`/`enroll`: a project file without it was put there by
+ *  somebody else (a cloned repo, a script) and may redirect the token to another server. */
+const WRITTEN_BY = "atalk";
+
+/** Project files the user vouched for with `atalk login --local`: [{path (realpath), sha256}].
+ *  A marker inside the project file proves nothing (anybody can write it), so trust lives
+ *  outside the repository, keyed by the file's real path and content hash. */
+function trustFile(): string {
+  return join(process.env.AGENTTALKS_CONFIG_DIR || CONFIG_DIR, "trusted-projects.json");
+}
+
+function fileSha(path: string): string | null {
+  try { return createHash("sha256").update(readFileSync(path)).digest("hex"); } catch { return null; }
+}
+
+function readTrusted(): Array<{ path: string; sha256: string }> {
+  try {
+    const j = JSON.parse(readFileSync(trustFile(), "utf8")) as { projects?: unknown };
+    return Array.isArray(j.projects) ? j.projects as Array<{ path: string; sha256: string }> : [];
+  } catch {
+    return [];
+  }
+}
+
+function isTrustedProject(path: string): boolean {
+  const real = resolvePathSafe(path);
+  const sha = fileSha(path);
+  if (!real || !sha) return false;
+  return readTrusted().some((e) => e.path === real && e.sha256 === sha);
+}
+
+function trustProject(path: string): void {
+  const real = resolvePathSafe(path);
+  const sha = fileSha(path);
+  if (!real || !sha) return;
+  const rest = readTrusted().filter((e) => e.path !== real);
+  rest.push({ path: real, sha256: sha });
+  const file = trustFile();
+  mkdirSync(join(file, ".."), { recursive: true, mode: 0o700 });
+  writeFileSync(file, JSON.stringify({ projects: rest }, null, 2), { mode: 0o600 });
+  try { chmodSync(file, 0o600); } catch { /* best effort */ }
+}
+
+/** First NON-EMPTY value: an exported-but-empty variable must not shadow the others. */
+function firstSet(...values: Array<string | undefined>): string | undefined {
+  return values.find((v) => typeof v === "string" && v.trim() !== "");
+}
 
 function findLocalConfig(): string | null {
   let dir = process.cwd();
@@ -70,11 +119,13 @@ function readSecretFlag(args: Args, name: string): string | undefined {
  *  applies only when CREATING the file - on overwriting an existing one (say 0644 after
  *  it was created by hand earlier) the permissions would not change, and a long-lived
  *  token sits in that file. Hence the explicit chmod after the write; the directory 0700. */
-function saveClientConfig(cfg: ClientConfig, local = false): string {
+function saveClientConfig(plain: ClientConfig, local = false): string {
+  const cfg = { ...plain, writtenBy: WRITTEN_BY };
   if (local) {
     const path = join(process.cwd(), LOCAL_CONFIG_NAME);
     writeFileSync(path, JSON.stringify(cfg, null, 2), { mode: 0o600 });
     try { chmodSync(path, 0o600); } catch { /* np. Windows - best effort */ }
+    trustProject(path);
     // The token must NOT reach a repository. If this is git, we append the ignore straight
     // away - "it was supposed to be in .gitignore" is no consolation after a leak.
     if (existsSync(join(process.cwd(), ".git"))) {
@@ -97,11 +148,14 @@ function loadClientConfig(args: Args): ClientConfig {
   // Order: flag > environment > project file (cwd upwards) > global file.
   // The project file beats the global one so that "this directory = this agent" also works
   // when the user has a general identity as well.
-  let stored: Partial<ClientConfig> = {};
-  for (const path of [findLocalConfig(), CONFIG_FILE]) {
+  let stored: Partial<ClientConfig> & { writtenBy?: string } = {};
+  let storedPath: string | null = null;
+  const localPath = findLocalConfig();
+  for (const path of [localPath, CONFIG_FILE]) {
     if (!path || !existsSync(path)) continue;
     try {
-      stored = JSON.parse(readFileSync(path, "utf8")) as Partial<ClientConfig>;
+      stored = JSON.parse(readFileSync(path, "utf8")) as typeof stored;
+      storedPath = path;
       break;
     } catch {
       // a corrupted configuration file must not block the remaining sources
@@ -114,10 +168,39 @@ function loadClientConfig(args: Args): ClientConfig {
   // a different name for the same thing. The skill is copied onto disks, so copies keep
   // teaching those names even after the source is fixed; the canonical form stays
   // AGENTTALKS_*, consistent with the server configuration.
-  const url = flagStr(args, "url") ?? process.env.AGENTTALKS_URL ?? process.env.ATALKS_URL
-    ?? stored.url ?? "http://127.0.0.1:8787";
-  const token = flagStr(args, "token") ?? process.env.AGENTTALKS_TOKEN
-    ?? process.env.ATALKS_TOKEN ?? stored.token ?? "";
+  const tokenExplicit = firstSet(flagStr(args, "token"), process.env.AGENTTALKS_TOKEN, process.env.ATALKS_TOKEN) !== undefined;
+  const urlExplicit = firstSet(flagStr(args, "url"), process.env.AGENTTALKS_URL, process.env.ATALKS_URL) !== undefined;
+  const projectInUse = storedPath !== null && storedPath === localPath;
+  // Fail closed: a project file nobody vouched for must not choose the server that receives a
+  // token which came from elsewhere (env, flag): that is how a cloned repo steals a token.
+  if (projectInUse && tokenExplicit && !urlExplicit && stored.url && !isTrustedProject(storedPath!)) {
+    throw new Error(
+      `the project file ${storedPath} is not trusted, so its url is not used with your token. ` +
+        `Run \`atalk login --local\` in that directory (if you wrote it) or pass --url.`,
+    );
+  }
+  const url = firstSet(flagStr(args, "url"), process.env.AGENTTALKS_URL, process.env.ATALKS_URL,
+    stored.url) ?? "http://127.0.0.1:8787";
+  const token = firstSet(flagStr(args, "token"), process.env.AGENTTALKS_TOKEN,
+    process.env.ATALKS_TOKEN, stored.token) ?? "";
+  // A project file we did not write can point the token at any server: say so (B-MG-20b).
+  const fromProjectFile = storedPath !== null && storedPath === localPath
+    && (url === stored.url || token === stored.token);
+  if (fromProjectFile && !isTrustedProject(storedPath!)) {
+    process.stderr.write(
+      `warning: ${storedPath} was not written by atalk login - check that url (${stored.url}) is a server you trust before the token is sent there\n`,
+    );
+  }
+  // A bearer token over plain http to a remote host is readable on the way (B-MG-20a).
+  try {
+    const u = new URL(url);
+    const loopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(u.hostname);
+    if (token && u.protocol === "http:" && !loopback) {
+      process.stderr.write(
+        `warning: the token goes over plain http to ${u.host}; anybody on the network path can read it. Use https.\n`,
+      );
+    }
+  } catch { /* invalid url: the request itself fails with a clear error */ }
   if (!token) {
     throw new Error(
       "brak tokenu. Ustaw AGENTTALKS_TOKEN (albo ATALKS_TOKEN), podaj --token, albo zapisz raz: " +
@@ -282,6 +365,14 @@ function hhmm(ts: number): string {
   });
 }
 
+/** The standing note, printed once before the first quoted text of an invocation. */
+let noteShown = false;
+function noteOnce(): void {
+  if (noteShown) return;
+  noteShown = true;
+  process.stdout.write(QUOTE_NOTE + "\n");
+}
+
 function fmtMsg(m: Msg, who: Map<number, string>, conv: Map<number, string>): string {
   const author = who.get(m.actorId) ?? `aktor:${m.actorId}`;
   const where = conv.get(m.conversationId) ?? `konwersacja:${m.conversationId}`;
@@ -291,7 +382,9 @@ function fmtMsg(m: Msg, who: Map<number, string>, conv: Map<number, string>): st
   if (m.kind === "file") tags.push("plik");
   if (m.threadId) tags.push(`watek:${m.threadId}`);
   const tag = tags.length ? ` (${tags.join(", ")})` : "";
-  return `  [${m.id}] ${hhmm(m.ts)} ${where} <${author}>${tag}: ${m.body}`;
+  noteOnce();
+  // The body is untrusted: it never starts a line of its own (every line quoted with "> ").
+  return `  [${m.id}] ${hhmm(m.ts)} ${where} <${author}>${tag}:\n${quote(m.body)}`;
 }
 
 /** id->name maps for rendering. Two queries per invocation - the CLI is short-lived. */
@@ -426,6 +519,7 @@ const KNOWN_FLAGS = new Set([
 ]);
 
 export async function atalkMain(argv: readonly string[]): Promise<number> {
+  noteShown = false;
   const args = parseArgs(argv, KNOWN_FLAGS);
   const [cmd, ...rest] = args.positional;
 
@@ -549,7 +643,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       if (rows.length === 0) out("  (nikogo)");
       for (const p of rows) {
         const state = p.typing ? "PISZE   " : p.busy ? "pracuje " : p.online ? "aktywna " : "cisza   ";
-        out(`  [${state}] @${p.handle} (${p.label})${p.doing ? ` - robi: ${p.doing}` : ""}`);
+        out(`  [${state}] @${p.handle} (${oneLine(p.label)})${p.doing ? ` - robi: ${oneLine(p.doing)}` : ""}`);
       }
       out("\n=== NIEPRZECZYTANE ===");
       const unread = (me.unread as Array<{ conversationId: number; unread: number; badge: number }>)
@@ -660,7 +754,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       }
       if (d.open.length) {
         out(`\n  OTWARTE PYTANIA (${d.open.length}):`);
-        for (const q of d.open) out(`    [q${q.id}] ${q.message.body.slice(0, 90)}`);
+        for (const q of d.open) out(`    [q${q.id}] ${oneLine(q.message.body, 90)}`);
       }
       return 0;
     }
@@ -740,8 +834,8 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
         const state = p.typing ? "PISZE" : p.busy ? "pracuje" : p.online ? "aktywna" : "cisza";
         const age = Math.round(Date.now() / 1000 - p.lastSeenAt);
         const ago = age < 60 ? `${age}s` : `${Math.round(age / 60)}min`;
-        out(`  [${state.padEnd(8)}] @${p.handle} (${p.label})  ostatnio ${ago} temu` +
-          (p.doing ? `  robi: ${p.doing}` : ""));
+        out(`  [${state.padEnd(8)}] @${p.handle} (${oneLine(p.label)})  ostatnio ${ago} temu` +
+          (p.doing ? `  robi: ${oneLine(p.doing)}` : ""));
       }
       return 0;
     }
@@ -908,7 +1002,7 @@ async function run(api: Api, cfg: ClientConfig, cmd: string, rest: string[], arg
       const byId = new Map((msgs.messages as Msg[]).map((m) => [m.id, m]));
       for (const p of pins) {
         const m = byId.get(p.messageId);
-        out(`  [${p.messageId}] ${m ? m.body.slice(0, 100) : "(starsza wiadomosc)"}  ` +
+        out(`  [${p.messageId}] ${m ? oneLine(m.body, 100) : "(starsza wiadomosc)"}  ` +
           `(przypiete przez @${p.by})`);
       }
       return 0;
@@ -1139,23 +1233,25 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       const r = await api.call("GET", `/api/wiki/search?q=${enc(q)}`);
       const hits = r.hits as Array<{ slug: string; title: string; snippet: string }>;
       if (hits.length === 0) { out("Brak trafien. Zaloz strone: atalk wiki write <slug> --title ..."); return 0; }
-      for (const h of hits) out(`  [${h.slug}] ${h.title}\n      ${h.snippet}`);
+      noteOnce();
+      for (const h of hits) out(`  [${h.slug}] ${oneLine(h.title)}\n${quote(h.snippet)}`);
       return 0;
     }
     case "list": {
       const r = await api.call("GET", "/api/wiki");
       const pages = r.pages as Array<{ slug: string; title: string; updatedBy: string | null }>;
       if (pages.length === 0) { out("Wiki jest pusta."); return 0; }
-      for (const p of pages) out(`  [${p.slug}] ${p.title}  (zmiana: @${p.updatedBy ?? "?"})`);
+      for (const p of pages) out(`  [${p.slug}] ${oneLine(p.title)}  (zmiana: @${p.updatedBy ?? "?"})`);
       return 0;
     }
     case "read": {
       if (!rrest[0]) { process.stderr.write("uzycie: atalk wiki read <slug>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}`);
       const p = r.page as { title: string; slug: string; body: string; updatedBy: string | null; revisions: number };
-      out(`# ${p.title}  (${p.slug})`);
+      noteOnce();
+      out(`# ${oneLine(p.title)}  (${p.slug})`);
       out(`ostatnia zmiana: @${p.updatedBy ?? "?"}, rewizji: ${p.revisions}\n`);
-      out(p.body);
+      out(quote(p.body));
       const files = r.files as Array<{ id: string; name: string; size: number }>;
       if (files.length) { out("\nZalaczniki:"); for (const f of files) out(`  [${f.id}] ${f.name} (${f.size} B)`); }
       return 0;
@@ -1204,8 +1300,9 @@ async function runWiki(api: Api, rest: string[], args: Args, out: (s: string) =>
       if (rrest.length < 2) { process.stderr.write("uzycie: atalk wiki revision <slug> <id>\n"); return 1; }
       const r = await api.call("GET", `/api/wiki/${enc(rrest[0])}/revisions/${enc(rrest[1])}`);
       const rev = r.revision as { id: number; actor: string | null; title: string; body: string };
-      out(`# ${rev.title}  (rewizja ${rev.id}, @${rev.actor ?? "?"})\n`);
-      out(rev.body);
+      noteOnce();
+      out(`# ${oneLine(rev.title)}  (rewizja ${rev.id}, @${rev.actor ?? "?"})\n`);
+      out(quote(rev.body));
       return 0;
     }
     case "delete": case "rm": {
