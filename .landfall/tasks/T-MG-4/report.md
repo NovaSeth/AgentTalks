@@ -28,9 +28,9 @@ Added **17 tests**. No existing tests removed or weakened. No dependencies added
 ## Files
 
 - `src/core/actors.ts`: activity calculation, visibility filtering, indexed queries.
-- `src/http/ui/js/dane.js`: retain activity timestamp alongside avatar.
-- `src/http/ui/js/widok-sidebar.js`: exported classifier used by rendering.
-- `src/http/ui/js/zdarzenia-sse.js`: immediate local activity updates.
+- `src/http/ui/js/data.js`: retain activity timestamp alongside avatar.
+- `src/http/ui/js/view-sidebar.js`: exported classifier used by rendering.
+- `src/http/ui/js/sse-events.js`: immediate local activity updates.
 - [test/core/actors.test.ts](/Users/michal/Documents/Code/AgentTalks-wt/T-MG-4/test/core/actors.test.ts): source, privacy, and query-plan tests.
 - [test/ui-sidebar-presence.test.ts](/Users/michal/Documents/Code/AgentTalks-wt/T-MG-4/test/ui-sidebar-presence.test.ts): classifier, avatar, SSE, and rendering tests.
 
@@ -63,7 +63,7 @@ Additional verification:
 
 Every full-suite failure is named with its stack trace in [.r1-npm-test.log](/Users/michal/Documents/Code/AgentTalks-wt/T-MG-4/.r1-npm-test.log). Failures comprise API (71), MCP (16), SSE (12), CLI (3), E2E (2), HTTP UI modules (2), and documentation (1).
 
-The additional whole-worktree secrets scan exited 1 with 10 findings in unchanged files: `deploy/instancja.env.przyklad:25,31`, `docs/docker.md:87`, `integrations/claude-skill/SKILL.md:366`, `src/http/ui/install.html:83`, `test/cli/atalk.test.ts:210`, and `test/http/api.test.ts:1126,1137,1143,1239`.
+The additional whole-worktree secrets scan exited 1 with 10 findings in unchanged files: `deploy/instance.env.example:25,31`, `docs/docker.md:87`, `integrations/claude-skill/SKILL.md:366`, `src/http/ui/install.html:83`, `test/cli/atalk.test.ts:210`, and `test/http/api.test.ts:1126,1137,1143,1239`.
 
 ## E2E assertions reviewed
 

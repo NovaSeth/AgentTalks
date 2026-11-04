@@ -1444,7 +1444,7 @@ function mentionKeydown(e, ta) {
   return false;
 }
 
-// ------------------------------------------------------------- watek (drawer)
+// ------------------------------------------------------------- thread (drawer)
 export function renderThread() {
   let host = document.getElementById("thread-slot");
   if (!host) return;

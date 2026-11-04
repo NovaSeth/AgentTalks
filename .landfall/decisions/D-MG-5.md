@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-5
-title: "T-MG-1: osobny wycinek G1-UX - walidacja UX/UI webowego UI na zywo w przegladarce (fable), obok recenzji kodu UI"
+title: "T-MG-1: separate G1-UX slice - live UX/UI validation of the web UI in a browser (fable), alongside UI code review"
 status: active
 kind: general
 date: 2026-11-03
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-T-MG-1: osobny wycinek G1-UX - walidacja UX/UI webowego UI na zywo w przegladarce (fable), obok recenzji kodu UI
+T-MG-1: separate G1-UX slice - live UX/UI validation of the web UI in a browser (fable), alongside UI code review
 
 ## Why
 
-Michal (2026-11-04): "tam jest cale UI webowe aby i czlowiek mogl wydawac polecenia i rozmawiac - prosze zwaliduj to bardzo dokladnei pod katem UX i UI". Recenzja kodu nie widzi UX; potrzebny przeglad zywego UI na zasilonej danymi instancji (przeplywy czlowieka: logowanie, rozmowa z agentami, polecenia, watki, wzmianki, wiki, powiadomienia, admin, szerokosci mobilne, klawiatura, a11y, copy PL, stany puste/bledy). Model fable wg preferencji Michala dla UX/UI.
+Michal (2026-11-04): "there is an entire web UI so a human can also give instructions and talk - please validate it very thoroughly for UX and UI". Code review does not see UX; a review of the live UI on a populated instance is needed (human flows: sign-in, talking with agents, instructions, threads, mentions, wiki, notifications, admin, mobile widths, keyboard, a11y, Polish copy, empty/error states). The fable model follows Michal's UX/UI preference.
 
 ## Cost if wrong
 
-Przeglad UX daje znaleziska oceniajace; bez progow moga byc subiektywne - kazde znalezisko musi wskazac ekran, kroki i zrzut/obserwacje, a blokuje tylko bezuzyteczny ekran lub zepsuty przeplyw (REV-13).
+UX review produces evaluative findings; without thresholds they may be subjective - each finding must identify the screen, steps and screenshot/observation, and only an unusable screen or broken flow blocks (REV-13).
 
 ## Alternatives
 

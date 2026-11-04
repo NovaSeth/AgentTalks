@@ -141,7 +141,7 @@ page and these guidelines are now in English.
 **`docker compose up -d --build` is now the ONLY way to start it** - in production as
 well, so the file in the repository can no longer drift away from reality. Instance
 values (port, address, secrets) travel through `--env-file` from a file outside the
-repository; the template is `deploy/instancja.env.przyklad`. The volume name is set
+repository; the template is `deploy/instance.env.example`. The volume name is set
 explicitly (`name: agenttalks_data`), because by default compose composes it from the
 directory name - which means that starting from another directory would mount an empty
 volume behind a green healthcheck.

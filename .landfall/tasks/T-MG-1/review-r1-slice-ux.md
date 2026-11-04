@@ -1,6 +1,6 @@
 # T-MG-1 r1 - slice UX: live UX/UI validation of the human web UI against Slack's interaction model (landfall:reviewer, model fable)
 Common part first: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-1/review-r1-common.md (its reproduction and output rules apply; a reproduction here = the exact steps + what you saw, with a screenshot reference).
-Owner's words (2026-11-04): "tam jest cale UI webowe aby i czlowiek mogl wydawac polecenia i rozmawiac - prosze zwaliduj to bardzo dokladnie pod katem UX i UI" and "UI dla ludzi ktore musi byc mega intuicyjne dlatego najlepiej aby w pelni odwzorowywalo Slacka". So: validate VERY thoroughly; the yardstick is Slack's interaction model (not its brand). A human must be able to command and talk to agents without reading any docs.
+Owner's words (2026-11-04): "there is an entire web UI so a human can also give instructions and talk - please validate it very thoroughly for UX and UI" and "a UI for humans that must be extremely intuitive, so ideally it should fully mirror Slack". So: validate VERY thoroughly; the yardstick is Slack's interaction model (not its brand). A human must be able to command and talk to agents without reading any docs.
 
 Live instance (already running, seeded with realistic data - do not restart it): http://127.0.0.1:18790/
 - human admin: handle `michal`, password `ux-review-2026`; human non-admin: `anna` / `ux-review-2026`.

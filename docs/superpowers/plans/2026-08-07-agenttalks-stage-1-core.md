@@ -1,87 +1,87 @@
-# AgentTalks etap 1 (rdzeń) - plan wykonawczy
+# AgentTalks stage 1 (core) - implementation plan
 
-> **Dla wykonawcy:** WYMAGANY SUB-SKILL: `superpowers:subagent-driven-development` albo
-> `superpowers:executing-plans`. Kroki mają checkboxy do odhaczania.
+> **For the implementer:** REQUIRED SUB-SKILL: `superpowers:subagent-driven-development` or
+> `superpowers:executing-plans`. Steps have checkboxes to tick off.
 
-**Cel:** Uruchomiony demon, w którym dwóch uwierzytelnionych aktorów wymienia wiadomości
-w kanałach, DM-ach i grupach, dostaje je pushem przez SSE, ma poprawne liczniki
-nieprzeczytanych, a historia z prototypu `~/.talk` jest zaimportowana.
+**Goal:** A running daemon in which two authenticated actors exchange messages
+in channels, DMs, and groups, receive them through SSE push, have correct unread
+counts, and have the history from the `~/.talk` prototype imported.
 
-**Architektura:** Trzy warstwy bez przecieków. `store/` zna SQL i nic więcej. `core/`
-zna reguły domenowe i dostaje `Ctx = { db, bus, now }`, nie zna HTTP. `http/` tłumaczy
-żądania na wywołania `core/` i nie zna SQL. Testy rdzenia chodzą na bazie w pamięci.
+**Architecture:** Three layers without leakage. `store/` knows SQL and nothing else. `core/`
+knows domain rules and receives `Ctx = { db, bus, now }`, but knows no HTTP. `http/` translates
+requests into `core/` calls and knows no SQL. Core tests run on an in-memory database.
 
-**Stos:** Node >= 24 (tu: 26), TypeScript uruchamiany natywnie, `node:sqlite`, `node:http`,
-`node:crypto`, `node:test`. **Zero zależności w etapie 1**; jedyna zależność produktu,
-`@modelcontextprotocol/sdk`, dochodzi w etapie 2 i dotyczy wyłącznie `src/mcp/`.
-Wdrożenie: obraz Docker na `node:26-alpine`.
+**Stack:** Node >= 24 (here: 26), natively executed TypeScript, `node:sqlite`, `node:http`,
+`node:crypto`, `node:test`. **Zero dependencies in stage 1**; the product's only dependency,
+`@modelcontextprotocol/sdk`, arrives in stage 2 and concerns only `src/mcp/`.
+Deployment: Docker image based on `node:26-alpine`.
 
-## Ograniczenia globalne
+## Global constraints
 
-- Node >= 24. Sprawdzane w `src/version.ts`, wywoływane na starcie CLI.
-- **Zero `dependencies` i `devDependencies` w `package.json`** przez cały etap 1.
-  Żaden moduł spoza `src/mcp/` (etap 2) nie ma prawa importować niczego spoza
-  standardowej biblioteki Node.
-- Żaden moduł `core/` nie importuje z `http/` ani `node:http`.
-- Żaden moduł `http/` nie zawiera SQL.
-- Plik przekraczający ~300 linii jest sygnałem, że robi dwie rzeczy.
-- Komentarze i komunikaty użytkownika po polsku, **bez polskich znaków diakrytycznych
-  w kodzie źródłowym** (spójnie z prototypem); dokumentacja z diakrytykami.
-- Bez znaku em-dash w jakimkolwiek pliku.
-- Identyfikatory wiadomości to `INTEGER AUTOINCREMENT`. Nigdy nie liczymy ich skanem.
-- Klient nigdy nie deklaruje swojego `actor_id`. Zawsze wynika z tokenu albo cookie.
-- Każdy `core/*` przyjmuje `ctx: Ctx` jako pierwszy argument.
-- Czas: sekundy uniksowe jako `number` (zgodnie z `ts` w prototypie), przez `ctx.now()`.
+- Node >= 24. Checked in `src/version.ts`, called at CLI startup.
+- **Zero `dependencies` and `devDependencies` in `package.json`** throughout stage 1.
+  No module outside `src/mcp/` (stage 2) may import anything outside
+  the Node standard library.
+- No `core/` module imports from `http/` or `node:http`.
+- No `http/` module contains SQL.
+- A file exceeding ~300 lines signals that it is doing two things.
+- Comments and user messages in Polish, **without Polish diacritics
+  in source code** (consistent with the prototype); documentation with diacritics.
+- No em-dash character in any file.
+- Message identifiers are `INTEGER AUTOINCREMENT`. Never calculate them by scanning.
+- The client never declares its `actor_id`. It always comes from the token or cookie.
+- Every `core/*` accepts `ctx: Ctx` as its first argument.
+- Time: Unix seconds as a `number` (consistent with the prototype's `ts`), through `ctx.now()`.
 
 ---
 
-## Struktura plików
+## File structure
 
-| Plik | Odpowiedzialność |
+| File | Responsibility |
 |---|---|
-| `package.json`, `tsconfig.json` | metadane pakietu, `bin`, skrypty `test`/`verify` |
-| `src/version.ts` | sprawdzenie wersji Node |
-| `src/config.ts` | typ `Config`, katalog danych, wczytanie i inicjalizacja |
-| `src/store/schema.ts` | DDL jako stała, wersjonowany przez `user_version` |
-| `src/store/db.ts` | `openDb`, pragmy, migracje |
-| `src/core/ctx.ts` | typ `Ctx`, `createCtx` |
-| `src/core/errors.ts` | `AppError` + konstruktory `badRequest`/`notFound`/... |
-| `src/core/ids.ts` | walidacja `handle`, `slug`, emoji |
-| `src/core/events.ts` | `EventBus`: subskrypcje per aktor |
-| `src/core/actors.ts` | aktorzy, hasła (scrypt) |
-| `src/core/tokens.ts` | mint, weryfikacja (sha256), odwołanie |
-| `src/core/conversations.ts` | kanały, DM, grupy, członkostwo, widoczność |
-| `src/core/mentions.ts` | parsowanie i rozwiązywanie `@handle` |
-| `src/core/messages.ts` | zapis, listowanie, edycja, kasowanie, wątki |
-| `src/core/unread.ts` | liczniki i znaczniki odczytu |
-| `src/core/presence.ts` | sesje, heartbeat, `typing`/`busy`, lista obecności |
-| `src/core/questions.ts` | `ask` / `answer` / otwarte |
-| `src/core/reactions.ts` | reakcje (toggle) |
-| `src/core/search.ts` | FTS5 ograniczony do widocznych konwersacji |
-| `src/http/router.ts` | mały router: metoda + wzorzec z `:param` |
-| `src/http/auth.ts` | bearer + podpisane cookie, CSRF |
-| `src/http/respond.ts` | `json`, `err`, czytanie body z limitem |
-| `src/http/routes/*.ts` | trasy pogrupowane po zasobie |
-| `src/http/sse.ts` | strumień zdarzeń i long-poll |
-| `src/http/server.ts` | złożenie routera, start `node:http` |
-| `src/importer/talk.ts` | import z katalogu `~/.talk` |
+| `package.json`, `tsconfig.json` | package metadata, `bin`, `test`/`verify` scripts |
+| `src/version.ts` | Node version check |
+| `src/config.ts` | `Config` type, data directory, loading and initialization |
+| `src/store/schema.ts` | DDL as a constant, versioned with `user_version` |
+| `src/store/db.ts` | `openDb`, pragmas, migrations |
+| `src/core/ctx.ts` | `Ctx` type, `createCtx` |
+| `src/core/errors.ts` | `AppError` + `badRequest`/`notFound`/... constructors |
+| `src/core/ids.ts` | validation of `handle`, `slug`, emoji |
+| `src/core/events.ts` | `EventBus`: per-actor subscriptions |
+| `src/core/actors.ts` | actors, passwords (scrypt) |
+| `src/core/tokens.ts` | minting, verification (sha256), revocation |
+| `src/core/conversations.ts` | channels, DMs, groups, membership, visibility |
+| `src/core/mentions.ts` | parsing and resolving `@handle` |
+| `src/core/messages.ts` | writing, listing, editing, deleting, threads |
+| `src/core/unread.ts` | counts and read markers |
+| `src/core/presence.ts` | sessions, heartbeat, `typing`/`busy`, presence list |
+| `src/core/questions.ts` | `ask` / `answer` / open questions |
+| `src/core/reactions.ts` | reactions (toggle) |
+| `src/core/search.ts` | FTS5 restricted to visible conversations |
+| `src/http/router.ts` | small router: method + pattern with `:param` |
+| `src/http/auth.ts` | bearer + signed cookie, CSRF |
+| `src/http/respond.ts` | `json`, `err`, reading the body with a limit |
+| `src/http/routes/*.ts` | routes grouped by resource |
+| `src/http/sse.ts` | event stream and long-poll |
+| `src/http/server.ts` | router assembly, starting `node:http` |
+| `src/importer/talk.ts` | import from the `~/.talk` directory |
 | `src/cli/main.ts` | `init`, `serve`, `actor`, `token`, `import-talk` |
-| `test/**/*.test.ts` | testy, `node --test` |
+| `test/**/*.test.ts` | tests, `node --test` |
 
 ---
 
-### Zadanie 1: Szkielet, baza, migracje
+### Task 1: Skeleton, database, migrations
 
-**Pliki:**
-- Utwórz: `package.json`, `tsconfig.json`, `src/version.ts`, `src/store/schema.ts`,
+**Files:**
+- Create: `package.json`, `tsconfig.json`, `src/version.ts`, `src/store/schema.ts`,
   `src/store/db.ts`, `src/core/ctx.ts`, `src/core/errors.ts`
 - Test: `test/store/db.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 // src/store/db.ts
 export type Db = import("node:sqlite").DatabaseSync;
-export function openDb(path: string): Db;      // pragmy + migracje
+export function openDb(path: string): Db;      // pragmas + migrations
 export function schemaVersion(db: Db): number;
 // src/core/ctx.ts
 export type Ctx = { db: Db; bus: EventBus; now: () => number };
@@ -95,7 +95,7 @@ export function notFound(code: string, message: string): AppError;
 export function conflict(code: string, message: string): AppError;
 ```
 
-- [ ] **Krok 1: Test na otwarcie bazy i wersję schematu**
+- [ ] **Step 1: Test database opening and schema version**
 
 ```ts
 // test/store/db.test.ts
@@ -129,12 +129,12 @@ test("FTS5 jest dostepny", () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, upewnij się że nie przechodzi**
+- [ ] **Step 2: Run and confirm it fails**
 
-Uruchom: `node --test test/store/db.test.ts`
-Oczekiwane: FAIL, `Cannot find module .../src/store/db.ts`
+Run: `node --test test/store/db.test.ts`
+Expected: FAIL, `Cannot find module .../src/store/db.ts`
 
-- [ ] **Krok 3: `package.json` bez zależności**
+- [ ] **Step 3: `package.json` without dependencies**
 
 ```json
 {
@@ -152,17 +152,17 @@ Oczekiwane: FAIL, `Cannot find module .../src/store/db.ts`
 }
 ```
 
-- [ ] **Krok 4: `src/store/schema.ts` - DDL jako stała**
+- [ ] **Step 4: `src/store/schema.ts` - DDL as a constant**
 
-Tabele dokładnie jak w specyfikacji 4.2. Ważne szczegóły:
+Tables exactly as in specification 4.2. Important details:
 `messages.id INTEGER PRIMARY KEY AUTOINCREMENT`; `UNIQUE(conversation_id, actor_id)`
-w `members`; `UNIQUE(message_id, actor_id, emoji)` w `reactions`;
-`conversations.slug` `UNIQUE` z dopuszczonym `NULL`; indeksy
+in `members`; `UNIQUE(message_id, actor_id, emoji)` in `reactions`;
+`conversations.slug` `UNIQUE` with `NULL` allowed; indexes
 `messages(conversation_id, id)`, `messages(thread_id)`, `mentions(actor_id)`,
-`members(actor_id)`; tabela `messages_fts` jako `fts5(body, content='messages',
-content_rowid='id')` plus trzy triggery synchronizujące (`INSERT`, `UPDATE`, `DELETE`).
+`members(actor_id)`; the `messages_fts` table as `fts5(body, content='messages',
+content_rowid='id')` plus three synchronization triggers (`INSERT`, `UPDATE`, `DELETE`).
 
-- [ ] **Krok 5: `src/store/db.ts`**
+- [ ] **Step 5: `src/store/db.ts`**
 
 ```ts
 export function openDb(path: string): Db {
@@ -174,15 +174,15 @@ export function openDb(path: string): Db {
   return db;
 }
 ```
-`migrate` czyta `PRAGMA user_version`, wykonuje brakujące migracje z tablicy
-`MIGRATIONS` w transakcji i podnosi `user_version`. Migracja 1 to cały `SCHEMA`.
+`migrate` reads `PRAGMA user_version`, runs missing migrations from the
+`MIGRATIONS` array in a transaction, and increments `user_version`. Migration 1 is the entire `SCHEMA`.
 
-- [ ] **Krok 6: Testy przechodzą**
+- [ ] **Step 6: Tests pass**
 
-Uruchom: `node --test test/store/db.test.ts`
-Oczekiwane: PASS (3 testy)
+Run: `node --test test/store/db.test.ts`
+Expected: PASS (3 tests)
 
-- [ ] **Krok 7: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add package.json tsconfig.json src/ test/ && \
@@ -191,14 +191,14 @@ git commit -m "feat(store): schemat SQLite z migracjami, zero zaleznosci"
 
 ---
 
-### Zadanie 2: Aktorzy, hasła, tokeny
+### Task 2: Actors, passwords, tokens
 
-**Pliki:**
-- Utwórz: `src/core/ids.ts`, `src/core/actors.ts`, `src/core/tokens.ts`
+**Files:**
+- Create: `src/core/ids.ts`, `src/core/actors.ts`, `src/core/tokens.ts`
 - Test: `test/core/actors.test.ts`, `test/core/tokens.test.ts`
 
-**Interfejsy - konsumuje:** `Ctx`, `AppError` z zadania 1.
-**Interfejsy - produkuje:**
+**Interfaces - consumes:** `Ctx`, `AppError` from task 1.
+**Interfaces - produces:**
 ```ts
 export type ActorKind = "human" | "agent" | "system";
 export type Actor = { id: number; kind: ActorKind; handle: string;
@@ -215,13 +215,13 @@ export function normalizeHandle(raw: string): string;   // src/core/ids.ts
 export type TokenInfo = { id: number; actorId: number; name: string; createdAt: number;
                           lastUsedAt: number | null; revokedAt: number | null };
 export function mintToken(ctx: Ctx, actorId: number, name: string):
-  { token: string; info: TokenInfo };                    // "atk_" + 43 znaki base64url
+  { token: string; info: TokenInfo };                    // "atk_" + 43 base64url characters
 export function verifyToken(ctx: Ctx, token: string): Actor | null;
 export function revokeToken(ctx: Ctx, tokenId: number): void;
 export function listTokens(ctx: Ctx, actorId: number): TokenInfo[];
 ```
 
-- [ ] **Krok 1: Testy aktorów**
+- [ ] **Step 1: Actor tests**
 
 ```ts
 test("handle jest normalizowany i walidowany", () => {
@@ -254,7 +254,7 @@ test("haslo weryfikuje sie przez scrypt i nie jest przechowywane jawnie", () => 
 });
 ```
 
-- [ ] **Krok 2: Testy tokenów**
+- [ ] **Step 2: Token tests**
 
 ```ts
 test("token weryfikuje sie i zwraca aktora", () => {
@@ -288,21 +288,21 @@ test("zly token nie rzuca, tylko zwraca null", () => {
 });
 ```
 
-- [ ] **Krok 3: Uruchom, potwierdź porażkę.** `node --test test/core/` -> FAIL.
+- [ ] **Step 3: Run and confirm failure.** `node --test test/core/` -> FAIL.
 
-- [ ] **Krok 4: Implementacja**
+- [ ] **Step 4: Implementation**
 
-`normalizeHandle`: trim, zdejmij wiodące `@`, małe litery, zamień `/` i spacje na `-`,
-odrzuć wszystko poza `[a-z0-9._-]`, wymuś długość 2..32, w przeciwnym razie
-`badRequest("handle", ...)`. Kolizja handle -> `conflict("handle_zajety", ...)`.
-Hasło: `scryptSync(password, salt16, 64)`, zapis `scrypt$<saltHex>$<hashHex>`,
-porównanie przez `timingSafeEqual`.
-Token: `"atk_" + randomBytes(32).toString("base64url")`, w bazie
-`sha256(token)` hex. `verifyToken` odrzuca odwołane, aktualizuje `last_used_at`.
+`normalizeHandle`: trim, remove the leading `@`, lowercase, replace `/` and spaces with `-`,
+reject anything outside `[a-z0-9._-]`, enforce length 2..32, otherwise
+`badRequest("handle", ...)`. Handle collision -> `conflict("handle_taken", ...)`.
+Password: `scryptSync(password, salt16, 64)`, stored as `scrypt$<saltHex>$<hashHex>`,
+comparison with `timingSafeEqual`.
+Token: `"atk_" + randomBytes(32).toString("base64url")`, in the database
+`sha256(token)` hex. `verifyToken` rejects revoked tokens and updates `last_used_at`.
 
-- [ ] **Krok 5: Testy przechodzą.** `node --test test/core/` -> PASS.
+- [ ] **Step 5: Tests pass.** `node --test test/core/` -> PASS.
 
-- [ ] **Krok 6: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git commit -am "feat(core): aktorzy z hasla scrypt i tokeny agentow z hashem"
@@ -310,13 +310,13 @@ git commit -am "feat(core): aktorzy z hasla scrypt i tokeny agentow z hashem"
 
 ---
 
-### Zadanie 3: Konwersacje, członkostwo, widoczność
+### Task 3: Conversations, membership, visibility
 
-**Pliki:**
-- Utwórz: `src/core/conversations.ts`
+**Files:**
+- Create: `src/core/conversations.ts`
 - Test: `test/core/conversations.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export type ConvKind = "public" | "private" | "dm" | "group";
 export type Conversation = { id: number; kind: ConvKind; slug: string | null;
@@ -343,11 +343,11 @@ export function setNotify(ctx: Ctx, convId: number, actorId: number, notify: Not
 export function recipientsOf(ctx: Ctx, convId: number): number[];
 ```
 
-Reguły widoczności, jedno miejsce dla wszystkich czterech rodzajów:
-`public` czyta każdy aktor; pisanie do `public` dołącza aktora automatycznie.
-`private`, `dm`, `group` wymagają członkostwa i do czytania, i do pisania.
+Visibility rules, one place for all four kinds:
+Any actor can read `public`; writing to `public` automatically joins the actor.
+`private`, `dm`, and `group` require membership for both reading and writing.
 
-- [ ] **Krok 1: Testy**
+- [ ] **Step 1: Tests**
 
 ```ts
 test("kanal publiczny jest czytelny bez czlonkostwa, pisanie dolacza", () => {
@@ -399,16 +399,16 @@ test("listForActor zwraca kanaly publiczne i wlasne prywatne, bez cudzych", () =
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** `ensureDirect` sortuje `actorIds` rosnąco, liczy
-`memberKey = ids.join(",")` i trzyma go w kolumnie `conversations.member_key`
-(`UNIQUE`), dzięki czemu ponowne wywołanie zwraca istniejącą rozmowę bez skanowania
-członkostw. `kind` to `dm` przy dwóch, `group` przy trzech i więcej.
+- [ ] **Step 3: Implementation.** `ensureDirect` sorts `actorIds` in ascending order, computes
+`memberKey = ids.join(",")`, and stores it in the `conversations.member_key` column
+(`UNIQUE`), so a repeated call returns the existing conversation without scanning
+memberships. `kind` is `dm` for two, `group` for three or more.
 
-- [ ] **Krok 4: Testy przechodzą.**
+- [ ] **Step 4: Tests pass.**
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(core): jeden prymityw konwersacji dla kanalow, DM i grup"
@@ -416,14 +416,14 @@ git commit -am "feat(core): jeden prymityw konwersacji dla kanalow, DM i grup"
 
 ---
 
-### Zadanie 4: Wiadomości, wzmianki, wątki
+### Task 4: Messages, mentions, threads
 
-**Pliki:**
-- Utwórz: `src/core/mentions.ts`, `src/core/messages.ts`, `src/core/events.ts`
+**Files:**
+- Create: `src/core/mentions.ts`, `src/core/messages.ts`, `src/core/events.ts`
 - Test: `test/core/mentions.test.ts`, `test/core/messages.test.ts`,
   `test/core/events.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 // events.ts
 export type Event =
@@ -459,7 +459,7 @@ export function inboxAfter(ctx: Ctx, actorId: number, afterId: number,
 export const MAX_BODY_BYTES = 65536;
 ```
 
-- [ ] **Krok 1: Testy wzmianek**
+- [ ] **Step 1: Mention tests**
 
 ```ts
 test("parseMentions wyciaga handle bez duplikatow i bez wielkosci liter", () => {
@@ -474,7 +474,7 @@ test("wzmianka na poczatku i po nawiasie jest lapana", () => {
 });
 ```
 
-- [ ] **Krok 2: Testy wiadomości**
+- [ ] **Step 2: Message tests**
 
 ```ts
 test("postMessage nadaje rosnace id i zapisuje wzmianki", () => {
@@ -559,7 +559,7 @@ test("skasowana wiadomosc nie ma ciala, ale zostaje w kolejnosci", () => {
 });
 ```
 
-- [ ] **Krok 3: Test szyny zdarzeń**
+- [ ] **Step 3: Event bus test**
 
 ```ts
 test("publish trafia tylko do subskrybentow z listy odbiorcow", () => {
@@ -599,18 +599,18 @@ test("postMessage publikuje zdarzenie do czlonkow konwersacji", () => {
 });
 ```
 
-- [ ] **Krok 4: Uruchom, potwierdź porażkę.**
+- [ ] **Step 4: Run and confirm failure.**
 
-- [ ] **Krok 5: Implementacja.** `postMessage` w jednej transakcji: sprawdź prawo
-zapisu (`assertCanPost`), przytnij i zwaliduj ciało, wstaw wiadomość, rozwiąż i wstaw
-wzmianki, spłaszcz `threadId` do korzenia (jeśli wskazany rodzic sam ma `thread_id`,
-użyj jego). Po zatwierdzeniu transakcji `ctx.bus.publish(recipientsOf(...), ...)`.
-Publikacja **po** commicie, żeby subskrybent nie zobaczył danych, których jeszcze nie ma
-w bazie. FTS aktualizują triggery z zadania 1.
+- [ ] **Step 5: Implementation.** `postMessage` in one transaction: check write
+permission (`assertCanPost`), trim and validate the body, insert the message, resolve and insert
+mentions, flatten `threadId` to the root (if the specified parent itself has a `thread_id`,
+use that). After committing the transaction, `ctx.bus.publish(recipientsOf(...), ...)`.
+Publish **after** commit so subscribers do not see data that is not yet
+in the database. The triggers from task 1 update FTS.
 
-- [ ] **Krok 6: Testy przechodzą.**
+- [ ] **Step 6: Tests pass.**
 
-- [ ] **Krok 7: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git commit -am "feat(core): wiadomosci, watki, wzmianki materializowane, szyna zdarzen"
@@ -618,13 +618,13 @@ git commit -am "feat(core): wiadomosci, watki, wzmianki materializowane, szyna z
 
 ---
 
-### Zadanie 5: Nieprzeczytane i znaczniki odczytu
+### Task 5: Unread counts and read markers
 
-**Pliki:**
-- Utwórz: `src/core/unread.ts`
+**Files:**
+- Create: `src/core/unread.ts`
 - Test: `test/core/unread.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export type UnreadRow = { conversationId: number; unread: number; badge: number;
                           lastMessageId: number };
@@ -634,12 +634,12 @@ export function markRead(ctx: Ctx, actorId: number, conversationId: number,
 export function totalBadge(ctx: Ctx, actorId: number): number;
 ```
 
-Semantyka przeniesiona z prototypu i zachowana świadomie:
-`unread` to „jest coś nowego" (pogrubienie), `badge` to „dotyczy CIEBIE" (plakietka).
-`badge` liczy wiadomości z wzmianką o tym aktorze **oraz** wszystkie w `dm` i `group`.
-Własne wiadomości nigdy nie są nieprzeczytane.
+Semantics carried over from the prototype and deliberately preserved:
+`unread` means "there is something new" (bold); `badge` means "concerns YOU" (badge).
+`badge` counts messages mentioning this actor **and** all messages in `dm` and `group`.
+One's own messages are never unread.
 
-- [ ] **Krok 1: Testy**
+- [ ] **Step 1: Tests**
 
 ```ts
 test("wlasne wiadomosci nie licza sie jako nieprzeczytane", () => {
@@ -690,15 +690,15 @@ test("markRead nie cofa sie do starszej wiadomosci", () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** Jedno zapytanie z `LEFT JOIN mentions`, grupowanie po
-`conversation_id`, warunek `m.id > members.last_read_message_id AND m.actor_id <> :me
-AND m.deleted_at IS NULL`. `markRead` używa `MAX(last_read_message_id, :id)`.
+- [ ] **Step 3: Implementation.** One query with `LEFT JOIN mentions`, grouped by
+`conversation_id`, condition `m.id > members.last_read_message_id AND m.actor_id <> :me
+AND m.deleted_at IS NULL`. `markRead` uses `MAX(last_read_message_id, :id)`.
 
-- [ ] **Krok 4: Testy przechodzą.**
+- [ ] **Step 4: Tests pass.**
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(core): liczniki nieprzeczytanych z rozroznieniem licznik/plakietka"
@@ -706,13 +706,13 @@ git commit -am "feat(core): liczniki nieprzeczytanych z rozroznieniem licznik/pl
 
 ---
 
-### Zadanie 6: Obecność, sesje, sygnały `typing` i `busy`
+### Task 6: Presence, sessions, `typing` and `busy` signals
 
-**Pliki:**
-- Utwórz: `src/core/presence.ts`
+**Files:**
+- Create: `src/core/presence.ts`
 - Test: `test/core/presence.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export type SessionKind = "durable" | "ephemeral";
 export type PresenceRow = { sessionId: string; actorId: number; handle: string;
@@ -729,11 +729,11 @@ export const TYPING_TTL = 7, BUSY_TTL = 30,
              STALE_DURABLE = 600, STALE_EPHEMERAL = 60, ONLINE_WINDOW = 900;
 ```
 
-Progi i semantyka przeniesione z prototypu bez zmian, bo są zweryfikowane:
-`typing` to człowiek stukający w klawiaturę (7 s), `busy` to sesja, która użyła narzędzia
-(30 s). Efemeryda jest martwa po 60 s ciszy, sesja trwała po 600 s.
+Thresholds and semantics carried over unchanged from the prototype, because they are validated:
+`typing` means a human typing on a keyboard (7 s); `busy` means a session that used a tool
+(30 s). An ephemeral session is dead after 60 s of silence, a persistent session after 600 s.
 
-- [ ] **Krok 1: Testy**
+- [ ] **Step 1: Tests**
 
 ```ts
 test("typing gasnie po TYPING_TTL, busy trzyma dluzej", () => {
@@ -776,15 +776,15 @@ test("dwie sesje tego samego aktora to jeden rozmowca, bez sufiksow", () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** Kolumny `typing_at`, `busy_at`, `last_seen_at`
-w `sessions`; świeżość liczona przy odczycie względem `ctx.now()`. Zakończone efemerydy
-odfiltrowane, sesje trwałe oznaczone `stale`.
+- [ ] **Step 3: Implementation.** Columns `typing_at`, `busy_at`, `last_seen_at`
+in `sessions`; freshness calculated at read time against `ctx.now()`. Ended ephemeral sessions
+are filtered out, persistent sessions marked `stale`.
 
-- [ ] **Krok 4: Testy przechodzą.**
+- [ ] **Step 4: Tests pass.**
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(core): obecnosc z rozdzielonymi sygnalami typing i busy"
@@ -792,14 +792,14 @@ git commit -am "feat(core): obecnosc z rozdzielonymi sygnalami typing i busy"
 
 ---
 
-### Zadanie 7: Otwarte pytania, reakcje, wyszukiwanie
+### Task 7: Open questions, reactions, search
 
-**Pliki:**
-- Utwórz: `src/core/questions.ts`, `src/core/reactions.ts`, `src/core/search.ts`
+**Files:**
+- Create: `src/core/questions.ts`, `src/core/reactions.ts`, `src/core/search.ts`
 - Test: `test/core/questions.test.ts`, `test/core/reactions.test.ts`,
   `test/core/search.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export function ask(ctx: Ctx, input: { conversationId: number; actorId: number;
   body: string; sessionId?: string | null }): { question: number; message: Message };
@@ -817,7 +817,7 @@ export function search(ctx: Ctx, q: { actorId: number; text: string;
   conversationId?: number; limit?: number }): Message[];
 ```
 
-- [ ] **Krok 1: Testy**
+- [ ] **Step 1: Tests**
 
 ```ts
 test("pytanie jest otwarte, dopoki ktokolwiek nie odpowie", () => {
@@ -873,17 +873,17 @@ test("wyszukiwanie pomija skasowane", () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** `ask` zapisuje wiadomość `kind="ask"` i wiersz
-w `questions`. `answer` zapisuje `kind="answer"` z `threadId` równym wiadomości pytania
-i ustawia `questions.answer_message_id`. `search` łączy `messages_fts` z listą
-konwersacji widocznych dla aktora; zapytanie użytkownika idzie jako parametr do
-`MATCH`, po ucieczce cudzysłowów, żeby składnia FTS nie wywracała zapytania.
+- [ ] **Step 3: Implementation.** `ask` writes a `kind="ask"` message and a row
+in `questions`. `answer` writes `kind="answer"` with `threadId` equal to the question message
+and sets `questions.answer_message_id`. `search` joins `messages_fts` with the list of
+conversations visible to the actor; the user query is passed as a parameter to
+`MATCH`, after escaping quotation marks so FTS syntax does not break the query.
 
-- [ ] **Krok 4: Testy przechodzą.**
+- [ ] **Step 4: Tests pass.**
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(core): otwarte pytania, reakcje, wyszukiwanie FTS z kontrola dostepu"
@@ -891,13 +891,13 @@ git commit -am "feat(core): otwarte pytania, reakcje, wyszukiwanie FTS z kontrol
 
 ---
 
-### Zadanie 8: Warstwa HTTP - router, uwierzytelnianie, odpowiedzi
+### Task 8: HTTP layer - router, authentication, responses
 
-**Pliki:**
-- Utwórz: `src/http/router.ts`, `src/http/respond.ts`, `src/http/auth.ts`
+**Files:**
+- Create: `src/http/router.ts`, `src/http/respond.ts`, `src/http/auth.ts`
 - Test: `test/http/router.test.ts`, `test/http/auth.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export type Req = import("node:http").IncomingMessage;
 export type Res = import("node:http").ServerResponse;
@@ -917,7 +917,7 @@ export function makeCookie(config: Config, actorId: number, ttlSec: number): str
 export function requireAuth(rc: RouteCtx): Auth;
 ```
 
-- [ ] **Krok 1: Testy routera i uwierzytelniania**
+- [ ] **Step 1: Router and authentication tests**
 
 ```ts
 test("router dopasowuje parametry sciezki", () => {
@@ -966,16 +966,16 @@ test("wygasle cookie jest odrzucone", () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** Cookie `at_session=<actorId>.<expiry>.<hmacSHA256>`,
-`HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` gdy `config.trustProxy`. Porównanie
-podpisu przez `timingSafeEqual`. Router trzyma trasy w tablicy i dopasowuje segmentami,
-bez wyrażeń regularnych budowanych z danych wejściowych.
+- [ ] **Step 3: Implementation.** Cookie `at_session=<actorId>.<expiry>.<hmacSHA256>`,
+`HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` when `config.trustProxy`. Compare the
+signature with `timingSafeEqual`. The router stores routes in an array and matches by segment,
+without regular expressions constructed from input.
 
-- [ ] **Krok 4: Testy przechodzą.**
+- [ ] **Step 4: Tests pass.**
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(http): router, podpisane cookie sesji, bearer dla agentow"
@@ -983,31 +983,31 @@ git commit -am "feat(http): router, podpisane cookie sesji, bearer dla agentow"
 
 ---
 
-### Zadanie 9: Trasy REST
+### Task 9: REST routes
 
-**Pliki:**
-- Utwórz: `src/http/routes/auth.ts`, `src/http/routes/actors.ts`,
+**Files:**
+- Create: `src/http/routes/auth.ts`, `src/http/routes/actors.ts`,
   `src/http/routes/conversations.ts`, `src/http/routes/messages.ts`,
   `src/http/routes/presence.ts`, `src/http/routes/index.ts`, `src/http/server.ts`
 - Test: `test/http/api.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export function buildRouter(): Router;
 export function createServer(ctx: Ctx, config: Config): import("node:http").Server;
 export function startTestServer(): Promise<{ url: string; ctx: Ctx; close: () => void }>;
 ```
 
-Trasy etapu 1:
+Stage 1 routes:
 
-| Metoda i ścieżka | Działanie |
+| Method and path | Action |
 |---|---|
 | `POST /api/login` | `{handle, password}` -> cookie |
-| `POST /api/logout` | czyści cookie |
-| `GET /api/me` | aktor, jego konwersacje, liczniki |
-| `GET /api/actors` | lista aktorów |
-| `POST /api/actors` | admin tworzy aktora |
-| `GET /api/conversations` | widoczne dla aktora |
+| `POST /api/logout` | clears the cookie |
+| `GET /api/me` | actor, their conversations, counts |
+| `GET /api/actors` | actor list |
+| `POST /api/actors` | admin creates an actor |
+| `GET /api/conversations` | visible to the actor |
 | `POST /api/conversations` | `{kind, slug?, topic?, members?}` |
 | `GET /api/conversations/:id/messages` | `?after&before&limit` |
 | `POST /api/conversations/:id/messages` | `{body, threadId?, kind?}` |
@@ -1015,19 +1015,19 @@ Trasy etapu 1:
 | `POST /api/conversations/:id/members` | `{handle}` |
 | `POST /api/conversations/:id/notify` | `{notify}` |
 | `PATCH /api/messages/:id` | `{body}` |
-| `DELETE /api/messages/:id` | kasowanie miękkie |
+| `DELETE /api/messages/:id` | soft deletion |
 | `POST /api/messages/:id/reactions` | `{emoji}` |
 | `POST /api/conversations/:id/ask` | `{body}` |
 | `POST /api/questions/:id/answer` | `{body}` |
 | `GET /api/questions/open` | `?conversationId` |
-| `GET /api/unread` | liczniki |
-| `GET /api/presence` | obecność |
-| `POST /api/sessions` | rejestracja i heartbeat |
+| `GET /api/unread` | counts |
+| `GET /api/presence` | presence |
+| `POST /api/sessions` | registration and heartbeat |
 | `POST /api/sessions/:id/signal` | `{kind}` |
 | `GET /api/search` | `?q&conversationId&limit` |
 | `GET /api/health` | `{ok:true, version}` |
 
-- [ ] **Krok 1: Testy kontraktowe na żywym serwerze**
+- [ ] **Step 1: Contract tests against a live server**
 
 ```ts
 test("bez uwierzytelnienia API zwraca 401, nie 500", async () => {
@@ -1084,16 +1084,16 @@ test("blad domenowy mapuje sie na kod HTTP, nie na 500", async () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** Jeden wspólny opakowywacz: łapie `AppError` i mapuje
-na `{status, code, message}`, wszystko inne loguje i zwraca 500 z kodem `wewnetrzny`.
-`POST` mutujące z cookie wymagają nagłówka `X-AT-CSRF` zgodnego z wartością z cookie;
-żądania z bearerem są z tego wyłączone (nie ma ciasteczka, nie ma CSRF).
+- [ ] **Step 3: Implementation.** One shared wrapper: catches `AppError` and maps
+it to `{status, code, message}`, logs everything else, and returns 500 with code `internal`.
+Mutating `POST` requests using cookies require an `X-AT-CSRF` header matching the cookie value;
+bearer requests are exempt (no cookie, no CSRF).
 
-- [ ] **Krok 4: Testy przechodzą.**
+- [ ] **Step 4: Tests pass.**
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(http): REST dla konwersacji, wiadomosci, obecnosci i pytan"
@@ -1101,20 +1101,20 @@ git commit -am "feat(http): REST dla konwersacji, wiadomosci, obecnosci i pytan"
 
 ---
 
-### Zadanie 10: SSE i long-poll
+### Task 10: SSE and long-poll
 
-**Pliki:**
-- Utwórz: `src/http/sse.ts`; Modyfikuj: `src/http/routes/index.ts`
+**Files:**
+- Create: `src/http/sse.ts`; Modify: `src/http/routes/index.ts`
 - Test: `test/http/sse.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export function sseHandler(req: Req, res: Res, rc: RouteCtx): void;   // GET /api/events
 export function longPollHandler(req: Req, res: Res, rc: RouteCtx): Promise<void>;
-//   GET /api/messages?after=<id>&wait=<sek, max 300>
+//   GET /api/messages?after=<id>&wait=<seconds, max 300>
 ```
 
-- [ ] **Krok 1: Testy**
+- [ ] **Step 1: Tests**
 
 ```ts
 test("SSE dostarcza wiadomosc do czlonka konwersacji", async () => {
@@ -1174,17 +1174,17 @@ test("zerwany klient SSE zwalnia subskrypcje", async () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** Nagłówki `text/event-stream`, `no-cache`,
-`X-Accel-Buffering: no`. Komentarz `:ping` co 20 s podtrzymuje połączenie przez proxy.
-`Last-Event-ID` przy wznowieniu dosyła zaległe przez `inboxAfter`. Odsubskrybowanie
-w `res.on("close")`. Long-poll rejestruje jednorazowego subskrybenta z timerem,
-oba wyjścia sprzątają timer i subskrypcję.
+- [ ] **Step 3: Implementation.** Headers `text/event-stream`, `no-cache`,
+`X-Accel-Buffering: no`. A `:ping` comment every 20 s keeps the connection alive through the proxy.
+`Last-Event-ID` on resume sends missed messages through `inboxAfter`. Unsubscribe
+in `res.on("close")`. Long-poll registers a one-shot subscriber with a timer;
+both exit paths clean up the timer and subscription.
 
-- [ ] **Krok 4: Testy przechodzą.**
+- [ ] **Step 4: Tests pass.**
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(http): SSE i long-poll zamiast pollowania calej historii"
@@ -1192,28 +1192,28 @@ git commit -am "feat(http): SSE i long-poll zamiast pollowania calej historii"
 
 ---
 
-### Zadanie 11: Konfiguracja i CLI `agenttalks`
+### Task 11: Configuration and CLI `agenttalks`
 
-**Pliki:**
-- Utwórz: `src/config.ts`, `src/cli/main.ts`, `bin/agenttalks.js`
+**Files:**
+- Create: `src/config.ts`, `src/cli/main.ts`, `bin/agenttalks.js`
 - Test: `test/config.test.ts`, `test/cli/init.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export type Config = { dataDir: string; host: string; port: number; secret: string;
   trustProxy: boolean; maxMessageBytes: number; maxFileBytes: number;
   sessionTtlSec: number };
 export function defaultDataDir(): string;
-export function initData(dataDir: string): Config;      // katalog, baza, sekret, config
+export function initData(dataDir: string): Config;      // directory, database, secret, config
 export function loadConfig(dataDir?: string): Config;
 export async function main(argv: string[]): Promise<number>;
 ```
 
-Komendy: `init [--data <dir>]`, `serve [--port] [--host]`, `actor create <handle>
---kind human|agent [--password]`, `token create --actor <handle> --name <nazwa>`,
-`token list --actor <handle>`, `token revoke <id>`, `import-talk <katalog>`.
+Commands: `init [--data <dir>]`, `serve [--port] [--host]`, `actor create <handle>
+--kind human|agent [--password]`, `token create --actor <handle> --name <name>`,
+`token list --actor <handle>`, `token revoke <id>`, `import-talk <directory>`.
 
-- [ ] **Krok 1: Testy**
+- [ ] **Step 1: Tests**
 
 ```ts
 test("init tworzy katalog danych, baze i sekret o dlugosci 64 znakow", () => {
@@ -1250,17 +1250,17 @@ test("serve odmawia startu na 0.0.0.0 bez jawnej zgody", async () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** `defaultDataDir`: `$AGENTTALKS_DATA`, inaczej
-`/var/lib/agenttalks` gdy zapisywalny, inaczej `~/.local/share/agenttalks`.
-`initData` jest idempotentne. Bind na adres inny niż pętla zwrotna wymaga
-`"allowPublicBind": true` w konfiguracji, z komunikatem wyjaśniającym dlaczego.
-`bin/agenttalks.js` to `#!/usr/bin/env node` z `import("../src/cli/main.ts")`.
+- [ ] **Step 3: Implementation.** `defaultDataDir`: `$AGENTTALKS_DATA`, otherwise
+`/var/lib/agenttalks` if writable, otherwise `~/.local/share/agenttalks`.
+`initData` is idempotent. Binding to a non-loopback address requires
+`"allowPublicBind": true` in configuration, with a message explaining why.
+`bin/agenttalks.js` is `#!/usr/bin/env node` with `import("../src/cli/main.ts")`.
 
-- [ ] **Krok 4: Testy przechodzą.**
+- [ ] **Step 4: Tests pass.**
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(cli): init, serve i zarzadzanie aktorami oraz tokenami"
@@ -1268,33 +1268,33 @@ git commit -am "feat(cli): init, serve i zarzadzanie aktorami oraz tokenami"
 
 ---
 
-### Zadanie 12: Importer z `~/.talk`
+### Task 12: Importer from `~/.talk`
 
-**Pliki:**
-- Utwórz: `src/importer/talk.ts`
+**Files:**
+- Create: `src/importer/talk.ts`
 - Test: `test/importer/talk.test.ts`
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export type ImportReport = { actors: number; conversations: number; messages: number;
   reads: number; reactions: number; questions: number; skipped: number };
 export function importTalkHome(ctx: Ctx, talkHome: string): ImportReport;
 ```
 
-Odwzorowanie:
-- każda unikalna `label` z `channel.jsonl` i z `presence/` to aktor;
-  `michal` staje się aktorem `human` o handle `michal`, reszta to `agent`,
-- `chan` staje się kanałem publicznym o `slug` bez `#`,
-- rekord z `to` staje się DM-em między nadawcą a adresatem (adres rozwiązywany po
-  etykiecie, potem po skróconym `sid`; nierozwiązywalny adres trafia do raportu
-  jako `skipped`, nigdy nie ginie po cichu),
-- `kind: react` staje się wierszem w `reactions`, nie wiadomością,
-- `kind: ask` i `answer` odtwarzają `questions` z powiązaniem po `id`/`ref`,
-- `read/<who>/<view>` przelicza się ze znacznika czasu na `last_read_message_id`
-  (największa wiadomość o `ts*1000 <= znacznik`),
-- oryginalne `ts` zachowane, kolejność `id` wynika z kolejności w pliku.
+Mapping:
+- each unique `label` from `channel.jsonl` and `presence/` becomes an actor;
+  `michal` becomes a `human` actor with handle `michal`; the rest become `agent`,
+- `chan` becomes a public channel with a `slug` without `#`,
+- a record with `to` becomes a DM between sender and recipient (the address is resolved by
+  label, then by shortened `sid`; an unresolvable address goes into the report
+  as `skipped`, never silently disappears),
+- `kind: react` becomes a row in `reactions`, not a message,
+- `kind: ask` and `answer` reconstruct `questions`, linked through `id`/`ref`,
+- `read/<who>/<view>` is converted from a timestamp into `last_read_message_id`
+  (the highest message satisfying `ts*1000 <= marker`),
+- original `ts` values are preserved; `id` order follows file order.
 
-- [ ] **Krok 1: Testy na atrapie katalogu**
+- [ ] **Step 1: Tests on a fixture directory**
 
 ```ts
 test("import odtwarza kanaly, aktorow i kolejnosc wiadomosci", () => {
@@ -1368,22 +1368,22 @@ test("uszkodzona linia JSON nie przerywa importu i jest policzona", () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: Implementacja.** Idempotencja przez kolumnę `messages.import_key`
-(`UNIQUE`, wartość `talk:<mid>`); powtórzony przebieg trafia w konflikt i zwiększa
-`skipped`. Cały import w jednej transakcji.
+- [ ] **Step 3: Implementation.** Idempotency through the `messages.import_key` column
+(`UNIQUE`, value `talk:<mid>`); a repeated run encounters a conflict and increments
+`skipped`. The entire import in one transaction.
 
-- [ ] **Krok 4: Testy przechodzą, potem import prawdziwych danych**
+- [ ] **Step 4: Tests pass, then import real data**
 
 ```bash
 node bin/agenttalks.js init --data /tmp/at-test
 node bin/agenttalks.js import-talk data --data /tmp/at-test
 ```
-Oczekiwane: 413 wiadomości minus reakcje i join/leave, 6 kanałów, brak `skipped`
-poza znanymi przypadkami.
+Expected: 413 messages minus reactions and join/leave, 6 channels, no `skipped`
+except known cases.
 
-- [ ] **Krok 5: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(importer): migracja historii z ~/.talk do AgentTalks"
@@ -1391,18 +1391,18 @@ git commit -am "feat(importer): migracja historii z ~/.talk do AgentTalks"
 
 ---
 
-### Zadanie 13: Weryfikacja end-to-end i dokumentacja instalacji
+### Task 13: End-to-end verification and installation documentation
 
-**Pliki:**
-- Utwórz: `test/e2e/rozmowa.test.ts`, `README.md` (przepisany), `docs/instalacja.md`
-- Modyfikuj: `package.json` (skrypt `verify`)
+**Files:**
+- Create: `test/e2e/conversation.test.ts`, `README.md` (rewritten), `docs/installation.md`
+- Modify: `package.json` (`verify` script)
 
-- [ ] **Krok 1: Test przechodzący całą drogę**
+- [ ] **Step 1: Test the entire path**
 
 ```ts
 test("dwoch agentow i czlowiek rozmawiaja przez zywy serwer", async () => {
   const s = await startTestServer();
-  // czlowiek zaklada konta i tokeny
+  // the human creates accounts and tokens
   const michal = createActor(s.ctx, { kind: "human", handle: "michal" });
   setPassword(s.ctx, michal.id, "haslo123");
   const nestor = createActor(s.ctx, { kind: "agent", handle: "nestor" });
@@ -1410,20 +1410,20 @@ test("dwoch agentow i czlowiek rozmawiaja przez zywy serwer", async () => {
   const tn = mintToken(s.ctx, nestor.id, "vps").token;
   const te = mintToken(s.ctx, eipa.id, "mac").token;
 
-  // logowanie czlowieka
+  // human login
   const login = await fetch(s.url + "/api/login", { method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ handle: "michal", password: "haslo123" }) });
   assert.equal(login.status, 200);
   const cookie = login.headers.get("set-cookie")!.split(";")[0];
 
-  // grupa trzech
+  // group of three
   const conv = await (await fetch(s.url + "/api/conversations", { method: "POST",
     headers: { cookie, "content-type": "application/json",
                "x-at-csrf": csrfFrom(cookie) },
     body: JSON.stringify({ kind: "group", members: ["nestor", "eipa"] }) })).json();
 
-  // agent slucha przez SSE, drugi pisze
+  // one agent listens through SSE, another writes
   const es = await openSse(s.url + "/api/events", te);
   await fetch(`${s.url}/api/conversations/${conv.conversation.id}/messages`, {
     method: "POST", headers: { authorization: "Bearer " + tn,
@@ -1432,7 +1432,7 @@ test("dwoch agentow i czlowiek rozmawiaja przez zywy serwer", async () => {
   const ev = await es.next(2000);
   assert.equal(ev.message.body, "@eipa przejmij deploy");
 
-  // plakietka u wzmiankowanego, u czlowieka tylko licznik
+  // badge for the mentioned actor, only a count for the human
   const unreadE = await (await fetch(s.url + "/api/unread",
     { headers: { authorization: "Bearer " + te } })).json();
   assert.equal(unreadE.rows[0].badge, 1);
@@ -1440,16 +1440,16 @@ test("dwoch agentow i czlowiek rozmawiaja przez zywy serwer", async () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom całość.** `npm test` -> wszystkie testy PASS.
+- [ ] **Step 2: Run everything.** `npm test` -> all tests PASS.
 
-- [ ] **Krok 3: Przepisz `README.md`**
+- [ ] **Step 3: Rewrite `README.md`**
 
-Sekcje: czym jest AgentTalks, instalacja w trzech komendach, pojęcia (aktor, token,
-sesja, konwersacja), stan etapów, migracja z prototypu, gdzie leżą dane, jak zgłaszać
-błędy. Zaznacz, że katalogi `cli/`, `nestor/`, `data/` to materiał źródłowy prototypu,
-nie kod produktu.
+Sections: what AgentTalks is, installation in three commands, concepts (actor, token,
+session, conversation), stage status, migration from the prototype, where data lives, how to report
+bugs. State that the `cli/`, `nestor/`, `data/` directories are prototype source material,
+not product code.
 
-- [ ] **Krok 4: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git commit -am "test(e2e): pelna droga czlowiek-agent-agent; README i instalacja"
@@ -1457,23 +1457,23 @@ git commit -am "test(e2e): pelna droga czlowiek-agent-agent; README i instalacja
 
 ---
 
-### Zadanie 14: Obraz Docker i uruchomienie w kontenerze
+### Task 14: Docker image and running in a container
 
-**Pliki:**
-- Utwórz: `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `docs/docker.md`
-- Modyfikuj: `src/config.ts` (rozpoznanie kontenera), `src/cli/main.ts` (`healthcheck`)
-- Test: `test/config.test.ts` (dopisz przypadki)
+**Files:**
+- Create: `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `docs/docker.md`
+- Modify: `src/config.ts` (container detection), `src/cli/main.ts` (`healthcheck`)
+- Test: `test/config.test.ts` (add cases)
 
-**Interfejsy - produkuje:**
+**Interfaces - produces:**
 ```ts
 export function inContainer(): boolean;    // AGENTTALKS_IN_CONTAINER === "1"
-// main(["healthcheck"]) -> 0 gdy /api/health odpowiada, 1 gdy nie
+// main(["healthcheck"]) -> 0 if /api/health responds, 1 otherwise
 ```
 
-Powód istnienia tego zadania: serwer docelowy ma Node 18 pod inną usługą, a AgentTalks
-wymaga Node 24 lub nowszego. Kontener czyni wersję Node własnością obrazu, a nie maszyny.
+Why this task exists: the target server has Node 18 for another service, while AgentTalks
+requires Node 24 or newer. A container makes the Node version belong to the image, not the machine.
 
-- [ ] **Krok 1: Testy bramki publicznego bindowania**
+- [ ] **Step 1: Tests for the public-binding gate**
 
 ```ts
 test("poza kontenerem bind na 0.0.0.0 jest zablokowany", async () => {
@@ -1494,9 +1494,9 @@ test("healthcheck zwraca 1, gdy serwer nie odpowiada", async () => {
 });
 ```
 
-- [ ] **Krok 2: Uruchom, potwierdź porażkę.**
+- [ ] **Step 2: Run and confirm failure.**
 
-- [ ] **Krok 3: `Dockerfile`**
+- [ ] **Step 3: `Dockerfile`**
 
 ```dockerfile
 FROM node:26-alpine
@@ -1516,7 +1516,7 @@ CMD ["node", "bin/agenttalks.js", "serve", "--host", "0.0.0.0", "--port", "8080"
 `.dockerignore`: `node_modules`, `.git`, `data`, `nestor`, `cli`, `docs`, `test`,
 `*.sqlite*`.
 
-- [ ] **Krok 4: `docker-compose.yml`**
+- [ ] **Step 4: `docker-compose.yml`**
 
 ```yaml
 services:
@@ -1532,7 +1532,7 @@ volumes:
   agenttalks-data:
 ```
 
-- [ ] **Krok 5: Zbuduj i sprawdź, że kontener naprawdę odpowiada**
+- [ ] **Step 5: Build and check that the container actually responds**
 
 ```bash
 docker build -t agenttalks:latest .
@@ -1542,15 +1542,15 @@ curl -fsS http://127.0.0.1:8787/api/health
 docker exec at-smoke node bin/agenttalks.js actor create smoke --kind agent
 docker stop at-smoke
 ```
-Oczekiwane: `{"ok":true,...}` i utworzony aktor. Rozmiar obrazu poniżej 250 MB
-(sprawdź `docker images agenttalks`), bo dysk na VPS-ie jest ograniczony.
+Expected: `{"ok":true,...}` and a created actor. Image size below 250 MB
+(check `docker images agenttalks`), because disk space on the VPS is limited.
 
-- [ ] **Krok 6: `docs/docker.md`**
+- [ ] **Step 6: `docs/docker.md`**
 
-Jak zbudować, jak podmienić wersję, gdzie leżą dane, jak zrobić kopię wolumenu, jak
-wpiąć za Apache jako reverse proxy, jak to współistnieje z `nestor.service`.
+How to build, replace the version, find the data, back up the volume,
+put it behind Apache as a reverse proxy, and coexist with `nestor.service`.
 
-- [ ] **Krok 7: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add Dockerfile .dockerignore docker-compose.yml docs/docker.md && \
@@ -1559,21 +1559,21 @@ git commit -m "feat(docker): obraz na node:26-alpine, wolumen danych, healthchec
 
 ---
 
-## Samoprzegląd planu
+## Plan self-review
 
-**Pokrycie specyfikacji.** Sekcja 4 modelu danych: zadania 1, 3, 4. Sekcja 5 tożsamości:
-zadania 2 i 8. Sekcja 6 doręczania, poziomy 1 i 2: zadanie 10 (poziom 3, wake, jest
-świadomie w etapie 2). Sekcja 7 MCP: etap 2. Sekcja 8 CLI `atalk`: etap 2 (etap 1 daje
-tylko `agenttalks` administracyjne). Sekcja 9 UI: etap 3. Sekcja 10 architektury:
-struktura plików. Sekcja 11.1 Docker: zadanie 14. Sekcja 11.2 instalacji lokalnej:
-zadania 11 i 13. Sekcja 12 błędów: zadania 9 i 10. Sekcja 13 testów: wszystkie zadania
+**Specification coverage.** Section 4, data model: tasks 1, 3, 4. Section 5, identity:
+tasks 2 and 8. Section 6, delivery levels 1 and 2: task 10 (level 3, wake, is
+deliberately in stage 2). Section 7, MCP: stage 2. Section 8, CLI `atalk`: stage 2 (stage 1 provides
+only administrative `agenttalks`). Section 9, UI: stage 3. Section 10, architecture:
+file structure. Section 11.1, Docker: task 14. Section 11.2, local installation:
+tasks 11 and 13. Section 12, errors: tasks 9 and 10. Section 13, tests: all tasks
 plus 13.
 
-**Luki świadome:** pliki, piny i dzierżawy mają tabele w schemacie od zadania 1, ale kod
-dostają w etapach 2 i 3. Importer w związku z tym nie wciąga pinów ani plików - to jest
-zapisane wprost w zadaniu 12 i wraca w etapie 3.
+**Deliberate gaps:** files, pins, and leases have tables in the schema from task 1, but get
+code in stages 2 and 3. The importer therefore does not import pins or files; this is
+stated explicitly in task 12 and returns in stage 3.
 
-**Spójność nazw sprawdzona:** `Ctx` wszędzie pierwszym argumentem; `postMessage`,
+**Naming consistency checked:** `Ctx` is always the first argument; `postMessage`,
 `listMessages`, `markRead`, `unreadFor`, `ensureDirect`, `assertCanPost`,
-`recipientsOf`, `inboxAfter`, `subscriberCount` używane w testach zadań 9, 10 i 13
-zgodnie z definicjami z zadań 3, 4, 5 i 10.
+`recipientsOf`, `inboxAfter`, `subscriberCount` used in the tests for tasks 9, 10, and 13
+match their definitions in tasks 3, 4, 5, and 10.

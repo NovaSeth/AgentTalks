@@ -66,7 +66,7 @@ const activeWaits = new Map<number, number>();
 
 /** How many messages talk_read returns without an explicit `limit`. The same as REST
  *  (`GET /api/conversations/:id/messages`), so that both clients say the same thing. */
-const DOMYSLNY_ODCINEK = 50;
+const DEFAULT_BATCH_SIZE = 50;
 const PROGRESS_INTERVAL_MS = 20_000;
 
 // ---- tool descriptions ----------------------------------------------------
@@ -450,16 +450,16 @@ function convName(ctx: Ctx, id: number): string {
  * `actor rename`), so a cache kept longer would show stale handles - and that is worse
  * than one query too many.
  */
-export type Nazwy = {
-  aktorzy: Map<number, string>;
-  rozmowy: Map<number, string>;
+export type NameCache = {
+  actors: Map<number, string>;
+  conversations: Map<number, string>;
   /** Renderings already cut to the budget, by message id: the grouped list reuses them, so
    *  the budget applies to what is finally returned (B-MG-11). */
-  linie: Map<number, string>;
+  lines: Map<number, string>;
 };
 
-function nowySlownik(): Nazwy {
-  return { aktorzy: new Map(), rozmowy: new Map(), linie: new Map() };
+function newNameCache(): NameCache {
+  return { actors: new Map(), conversations: new Map(), lines: new Map() };
 }
 
 // ---- untrusted text -------------------------------------------------------
@@ -473,30 +473,30 @@ function untrusted(result: string): string {
   return `${QUOTE_NOTE}\n${result}`;
 }
 
-function nazwaAktora(ctx: Ctx, id: number, nazwy?: Nazwy): string {
-  const z = nazwy?.aktorzy.get(id);
+function actorName(ctx: Ctx, id: number, names?: NameCache): string {
+  const z = names?.actors.get(id);
   if (z !== undefined) return z;
   const a = ctx.db.prepare("SELECT handle, kind FROM actors WHERE id = ?").get(id) as
     { handle: string; kind: string } | undefined;
   // The author's kind visible INLINE - see the comment at fmtMsg.
-  const nazwa = a ? oneLine(a.kind === "human" ? `${a.handle}:human` : a.handle) : "?";
-  nazwy?.aktorzy.set(id, nazwa);
-  return nazwa;
+  const name = a ? oneLine(a.kind === "human" ? `${a.handle}:human` : a.handle) : "?";
+  names?.actors.set(id, name);
+  return name;
 }
 
-function nazwaRozmowy(ctx: Ctx, id: number, nazwy?: Nazwy): string {
-  const z = nazwy?.rozmowy.get(id);
+function conversationName(ctx: Ctx, id: number, names?: NameCache): string {
+  const z = names?.conversations.get(id);
   if (z !== undefined) return z;
-  const nazwa = convName(ctx, id);
-  nazwy?.rozmowy.set(id, nazwa);
-  return nazwa;
+  const name = convName(ctx, id);
+  names?.conversations.set(id, name);
+  return name;
 }
 
-function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
+function fmtMsg(ctx: Ctx, m: Message, names?: NameCache): string {
   // The author's kind visible INLINE: an agent enforcing "approval for production only from
   // a human" has to know cheaply who is writing - feedback from 332c7e42 (the row about
   // deploy approval came from it being impossible to say cheaply "is this a human").
-  const author = nazwaAktora(ctx, m.actorId, nazwy);
+  const author = actorName(ctx, m.actorId, names);
   const tags: string[] = [];
   if (m.kind === "ask") tags.push("QUESTION");
   if (m.kind === "answer") tags.push("answer");
@@ -506,7 +506,7 @@ function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
   const tag = tags.length ? ` (${tags.join(", ")})` : "";
   // The header line carries only trusted metadata; the body follows as quoted lines, so a body
   // can never open a line that looks like a header of somebody else's message.
-  return `[${m.id}] ${fmtTs(m.ts)} ${nazwaRozmowy(ctx, m.conversationId, nazwy)} <${author}>${tag}:\n` +
+  return `[${m.id}] ${fmtTs(m.ts)} ${conversationName(ctx, m.conversationId, names)} <${author}>${tag}:\n` +
     quote(m.body);
 }
 
@@ -524,10 +524,10 @@ function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
  */
 /** "c:1" -> "#general", "w:slug" -> "wiki:slug". A place given as a code is for a
  *  machine; the agent reads this text, so it gets the name. */
-function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
-  if (gdzie.startsWith("c:")) return convName(ctx, Number(gdzie.slice(2)));
-  if (gdzie.startsWith("w:")) return oneLine(`wiki:${gdzie.slice(2)}`);
-  return oneLine(gdzie);
+function readableLocation(ctx: Ctx, location: string): string {
+  if (location.startsWith("c:")) return convName(ctx, Number(location.slice(2)));
+  if (location.startsWith("w:")) return oneLine(`wiki:${location.slice(2)}`);
+  return oneLine(location);
 }
 
 /**
@@ -546,81 +546,81 @@ function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
  * characters against a response counted in tens of thousands) and carries EXACTLY what can
  * be compared by eye with the list the agent sees on its side.
  */
-function stopkaSchematu(nazwa: string): string {
-  const t = TOOLS.find((x) => x.name === nazwa);
-  const pola = Object.keys(
+function schemaFooter(name: string): string {
+  const t = TOOLS.find((x) => x.name === name);
+  const fields = Object.keys(
     (t?.inputSchema as { properties?: Record<string, unknown> })?.properties ?? {},
   );
-  return `\n[schema] ${nazwa}: ${pola.join(", ")}` +
+  return `\n[schema] ${name}: ${fields.join(", ")}` +
     ` - different fields mean a frozen tool list (restart the MCP session).`;
 }
 
-function pogrupujPoRozmowach(
+function groupByConversation(
   ctx: Ctx,
   actorId: number,
   messages: Message[],
   /** The same dictionary the budget used - otherwise this list formats itself a second
    *  time from scratch and half the saving disappears. */
-  nazwy: Nazwy = nowySlownik(),
+  names: NameCache = newNameCache(),
 ): string {
   if (messages.length === 0) return "";
-  const wzmianki = new Set<number>();
+  const mentions = new Set<number>();
   if (messages.length > 0) {
-    const znaki = messages.map(() => "?").join(",");
+    const placeholders = messages.map(() => "?").join(",");
     const rows = ctx.db
       .prepare(
         `SELECT message_id FROM mentions
-          WHERE actor_id = ? AND message_id IN (${znaki})`,
+          WHERE actor_id = ? AND message_id IN (${placeholders})`,
       )
       .all(actorId, ...messages.map((m) => m.id)) as Array<{ message_id: number }>;
-    for (const r of rows) wzmianki.add(r.message_id);
+    for (const r of rows) mentions.add(r.message_id);
   }
 
-  type Blok = { conv: number; msgs: Message[]; doMnie: number; osobista: boolean };
-  const bloki = new Map<number, Blok>();
+  type ConversationBlock = { conv: number; msgs: Message[]; forMe: number; personal: boolean };
+  const blocks = new Map<number, ConversationBlock>();
   for (const m of messages) {
-    let b = bloki.get(m.conversationId);
+    let b = blocks.get(m.conversationId);
     if (!b) {
       const conv = getConversation(ctx, m.conversationId);
       b = {
         conv: m.conversationId,
         msgs: [],
-        doMnie: 0,
-        osobista: conv?.kind === "dm" || conv?.kind === "group",
+        forMe: 0,
+        personal: conv?.kind === "dm" || conv?.kind === "group",
       };
-      bloki.set(m.conversationId, b);
+      blocks.set(m.conversationId, b);
     }
     b.msgs.push(m);
-    if (b.osobista || wzmianki.has(m.id)) b.doMnie++;
+    if (b.personal || mentions.has(m.id)) b.forMe++;
   }
 
-  const kolejnosc = [...bloki.values()].sort((a, b) => {
-    const wagaA = a.osobista ? 2 : a.doMnie > 0 ? 1 : 0;
-    const wagaB = b.osobista ? 2 : b.doMnie > 0 ? 1 : 0;
-    if (wagaA !== wagaB) return wagaB - wagaA;
+  const ordered = [...blocks.values()].sort((a, b) => {
+    const weightA = a.personal ? 2 : a.forMe > 0 ? 1 : 0;
+    const weightB = b.personal ? 2 : b.forMe > 0 ? 1 : 0;
+    if (weightA !== weightB) return weightB - weightA;
     // A tie is broken by the newest message: a fresher conversation goes higher.
     return b.msgs[b.msgs.length - 1].id - a.msgs[a.msgs.length - 1].id;
   });
 
-  const out: string[] = [`${messages.length} new messages in ${kolejnosc.length} conversations:`];
-  for (const b of kolejnosc) {
-    const czeka = b.doMnie > 0 ? `, ${b.doMnie} for you` : "";
-    const nazwaBloku = nazwaRozmowy(ctx, b.conv, nazwy);
-    out.push("", `=== ${nazwaBloku} (${b.msgs.length} new${czeka}) ===`);
+  const out: string[] = [`${messages.length} new messages in ${ordered.length} conversations:`];
+  for (const b of ordered) {
+    const waiting = b.forMe > 0 ? `, ${b.forMe} for you` : "";
+    const blockName = conversationName(ctx, b.conv, names);
+    out.push("", `=== ${blockName} (${b.msgs.length} new${waiting}) ===`);
     // The conversation name is already in the block header - repeating it on every line
     // costs context and adds nothing.
     for (const m of b.msgs) {
       // The marker for "mentions you" is "* ", not "> ": the quote prefix is reserved for
       // text written by other actors.
-      out.push((wzmianki.has(m.id) ? "* " : "  ") +
-        (nazwy.linie.get(m.id) ?? fmtMsg(ctx, m, nazwy)).replace(` ${nazwaBloku} `, " "));
+      out.push((mentions.has(m.id) ? "* " : "  ") +
+        (names.lines.get(m.id) ?? fmtMsg(ctx, m, names)).replace(` ${blockName} `, " "));
     }
   }
   return out.join("\n");
 }
 
 function renderStatus(ctx: Ctx, actor: Actor): string {
-  const nazwy = nowySlownik();
+  const names = newNameCache();
   const out: string[] = [`You are @${actor.handle}.`];
   const rows = presenceFor(ctx, actor.id);
   out.push("", "=== WHO IS HERE ===");
@@ -641,7 +641,7 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   const open = openQuestions(ctx, { actorId: actor.id });
   out.push("", "=== OPEN QUESTIONS ===");
   if (open.length === 0) out.push("  (none)");
-  for (const q of open) out.push(`  [q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
+  for (const q of open) out.push(`  [q${q.id}] ${fmtMsg(ctx, q.message, names)}`);
   // The window we REALLY read from (below we show only the last 8 of it).
   // The cursor for talk_read MUST point at the start of THAT window, not at the global
   // MAX(id) - otherwise an agent that saw only 8 of, say, 40 unread messages gets a cursor
@@ -653,7 +653,7 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   const last = inboxAfter(ctx, actor.id, windowStart).slice(-8);
   out.push("", "=== RECENT MESSAGES FOR YOU ===");
   if (last.length === 0) out.push("  (nothing new)");
-  for (const m of last) out.push(`  ${fmtMsg(ctx, m, nazwy)}`);
+  for (const m of last) out.push(`  ${fmtMsg(ctx, m, names)}`);
   const wn = wikiPageCount(ctx);
   if (wn > 0) {
     out.push("", `=== WIKI ===`, `  ${wn} knowledge pages; before asking, check wiki_search`);
@@ -672,14 +672,14 @@ function renderStatus(ctx: Ctx, actor: Actor): string {
   // alongside, it gives the agent something to compare with what it sees on its side - and
   // in the call it makes first anyway. The list is generated from TOOLS, so it cannot go
   // stale.
-  const wLoopie = ["talk_read", "talk_send", "wiki_read"];
+  const loopTools = ["talk_read", "talk_send", "wiki_read"];
   out.push("", "=== TOOLS ACCORDING TO THE SERVER ===");
-  for (const nazwa of wLoopie) {
-    const t = TOOLS.find((x) => x.name === nazwa);
-    const pola = Object.keys(
+  for (const name of loopTools) {
+    const t = TOOLS.find((x) => x.name === name);
+    const fields = Object.keys(
       (t?.inputSchema as { properties?: Record<string, unknown> })?.properties ?? {},
     );
-    out.push(`  ${nazwa}: ${pola.join(", ") || "(no parameters)"}`);
+    out.push(`  ${name}: ${fields.join(", ") || "(no parameters)"}`);
   }
   out.push(
     "  If your client shows DIFFERENT fields, it has a frozen schema from session startup.",
@@ -709,48 +709,48 @@ const text = (t: string): ToolResult => ({ content: [{ type: "text", text: t }] 
  * 40,000 characters is roughly 10k tokens - it fits within the limit of every client I
  * know of and leaves room for the rest of the context.
  */
-const BUDZET_ZNAKOW = 40_000;
+const CHARACTER_BUDGET = 40_000;
 
 /**
  * Cuts a list to the budget AT AN ITEM BOUNDARY and says how much was left.
  *
- * `od: "konca"` for history (talk_log): when not everything fits, the NEWEST entries are
- * the valuable ones. For a cursor read ("poczatku") the opposite - we keep the oldest,
+ * `from: "end"` for history (talk_log): when not everything fits, the NEWEST entries are
+ * the valuable ones. For a cursor read ("start") the opposite - we keep the oldest,
  * because the cursor moves forward and the rest arrives on the next call.
  *
  * An item longer than the whole budget is truncated but does NOT disappear: an empty
  * result carrying only a note about truncation is worse than truncated content with a
  * pointer to where the whole thing is.
  */
-function wBudzecie<T>(
+function withinBudget<T>(
   items: T[],
   fmt: (x: T) => string,
-  od: "poczatku" | "konca" = "poczatku",
-): { linie: string[]; pokazane: T[]; pominiete: number; uciete: number } {
-  const kolejnosc = od === "konca" ? [...items].reverse() : items;
-  const linie: string[] = [];
-  const pokazane: T[] = [];
-  let uzyte = 0;
+  from: "start" | "end" = "start",
+): { lines: string[]; shown: T[]; omitted: number; truncated: number } {
+  const ordered = from === "end" ? [...items].reverse() : items;
+  const lines: string[] = [];
+  const shown: T[] = [];
+  let used = 0;
   /** Characters cut INSIDE items (an item longer than the whole budget). */
-  let uciete = 0;
-  for (const it of kolejnosc) {
+  let truncated = 0;
+  for (const it of ordered) {
     let l = fmt(it);
-    let tniete = 0;
-    if (l.length > BUDZET_ZNAKOW) {
-      tniete = l.length - BUDZET_ZNAKOW;
-      l = l.slice(0, BUDZET_ZNAKOW) + `\n[...content truncated: ${tniete} characters - read the full content through REST]`;
+    let cutChars = 0;
+    if (l.length > CHARACTER_BUDGET) {
+      cutChars = l.length - CHARACTER_BUDGET;
+      l = l.slice(0, CHARACTER_BUDGET) + `\n[...content truncated: ${cutChars} characters - read the full content through REST]`;
     }
-    if (pokazane.length > 0 && uzyte + l.length > BUDZET_ZNAKOW) break;
-    linie.push(l);
-    pokazane.push(it);
-    uciete += tniete;
-    uzyte += l.length + 1;
+    if (shown.length > 0 && used + l.length > CHARACTER_BUDGET) break;
+    lines.push(l);
+    shown.push(it);
+    truncated += cutChars;
+    used += l.length + 1;
   }
-  if (od === "konca") {
-    linie.reverse();
-    pokazane.reverse();
+  if (from === "end") {
+    lines.reverse();
+    shown.reverse();
   }
-  return { linie, pokazane, pominiete: items.length - pokazane.length, uciete };
+  return { lines, shown, omitted: items.length - shown.length, truncated };
 }
 
 /**
@@ -766,26 +766,26 @@ function wBudzecie<T>(
  * [163], deliberately narrowed). We only take away the silence: the result is the same,
  * and a sentence arrives saying what was lost.
  */
-function dopiszNieznanePola(
+function appendUnknownFields(
   name: string,
   args: Record<string, unknown>,
-  wynik: ToolResult,
+  result: ToolResult,
 ): ToolResult {
   const def = TOOLS.find((t) => t.name === name);
-  const znane = new Set(Object.keys(
+  const known = new Set(Object.keys(
     (def?.inputSchema as { properties?: Record<string, unknown> })?.properties ?? {},
   ));
-  const nieznane = Object.keys(args).filter((k) => !znane.has(k));
-  if (nieznane.length === 0 || wynik.isError) return wynik;
-  const ostatnia = wynik.content[wynik.content.length - 1];
-  if (!ostatnia || ostatnia.type !== "text") return wynik;
+  const unknown = Object.keys(args).filter((k) => !known.has(k));
+  if (unknown.length === 0 || result.isError) return result;
+  const lastPart = result.content[result.content.length - 1];
+  if (!lastPart || lastPart.type !== "text") return result;
   return {
-    ...wynik,
+    ...result,
     content: [
-      ...wynik.content.slice(0, -1),
+      ...result.content.slice(0, -1),
       {
         type: "text",
-        text: `${ostatnia.text}\n\n[warning] ${name} does not recognize fields: ${nieznane.join(", ")}. ` +
+        text: `${lastPart.text}\n\n[warning] ${name} does not recognize fields: ${unknown.join(", ")}. ` +
           `IGNORED - the result above does not account for them. If you expected ` +
           `different behavior, check the names in tools/list; if your client has an old schema, ` +
           `restart the session.`,
@@ -875,16 +875,16 @@ async function callTool(
           })
           .join("\n");
       }
-      const nieznane = unresolvedMentions(ctx, message.body);
-      const mentionNote = nieznane.length
-        ? `\nMentions that did not resolve (no such actor, nobody was notified): ${nieznane.map((h) => "@" + h).join(", ")}`
+      const unknown = unresolvedMentions(ctx, message.body);
+      const mentionNote = unknown.length
+        ? `\nMentions that did not resolve (no such actor, nobody was notified): ${unknown.map((h) => "@" + h).join(", ")}`
         : "";
       return text(`sent [${message.id}] to ${convName(ctx, conv.id)}${deliveryNote}${mentionNote}`);
     }
 
     case "talk_read": {
       const after = num(args.afterId) ?? 0;
-      const limit = Math.min(Math.max(num(args.limit) ?? DOMYSLNY_ODCINEK, 1), 200);
+      const limit = Math.min(Math.max(num(args.limit) ?? DEFAULT_BATCH_SIZE, 1), 200);
       const waitSec = Math.min(Math.max(num(args.waitSec) ?? 0, 0), WAIT_MAX_SEC);
       let messages = inboxAfter(ctx, actor.id, after, limit);
       if (messages.length === 0 && waitSec > 0) {
@@ -911,33 +911,33 @@ async function callTool(
         }
       }
       if (messages.length === 0) {
-        return text(`No new messages. Cursor: afterId=${after}${stopkaSchematu("talk_read")}`);
+        return text(`No new messages. Cursor: afterId=${after}${schemaFooter("talk_read")}`);
       }
       // The cursor points at the last message SHOWN, not at the last one fetched - otherwise
       // truncation by budget would skip messages irreversibly (the same bug audit #1 caught
       // with the global MAX(id)). We compute the budget BEFORE grouping, chronologically, so
       // that the cursor keeps meaning "you have seen everything up to this id".
       // The cursor only advances past messages actually shown.
-      const nazwy = nowySlownik();
-      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy));
+      const names = newNameCache();
+      const window = withinBudget(messages, (m) => fmtMsg(ctx, m, names));
       // The grouped list below must print THESE (already budgeted) renderings, not format the
       // original messages a second time (B-MG-11).
-      okno.pokazane.forEach((m, i) => nazwy.linie.set(m.id, okno.linie[i]));
-      const cursor = okno.pokazane[okno.pokazane.length - 1].id;
-      const zostalo = okno.pominiete > 0 || messages.length === limit;
+      window.shown.forEach((m, i) => names.lines.set(m.id, window.lines[i]));
+      const cursor = window.shown[window.shown.length - 1].id;
+      const remaining = window.omitted > 0 || messages.length === limit;
       // Who is writing RIGHT NOW. This is the moment an agent decides it will answer - and the
       // only one in which this information changes anything. Until now you had to ask separately
       // for the list of people present, and know that it was worth it (@michal's request,
       // #general [226]).
-      const pisza = whoIsTyping(ctx, actor.id);
-      const ktoPisze = pisza.length === 0 ? "" :
-        `\nTyping now: ${pisza.map((p) => `@${oneLine(p.handle)}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
+      const typing = whoIsTyping(ctx, actor.id);
+      const typingNote = typing.length === 0 ? "" :
+        `\nTyping now: ${typing.map((p) => `@${oneLine(p.handle)}${p.in ? ` (${readableLocation(ctx, p.in)})` : ""}`)
           .join(", ")} - consider whether your reply is still needed.`;
       return text(untrusted(
-        pogrupujPoRozmowach(ctx, actor.id, okno.pokazane, nazwy) +
+        groupByConversation(ctx, actor.id, window.shown, names) +
           `\n\nCursor: afterId=${cursor}` +
-          (zostalo ? `\nMore messages remain - repeat talk_read with afterId=${cursor}.` : "") +
-          ktoPisze + stopkaSchematu("talk_read"),
+          (remaining ? `\nMore messages remain - repeat talk_read with afterId=${cursor}.` : "") +
+          typingNote + schemaFooter("talk_read"),
       ));
     }
 
@@ -957,14 +957,14 @@ async function callTool(
       if (messages.length === 0) return text(`No messages in ${convName(ctx, conv.id)}.`);
       // "from the end": this is history, so when not everything fits, the newest entries are
       // the more valuable ones. Fetching older ones already has a cursor - beforeId.
-      const nazwy = nowySlownik();
-      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy), "konca");
-      const glowa = okno.pokazane[0];
+      const names = newNameCache();
+      const window = withinBudget(messages, (m) => fmtMsg(ctx, m, names), "end");
+      const head = window.shown[0];
       return text(untrusted(
-        okno.linie.join("\n") +
-          (okno.pominiete > 0
-            ? `\n\n(${okno.pominiete} older messages omitted to fit the limit - ` +
-              `read more: talk_log {conversation, beforeId: ${glowa.id}})`
+        window.lines.join("\n") +
+          (window.omitted > 0
+            ? `\n\n(${window.omitted} older messages omitted to fit the limit - ` +
+              `read more: talk_log {conversation, beforeId: ${head.id}})`
             : ""),
       ));
     }
@@ -1030,11 +1030,11 @@ async function callTool(
       const conv = ref ? resolveConversation(ctx, actor, ref) : null;
       const items = openQuestions(ctx, { actorId: actor.id, conversationId: conv?.id });
       if (items.length === 0) return text("No open questions.");
-      const nazwy = nowySlownik();
-      const okno = wBudzecie(items, (q) => `[q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
+      const names = newNameCache();
+      const window = withinBudget(items, (q) => `[q${q.id}] ${fmtMsg(ctx, q.message, names)}`);
       return text(untrusted(
-        okno.linie.join("\n") +
-          (okno.pominiete > 0 ? `\n\n(${okno.pominiete} more questions omitted)` : ""),
+        window.lines.join("\n") +
+          (window.omitted > 0 ? `\n\n(${window.omitted} more questions omitted)` : ""),
       ));
     }
 
@@ -1056,12 +1056,12 @@ async function callTool(
         limit: num(args.limit),
       });
       if (hits.length === 0) return text("No matches.");
-      const nazwy = nowySlownik();
-      const okno = wBudzecie(hits, (m) => fmtMsg(ctx, m, nazwy));
+      const names = newNameCache();
+      const window = withinBudget(hits, (m) => fmtMsg(ctx, m, names));
       return text(untrusted(
-        okno.linie.join("\n") +
-          (okno.pominiete > 0
-            ? `\n\n(${okno.pominiete} more matches omitted - narrow the query ` +
+        window.lines.join("\n") +
+          (window.omitted > 0
+            ? `\n\n(${window.omitted} more matches omitted - narrow the query ` +
               `or provide limit/sinceTs)`
             : ""),
       ));
@@ -1079,11 +1079,11 @@ async function callTool(
       // private channel, because conversation -1 never exists.
       assertCanRead(ctx, first ? first.conversation_id : -1, actor.id);
       const messages = listThread(ctx, first!.thread_id ?? root);
-      const nazwy = nowySlownik();
-      const okno = wBudzecie(messages, (m) => fmtMsg(ctx, m, nazwy), "konca");
+      const names = newNameCache();
+      const window = withinBudget(messages, (m) => fmtMsg(ctx, m, names), "end");
       return text(untrusted(
-        okno.linie.join("\n") +
-          (okno.pominiete > 0 ? `\n\n(${okno.pominiete} earlier messages in the thread omitted)` : ""),
+        window.lines.join("\n") +
+          (window.omitted > 0 ? `\n\n(${window.omitted} earlier messages in the thread omitted)` : ""),
       ));
     }
 
@@ -1105,7 +1105,7 @@ async function callTool(
     case "talk_digest": {
       const d = digestFor(ctx, actor.id);
       if (!d) return text("Nothing new since your last activity.");
-      const nazwy = nowySlownik();
+      const names = newNameCache();
       const out = [
         `While you were away: ${d.count} messages`,
         "  who:    " + d.byWho.map(([k, v]) => `${oneLine(k)} x${v}`).join(", "),
@@ -1113,11 +1113,11 @@ async function callTool(
       ];
       if (d.mentions.length) {
         out.push(`  FOR YOU (${d.mentions.length}):`);
-        for (const m of d.mentions.slice(-3)) out.push("    " + fmtMsg(ctx, m, nazwy));
+        for (const m of d.mentions.slice(-3)) out.push("    " + fmtMsg(ctx, m, names));
       }
       if (d.open.length) {
         out.push(`  OPEN QUESTIONS (${d.open.length}):`);
-        for (const q of d.open) out.push(`    [q${q.id}] ${fmtMsg(ctx, q.message, nazwy)}`);
+        for (const q of d.open) out.push(`    [q${q.id}] ${fmtMsg(ctx, q.message, names)}`);
       }
       return text(untrusted(out.join("\n")));
     }
@@ -1125,12 +1125,12 @@ async function callTool(
     case "talk_mentions": {
       const ms = mentionsOf(ctx, actor.id, { afterId: num(args.afterId) });
       if (ms.length === 0) return text("No mentions.");
-      const nazwy = nowySlownik();
-      const okno = wBudzecie(ms, (m) => fmtMsg(ctx, m, nazwy), "konca");
+      const names = newNameCache();
+      const window = withinBudget(ms, (m) => fmtMsg(ctx, m, names), "end");
       return text(untrusted(
-        okno.linie.join("\n") +
-          (okno.pominiete > 0
-            ? `\n\n(${okno.pominiete} older mentions omitted - provide afterId ` +
+        window.lines.join("\n") +
+          (window.omitted > 0
+            ? `\n\n(${window.omitted} older mentions omitted - provide afterId ` +
               `to read them from the start)`
             : ""),
       ));
@@ -1214,8 +1214,8 @@ async function callTool(
       // window in full. With a wiki counted in hundreds of thousands of characters that is the
       // difference between "deployable" and "does not fit" (@milosz's question, #general [185]).
       if (args.outline === true) {
-        const spis = pageOutline(page.body);
-        if (spis.length === 0) {
+        const outline = pageOutline(page.body);
+        if (outline.length === 0) {
           return text(
             `# ${oneLine(page.title)} (${page.slug}) - ${page.body.length} characters, no headings.\n` +
               `Full content: wiki_read {slug: "${page.slug}"}`,
@@ -1224,27 +1224,27 @@ async function callTool(
         return text(
           QUOTE_NOTE + "\n" +
           `# ${oneLine(page.title)}  (${page.slug})  ${page.body.length} characters, revision ${page.lastRevisionId}\n` +
-            spis.map((x) => `${"  ".repeat(x.level - 1)}[${x.bytes} chars] ${oneLine(x.heading)}`).join("\n") +
+            outline.map((x) => `${"  ".repeat(x.level - 1)}[${x.bytes} chars] ${oneLine(x.heading)}`).join("\n") +
             `\n\nSection: wiki_read {slug: "${page.slug}", section: "<heading>"}` +
             `\nWHOLE PAGE (required to unlock writing): wiki_read {slug: "${page.slug}"}`,
         );
       }
 
-      const sekcja = strv(args.section);
-      if (sekcja) {
-        const tresc = pageSection(page.body, sekcja);
-        if (tresc === null) {
+      const section = strv(args.section);
+      if (section) {
+        const body = pageSection(page.body, section);
+        if (body === null) {
           throw notFound(
             "section_not_found",
-            `page "${page.slug}" has no section "${sekcja}". List headings: ` +
+            `page "${page.slug}" has no section "${section}". List headings: ` +
               `wiki_read {slug: "${page.slug}", outline: true}`,
           );
         }
         // We do NOT set the read marker - the same rule as for a truncated page: somebody who saw
         // a fragment would overwrite the rest without knowing it.
         return text(
-          `${QUOTE_NOTE}\n# ${oneLine(page.title)} (${page.slug}), section "${oneLine(sekcja)}", revision ${page.lastRevisionId}\n` +
-            `[this is NOT the whole page - read the full page before writing]\n${quote(tresc)}`,
+          `${QUOTE_NOTE}\n# ${oneLine(page.title)} (${page.slug}), section "${oneLine(section)}", revision ${page.lastRevisionId}\n` +
+            `[this is NOT the whole page - read the full page before writing]\n${quote(body)}`,
         );
       }
 
@@ -1252,26 +1252,26 @@ async function callTool(
       // so this is the second place after talk_read where one call can exceed a client's output
       // limit. We cut by LINES, because a page is a document: a missing paragraph reads better
       // than a truncated sentence.
-      const linie = page.body.split(LINE_BREAKS);
+      const lines = page.body.split(LINE_BREAKS);
       // Budget the QUOTED text: the "> " prefix adds 2 characters per line (R1-F1).
-      const okno = wBudzecie(linie, (l) => "> " + l);
+      const window = withinBudget(lines, (l) => "> " + l);
       // The read marker ONLY for a whole page. A read unlocks a write, and a write replaces the
       // WHOLE content - an agent that saw 3/4 of a page and sent back "what I read plus my
       // paragraph" would delete the rest and never find out. Better not to let it into the write
       // and to say how to read the whole thing.
       // A single line longer than the budget is cut INSIDE the line and does not count as
       // "omitted" - so the characters cut inside lines count too (B-MG-10).
-      const kompletna = okno.pominiete === 0 && okno.uciete === 0;
-      if (kompletna) markPageSeen(ctx, page.slug, actor.id);
-      const naglowek =
+      const complete = window.omitted === 0 && window.truncated === 0;
+      if (complete) markPageSeen(ctx, page.slug, actor.id);
+      const header =
         `${QUOTE_NOTE}\n# ${oneLine(page.title)}  (${page.slug})\n` +
         `last changed by: @${page.updatedBy ?? "?"}, revisions: ${page.revisions}` +
         `, current revision: ${page.lastRevisionId} (pass this as baseRevision when saving)\n\n`;
       return text(
-        naglowek + okno.linie.join("\n") +
-          (!kompletna
-            ? `\n\n[...truncated: ${okno.pominiete} of ${linie.length} lines did not fit ` +
-              `within the tool output limit${okno.uciete > 0 ? `, and ${okno.uciete} characters were cut within long lines` : ""}. ` +
+        header + window.lines.join("\n") +
+          (!complete
+            ? `\n\n[...truncated: ${window.omitted} of ${lines.length} lines did not fit ` +
+              `within the tool output limit${window.truncated > 0 ? `, and ${window.truncated} characters were cut within long lines` : ""}. ` +
               `This read does NOT unlock writing. DO NOT save this page based on what you see: ` +
               `you would overwrite the missing content. Read more: wiki_read {slug: "${page.slug}", outline: true}, then ` +
               `section, or read the whole page through REST: GET /api/wiki/${page.slug} (that read unlocks writing).]`
@@ -1287,10 +1287,10 @@ async function callTool(
         const fresh = p.unseen > 0 ? `  [${p.unseen} changes since your last visit]` : "";
         // A sentence and a SIZE next to every entry: that is the whole difference between
         // "choosing a page" and "fetching forty pages in order to choose".
-        const opis = p.summary ? `\n${quote(p.summary)}` : "";
-        const koszt = p.bytes ? `  ${p.bytes} chars` : "";
-        const czytane = p.readers ? `  (readers: ${p.readers})` : "  (no readers yet)";
-        return `[${oneLine(p.slug)}] ${oneLine(p.title)}${koszt}${czytane}${where}  (changed by: @${p.updatedBy ?? "?"})${fresh}${opis}`;
+        const description = p.summary ? `\n${quote(p.summary)}` : "";
+        const sizeNote = p.bytes ? `  ${p.bytes} chars` : "";
+        const readerNote = p.readers ? `  (readers: ${p.readers})` : "  (no readers yet)";
+        return `[${oneLine(p.slug)}] ${oneLine(p.title)}${sizeNote}${readerNote}${where}  (changed by: @${p.updatedBy ?? "?"})${fresh}${description}`;
       }).join("\n")));
     }
 
@@ -1447,13 +1447,13 @@ function buildServer(ctx: Ctx, config: Config, actor: Actor, stillValid?: () => 
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
     try {
-      const wynik = await callTool(ctx, config, actor, name, (args ?? {}) as Record<string, unknown>, {
+      const result = await callTool(ctx, config, actor, name, (args ?? {}) as Record<string, unknown>, {
         progressToken: request.params._meta?.progressToken,
         sendNotification: extra?.sendNotification as ((n: unknown) => Promise<void>) | undefined,
         signal: extra?.signal,
         stillValid,
       });
-      return dopiszNieznanePola(name, (args ?? {}) as Record<string, unknown>, wynik);
+      return appendUnknownFields(name, (args ?? {}) as Record<string, unknown>, result);
     } catch (err) {
       // A domain error comes back as a tool result (isError), not as a protocol error: the agent
       // is meant to read it and fix the call, not to see a broken session.

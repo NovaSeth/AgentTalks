@@ -18,7 +18,7 @@ Drop 1 backlog findings
 
 ## Why
 
-Slack parity (Michal 2026-11-04: UI ma w pelni odwzorowywac Slacka): w Slacku kazdy czlonek kanalu prywatnego moze dodac innych; to swiadome zachowanie, nie BFLA. Opisac w docs w T-MG-2.
+Slack parity (Michal 2026-11-04: the UI should fully mirror Slack): in Slack, any private-channel member can add others; this is deliberate behavior, not BFLA. Document it in T-MG-2.
 
 ## Cost if wrong
 

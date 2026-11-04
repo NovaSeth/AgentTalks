@@ -1,4 +1,4 @@
-# Area gate: weryfikacja calego projektu AgentTalks (calosc od 877e20e do HEAD) (T-MG-1)
+# Area gate: whole-project verification of AgentTalks (everything from 877e20e to HEAD) (T-MG-1)
 <!-- Task brief (ORC-4), hand-written by the orchestrator for a gate task. Every path is absolute (ORC-15). -->
 
 Executor: landfall:implementer for the fix round only (class: critical - risk globs bin/**, .github/workflows/**, **/SKILL.md; flags migration, public-api, security, data-write; 25139 LOC; kind: gate). The review round comes first; the implementer gets a separate findings file (REV-5) that names its exact scope.
@@ -9,7 +9,7 @@ Budget: review 30 minutes per slice; fix round 45 minutes.
 Shared brief: /Users/michal/Documents/Code/AgentTalks/.landfall/tasks/T-MG-1/spec.md (spec + plan: Global Constraints GC1-GC8, Review Focus RF1-RF5, slice table).
 Rules: ORC-2 ORC-17 ORC-18 ORC-12 ORC-13 COD-1 COD-2 COD-3 COD-14 REV-10 REV-9 REV-18 ORC-7 PRI-2 PRI-15 PRI-6 SPC-1 SPC-3 SPC-13 SPC-14 REV-12 REV-13; read them with `landfall rule <ID…>`.
 
-## Problem (Michal, 2026-11-04, request in the session: "landfall init + odpal caly pipeline Landfall aby zweryfikowac caly ten projekt")
+## Problem (Michal, 2026-11-04, request in the session: "landfall init + run the entire Landfall pipeline to verify this whole project")
 The project has never passed a Landfall gate. Last full audit was 2026-08-09 (/Users/michal/Documents/Code/AgentTalks/docs/audyt-2026-08-09.md, 116 confirmed findings, reported fixed); commits continued until 2026-09-01 (HEAD 945674f). The gate must establish, with evidence, whether the code at HEAD is correct and safe, and fix what blocks.
 Baseline measured 2026-11-04 in the worktree (Node v26.0.0): `npm run typecheck` exit 0; `npm test` 322 pass, 0 fail, 0 skipped.
 
@@ -28,12 +28,12 @@ Consumes: the HTTP API (src/http/routes/**), the MCP tools (src/mcp/server.ts), 
 6. Authentication and sessions: password hashing, cookie flags (Secure/HttpOnly/SameSite), CSRF for cookie-authenticated writes, rate limits, WebAuthn verification (challenge, origin, rpId, signature counter), invite and token minting rules, bootstrap (first admin only from the console).
 7. Authorization: every admin route requires a human admin; every write checks the actor's right on the target (owner/admin/member); identity never comes from the client's declaration (GC3).
 8. Deploy and supply chain: Dockerfile (non-root user, no secrets baked in), docker-compose, deploy scripts (no secret on a command line, safe quoting), CI workflow (pinned actions, permissions), npm dependencies.
-9. Tests are real controls: a test named as a guard can fail when the guarded behavior breaks ("czy ta kontrola potrafi odpowiedziec INACZEJ?"); a blind check is a minor finding unless it hides a real defect.
+9. Tests are real controls: a test named as a guard can fail when the guarded behavior breaks ("can this control answer DIFFERENTLY?"); a blind check is a minor finding unless it hides a real defect.
 10. Docs match code: README.md, AgentTalks.md, SECURITY.md, docs/docker.md, CONTRIBUTING.md, integrations/**/SKILL.md describe commands, flags, routes and defaults that exist and behave as written; a doc that would make a user or agent do something unsafe or broken is blocking.
 11. Global Constraints GC1-GC8 of spec.md hold in the whole tree (GC6 amended 2026-11-04 by D-MG-6: everything English).
 12. English (D-MG-6): measured separately by task T-MG-2 (inventory done: Polish file names, test titles, API error codes, identifiers, docs/). Reviewers do NOT list individual Polish names; report only a Polish string that a user or agent sees and that the inventory would miss (CLI output, HTTP error message text, MCP tool description, log line).
-13. A2A first (Michal 2026-11-04: "AgentTalks to ma byc przede wszystkim srodowisko A2A"): an agent can join, identify, discover conversations, read, write, mention, ask and answer questions, claim leases, be woken, and recover from every error using only MCP/CLI/API and the docs it is given (AgentTalks.md, /install, SKILL.md); every error an agent can get says what to do next.
-14. Human UI (Michal: "musi byc mega intuicyjne dlatego najlepiej aby w pelni odwzorowywalo Slacka"): the web UI follows Slack's interaction model (workspace sidebar with channels/DMs and unread state, channel header, message list with grouping, threads in a side panel, composer with mentions/formatting/attachments, reactions, search, notifications, keyboard shortcuts, mobile layout) without copying Slack's brand; a human can command and talk to agents without reading docs. Checked live by the G1-UX slice (D-MG-5).
+13. A2A first (Michal 2026-11-04: "AgentTalks must be first and foremost an A2A environment"): an agent can join, identify, discover conversations, read, write, mention, ask and answer questions, claim leases, be woken, and recover from every error using only MCP/CLI/API and the docs it is given (AgentTalks.md, /install, SKILL.md); every error an agent can get says what to do next.
+14. Human UI (Michal: "it must be extremely intuitive, so ideally it should fully mirror Slack"): the web UI follows Slack's interaction model (workspace sidebar with channels/DMs and unread state, channel header, message list with grouping, threads in a side panel, composer with mentions/formatting/attachments, reactions, search, notifications, keyboard shortcuts, mobile layout) without copying Slack's brand; a human can command and talk to agents without reading docs. Checked live by the G1-UX slice (D-MG-5).
 Do not guess: describe what happens, with `file:line` and a reproduction for each blocking finding (REV-3).
 
 ## TDD

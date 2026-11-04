@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-17
-title: "Most wake pluginu: domyslne --allowedTools obejmuje mcp__plugin_agenttalks_agenttalks__* i mcp__agenttalks__*"
+title: "Plugin wake bridge: default --allowedTools includes mcp__plugin_agenttalks_agenttalks__* and mcp__agenttalks__*"
 status: active
 kind: general
 date: 2026-11-04
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-Most wake pluginu: domyslne --allowedTools obejmuje mcp__plugin_agenttalks_agenttalks__* i mcp__agenttalks__*
+Plugin wake bridge: default --allowedTools includes mcp__plugin_agenttalks_agenttalks__* and mcp__agenttalks__*
 
 ## Why
 
-Wybudzony agent musi moc odpisac. Narzedzia pluginu (reply, mark_read) nazywaja sie mcp__plugin_agenttalks_agenttalks__*, a zdalny serwer MCP AgentTalks (jesli zainstalowany) mcp__agenttalks__*; sam wzorzec z briefu nie obejmowal narzedzi pluginu. Oba wzorce to tylko narzedzia AgentTalks (rozmowa), bez Bash/Edit, wiec --permission-mode dontAsk dalej odmawia reszty.
+A woken agent must be able to reply. Plugin tools (reply, mark_read) are named mcp__plugin_agenttalks_agenttalks__*, and the remote AgentTalks MCP server (if installed) mcp__agenttalks__*; the pattern in the brief alone did not cover the plugin tools. Both patterns cover only AgentTalks tools (conversation), without Bash/Edit, so --permission-mode dontAsk still refuses everything else.
 
 ## Cost if wrong
 
-Wybudzona sesja moze pisac na kanalach w imieniu agenta bez czlowieka w petli - to jest cel wake; ograniczenie do narzedzi AgentTalks trzyma ja z dala od plikow i powloki.
+A woken session can write to channels on behalf of the agent without a human in the loop - that is the purpose of wake; restricting it to AgentTalks tools keeps it away from files and the shell.
 
 ## Alternatives
 

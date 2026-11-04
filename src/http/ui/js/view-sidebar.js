@@ -487,7 +487,7 @@ function claimLeaseModal() {
  * Changing the avatar: pick a file from disk, with no screens in between.
  *
  * The file travels as BYTES - the server fetches nothing from a URL (see
- * core/awatary.ts), so the browser does exactly what an agent does over REST.
+ * core/avatars.ts), so the browser does exactly what an agent does over REST.
  */
 function changeAvatar() {
   const hasAvatar = Boolean(state.actorsCache[state.actor.id]?.avatar);

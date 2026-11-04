@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-4
-title: "T-MG-1: recenzja w 5 rozlacznych wycinkach (2x security, rdzen, UI, testy+docs) + krzyzowa recenzja codex"
+title: "T-MG-1: review in 5 disjoint slices (2x security, core, UI, tests+docs) + cross-review by codex"
 status: active
 kind: general
 date: 2026-11-03
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-T-MG-1: recenzja w 5 rozlacznych wycinkach (2x security, rdzen, UI, testy+docs) + krzyzowa recenzja codex
+T-MG-1: review in 5 disjoint slices (2x security, core, UI, tests+docs) + cross-review by codex
 
 ## Why
 
-25k LOC nie miesci sie rzetelnie w jednym recenzencie; rozlaczne wycinki daja pokrycie bez duplikacji, a codex jako inny dostawca spelnia REV-12 (cross-review innym modelem). Modele wg preferencji Michala z pamieci: rutynowy audyt na sonnet (domyslne agentow landfall), recenzja UI na fable.
+25k LOC cannot be reviewed reliably by one reviewer; disjoint slices provide coverage without duplication, and codex as a different provider satisfies REV-12 (cross-review with another model). Models follow Michal's preferences from memory: routine audit on sonnet (the landfall agents' default), UI review on fable.
 
 ## Cost if wrong
 
-Blad na granicy wycinkow (np. autoryzacja trasy w routes vs regula w core) moze umknac obu recenzentom; lagodzi to codex czytajacy calosc i jawna lista styku w briefach.
+A defect at a slice boundary (e.g. route authorization in routes vs a rule in core) may escape both reviewers; mitigated by codex reading everything and an explicit interface list in the briefs.
 
 ## Alternatives
 

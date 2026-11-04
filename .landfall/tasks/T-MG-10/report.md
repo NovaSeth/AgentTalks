@@ -41,7 +41,7 @@ Production must set AGENTTALKS_TRUST_PROXY=1 (behind Apache) or AGENTTALKS_BASE_
 <!-- Stored by the orchestrator: the implementer's harness refused the write. -->
 Status: DONE_WITH_CONCERNS
 Merge: `git merge origin/main` clean (8b0cde1); baseline after the merge 391 pass. Round commits: 52d10c0, a745315, 3b51e11, b17df32.
-- F1: wBudzecie measures the quoted line ("> " + l); 'x\n'*30000 -> <= 42 000 chars, the message names how to read the rest. Test R1-F1.
+- F1: withinBudget measures the quoted line ("> " + l); 'x\n'*30000 -> <= 42 000 chars, the message names how to read the rest. Test R1-F1.
 - F2: LINE_BREAKS moved to dependency-free src/core/untrusted.ts; covers every C0 control except tab, DEL, NEL, U+2028/2029 (regex with the u flag). Test matrix over 11 tools with U+001C + helper test for six separators.
 - F3: atalk fmtMsg prints the header then the "> "-quoted body; the note once per invocation; wiki/pins/questions/labels/doing quoted or single-lined; server.ts re-exports the shared helper. Test R1-F3 (no clean RED captured: the first capture caught the runner's own frames; GREEN shows the behavior).
 - F4: `atalk login --local` records {realpath, sha256} in $AGENTTALKS_CONFIG_DIR or ~/.config/agenttalks/trusted-projects.json (0600); an untrusted/edited project file with a url is refused when the token comes from env/flags and no --url is given (one-line error); a file with its own token+url still works with a warning; the hook surfaces the first warning/error line in additionalContext, quoted. New AGENTTALKS_CONFIG_DIR override (tests). Tests R1-F4 + hook warning test.

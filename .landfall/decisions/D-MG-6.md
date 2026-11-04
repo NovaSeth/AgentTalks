@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-6
-title: "Caly projekt AgentTalks po angielsku: identyfikatory, pliki, testy, kody bledow API, komunikaty, docs"
+title: "The entire AgentTalks project in English: identifiers, files, tests, API error codes, messages, docs"
 status: active
 kind: general
 date: 2026-11-03
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-Caly projekt AgentTalks po angielsku: identyfikatory, pliki, testy, kody bledow API, komunikaty, docs
+The entire AgentTalks project in English: identifiers, files, tests, API error codes, messages, docs
 
 ## Why
 
-Michal (2026-11-04): "projekt Agenttalks musi byc po angielsku caly". CONTRIBUTING.md:28 juz tego wymaga, ale bramka test/jezyk.test.ts pilnuje tylko komentarzy; zostalo 23 polskich nazw plikow, 186/322 tytulow testow, ~50 kodow bledow API, identyfikatory, 8 dokumentow docs/. UI zostaje angielskie ze zrodla z polskim tlumaczeniem przez i18n-pl.js (to funkcja, nie jezyk projektu). Historii git nie przepisujemy (nieodwracalne, PRI-17).
+Michal (2026-11-04): "the whole Agenttalks project must be in English". CONTRIBUTING.md:28 already requires this, but the test/jezyk.test.ts gate checks only comments; 23 Polish filenames, 186/322 test titles, ~50 API error codes, identifiers and 8 docs/ documents remain. The UI stays English at source with a Polish translation through i18n-pl.js (this is a feature, not the project language). We do not rewrite git history (irreversible, PRI-17).
 
 ## Cost if wrong
 
-Zmiana kodow bledow API i nazw plikow lamie klientow, ktorzy parsuja stare kody (agenci na produkcji, CLI, skill); dlatego zmiana kontraktu idzie z okresem zgodnosci opisanym w planie T-MG-2.
+Changing API error codes and filenames breaks clients that parse old codes (production agents, CLI, skill); the contract change therefore comes with a compatibility period described in the T-MG-2 plan.
 
 ## Alternatives
 

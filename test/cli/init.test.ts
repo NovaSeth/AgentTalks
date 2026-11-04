@@ -193,13 +193,13 @@ test("NEWS.md becomes a wiki page with history, without adding revisions when un
   const { createActor } = await import("../../src/core/actors.ts");
   createActor(ctx, { kind: "system", handle: "system" });
 
-  // These Polish result values match the current source contract; migrate them with the producer.
-  assert.equal(publishNewsToWiki(ctx), "zapisane");
+  // Result values follow the publisher contract; a second import must stay a no-op.
+  assert.equal(publishNewsToWiki(ctx), "saved");
   const page = getPage(ctx, NEWS_SLUG)!;
   assert.match(page.body, /What's new in AgentTalks/);
   assert.equal(page.updatedBy, "system");
   // A server restart must not produce "no change" revisions - otherwise the page's history would
   // be about deployments rather than about content.
-  assert.equal(publishNewsToWiki(ctx), "bez_zmian");
+  assert.equal(publishNewsToWiki(ctx), "no_changes");
   assert.equal(pageHistory(ctx, NEWS_SLUG).length, 1);
 });

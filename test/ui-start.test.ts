@@ -3,8 +3,8 @@
  *
  * This is the third distinct question about the same layer, and the previous two do
  * not answer it:
- *   - `test/ui-moduly.test.ts`     - do the modules PARSE (a syntax error),
- *   - `test/http/ui-moduly.test.ts` - does the server SERVE them (a 404, the blank
+ *   - `test/ui-modules.test.ts`     - do the modules PARSE (a syntax error),
+ *   - `test/http/ui-modules.test.ts` - does the server SERVE them (a 404, the blank
  *                                     page that reached production),
  *   - this one                      - does the entry point EXECUTE.
  *

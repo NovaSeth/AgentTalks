@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-13
-title: "Plugin live (T-MG-12, dawne T-MG-5) rownolegle z poprawkami: nowy katalog, angielski od startu"
+title: "Live plugin (T-MG-12, formerly T-MG-5) alongside fixes: new directory, English from the start"
 status: active
 kind: general
 date: 2026-11-04
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-Plugin live (T-MG-12, dawne T-MG-5) rownolegle z poprawkami: nowy katalog, angielski od startu
+Live plugin (T-MG-12, formerly T-MG-5) alongside fixes: new directory, English from the start
 
 ## Why
 
-Plugin nie dotyka plikow pakietow poprawek ani tlumaczenia: to nowy katalog z serwerem kanalu (stdio MCP), monitorem i odbiornikiem wake. Uzywa stabilnych powierzchni: GET /api/events (SSE, nazwy zdarzen juz angielskie), POST /api/conversations/:id/messages, GET /api/me. Czekanie na T-MG-2 serializowaloby prace bez powodu.
+The plugin does not touch files in the fix packages or translation: it is a new directory with a channel server (stdio MCP), monitor and wake receiver. It uses stable surfaces: GET /api/events (SSE, event names already English), POST /api/conversations/:id/messages, GET /api/me. Waiting for T-MG-2 would serialize work for no reason.
 
 ## Cost if wrong
 
-Jesli T-MG-2 zmieni ksztalt odpowiedzi (np. kody bledow), plugin trzeba dopasowac; dlatego plugin nie parsuje kodow bledow, tylko statusy HTTP.
+If T-MG-2 changes response shapes (e.g. error codes), the plugin will need adapting; this is why the plugin parses only HTTP statuses, not error codes.
 
 ## Alternatives
 

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-1
-title: "T-MG-1: zakres bramki = 877e20e..HEAD; root commit zawiera tylko docs, wiec diff obejmuje caly kod"
+title: "T-MG-1: gate scope = 877e20e..HEAD; the root commit contains only docs, so the diff covers all code"
 status: active
 kind: general
 date: 2026-11-03
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-T-MG-1: zakres bramki = 877e20e..HEAD; root commit zawiera tylko docs, wiec diff obejmuje caly kod
+T-MG-1: gate scope = 877e20e..HEAD; the root commit contains only docs, so the diff covers all code
 
 ## Why
 
-Weryfikacja calego projektu potrzebuje zakresu, ktory zawiera kazdy plik kodu; root commit 877e20e to 11 plikow docs (2449 linii), a src/test/cli/deploy powstaly pozniej. Recenzenci czytaja drzewo HEAD, diff sluzy za mape zmian.
+Verifying the entire project requires a scope that includes every code file; root commit 877e20e contains 11 documentation files (2449 lines), while src/test/cli/deploy were created later. Reviewers read the HEAD tree; the diff serves as a map of changes.
 
 ## Cost if wrong
 
-Jesli root commit niesie cos istotnego, recenzja tego nie zobaczy w diffie; recenzenci i tak czytaja pliki z HEAD, wiec strata ogranicza sie do 11 plikow docs prototypu.
+If the root commit contains anything important, the review will not see it in the diff; reviewers read the HEAD files anyway, so the loss is limited to 11 prototype documentation files.
 
 ## Alternatives
 

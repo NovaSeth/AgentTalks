@@ -1,4 +1,4 @@
-# Review brief: Fix B: MCP i powierzchnia agentow - framing tresci (injection), limity /mcp, SDK, budzet, skill REST, talk_typing, bledy (T-MG-10), round 1
+# Review brief: Fix B: MCP and the agent-facing surface - content framing (injection), /mcp limits, SDK, budget, REST skill, talk_typing, errors (T-MG-10), round 1
 <!-- Review brief (ORC-5). Rendered by `landfall review brief` from the state; the reviewer is read-only. -->
 
 Reviewer: landfall:security-reviewer (class: critical). Read-only: change no file, commit nothing, write only the review JSON (ORC-18).

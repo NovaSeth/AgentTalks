@@ -1,276 +1,276 @@
-# AgentTalks - projekt systemu
+# AgentTalks - system design
 
-**Data**: 2026-08-07
-**Punkt wyjścia**: [analiza kodu źródłowego](2026-08-07-analiza-kodu-zrodlowego.md)
+**Date**: 2026-08-07
+**Starting point**: [source code analysis](2026-08-07-source-code-analysis.md)
 
-## 1. Co budujemy
+## 1. What we are building
 
-Demon instalowany na serwerze, dający **wielu agentom AI i wielu ludziom** wspólną
-przestrzeń komunikacji o semantyce Slacka: kanały publiczne i prywatne, wiadomości
-bezpośrednie, rozmowy grupowe, wątki, wzmianki, reakcje, pliki, wyszukiwanie. Do tego
-interfejs webowy, żeby człowiek był normalnym uczestnikiem rozmowy, a nie operatorem
-podglądającym logi.
+A daemon installed on a server, giving **multiple AI agents and multiple humans** a shared
+communication space with Slack semantics: public and private channels, direct
+messages, group conversations, threads, mentions, reactions, files, search. Plus
+a web interface so a human is a regular participant in the conversation, rather than an operator
+watching logs.
 
-Trzy interfejsy do tego samego rdzenia, wszystkie równoprawne:
+Three interfaces to the same core, all equal:
 
-| Interfejs | Dla kogo | Transport |
+| Interface | Audience | Transport |
 |---|---|---|
-| REST + SSE | UI webowe, dowolny klient | HTTP, cookie sesji albo token |
-| MCP | agenci Claude i inni mówiący MCP | MCP Streamable HTTP, token |
-| CLI `atalk` | agenci w powłoce, hooki, skrypty, człowiek w terminalu | HTTP do demona, token |
+| REST + SSE | Web UI, any client | HTTP, session cookie or token |
+| MCP | Claude agents and others that speak MCP | MCP Streamable HTTP, token |
+| CLI `atalk` | Agents in a shell, hooks, scripts, humans in a terminal | HTTP to the daemon, token |
 
-**Zasada nadrzędna, przeniesiona z prototypu**: interfejs człowieka nie może wiedzieć
-o rozmowie więcej niż jej uczestnicy. Każda funkcja UI ma odpowiednik w MCP i w CLI.
+**The overriding principle, carried over from the prototype**: the human interface must not know
+more about a conversation than its participants do. Every UI feature has an MCP and CLI counterpart.
 
-## 2. Czego świadomie nie budujemy
+## 2. What we deliberately are not building
 
-Federacja między serwerami, szyfrowanie end-to-end, głos i wideo, organizacje/workspace'y,
-macierz uprawnień poza `admin`/`member`, własne emoji, most A2A, retencja bardziej złożona
-niż opcjonalny TTL. Każda z tych rzeczy jest dokładalna później i żadna nie jest potrzebna,
-żeby system działał.
+Federation between servers, end-to-end encryption, voice and video, organizations/workspaces,
+a permission matrix beyond `admin`/`member`, custom emoji, an A2A bridge, retention more complex
+than an optional TTL. Each of these can be added later, and none is needed
+for the system to work.
 
-Odpada też pasek zdrowia maszyny z prototypu: to była funkcja jednego VPS-a
-(workery php-fpm, `~/lowmem-sample.log`), nie funkcja komunikatora.
+The prototype's machine health bar also goes: it was a feature of one VPS
+(php-fpm workers, `~/lowmem-sample.log`), not a messaging feature.
 
-## 3. Wybór stosu
+## 3. Stack choice
 
-Trzy realne opcje, rozważone:
+Three realistic options considered:
 
-**A. TypeScript na Node 24+, wyłącznie biblioteka standardowa** *(wybrane)*
-Jeden język na serwer, UI, CLI i MCP. Zmierzone na tej maszynie (Node 26):
-- Node uruchamia pliki `.ts` **natywnie**, bez transpilacji i bez bundlera,
-- `node:sqlite` daje synchroniczny, transakcyjny SQLite **z FTS5** w standardzie,
-- `node:http`, `node:crypto`, `node:test` pokrywają serwer, hasła i testy.
+**A. TypeScript on Node 24+, standard library only** *(chosen)*
+One language for server, UI, CLI, and MCP. Measured on this machine (Node 26):
+- Node runs `.ts` files **natively**, without transpilation or a bundler,
+- `node:sqlite` provides synchronous, transactional SQLite **with FTS5** out of the box,
+- `node:http`, `node:crypto`, `node:test` cover the server, passwords, and tests.
 
-Efekt: **zero zależności runtime, zero kroku budowania, brak modułów natywnych**.
-Instalacja to `npm i -g agenttalks` bez kompilacji czegokolwiek. To jest ta sama zasada,
-która w prototypie dała jednoplikowe UI i CLI na samej stdlib Pythona, tylko rozciągnięta
-na cały system.
+The result: **zero runtime dependencies, zero build step, no native modules**.
+Installation is `npm i -g agenttalks` without compiling anything. This is the same principle
+that gave the prototype its single-file UI and Python-stdlib-only CLI, extended
+to the entire system.
 
 **B. Python + SQLite + FastAPI**
-Zgodne z istniejącym CLI, ale MCP w Pythonie jest wtórny, a UI i tak byłoby w JS.
-Dwa języki zamiast jednego.
+Consistent with the existing CLI, but MCP in Python is secondary, and the UI would be in JS anyway.
+Two languages instead of one.
 
-**C. Go, jeden statyczny plik binarny**
-Dobra historia instalacji, najgorsze ponowne użycie czegokolwiek z prototypu
-i najsłabsze wsparcie MCP.
+**C. Go, one static binary**
+A good installation story, the worst reuse of anything from the prototype,
+and the weakest MCP support.
 
-**Wybór: A.** Decydujące: MCP jest głównym interfejsem agenta, a brak zależności
-w rdzeniu usuwa całą klasę problemów wdrożeniowych i łańcucha dostaw.
+**Choice: A.** Decisive factors: MCP is the primary agent interface, and the absence of dependencies
+in the core removes an entire class of deployment and supply-chain problems.
 
-**Jedna zależność, świadoma: `@modelcontextprotocol/sdk`.** MCP jest pełnoprawnym
-interfejsem AgentTalks, nie dodatkiem, więc nie jest zależnością opcjonalną ani
-odłożoną. Implementowanie Streamable HTTP ręcznie oszczędziłoby jeden pakiet kosztem
-zgodności ze specyfikacją, która się rozwija; oficjalny SDK jest tu właściwym wyborem.
-Podział pozostaje czytelny: `store/`, `core/`, `http/`, CLI i UI nie importują niczego
-spoza standardowej biblioteki; robi to wyłącznie `src/mcp/`.
+**One deliberate dependency: `@modelcontextprotocol/sdk`.** MCP is a first-class
+AgentTalks interface, not an add-on, so it is neither an optional nor a
+deferred dependency. Implementing Streamable HTTP by hand would save one package at the cost of
+compliance with an evolving specification; the official SDK is the right choice here.
+The boundary remains clear: `store/`, `core/`, `http/`, the CLI, and the UI import nothing
+outside the standard library; only `src/mcp/` does.
 
-**Wymaganie: Node >= 24** (natywny TypeScript, stabilne `node:sqlite` z FTS5).
-Sprawdzane przy starcie z czytelnym komunikatem.
+**Requirement: Node >= 24** (native TypeScript, stable `node:sqlite` with FTS5).
+Checked at startup with a clear message.
 
-## 4. Model danych
+## 4. Data model
 
-### 4.1 Jeden prymityw zamiast dwóch
+### 4.1 One primitive instead of two
 
-Największa zmiana wobec prototypu. Tam wiadomość miała `chan` **albo** `to`, przez co
-kanały i DM-y były dwiema osobnymi ścieżkami kodu w każdej funkcji (widoczność, liczniki,
-dostarczanie, render). Tutaj wszystko jest **konwersacją**:
+The biggest change from the prototype. There, a message had `chan` **or** `to`, making
+channels and DMs two separate code paths in every feature (visibility, counts,
+delivery, rendering). Here, everything is a **conversation**:
 
-| `conversations.kind` | Znaczenie | Członkostwo |
+| `conversations.kind` | Meaning | Membership |
 |---|---|---|
-| `public` | kanał otwarty, `#general` | dołącza kto chce |
-| `private` | kanał zamknięty | tylko zaproszeni |
-| `dm` | rozmowa dwóch aktorów | dokładnie 2, tworzona automatycznie |
-| `group` | rozmowa wielu poza kanałem | 3 lub więcej |
+| `public` | Open channel, `#general` | Anyone may join |
+| `private` | Closed channel | Invitees only |
+| `dm` | Conversation between two actors | Exactly 2, created automatically |
+| `group` | Conversation among several actors outside a channel | 3 or more |
 
-„Wiadomość do wielu" to `group` z listą odbiorców. Widoczność, nieprzeczytane,
-dostarczanie i render mają jedną implementację dla wszystkich czterech.
+A "message to many" is a `group` with a recipient list. Visibility, unread counts,
+delivery, and rendering have one implementation for all four.
 
-### 4.2 Schemat (SQLite, WAL)
+### 4.2 Schema (SQLite, WAL)
 
 ```sql
 actors(id, kind, handle UNIQUE, display_name, created_at, disabled_at)
    -- kind: human | agent | system
 tokens(id, actor_id, hash, name, scopes, created_at, last_used_at, revoked_at)
 sessions(id, actor_id, label, kind, cwd, host, started_at, last_seen_at, doing, ended_at)
-   -- kind: durable | ephemeral   (deklarowane przy rejestracji, nie zgadywane)
+   -- kind: durable | ephemeral   (declared during registration, not guessed)
 conversations(id, kind, slug UNIQUE NULL, topic, created_by, created_at, archived_at)
 members(conversation_id, actor_id, role, joined_at, notify, last_read_message_id)
    -- notify: all | mentions | none      role: admin | member
 messages(id INTEGER PK AUTOINCREMENT, conversation_id, actor_id, session_id,
          ts, kind, body, thread_id, edited_at, deleted_at, meta JSON)
    -- kind: text | ask | answer | file | system
-mentions(message_id, actor_id)               -- materializowane przy zapisie
+mentions(message_id, actor_id)               -- materialized on write
 reactions(message_id, actor_id, emoji)       -- UNIQUE(message_id, actor_id, emoji)
 questions(id, message_id, conversation_id, answer_message_id, closed_at)
 files(id, actor_id, conversation_id, name, size, sha256, mime, path, created_at)
 pins(conversation_id, message_id, actor_id, created_at)
-leases(resource PK, actor_id, acquired_at, expires_at)   -- następca talk-lock.py
-messages_fts                                  -- FTS5 nad messages.body
+leases(resource PK, actor_id, acquired_at, expires_at)   -- successor to talk-lock.py
+messages_fts                                  -- FTS5 over messages.body
 ```
 
-Indeksy: `messages(conversation_id, id)`, `messages(thread_id)`, `mentions(actor_id)`,
+Indexes: `messages(conversation_id, id)`, `messages(thread_id)`, `mentions(actor_id)`,
 `members(actor_id)`, `sessions(actor_id, last_seen_at)`.
 
-### 4.3 Trzy konsekwencje, które warto nazwać wprost
+### 4.3 Three consequences worth stating explicitly
 
-**Identyfikator wiadomości to `INTEGER AUTOINCREMENT`**, nie `m<n>` liczone przez skan
-pliku. To likwiduje O(n) na każdym zapisie i daje monotoniczny kursor dla `?after=<id>`.
+**The message identifier is `INTEGER AUTOINCREMENT`**, not `m<n>` calculated by scanning
+a file. This eliminates O(n) on every write and provides a monotonic cursor for `?after=<id>`.
 
-**Znacznik odczytu to `last_read_message_id`**, nie znacznik czasu. Znika cała klasa
-problemów z rozjazdem zegarów i z równoczesnymi zapisami.
+**The read marker is `last_read_message_id`**, not a timestamp. An entire class of
+clock-skew and concurrent-write problems disappears.
 
-**Wzmianki są materializowane przy zapisie** (tabela `mentions`). Pytanie „czy to dotyczy
-mnie" jest zapytaniem po indeksie, a nie skanem podłańcuchowym po całej historii.
+**Mentions are materialized on write** (the `mentions` table). "Does this concern
+me?" becomes an indexed query, not a substring scan over the entire history.
 
-## 5. Tożsamość, uwierzytelnianie, autoryzacja
+## 5. Identity, authentication, authorization
 
-Trzy rozdzielone pojęcia, których prototyp nie rozróżniał:
+Three separate concepts that the prototype did not distinguish:
 
-- **Aktor** to trwała tożsamość: człowiek albo agent. Ma `handle` (`@nestor`, `@michal`),
-  który jest stały. Zmiana `display_name` nie rusza adresowania ani historii.
-- **Token** należy do aktora, jest odwoływalny, przechowywany jako hash. Jeden aktor może
-  mieć wiele tokenów (laptop, VPS, CI).
-- **Sesja** to jedno żywe połączenie tego aktora. Ten sam agent może mieć pięć
-  równoległych sesji i **nadal jest jednym rozmówcą**. To zastępuje auto-sufiksy
-  `(2)`/`(3)`, które w prototypie łatały objaw, nie przyczynę.
+- **Actor** is a persistent identity: a human or an agent. It has a `handle` (`@nestor`, `@michal`)
+  that is stable. Changing `display_name` does not affect addressing or history.
+- **Token** belongs to an actor, is revocable, and is stored as a hash. One actor may
+  have multiple tokens (laptop, VPS, CI).
+- **Session** is one live connection of that actor. The same agent can have five
+  parallel sessions and **still be one participant**. This replaces the automatic
+  `(2)`/`(3)` suffixes that patched the symptom in the prototype, not the cause.
 
-Reguły:
-- `actor_id` nadaje serwer. Klient **nigdy** nie deklaruje, kim jest. Znika
-  `execFile(..., {TALK_SID: asSid})`, czyli podszywanie się jako API.
-- Człowiek loguje się hasłem i dostaje cookie sesji (`HttpOnly`, `SameSite=Lax`, CSRF
-  na mutacjach). Agent używa `Authorization: Bearer atk_...`.
-- Tokeny agentów mint uje admin: `agenttalks token create --actor nestor --name vps`.
-  Wypisany raz, potem tylko hash.
-- Autoryzacja: dostęp do konwersacji wynika z `members`. Kanał prywatny, DM i grupa są
-  egzekwowane w rdzeniu, nie w UI.
-- Limity: rozmiar wiadomości (domyślnie 64 KB), rozmiar pliku (domyślnie 32 MB), rate
-  limit na token.
+Rules:
+- The server assigns `actor_id`. The client **never** declares who it is. This removes
+  `execFile(..., {TALK_SID: asSid})`, impersonation as an API.
+- A human logs in with a password and receives a session cookie (`HttpOnly`, `SameSite=Lax`, CSRF
+  on mutations). An agent uses `Authorization: Bearer atk_...`.
+- An admin mints agent tokens: `agenttalks token create --actor nestor --name vps`.
+  Printed once; afterward only the hash remains.
+- Authorization: access to a conversation follows from `members`. Private channels, DMs, and groups are
+  enforced in the core, not the UI.
+- Limits: message size (64 KB by default), file size (32 MB by default), rate
+  limit per token.
 
-## 6. Doręczanie: trzy poziomy
+## 6. Delivery: three levels
 
-Prototyp miał jeden i pół mechanizmu: hook `PostToolUse` (agent bezczynny nie dostaje nic)
-oraz `mode=task` przywiązany do mostu Nestora. Tutaj są trzy, wybierane przez odbiorcę:
+The prototype had one and a half mechanisms: the `PostToolUse` hook (an idle agent receives nothing)
+and `mode=task` tied to the Nestor bridge. Here there are three, chosen by the recipient:
 
-1. **SSE `/api/events`** - dla UI i dla długo żyjących procesów agenta. Serwer wypycha
-   tylko to, czego odbiorca jest członkiem, filtrowane po `notify`.
-2. **Long-poll `GET /api/messages?after=<id>&wait=30`** - dla CLI i agentów w pętli, bez
-   klienta SSE. To samo obsługuje MCP `talk_wait`.
-3. **Wake** - dla agentów, których w danej chwili nie ma. Aktor rejestruje *punkt
-   dostarczenia*:
-   - `webhook` - POST na URL z podpisem HMAC,
-   - `exec` - komenda uruchamiana przez demona (dla agentów na tej samej maszynie),
-   - `none` - wiadomość czeka.
+1. **SSE `/api/events`**: for the UI and long-lived agent processes. The server pushes
+   only conversations the recipient belongs to, filtered by `notify`.
+2. **Long-poll `GET /api/messages?after=<id>&wait=30`**: for the CLI and agents running a loop without
+   an SSE client. MCP `talk_wait` handles the same thing.
+3. **Wake**: for agents that are not currently present. An actor registers a *delivery
+   endpoint*:
+   - `webhook`: POST to a URL with an HMAC signature,
+   - `exec`: a command executed by the daemon (for agents on the same machine),
+   - `none`: the message waits.
 
-   Wake odpala się, gdy przyjdzie DM, wzmianka albo wiadomość w konwersacji z
-   `notify=all`. Ma dławienie (nie częściej niż raz na N sekund) i wykładniczy backoff
-   po błędach.
+   Wake fires when a DM, mention, or message in a conversation with
+   `notify=all` arrives. It is throttled (no more than once every N seconds) and uses exponential backoff
+   after errors.
 
-**To generalizuje `mode=task` poza Nestora.** Nestor przestaje być częścią architektury
-i staje się jednym aktorem z punktem dostarczenia typu `exec`. Odpowiedź agenta wraca
-**jego własnym tokenem**; nie ma już zapisu w cudzym imieniu.
+**This generalizes `mode=task` beyond Nestor.** Nestor stops being part of the architecture
+and becomes one actor with an `exec` delivery endpoint. An agent's response returns
+**using its own token**; there are no more writes on someone else's behalf.
 
-## 7. Interfejs MCP
+## 7. MCP interface
 
-Narzędzia wystawiane agentom (nazwy `talk_*`, bo tak agent o tym myśli):
+Tools exposed to agents (`talk_*` names, because that is how the agent thinks about them):
 
 `talk_send`, `talk_read`, `talk_wait`, `talk_conversations`, `talk_who`, `talk_ask`,
 `talk_answer`, `talk_open`, `talk_react`, `talk_search`, `talk_thread`, `talk_upload`,
-`talk_download`, `talk_status`, `talk_claim` / `talk_release` (dzierżawy zasobów).
+`talk_download`, `talk_status`, `talk_claim` / `talk_release` (resource leases).
 
-`talk_wait` trzyma jedno wywołanie do 5 minut i emituje `notifications/progress` co 20 s,
-żeby klient MCP nie zerwał połączenia na limicie ciszy. Ten mechanizm w prototypie już
-istnieje i działa (`server.ts:252-270`); przenosimy go bez zmian.
+`talk_wait` holds one call for up to 5 minutes and emits `notifications/progress` every 20 s,
+so the MCP client does not disconnect on its idle timeout. This mechanism already
+exists and works in the prototype (`server.ts:252-270`); we carry it over unchanged.
 
-Zasoby MCP: historia konwersacji jako `agenttalks://conversation/<slug>`.
+MCP resources: conversation history as `agenttalks://conversation/<slug>`.
 
 ## 8. CLI `atalk`
 
-Zachowujemy czasowniki z prototypu, bo są dobre, są w hookach i jest do nich nawyk:
+Keep the prototype's verbs because they are good, hooks use them, and people are accustomed to them:
 `status`, `who`, `say`, `in`, `to`, `read`, `log`, `unread`, `seen`, `since`, `channels`,
 `watch`/`unwatch`, `ask`, `answer`, `open`, `react`, `mentions`, `search`, `pin`/`pins`,
 `send-file`/`files`/`get-file`, `me`, `doing`.
 
-Nowe: `login`, `logout`, `dm <handle...>` (rozmowa grupowa), `thread <id>`, `claim`,
+New: `login`, `logout`, `dm <handle...>` (group conversation), `thread <id>`, `claim`,
 `release`, `watch --notify all|mentions|none`.
 
-Różnica: `atalk` mówi HTTP do demona i **nie dotyka bezpośrednio żadnych plików danych**.
-Token w `~/.config/agenttalks/config.json` (0600). Konfiguracja przez `AGENTTALKS_URL`
-i `AGENTTALKS_TOKEN`, żeby dało się użyć z hooka i z CI.
+The difference: `atalk` speaks HTTP to the daemon and **does not directly touch any data files**.
+Token in `~/.config/agenttalks/config.json` (0600). Configuration through `AGENTTALKS_URL`
+and `AGENTTALKS_TOKEN`, so it can be used from hooks and CI.
 
-Znika zależność od `/proc`, więc CLI działa też na macOS.
+The `/proc` dependency disappears, so the CLI also works on macOS.
 
-## 9. Interfejs webowy
+## 9. Web interface
 
-Zachowujemy z prototypu, bo to zweryfikowane decyzje:
-parytet z CLI, `pisze...` kontra `pracuje` (sygnał pracy **musi** pochodzić z użycia
-narzędzia), efemeryda kontra sesja trwała, pogrubienie kontra plakietka, podsumowanie
-nieobecności, piny, otwarte pytania, deterministyczne awatary, reguła „animacja bez
-znaczenia to szum", oraz wszystkie pięć poprawek mobilnych (`100dvh`, 16 px na polach,
-szuflada zamiast `display:none`, `min-height:0`, `safe-area-inset`).
+Keep the prototype's validated decisions:
+CLI parity, `typing...` versus `working` (the work signal **must** come from tool
+use), ephemeral versus persistent sessions, bold versus badges, an absence
+summary, pins, open questions, deterministic avatars, the "meaningless animation
+is noise" rule, and all five mobile fixes (`100dvh`, 16 px fields,
+a drawer instead of `display:none`, `min-height:0`, `safe-area-inset`).
 
-Dodajemy: logowanie i wielu ludzi, wątki, rozmowy grupowe, wysyłanie i pobieranie plików
-z przeciągnięciem, edycję i kasowanie własnych wiadomości, wyszukiwanie po stronie serwera
-(FTS5), listę członków konwersacji, ustawienia powiadomień per konwersacja.
+Add: login and multiple humans, threads, group conversations, file uploads and downloads
+with drag-and-drop, editing and deleting one's own messages, server-side search
+(FTS5), a conversation member list, per-conversation notification settings.
 
-Zmieniamy transport: **SSE zamiast pollowania całej historii co 2,5 s**. Start ładuje
-ostatnie N wiadomości widocznej konwersacji, reszta dociąga się kursorem.
+Change the transport: **SSE instead of polling the entire history every 2.5 s**. Startup loads
+the last N messages of the visible conversation; the rest is fetched using a cursor.
 
-Zmieniamy strukturę: zamiast jednego pliku 848 linii, który przy tym zakresie urósłby
-do trzech tysięcy, kilka plików statycznych (`index.html`, `app.js` jako moduł ES,
-`app.css`) serwowanych z katalogu. **Nadal zero build stepu** - żadnego bundlera,
-żadnej transpilacji. Wdrożenie jest atomowe (zapis do katalogu tymczasowego plus
-`rename`), więc znika ryzyko „plik w połowie zapisu jest na produkcji".
+Change the structure: instead of one 848-line file that would grow to
+three thousand at this scope, several static files (`index.html`, `app.js` as an ES module,
+`app.css`) served from a directory. **Still zero build step**: no bundler,
+no transpilation. Deployment is atomic (write to a temporary directory plus
+`rename`), removing the risk of "a half-written file is in production".
 
-## 10. Architektura procesu
+## 10. Process architecture
 
 ```
-agenttalks (jeden proces Node)
+agenttalks (one Node process)
 +-----------------------------------------------------------+
-| http/     node:http + wlasny maly router                   |
-|   /api/*        REST      auth: cookie (ludzie) | bearer   |
-|   /api/events   SSE                                        |
-|   /mcp          MCP Streamable HTTP        (etap 2)        |
-|   /             statyczne UI                               |
+| http/     node:http + a small custom router                |
+|   /api/*        REST      auth: cookie (humans) | bearer    |
+|   /api/events   SSE                                       |
+|   /mcp          MCP Streamable HTTP        (stage 2)       |
+|   /             static UI                                 |
 +-----------------------------------------------------------+
-| core/     bez wiedzy o HTTP, testowalny w izolacji         |
+| core/     no knowledge of HTTP, testable in isolation      |
 |   actors  conversations  messages  presence  unread        |
 |   files   questions      reactions  search    leases       |
-|   delivery (SSE hub, long-poll, wake)                      |
+|   delivery (SSE hub, long-poll, wake)                       |
 +-----------------------------------------------------------+
-| store/    SQLite (WAL) + katalog plików                    |
+| store/    SQLite (WAL) + files directory                   |
 +-----------------------------------------------------------+
 ```
 
-Granice: `http/` tłumaczy żądania na wywołania `core/` i nie zna SQL. `core/` nie zna
-`node:http` ani `res`. `store/` nie zna reguł domenowych. Dzięki temu testy rdzenia chodzą na
-bazie w pamięci, bez sieci.
+Boundaries: `http/` translates requests into `core/` calls and knows no SQL. `core/` knows
+neither `node:http` nor `res`. `store/` knows no domain rules. This lets core tests run on
+an in-memory database without a network.
 
-Każdy moduł `core/` to jeden plik z jedną odpowiedzialnością. Jeśli któryś przekracza
-~300 linii, to sygnał, że robi dwie rzeczy.
+Each `core/` module is one file with one responsibility. If one exceeds
+~300 lines, that signals it is doing two things.
 
-## 11. Instalacja i eksploatacja
+## 11. Installation and operations
 
-### 11.1 Docker jako główna droga wdrożenia
+### 11.1 Docker as the primary deployment path
 
-Serwer docelowy ma już usługę na starszym Node (`nestor.service` na Node 18), a AgentTalks
-wymaga Node 24 lub nowszego. Zamiast żonglować wersjami przez `nvm` czy `fnm` w jednym
-systemie, **całość jedzie w kontenerze Docker**. Powody, w kolejności wagi:
+The target server already has a service on an older Node (`nestor.service` on Node 18), while AgentTalks
+requires Node 24 or newer. Instead of juggling versions with `nvm` or `fnm` on one
+system, **everything runs in a Docker container**. Reasons, in order of importance:
 
-1. Wersja Node jest własnością obrazu, nie maszyny. Nic nie koliduje z istniejącymi
-   usługami i nic się nie zepsuje przy aktualizacji systemu.
-2. Aktualizacja i wycofanie zmiany to podmiana tagu obrazu, a nie ręczna operacja na
-   plikach na produkcji. Znika cała klasa problemów typu „plik w połowie zapisu".
-3. Stan jest jawnie w jednym wolumenie. Kopia zapasowa to kopia wolumenu.
-4. Ta sama komenda uruchamia system lokalnie na macOS i na VPS-ie.
+1. The Node version belongs to the image, not the machine. Nothing conflicts with existing
+   services, and a system upgrade will not break anything.
+2. Updating and rolling back means changing the image tag, not manually operating on
+   production files. An entire class of "half-written file" problems disappears.
+3. State is explicitly kept in one volume. A backup is a copy of the volume.
+4. The same command runs the system locally on macOS and on a VPS.
 
-Obraz jest trywialny, bo nie ma kroku budowania i nie ma modułów natywnych:
+The image is trivial because there is no build step and there are no native modules:
 
 ```dockerfile
 FROM node:26-alpine
 WORKDIR /app
 COPY package.json ./
-RUN npm ci --omit=dev            # jedyna zaleznosc: @modelcontextprotocol/sdk
+RUN npm ci --omit=dev            # only dependency: @modelcontextprotocol/sdk
 COPY src ./src
 COPY ui ./ui
 COPY bin ./bin
@@ -282,11 +282,11 @@ USER node
 CMD ["node", "bin/agenttalks.js", "serve", "--host", "0.0.0.0", "--port", "8080"]
 ```
 
-`--host 0.0.0.0` jest tu bezpieczne i konieczne: wewnątrz kontenera to jedyny sposób,
-żeby proxy hosta dosięgło procesu, a publikacja portu jest kontrolowana po stronie
-Dockera (`-p 127.0.0.1:8787:8080`). Bramka „nie binduj publicznie bez zgody" pozostaje
-dla instalacji spoza kontenera i jest wyłączana zmienną `AGENTTALKS_IN_CONTAINER=1`,
-ustawianą w obrazie.
+`--host 0.0.0.0` is safe and necessary here: inside the container it is the only way
+for the host proxy to reach the process, while port publishing is controlled by
+Docker (`-p 127.0.0.1:8787:8080`). The "do not bind publicly without permission" gate remains
+for non-container installations and is disabled by `AGENTTALKS_IN_CONTAINER=1`,
+set in the image.
 
 ```yaml
 # docker-compose.yml
@@ -302,83 +302,83 @@ volumes:
   agenttalks-data:
 ```
 
-Przed nim staje istniejący reverse proxy (Apache albo Caddy) z TLS. Kontener nie
-wystawia się na świat bezpośrednio.
+The existing reverse proxy (Apache or Caddy) with TLS sits in front of it. The container is not
+directly exposed to the world.
 
-### 11.2 Instalacja bez kontenera
+### 11.2 Installation without a container
 
-Nadal wspierana, bo do rozwoju lokalnego kontener jest zbędnym pośrednikiem:
+Still supported, because a container is an unnecessary intermediary for local development:
 
 ```bash
 npm i -g agenttalks
-agenttalks init                 # katalog danych, baza, pierwsze konto admina
+agenttalks init                 # data directory, database, first admin account
 agenttalks serve
-agenttalks install-service      # generuje unit systemd i włącza
+agenttalks install-service      # generates and enables a systemd unit
 agenttalks token create --actor nestor --name vps
-agenttalks import-talk ~/.talk  # migracja z prototypu
+agenttalks import-talk ~/.talk  # migration from the prototype
 ```
 
-Jeśli na maszynie jest starszy Node, `agenttalks` mówi to wprost i wskazuje dwie drogi
-wyjścia: kontener albo `fnm`/`nvm`. Nie próbuje niczego instalować sam.
+If the machine has an older Node, `agenttalks` says so explicitly and points to two ways
+forward: a container or `fnm`/`nvm`. It does not try to install anything itself.
 
-- Katalog danych: `$AGENTTALKS_DATA` albo `/var/lib/agenttalks`, w trybie
-  użytkownika `~/.local/share/agenttalks`.
-- Konfiguracja: `agenttalks.json` w katalogu danych (bind, port, `trustProxy`, limity,
-  TTL retencji, ścieżka plików).
-- Domyślnie bind na `127.0.0.1`, przewidziany pod reverse proxy z TLS. Bind na `0.0.0.0`
-  wymaga jawnej zgody w konfiguracji.
-- Kopia zapasowa: `agenttalks backup` robi `VACUUM INTO` plus archiwum plików.
-- Import z prototypu przenosi wiadomości, kanały, piny, znaczniki odczytu i pliki;
-  etykiety sesji stają się aktorami typu `agent`, a `michal` aktorem typu `human`.
+- Data directory: `$AGENTTALKS_DATA` or `/var/lib/agenttalks`, in user
+  mode `~/.local/share/agenttalks`.
+- Configuration: `agenttalks.json` in the data directory (bind, port, `trustProxy`, limits,
+  retention TTL, file path).
+- Binds to `127.0.0.1` by default, intended for a reverse proxy with TLS. Binding to `0.0.0.0`
+  requires explicit permission in configuration.
+- Backup: `agenttalks backup` performs `VACUUM INTO` plus a file archive.
+- Import from the prototype carries over messages, channels, pins, read markers, and files;
+  session labels become `agent` actors, and `michal` becomes a `human` actor.
 
-## 12. Błędy i tryby awaryjne
+## 12. Errors and failure modes
 
-- **Awaria zapisu jest głośna.** Prototyp cicho pomijał uszkodzone linie JSON, przez co
-  wiadomość mogła zniknąć bez śladu. SQLite w transakcji albo zapisuje, albo zwraca błąd,
-  a błąd wraca do wywołującego.
-- **Rozdzielone warstwy błędu w UI** (lekcja z `talk.html:670-673`): awaria transportu
-  i awaria renderowania mają dawać różne komunikaty. Jeden `catch` na obu kosztował
-  godziny diagnozy skierowanej na złą warstwę.
-- Wake z błędem: backoff i licznik, po N nieudanych próbach punkt dostarczenia jest
-  wyłączany i pojawia się wiadomość systemowa w DM do właściciela.
-- Zerwane SSE: klient wznawia od `Last-Event-ID`, serwer dosyła zaległe po `after=<id>`.
-- Odwołany token: 401 z jasnym kodem, CLI mówi „zaloguj się ponownie".
+- **Write failures are loud.** The prototype silently skipped corrupted JSON lines, so
+  a message could disappear without a trace. SQLite in a transaction either writes or returns an error,
+  and the error goes back to the caller.
+- **Separate UI error layers** (a lesson from `talk.html:670-673`): transport failures
+  and rendering failures must produce different messages. A single `catch` for both cost
+  hours diagnosing the wrong layer.
+- Failed wake: backoff and a counter; after N failed attempts the delivery endpoint is
+  disabled and a system message appears in a DM to the owner.
+- Disconnected SSE: the client resumes from `Last-Event-ID`; the server sends missed messages after `after=<id>`.
+- Revoked token: 401 with a clear code; the CLI says "log in again".
 
-## 13. Testy
+## 13. Tests
 
-- **Rdzeń**: testy jednostkowe na SQLite w pamięci. Widoczność konwersacji, liczniki
-  nieprzeczytanych, wzmianki, wątki, dzierżawy, `ask`/`answer`.
-- **API**: testy kontraktowe na żywym demonie na losowym porcie, łącznie z SSE i wake
-  (webhook na lokalny serwer testowy).
-- **UI**: port `lint-ui.py` do węzła plus rozszerzenie o nowe pliki. To jest realna
-  wartość, bo każde z dziesięciu sprawdzeń koduje popełniony błąd, a linter ma test
-  wsteczny (celowo psuje kopię i sprawdza, czy krzyknie).
-- **Smoke wizualny**: Playwright na macOS. Na VPS było to niewykonalne (273 MB dysku,
-  200-400 MB RAM), lokalnie nie jest.
-- **Weryfikacja stoi na drodze wdrożenia**, nie obok. `npm run verify` uruchamia wszystko
-  i blokuje.
+- **Core**: unit tests on in-memory SQLite. Conversation visibility, unread
+  counts, mentions, threads, leases, `ask`/`answer`.
+- **API**: contract tests against a live daemon on a random port, including SSE and wake
+  (a webhook to a local test server).
+- **UI**: port `lint-ui.py` to Node and extend it for the new files. This has real
+  value because each of the ten checks encodes a past mistake, and the linter has a
+  regression test (deliberately breaks a copy and checks that it complains).
+- **Visual smoke test**: Playwright on macOS. This was impossible on the VPS (273 MB disk,
+  200-400 MB RAM), but is possible locally.
+- **Verification stands in the way of deployment**, not beside it. `npm run verify` runs everything
+  and blocks.
 
-## 14. Podział na etapy
+## 14. Stages
 
-Projekt jest za duży na jeden plan wykonawczy. Cztery etapy, każdy kończy się czymś,
-co da się uruchomić.
+The project is too big for one implementation plan. Four stages, each ending with something
+that can be run.
 
-| Etap | Zakres | Kończy się tym, że |
+| Stage | Scope | Ends with |
 |---|---|---|
-| **1. Rdzeń** *(zrealizowany)* | store, model danych, aktorzy, tokeny, konwersacje, wiadomości, wzmianki, nieprzeczytane, REST, SSE, `agenttalks init/serve`, importer z `~/.talk`, **obraz Docker** | dwa `curl`-e rozmawiają ze sobą przez serwer w kontenerze, historia z prototypu jest w bazie |
-| **2. Agenci** *(zrealizowany; wake tylko webhook - wariant exec odłożony)* | serwer **MCP**, CLI `atalk`, wake (webhook), hooki Claude Code, dzierżawy zasobów, pliki z TTL/sensitive/burn | agent gada z agentem bez udziału człowieka, agent bezczynny daje się obudzić |
-| **3. UI** | logowanie, konwersacje, wątki, pliki, SSE, wyszukiwanie, semantyka nieprzeczytanych, mobile | człowiek jest normalnym uczestnikiem rozmowy z telefonu |
-| **4. Eksploatacja** | compose i systemd na VPS-ie, kopie zapasowe, retencja, rate limity, dokumentacja | da się to postawić na czystej maszynie z jednej instrukcji |
+| **1. Core** *(implemented)* | store, data model, actors, tokens, conversations, messages, mentions, unread counts, REST, SSE, `agenttalks init/serve`, importer from `~/.talk`, **Docker image** | Two `curl` clients talk to each other through the containerized server; prototype history is in the database |
+| **2. Agents** *(implemented; webhook-only wake, exec variant deferred)* | **MCP** server, CLI `atalk`, wake (webhook), Claude Code hooks, resource leases, files with TTL/sensitive/burn | An agent talks to another agent without human involvement; an idle agent can be woken |
+| **3. UI** | login, conversations, threads, files, SSE, search, unread semantics, mobile | A human is a regular conversation participant on a phone |
+| **4. Operations** | compose and systemd on the VPS, backups, retention, rate limits, documentation | It can be installed on a clean machine using one set of instructions |
 
-Kolejność: 1, potem 2 i 3 równolegle, potem 4. Każdy etap dostaje własny plan wykonawczy.
+Order: 1, then 2 and 3 in parallel, then 4. Each stage gets its own implementation plan.
 
-Obraz Docker wchodzi już w etapie 1, a nie na końcu. Wdrożenie, które pojawia się dopiero
-po zbudowaniu wszystkiego, zawsze przynosi niespodzianki; wdrożenie od pierwszego dnia
-sprawia, że każdy kolejny etap jest natychmiast uruchamialny tam, gdzie ma docelowo żyć.
+The Docker image arrives in stage 1, not at the end. Deployment that first appears
+after everything has been built always brings surprises; deployment from day one
+means each subsequent stage can immediately run where it is ultimately meant to live.
 
-## 15. Co unieważni ten projekt
+## 15. What would invalidate this design
 
-Rezygnacja z MCP jako głównego interfejsu agenta (wtedy wybór stosu wraca do rozważenia).
-Wymóg pracy wielu instancji demona naraz (SQLite przestaje wystarczać, potrzebny Postgres
-plus zewnętrzna szyna zdarzeń). Wymóg federacji między serwerami. Zmiana modelu tożsamości
-z „aktor plus tokeny plus sesje" na coś innego, bo z niego wynika połowa reszty.
+Dropping MCP as the primary agent interface (then the stack choice needs reconsideration).
+Requiring multiple daemon instances to run at once (SQLite is no longer sufficient; Postgres
+plus an external event bus is needed). Requiring federation between servers. Changing the identity model
+from "actor plus tokens plus sessions" to something else, because half of the rest follows from it.

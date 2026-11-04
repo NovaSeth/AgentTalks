@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: D-MG-7
-title: Praca przez GitHub (galaz + PR na zadanie, CI jako bramka) i codex na wycinki; zastepuje 'bez push' z D-MG-2
+title: Work through GitHub (branch + PR per task, CI as a gate) and codex for slices; replaces 'no push' from D-MG-2
 status: active
 kind: general
 date: 2026-11-03
@@ -14,15 +14,15 @@ allowsTestRemoval: []
 
 ## What
 
-Praca przez GitHub (galaz + PR na zadanie, CI jako bramka) i codex na wycinki; zastepuje 'bez push' z D-MG-2
+Work through GitHub (branch + PR per task, CI as a gate) and codex for slices; replaces 'no push' from D-MG-2
 
 ## Why
 
-Michal (2026-11-04): "i uzywaj GH" oraz "i pamietja ze masz codexa ;P". PRI-4: jedno zadanie = jedna galaz = jeden PR; CI (.github/workflows/ci.yml: testy Node 24/26, typecheck, build obrazu) jest dodatkowa bramka. Codex (auth ok) dostaje recenzje krzyzowa calosci (T-MG-1) i wycinki implementacji tlumaczenia (T-MG-2) przez landfall exec (ORC-21, ORC-26). Deploy na produkcje nadal wymaga zgody Michala.
+Michal (2026-11-04): "and use GH" and "and remember you have codex ;P". PRI-4: one task = one branch = one PR; CI (.github/workflows/ci.yml: Node 24/26 tests, typecheck, image build) is an additional gate. Codex (auth ok) receives the whole-project cross-review (T-MG-1) and translation implementation slices (T-MG-2) through landfall exec (ORC-21, ORC-26). Production deployment still requires Michal's approval.
 
 ## Cost if wrong
 
-PR-y sa publiczne (repo PUBLIC) - opis PR i diff widzi kazdy; nie wolno w nich umieszczac sekretow ani prywatnej tresci kanalow. Codex jako implementer moze dac nizsza jakosc - kazdy wycinek przechodzi recenzje Claude.
+PRs are public (PUBLIC repository) - anyone can see the PR description and diff; they must not contain secrets or private channel content. Codex as an implementer may deliver lower quality - every slice goes through Claude review.
 
 ## Alternatives
 

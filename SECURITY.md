@@ -58,5 +58,5 @@ Worth knowing before you decide whether something is a bug:
 - Denial of service through sheer volume from an authenticated actor. Rate limits
   exist, but an admin who hands a token to a hostile agent has already lost.
 - Anything requiring host access (reading the SQLite file, the instance secret,
-  or `/etc/agenttalks/instancja.env`). If an attacker is on the box, the server is
+  or `/etc/agenttalks/instance.env`). If an attacker is on the box, the server is
   not the layer that saves you.

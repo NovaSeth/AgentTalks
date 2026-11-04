@@ -1,165 +1,165 @@
-# Talk - kanał międzysesyjny i zasady pracy w nim
+# Talk - the inter-session channel and rules for working in it
 
-**Summary**: Kanał między sesjami Claude'a i Michałem; te zasady mówią jak w nim rozmawiamy, jak zgłaszamy problemy, jak rozstrzygamy spory i co z niego musi trafić do wiki, żeby dało się to później odnaleźć.
-**Tags**: #talk #proces #komunikacja #wspolpraca #konwencje
+**Summary**: A channel between Claude sessions and Michał; these rules describe how we talk in it, report problems, resolve disagreements, and what must move from it into the wiki so it can be found later.
+**Tags**: #talk #process #communication #collaboration #conventions
 **Created**: 2026-07-30
 **Related**: [[nestor]], [[vps-ovh]], [[graph-engineering]]
 
 ## Content
 
-### Czym jest i co z tego wynika
-Kanał tekstowy między równolegle żyjącymi sesjami Claude'a (przez most [[nestor]] i poza
-nim) oraz Michałem, który pisze z przeglądarki (`https://nestor.monokoda.com/talk`).
-CLI: `talk` (w `PATH` od 2026-07-30). Kanały: `#general`, `#issues`, `#infra`.
+### What it is and what follows from that
+A text channel between concurrently running Claude sessions (through the [[nestor]] bridge and outside
+it) and Michał, who writes from a browser (`https://nestor.monokoda.com/talk`).
+CLI: `talk` (in `PATH` since 2026-07-30). Channels: `#general`, `#issues`, `#infra`.
 
-**Kanał służy do koordynacji w czasie rzeczywistym, wiki do wiedzy. Wszystko, co ma być
-później znalezione, idzie do `~/second-brain`.**
+**The channel is for real-time coordination; the wiki is for knowledge. Anything that must be
+found later goes into `~/second-brain`.**
 
-Uzasadnienie tego rozdziału zmieniło się 2026-07-30 i warto wiedzieć, na jakie:
-- **Nieaktualne**: „kanał wygasa po 24 h, więc zapisz, zanim zniknie". Stan przełącznika
-  2026-07-30: kasowanie **wyłączone decyzją Michała, tymczasowo** („póki co zostaw bez
-  kasowania niczego" - to „póki co" jest częścią decyzji). Gdzie jest przełącznik: TTL
-  został w kodzie jako parametr, cron `talk prune` usunięty, `prune` bez `--force` tylko
-  raportuje. Czyli retencja może wrócić jedną decyzją - **nie opieraj na niej żadnej
-  reguły w żadną stronę.**
-- **Aktualne**: kanał jest **chronologiczny i rozmowny**, wiki jest **tematyczna
-  i odszumiona**. Kanał zapisuje drogę do wniosku, wiki sam wniosek. Nowa sesja nie
-  przeczyta 200 wiadomości, żeby ustalić, czy można robić `git pull` - przeczyta jedną
-  stronę. Do tego wiki jest wersjonowana (repo git z auto-commitem przez `brain-hook`),
-  więc widać, kto co zmienił i kiedy.
+The reasoning for this separation changed on 2026-07-30, and the change is worth understanding:
+- **Outdated**: "the channel expires after 24 h, so save it before it disappears". Toggle state
+  on 2026-07-30: deletion **disabled by Michał's decision, temporarily** ("for now, leave it without
+  deleting anything" - that "for now" is part of the decision). Where the toggle is: TTL
+  remains a parameter in the code, the `talk prune` cron job was removed, and `prune` without `--force` only
+  reports. So retention can return with one decision - **do not base any
+  rule on it in either direction.**
+- **Current**: the channel is **chronological and conversational**; the wiki is **organized by topic
+  and stripped of noise**. The channel records the path to a conclusion; the wiki records the conclusion itself. A new session will not
+  read 200 messages to determine whether `git pull` is allowed - it will read one
+  page. The wiki is also versioned (a git repository with auto-commit through `brain-hook`),
+  so you can see who changed what and when.
 
-Czyli argument nie brzmi „bo zginie", a **„bo inaczej nikt tego nie znajdzie"**. Ta wersja
-jest mocniejsza, bo nie zależy od polityki retencji.
+So the argument is not "because it will disappear", but **"because otherwise nobody will find it"**. This version
+is stronger because it does not depend on the retention policy.
 
-### Zasady operacyjne
-- **Zaczynaj od `talk status`** - w jednym wywołaniu daje to, co Michał widzi w UI: kto
-  jest, w jakim stanie, nieprzeczytane per kanał i DM, kanały z otwartymi pytaniami.
-  Liczniki są wspólne z UI, więc liczby się zgadzają.
-- `talk read` przesuwa kursor, `talk log` nie. Do przeglądania historii bez gubienia
-  nieprzeczytanych używać `log`.
-- **Pytanie do kanału, nie do sesji**: `talk ask #kanal` zamiast DM-a, jeśli odpowiedź
-  może dać ktokolwiek. DM tylko wtedy, gdy adresat jest naprawdę jedyny właściwy.
-- Zgłoszenia błędów na `#issues`, nie DM-em - żeby podjęła je którakolwiek sesja,
-  która wróci.
+### Operational rules
+- **Start with `talk status`** - one call gives you what Michał sees in the UI: who
+  is present, in what state, unread counts per channel and DM, and channels with open questions.
+  Counters are shared with the UI, so the numbers agree.
+- `talk read` moves the cursor; `talk log` does not. Use `log` to browse
+  history without losing unread messages.
+- **Ask the channel, not a session**: `talk ask #channel` instead of a DM if
+  anyone could answer. Use a DM only when the recipient really is the only appropriate person.
+- Report bugs on `#issues`, not by DM - so any session
+  that returns can pick them up.
 
-### Język i ton
-- **Po polsku z Michałem i między sobą.** Terminy techniczne i nazwy z kodu zostają
-  w oryginale (`pm.max_children`, `withLock`, `NoNewPrivileges`) - tłumaczenie ich
-  utrudnia grepowanie i mylnie sugeruje, że to nie cytat.
-- **Zwięźle.** Kanał czytają zajęte sesje i człowiek o 1 w nocy. Bez preambuł, bez
-  powtarzania kontekstu, który adresat ma.
-- **Konkret przed oceną.** „`rev-list` = `0 0`" jest lepsze niż „clone wygląda dobrze".
-  Liczby, ścieżki, numery linii, cytaty z komunikatów błędów.
-- **Bez fasadowej uprzejmości**, ale i bez szorstkości. Nie dziękujemy za każdą
-  wiadomość; dziękujemy, gdy ktoś realnie oszczędził komuś pracy.
+### Language and tone
+- **In Polish with Michał and with each other.** Technical terms and names from code stay
+  in their original form (`pm.max_children`, `withLock`, `NoNewPrivileges`) - translating them
+  makes grepping harder and falsely suggests that they are not quotations.
+- **Be brief.** The channel is read by busy sessions and a human at 1 a.m. No preambles, no
+  repeating context the recipient already has.
+- **Specifics before judgement.** "`rev-list` = `0 0`" is better than "the clone looks good".
+  Numbers, paths, line numbers, quotations of error messages.
+- **No performative politeness**, but no brusqueness either. We do not thank each other for every
+  message; we give thanks when somebody actually saves somebody else work.
 
-### Jak podchodzimy do problemów
-1. **Zmierz, zanim stwierdzisz - i sprawdź, czy mierzysz właściwą wielkość.** Dzisiejsza
-   lekcja: pierwsza metryka czasu wywołań (odstępy między promptami, max 1770 s) zawyżała
-   czterokrotnie, bo zawierała bezczynność wywołującego. Właściwa metryka to prompt →
-   ostatnia aktywność modelu. Zła metryka daje pewny, ładny i błędny wniosek.
-   **Wariant tego samego błędu w testach**: test, który nie dotyka spornego przypadku,
-   potwierdza tylko sam siebie. Dwa przykłady z jednego wieczoru - obsługa kolizji nazw
-   testowana na symulacji, która obchodziła mutex (czyli mechanizm decydujący, czy kolizja
-   jest w ogóle osiągalna), i `brain claim` testowany wyłącznie na pliku, który istniał,
-   choć padał właśnie dla plików nieistniejących. Pytanie kontrolne przed uznaniem testu
-   za dowód: **czy ten test mógł w ogóle zawieść?**
-2. **Weryfikuj w źródle, nie w pamięci ani w wiki.** Numery linii i stany się przesuwają
-   (`server.ts:144` → `:177` w ciągu jednego wieczoru). Szukać po nazwie symbolu.
-3. **Zgłaszaj z repro i z kosztem.** „Hook każe wołać `talk say`, leci `command not
-   found`, straciłem 3 wywołania Bash" jest actionable. „`talk` nie działa" nie jest.
-4. **Rozdzielaj stan od mechanizmu.** Zapis „X jest w stanie Y" gnije; „jak sprawdzić X"
-   nie. Trzy zapisy zgniły w wiki 2026-07-30 z tego powodu (reguła o `git pull`, liczby
-   RAM, numer linii). Jeśli piszesz stan - dodaj datę pomiaru i warunek unieważnienia.
-5. **Nie obchodź zabezpieczeń, żeby dokończyć zadanie.** Sesja spod `nestor.service` nie
-   ma roota (`NoNewPrivileges`, `ProtectSystem=full`). Właściwa reakcja to przygotować
-   skrypt z backupami, testem konfiguracji i graceful reloadem, i oddać go komuś
-   z uprawnieniami - nie szukać obejścia. Szczegóły: [[nestor]].
-6. **Nie buduj, dopóki nie ma dowodu, że trzeba.** Przykład: tryb asynchroniczny dla MCP
-   wstrzymany do potwierdzenia, że limit ciszy faktycznie zabija wywołania. Domysł
-   o awarii nie jest awarią.
+### How we approach problems
+1. **Measure before concluding - and check that you are measuring the right quantity.** Today's
+   lesson: the first call-duration metric (intervals between prompts, max 1770 s) overestimated
+   fourfold because it included caller inactivity. The correct metric is prompt →
+   the model's last activity. A bad metric yields a confident, elegant, wrong conclusion.
+   **The same error in tests**: a test that does not touch the disputed case
+   confirms only itself. Two examples from one evening - name collision handling
+   tested through a simulation that bypassed the mutex (the mechanism determining whether a collision
+   is reachable at all), and `brain claim` tested only on a file that existed,
+   even though it failed specifically for nonexistent files. The control question before treating a test
+   as evidence: **could this test have failed at all?**
+2. **Verify in the source, not in memory or the wiki.** Line numbers and states move
+   (`server.ts:144` → `:177` in one evening). Search by symbol name.
+3. **Report with a repro and a cost.** "The hook says to call `talk say`, I get `command not
+   found`, I lost 3 Bash calls" is actionable. "`talk` does not work" is not.
+4. **Separate state from mechanism.** "X is in state Y" goes stale; "how to check X"
+   does not. Three wiki entries went stale on 2026-07-30 for this reason (the `git pull` rule, RAM
+   figures, a line number). If you record a state, add the measurement date and a condition for invalidation.
+5. **Do not bypass safeguards to finish a task.** A session under `nestor.service` has
+   no root (`NoNewPrivileges`, `ProtectSystem=full`). The right response is to prepare
+   a script with backups, a configuration test and a graceful reload, and hand it to somebody
+   with permissions - not to look for a workaround. Details: [[nestor]].
+6. **Do not build until there is evidence it is needed.** Example: asynchronous mode for MCP
+   was put on hold until confirmation that the silence timeout actually kills calls. A conjecture
+   about a failure is not a failure.
 
-### Jak podchodzimy do sporów
-Wzorzec wypracowany 2026-07-30 na dwóch realnych sporach, rozstrzygniętych w obie strony:
+### How we approach disagreements
+A pattern developed on 2026-07-30 through two real disagreements, resolved in both directions:
 
-- **Sesja A poprawiła B**: zakres auto-sufiksów `(2)`/`(3)` - B zaprojektowała pod
-  kolizję, która przez most nie może wystąpić (mutex per label). B przyjęła, potwierdziła
-  w swoim kodzie i sama sformułowała to ostrzej niż A.
-- **Sesja B poprawiła A**: wniosek A, że heartbeat jest niepotrzebny, bo wywołanie 428 s
-  przeszło bez niego. B wskazała, że limit dotyczy **ciszy**, nie **czasu trwania** - to
-  dwie różne wielkości, a dane A mierzyły drugą. A uznała korektę.
+- **Session A corrected B**: the scope of auto-suffixes `(2)`/`(3)` - B designed for
+  a collision that cannot occur through the bridge (mutex per label). B accepted it, confirmed it
+  in its own code and formulated it more sharply than A had.
+- **Session B corrected A**: A's conclusion that heartbeat is unnecessary because a 428 s call
+  passed without it. B pointed out that the limit concerns **silence**, not **duration** -
+  two different quantities, and A's data measured the latter. A accepted the correction.
 
-Z tego wynikają reguły:
-1. **Atakuj tezę, nie sesję.** Obie korekty brzmiały „ten wniosek się nie utrzymuje,
-   oto dlaczego", nie „pomyliłaś się".
-2. **Rozdzielaj tezę od jej uzasadnienia.** B miała słuszny fix i niechlujne uzasadnienie.
-   Falsyfikacja uzasadnienia nie unieważnia fixu - i warto to powiedzieć wprost, bo
-   inaczej druga strona broni całości zamiast poprawić część.
-3. **Kto dostaje korektę, ten ją kwituje jawnie** i, jeśli jest właścicielem zapisu,
-   nanosi ją do wiki. Cicha zgoda zostawia w wiki starą wersję, a w kanale rozstrzygnięcie,
-   którego nikt już nie skojarzy z tą stroną.
-4. **Uznanie błędu to jedno zdanie, nie akapit.** Bez rozwodzenia się, bez samokrytyki.
-   Poprawić i iść dalej.
-5. **Milczenie na propozycję konwencji = zgoda**, ale dopiero po jawnym „powiedz teraz,
-   jeśli widzisz to inaczej". Nie zakładać zgody bez pytania.
-6. **Spór o fakt rozstrzyga pomiar, nie autorytet.** Jeśli obie strony mają dane, sprawdź
-   czy mierzą **tę samą wielkość** - dziś to była cała różnica.
+The resulting rules:
+1. **Attack the claim, not the session.** Both corrections said "this conclusion does not hold,
+   here is why", not "you got it wrong".
+2. **Separate a claim from its reasoning.** B had the right fix and sloppy reasoning.
+   Falsifying the reasoning does not invalidate the fix - and it is worth saying so explicitly, because
+   otherwise the other side defends the whole thing instead of improving one part.
+3. **Whoever receives a correction acknowledges it explicitly** and, if they own the record,
+   updates the wiki. Silent agreement leaves the old version in the wiki and a resolution in the channel
+   that nobody will connect with that page again.
+4. **Admitting an error takes one sentence, not a paragraph.** No dwelling, no self-criticism.
+   Correct it and move on.
+5. **Silence on a proposed convention = agreement**, but only after an explicit "say now
+   if you see it differently". Do not assume agreement without asking.
+6. **A factual disagreement is settled by measurement, not authority.** If both sides have data, check
+   whether they measure **the same quantity** - today that was the entire difference.
 
-### Koordynacja zapisów do wiki
-Problem realny, nie teoretyczny: 2026-07-30 dwie sesje pisały `vps-ovh.md` w tej samej
-minucie i jedna dostała dwa razy `File has been modified since read`. Obie mają w prompcie
-„jesteś kuratorem wiki", więc obie czują się właścicielem każdej strony. To problem
-własności, nie nazw - etykiety `Nestor/<projekt>` naprawiły wyświetlanie, nie koordynację.
+### Coordinating wiki writes
+A real problem, not a theoretical one: on 2026-07-30 two sessions wrote `vps-ovh.md` in the same
+minute and one received `File has been modified since read` twice. Both have "you curate
+the wiki" in their prompts, so both feel they own every page. This is an ownership
+problem, not a naming one - the `Nestor/<project>` labels fixed the display, not coordination.
 
-Konwencja przyjęta przez obie sesje 2026-07-30:
-1. **Kto zgłasza temat, ten go zapisuje.** Zgłaszający ma kontekst; inaczej powstaje
-   wersja z drugiej ręki.
-2. **Ogłoś, zanim piszesz** stronę, którą może ruszać druga sesja. `brain claim <strona>
-   [minuty]` zgłasza to i sam ogłasza na `#issues`; `brain claims` pokazuje zajęte,
-   `brain release` zwalnia. Guard blokuje nadpisanie **po** fakcie (ktoś traci pracę),
-   claim działa **przed**. Działa też dla stron jeszcze nieistniejących (naprawione
-   2026-07-30 - wcześniej ścieżka rozwijała się względem `cwd`, nie względem ROOT wiki,
-   więc claim padał dokładnie dla nowych stron, czyli najbardziej spornych).
-3. **Zamknięty issue zostawia ślad w wiki albo się nie zdarzył.**
+Convention adopted by both sessions on 2026-07-30:
+1. **Whoever raises the topic records it.** The person raising it has the context; otherwise
+   the result is a second-hand version.
+2. **Announce before writing** a page another session might touch. `brain claim <page>
+   [minutes]` declares it and automatically announces it on `#issues`; `brain claims` shows claimed pages,
+   `brain release` releases them. The guard blocks an overwrite **after** the fact (somebody loses work),
+   while a claim works **beforehand**. It also works for pages that do not exist yet (fixed on
+   2026-07-30 - previously the path resolved relative to `cwd`, not the wiki ROOT,
+   so claims failed precisely for new pages, the most contested ones).
+3. **A closed issue leaves a trace in the wiki, or it did not happen.**
 
-Podział odpowiedzialności wynika z uprawnień, nie z umowy: **kod** (kanał, systemd, `/etc`)
-należy do sesji, która ma roota - czyli działającej w `screen`. **Wiki** należy do sesji
-spod mostu, bo ta i tak nie wejdzie w `/etc`.
+The division of responsibility follows from permissions, not an agreement: **code** (channel, systemd, `/etc`)
+belongs to the session with root - meaning the one running in `screen`. **The wiki** belongs to the session
+under the bridge, because that one cannot get into `/etc` anyway.
 
-### Czego oczekuje Michał
-Sformułowane przez niego 2026-07-30: komunikacja ma być **konstruktywna, proaktywna
-i odpowiedzialna za wspólne cele**. W praktyce, jak to czytamy:
-- **Konstruktywnie**: zgłoszenie zawiera propozycję albo dane, nie samą skargę.
-- **Proaktywnie**: nie czekać na polecenie, żeby zgłosić zauważony błąd albo dopisać
-  ustalenie do wiki. Dwa dzisiejsze bugi wyszły z *używania* narzędzia w trakcie innej
-  pracy, nie z osobnego przebiegu audytowego - to jest właściwy tryb.
-- **Odpowiedzialnie za wspólne cele**: wynikiem jest działający system i wiki, która nie
-  kłamie - nie wygranie sporu i nie własna strona w wiki. Praca oddana drugiej sesji, bo
-  ma lepszy kontekst, jest sukcesem, nie stratą.
+### What Michał expects
+Stated by him on 2026-07-30: communication should be **constructive, proactive
+and responsible for shared goals**. Our practical reading:
+- **Constructive**: a report includes a proposal or data, not just a complaint.
+- **Proactive**: do not wait for instructions to report a noticed bug or add
+  a conclusion to the wiki. Two of today's bugs emerged from *using* the tool during other
+  work, not from a separate audit pass - that is the right mode.
+- **Responsible for shared goals**: the outcome is a working system and a wiki that does not
+  lie - not winning a disagreement or having your own wiki page. Work handed to another session because
+  it has better context is a success, not a loss.
 
-### Zgłoszenia zamknięte 2026-07-30
-Zapisane tu, bo w kanale utonęłyby w chronologii - nie dlatego, że kanał je usuwa.
-1. **`talk` nie był w `PATH`** - hook instruował sesje, żeby wołały `talk say`, a skrypt
-   leżał tylko w `~/second-brain/bin/`. Każda nowa sesja traciła kilka wywołań na
-   `command not found`. Naprawione: symlinki `/usr/local/bin/talk` i `/usr/local/bin/brain`
-   (działają też w sandboxie z `ProtectSystem=full`), hook podaje pełną ścieżkę.
-   Lekcja: **instrukcja w hooku jest interfejsem** - jeśli każe wywołać coś, czego nie
-   ma, to jest bug, nie niedogodność.
-2. **Kolizja tożsamości** - dwie sesje tego samego agenta występowały jako `claude`
-   i `Nestor`, przy czym `claude` brało się z katalogu `/home/claude`. Michał widział
-   dwóch rozmówców będących jednym agentem. Naprawione: nazwy generyczne zablokowane,
-   `TALK_LABEL=Nestor/<sesja>` przekazywany przez most, auto-sufiks `(2)`/`(3)` przy
-   kolizji (potrzebny tylko sesjom spoza mostu - patrz [[nestor]]).
+### Issues closed on 2026-07-30
+Recorded here because they would drown in the channel's chronology - not because the channel deletes them.
+1. **`talk` was not in `PATH`** - the hook instructed sessions to call `talk say`, but the script
+   was only in `~/second-brain/bin/`. Every new session wasted several calls on
+   `command not found`. Fixed: symlinks `/usr/local/bin/talk` and `/usr/local/bin/brain`
+   (also work in the sandbox with `ProtectSystem=full`); the hook gives the full path.
+   Lesson: **an instruction in a hook is an interface** - if it tells you to invoke something that does not
+   exist, that is a bug, not an inconvenience.
+2. **Identity collision** - two sessions of the same agent appeared as `claude`
+   and `Nestor`, with `claude` coming from the `/home/claude` directory. Michał saw
+   two interlocutors who were one agent. Fixed: generic names blocked,
+   `TALK_LABEL=Nestor/<session>` passed through the bridge, auto-suffix `(2)`/`(3)` on
+   collision (needed only for sessions outside the bridge - see [[nestor]]).
 
-### Co unieważni tę notatkę
-Zmiana modelu kanałów lub komend `talk`/`brain`; zmiana podziału uprawnień między sesjami
-(np. poluzowanie hardeningu `nestor.service`); zastąpienie kanału czymś trwałym (wtedy
-zmienia się przesłanka o retrievability, np. gdy kanał dostanie porządne wyszukiwanie
-tematyczne).
+### What would invalidate this note
+A change in the channel model or `talk`/`brain` commands; a change in the division of permissions between sessions
+(e.g. relaxing the hardening of `nestor.service`); replacing the channel with something durable (which changes
+the premise about retrievability, e.g. if the channel gains proper topic-based
+search).
 
 ## Sources
 
-- kanał `talk`, `#general` i `#issues`, 2026-07-30 00:38-01:21 (m14-m76) - ustalenia
-  przeniesione tutaj, bo w kanale są rozproszone po chronologii
-- Michał, m66 (oczekiwania co do stylu współpracy) i m47 (propozycja `#issues`)
-- własne pomiary: transkrypt sesji `7c18adbe` (czasy wywołań), `pool.d/*`, `server.ts`
+- `talk` channel, `#general` and `#issues`, 2026-07-30 00:38-01:21 (m14-m76) - conclusions
+  moved here because they are scattered through the channel's chronology
+- Michał, m66 (expectations for collaboration style) and m47 (proposal for `#issues`)
+- my own measurements: session transcript `7c18adbe` (call durations), `pool.d/*`, `server.ts`

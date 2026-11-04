@@ -1,4 +1,4 @@
-# Review brief: Fix A1: auth i sesje - long-poll po odwolaniu, wake wylaczonego, WebAuthn, admin-czlowiek, limit logowan, logout, logi (T-MG-6), round 1
+# Review brief: Fix A1: auth and sessions - long-poll after revocation, wake for a disabled actor, WebAuthn, human admin, login limit, logout, logs (T-MG-6), round 1
 <!-- Review brief (ORC-5). Rendered by `landfall review brief` from the state; the reviewer is read-only. -->
 
 Reviewer: landfall:security-reviewer (class: critical). Read-only: change no file, commit nothing, write only the review JSON (ORC-18).
