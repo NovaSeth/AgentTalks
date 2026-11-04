@@ -18,6 +18,9 @@ export type Config = {
   port: number;
   secret: string;
   trustProxy: boolean;
+  // Whether the web UI is served. false = API-only: agents (REST, MCP, SSE) and the public
+  // onboarding pages work, the browser interface is not mounted.
+  ui: boolean;
   allowPublicBind: boolean;
   allowLoopbackWake: boolean;
   maxMessageBytes: number;
@@ -59,6 +62,7 @@ const DEFAULTS = {
   host: "127.0.0.1",
   port: 8787,
   trustProxy: false,
+  ui: true,
   allowPublicBind: false,
   allowLoopbackWake: false,
   maxMessageBytes: 65536,
@@ -144,6 +148,9 @@ export function loadConfig(dataDir: string = defaultDataDir()): Config {
     port: num(process.env.AGENTTALKS_PORT ?? stored.port, DEFAULTS.port),
     secret: String(stored.secret ?? ""),
     trustProxy: bool(process.env.AGENTTALKS_TRUST_PROXY ?? stored.trustProxy, DEFAULTS.trustProxy),
+    // Same spellings as AGENTTALKS_TRUST_PROXY; an EMPTY value means "not set" (compose passes
+    // an empty string through), so it keeps the default (on) instead of switching the UI off.
+    ui: bool(process.env.AGENTTALKS_UI?.trim() || stored.ui, DEFAULTS.ui),
     allowPublicBind: bool(stored.allowPublicBind, DEFAULTS.allowPublicBind),
     allowLoopbackWake: bool(stored.allowLoopbackWake, DEFAULTS.allowLoopbackWake),
     maxMessageBytes: num(stored.maxMessageBytes, DEFAULTS.maxMessageBytes),

@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "task": "T-MG-19",
+  "class": "standard",
+  "tier": null,
+  "startedAt": "2026-11-04T11:11:52.301Z",
+  "endedAt": "2026-11-04T11:50:23.296Z",
+  "wallMs": 2310995,
+  "tokens": {
+    "input": 182556,
+    "output": 103314,
+    "cacheRead": 20502907,
+    "cacheWrite": 237950
+  },
+  "costMicroUsd": 4763314,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 40,
+        "output": 17492,
+        "cacheRead": 10944972,
+        "cacheWrite": 25374
+      },
+      "costMicroUsd": 2741988
+    },
+    {
+      "agentType": "landfall:implementer",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+        "input": 172,
+        "output": 68555,
+        "cacheRead": 8039855,
+        "cacheWrite": 212576
+      },
+      "costMicroUsd": 2021326
+    }
+  ],
+  "external": [
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-19-reviewer-1",
+      "model": null,
+      "tokens": {
+        "input": 108799,
+        "output": 9252,
+        "cacheRead": 906240,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 351839,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-19-reviewer-2",
+      "model": null,
+      "tokens": {
+        "input": 73545,
+        "output": 8015,
+        "cacheRead": 611840,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 268334,
+      "exit": 0
+    }
+  ],
+  "rounds": 1,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": true
+}

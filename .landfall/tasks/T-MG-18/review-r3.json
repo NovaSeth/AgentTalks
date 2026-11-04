@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "src/http/ui/js/sse-events.js",
+      "line": 193,
+      "rule": null,
+      "text": "Item 2: F2 and F3 ADDRESSED (both repros pass; mutations fail). New regression in an in-memory ui-t18-catchup test: load message 1/cursor 1, reconnect with server messages 1..2, hold the after=1 response, deliver message_updated(2, 'edited live'), then release it. Output: beforeRelease='edited live', afterRelease='m2'; base preserves 'edited live'. Catch-up overwrites newer SSE state. Make REST merges preserve newer live revisions and add this delayed-response regression."
+    }
+  ],
+  "run": "codex-T-MG-18-reviewer-3",
+  "sha256": "a9e38a21969a0bdf61ef846724dfba40df3e7fc012474dc98330ef94ec788a00"
+}

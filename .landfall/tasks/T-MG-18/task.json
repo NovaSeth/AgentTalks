@@ -13,8 +13,8 @@
       "at": "2026-11-04T11:11:52.723Z"
     }
   ],
-  "status": "new",
-  "round": 0,
+  "status": "fix-round",
+  "round": 3,
   "events": [
     {
       "at": "2026-11-04T11:11:32.057Z",
@@ -33,8 +33,134 @@
           "loc-over-trivial"
         ]
       }
+    },
+    {
+      "at": "2026-11-04T11:11:53.505Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-18-storage-simplify",
+        "base": "b8bae5e4697a970c5d43f201a88b62c57198bdd9",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-18"
+      }
+    },
+    {
+      "at": "2026-11-04T11:12:50.359Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "claude:implementer",
+        "base": "b8bae5e4697a970c5d43f201a88b62c57198bdd9",
+        "note": "D-MG-30 + B-MG-107, 116, 117"
+      }
+    },
+    {
+      "at": "2026-11-04T11:22:25.484Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
+      }
+    },
+    {
+      "at": "2026-11-04T11:27:28.217Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T11:27:28.667Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 1
+      }
+    },
+    {
+      "at": "2026-11-04T11:30:53.389Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T11:30:53.660Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 1,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T11:35:13.440Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T11:35:13.705Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 0,
+        "open": 2
+      }
+    },
+    {
+      "at": "2026-11-04T11:41:53.599Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T11:41:53.802Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 2,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T11:50:26.896Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T11:50:27.683Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 3,
+        "addressed": 0,
+        "open": 1
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "b8bae5e4697a970c5d43f201a88b62c57198bdd9",
+  "branch": "task/T-MG-18-storage-simplify"
 }

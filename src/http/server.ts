@@ -20,7 +20,7 @@ import { unauthorized } from "../core/errors.ts";
 
 export const VERSION = "0.3.0";
 
-export function buildRouter(): Router {
+export function buildRouter(ui = true): Router {
   const router = new Router();
   // Health with a REAL probe: "the server came up" != "the database answers". Feedback
   // 332c7e42: an auth stub / empty stream must NOT go green. If the DB does not answer, the
@@ -40,6 +40,7 @@ export function buildRouter(): Router {
     json(res, 200, {
       ok: true,
       version: VERSION,
+      ui: rc.config.ui,
       ...(isLoopbackRequest(req) ? { actors: row.actors, lastMessageId: row.lastMessageId } : {}),
     });
   });
@@ -91,7 +92,7 @@ export function buildRouter(): Router {
     json(res, 405, { error: "the MCP server is stateless; use POST", code: "post_only" });
   });
   // The UI, the gate, public onboarding - mounted last (the most general routes).
-  registerUiRoutes(router);
+  registerUiRoutes(router, ui);
   return router;
 }
 
@@ -172,7 +173,7 @@ function isLoopbackRequest(req: { headers: Record<string, unknown>; socket: { re
 }
 
 export function createServer(ctx: Ctx, config: Config): Server {
-  const router = buildRouter();
+  const router = buildRouter(config.ui);
 
   return createHttpServer((req, res) => {
     void (async () => {

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "docs/install.md",
+      "line": 990,
+      "rule": "REV-2",
+      "text": "Part B.7: `atalk login --local` does not read the existing project file, so the documented trust step fails. Reproduced with credential environment variables unset: `node bin/atalk.js login --local` exits 1 with `usage: atalk login --url <url> --token <atk_...>|- [--local]`. Document `atalk login --local --url <server> --token -` and pasting the existing token; update the repeated plugin README and troubleshooting instructions."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "test/http/api-only-mode.test.ts",
+      "line": 71,
+      "rule": "COD-2",
+      "text": "Part A: invalid-token MCP and unauthenticated SSE requests do not prove these services work in API-only mode. Reproduction: an in-memory Router.add mutation replaced POST /mcp with a handler returning 500; invoking it and applying this assertion produced `status=500; assertion PASSED`. Mint a valid test token and assert a successful MCP tools/list response and authenticated SSE delivery, retaining the authentication-denial checks."
+    }
+  ],
+  "run": "codex-T-MG-19-reviewer-1",
+  "sha256": "1cf641af3390aa68b1957792a1896e358be2b3a9147c1630242c2fbec8f1687a"
+}

@@ -306,6 +306,7 @@ export function siteGateBlocks(
   req: IncomingMessage, res: ServerResponse, config: Config, pathname: string,
 ): boolean {
   if (!config.sitePassword) return false;      // the gate is off
+  if (config.ui === false) return false;        // API-only: there is no UI to gate
   if (!isGatedPath(pathname)) return false;     // a public path, or API/MCP
   if (hasValidGateCookie(req, config)) return false;
   // no-store: the gate (with its logotype) must not get stuck in a browser cache after a
@@ -321,7 +322,28 @@ export function siteGateBlocks(
 
 // --- route registration -----------------------------------------------------
 
-export function registerUiRoutes(router: Router): void {
+const UI_DISABLED = {
+  error: "the web UI is disabled on this server (API-only mode); use the API, MCP or the CLI",
+  code: "ui_disabled",
+};
+
+/** The paths that exist only for the browser interface. With AGENTTALKS_UI=0 they answer a
+ *  short 404 that says why, instead of the generic "path not found". */
+function registerUiDisabledRoutes(router: Router): void {
+  const off = (_req: IncomingMessage, res: ServerResponse) => json(res, 404, UI_DISABLED);
+  router.add("POST", "/api/site-gate", off);
+  for (const p of ["/", "/app", "/api/ui-version", "/app.css", "/js/:file", "/vendor/primer/:dir/:file",
+    "/favicon.svg", "/favicon.ico", "/apple-touch-icon.png"]) router.add("GET", p, off);
+  for (const size of [16, 32, 180, 192, 512]) router.add("GET", `/icons/icon-${size}.png`, off);
+}
+
+export function registerUiRoutes(router: Router, ui = true): void {
+  if (ui) registerWebUiRoutes(router);
+  else registerUiDisabledRoutes(router);
+  registerPublicRoutes(router);
+}
+
+function registerWebUiRoutes(router: Router): void {
   // Verifying the gate password. The /api/* path is already outside the gate (isGatedPath), so
   // this POST is always reachable, cookie or no cookie.
   router.add("POST", "/api/site-gate", async (req, res, rc) => {
@@ -387,6 +409,10 @@ export function registerUiRoutes(router: Router): void {
       serveBinary(res, uiFile(`icons/icon-${size}.png`), "image/png"));
   }
 
+}
+
+/** Public onboarding: served with or without the web UI. */
+function registerPublicRoutes(router: Router): void {
   // No indexing of the interface - hard, for bots that ignore the meta tag. The public
   // onboarding paths are allowed EXPLICITLY, and listed before the Disallow: an agent's fetch
   // tool (Claude Code's WebFetch among them) honours robots.txt, and a blanket "Disallow: /"
