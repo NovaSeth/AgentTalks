@@ -15,19 +15,73 @@ const UI = fileURLToPath(new URL("../src/http/ui/js/", import.meta.url));
 
 const stored = new Map<string, string>();
 
+// A small browser (fix round 2): elements live in a map by id, so the rail buttons keep the
+// classes paintRail toggles and the shell keeps the markup renderShell wrote; the hashchange
+// listener app.js installs is captured, so a test can drive the real route handler.
+const elements = new Map<string, any>();
+const listeners: Record<string, Function> = {};
+function makeEl(id = ""): any {
+  const classes = new Set<string>();
+  const attrs = new Map<string, string>();
+  return {
+    id, innerHTML: "", textContent: "", value: "", style: {}, dataset: {}, tabIndex: 0, hidden: false, inert: false,
+    classList: {
+      add: (c: string) => classes.add(c), remove: (c: string) => classes.delete(c),
+      toggle: (c: string, on?: boolean) => { if (on === undefined) on = !classes.has(c); if (on) classes.add(c); else classes.delete(c); return on; },
+      contains: (c: string) => classes.has(c),
+    },
+    setAttribute: (k: string, v: string) => { attrs.set(k, v); }, getAttribute: (k: string) => attrs.get(k) ?? null,
+    removeAttribute: (k: string) => { attrs.delete(k); }, hasAttribute: (k: string) => attrs.has(k),
+    addEventListener() {}, removeEventListener() {}, appendChild() {}, remove() {}, replaceWith() {},
+    querySelector: () => makeEl(), querySelectorAll: () => [], closest: () => null,
+    focus() {}, blur() {}, click() {}, scrollTo() {}, scrollIntoView() {}, select() {},
+    insertAdjacentHTML() {}, getBoundingClientRect: () => ({ top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0 }),
+    offsetWidth: 0, offsetHeight: 0, offsetParent: null, scrollHeight: 0, scrollTop: 0, clientHeight: 0,
+  };
+}
+function el(id: string) {
+  if (!elements.has(id)) {
+    const node = makeEl(id);
+    // The app root: writing its markup replaces the rail, as a browser would, so a class paintRail
+    // toggled on an older rail button does not survive a full render.
+    if (id === "app") {
+      let html = "";
+      Object.defineProperty(node, "innerHTML", {
+        get: () => html,
+        set: (v: string) => { html = v; for (const [k, n] of elements) if (k.startsWith("rail-")) n.classList.remove("on"); },
+      });
+    }
+    elements.set(id, node);
+  }
+  return elements.get(id);
+}
+
 async function loadUi() {
   const g = globalThis as Record<string, unknown>;
   g.document = {
-    documentElement: {}, getElementById: () => null, addEventListener() {}, removeEventListener() {},
-    querySelector: () => null, querySelectorAll: () => [], title: "", visibilityState: "visible",
+    documentElement: { style: { setProperty() {} } }, body: makeEl("body"), head: makeEl("head"), title: "",
+    getElementById: (id: string) => el(id), createElement: () => makeEl(), createTextNode: () => makeEl(),
+    addEventListener() {}, removeEventListener() {},
+    querySelector: () => null, querySelectorAll: () => [],
+    get activeElement() { return null; }, contains: () => false, visibilityState: "visible",
   };
-  g.window = { matchMedia: () => ({ matches: false }), innerWidth: 1728, innerHeight: 900 };
-  g.sessionStorage = { getItem: () => null };
+  g.window = {
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    addEventListener: (name: string, fn: Function) => { listeners[name] = fn; }, removeEventListener() {},
+    innerWidth: 1728, innerHeight: 900, visualViewport: null, PublicKeyCredential: undefined,
+    open() {}, confirm: () => false, location: { origin: "https://test.local" },
+    scrollY: 0, scrollTo() {},
+  };
+  g.location = { origin: "https://test.local", href: "https://test.local/", hash: "", reload() {} };
+  g.sessionStorage = { getItem: () => null, setItem() {}, removeItem() {} };
   g.localStorage = {
     getItem: (k: string) => stored.get(k) ?? null,
     setItem: (k: string, v: string) => { stored.set(k, v); },
     removeItem: (k: string) => { stored.delete(k); },
   };
+  g.HTMLImageElement = class {};
+  g.EventSource = class { close() {} addEventListener() {} };
+  g.history = { back() {}, forward() {}, replaceState() {}, pushState() {} };
   const sidebar = await import(UI + "view-sidebar.js");
   const router = await import(UI + "router.js");
   const store = await import(UI + "state.js");
@@ -208,4 +262,62 @@ test("T38-r1: app.js decides the place before drawing the rail and repaints the 
   const rail = app.indexOf('railButton("rail-chats"', shell);
   assert.ok(follow > shell && follow < rail, "renderShell settles the place before the rail markup");
   assert.match(app, /sidebar: \(\) => \{ renderSidebarList\(\); paintRail\(\); \}/, "views.sidebar paints the rail");
+});
+
+// ------------------------------------------------------------------ fix round 2
+// The orchestrator's second browser check: `#/c/general` from a wiki page kept the Wiki place,
+// `#/wiki/<slug>` from DMs kept DMs. This test drives the REAL route handler (the hashchange
+// listener app.js installs) through both sequences, with a server that answers the few GETs
+// the routes make.
+
+async function bootApp() {
+  const ui = await loadUi();
+  const g = globalThis as Record<string, any>;
+  g.fetch = async (path: string) => {
+    const json = /\/api\/wiki\/[^/]+\/history/.test(path) ? { revisions: [] }
+      : /\/api\/wiki\/[^/]+$/.test(path) ? { page: { slug: path.split("/").pop(), title: "Page", revisions: 1, updatedBy: "nestor", updatedAt: 0, createdBy: "nestor" }, files: [] }
+      : /\/messages/.test(path) ? { messages: [] }
+      : {};
+    return { ok: true, status: 200, json: async () => json, text: async () => "", headers: { get: () => null } };
+  };
+  await import(UI + "app.js");
+  await new Promise((r) => setTimeout(r, 30));
+  const { state, sidebar } = ui;
+  seedState(state);
+  state.wiki = { pages: [{ slug: "nowosci", title: "Nowosci" }], slug: null, editing: false, draft: null, page: null, files: [], history: [] };
+  state.msgs = state.msgs || {}; state.loaded = state.loaded || {}; state.readMark = state.readMark || {};
+  const go = async (hash: string) => {
+    g.location.hash = hash;
+    await listeners.hashchange({ newURL: "https://test.local/" + hash });
+    await new Promise((r) => setTimeout(r, 10));
+  };
+  const railOn = () => ["rail-chats", "rail-dms", "rail-wiki"].filter((id) => el(id).classList.contains("on")
+    || new RegExp('id="' + id + '" aria-current="page"').test(el("app").innerHTML));
+  return { state, sidebar, go, railOn };
+}
+
+test("T38-r2: the route handler - a conversation opened from a wiki page returns to Home; a wiki page opened from DMs selects Wiki", async () => {
+  const { state, sidebar, go, railOn } = await bootApp();
+  sidebar.setSidebarPlace("home");
+  await go("#/c/general");
+  assert.equal(state.view, "chat");
+  assert.equal(sidebar.getSidebarPlace(), "home");
+
+  await go("#/wiki/nowosci");
+  assert.equal(state.view, "wiki");
+  assert.equal(sidebar.getSidebarPlace(), "wiki", "a wiki page lights Wiki");
+
+  await go("#/c/general");
+  assert.equal(state.view, "chat");
+  assert.equal(sidebar.getSidebarPlace(), "home", "a conversation from the Wiki place returns to Home");
+  assert.deepEqual(railOn(), ["rail-chats"]);
+
+  await go("#/dms");
+  assert.equal(sidebar.getSidebarPlace(), "dms");
+
+  await go("#/wiki/nowosci");
+  assert.equal(state.view, "wiki");
+  assert.equal(sidebar.getSidebarPlace(), "wiki", "a wiki page from DMs lights Wiki");
+  assert.ok(railOn().includes("rail-wiki"));
+  assert.ok(!railOn().includes("rail-dms"));
 });
