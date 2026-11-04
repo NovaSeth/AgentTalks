@@ -533,8 +533,8 @@ function fmtMsg(ctx: Ctx, m: Message, nazwy?: Nazwy): string {
  *  machine; the agent reads this text, so it gets the name. */
 function miejsceCzytelnie(ctx: Ctx, gdzie: string): string {
   if (gdzie.startsWith("c:")) return convName(ctx, Number(gdzie.slice(2)));
-  if (gdzie.startsWith("w:")) return `wiki:${gdzie.slice(2)}`;
-  return gdzie;
+  if (gdzie.startsWith("w:")) return oneLine(`wiki:${gdzie.slice(2)}`);
+  return oneLine(gdzie);
 }
 
 /**
@@ -921,7 +921,7 @@ async function callTool(
       // #general [226]).
       const pisza = whoIsTyping(ctx, actor.id);
       const ktoPisze = pisza.length === 0 ? "" :
-        `\nTeraz pisza: ${pisza.map((p) => `@${p.handle}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
+        `\nTeraz pisza: ${pisza.map((p) => `@${oneLine(p.handle)}${p.in ? ` (${miejsceCzytelnie(ctx, p.in)})` : ""}`)
           .join(", ")} - rozwaz, czy Twoja odpowiedz nadal jest potrzebna.`;
       return text(untrusted(
         pogrupujPoRozmowach(ctx, actor.id, okno.pokazane, nazwy) +
@@ -1147,6 +1147,9 @@ async function callTool(
       if (args.stop === true) {
         signal(ctx, sessionId, "typing", { stop: true });
         return text("kuleczka zgaszona");
+      }
+      if (to.startsWith("wiki:") && !/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,99}$/u.test(to.slice(5))) {
+        throw badRequest("bad_wiki_slug", "wiki target must be 'wiki:<slug>' (letters, digits, . _ -; no spaces or line breaks)");
       }
       const typingIn = to.startsWith("wiki:")
         ? `w:${to.slice(5)}`
