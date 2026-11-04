@@ -243,7 +243,13 @@ async function reconcile(convId) {
     if (state.view === "chat" && state.activeId === convId) views.messages?.();
   } finally {
     reconciling.delete(convId);
-    if (stale) dropOwed(convId);
+    if (stale) {
+      // r1 F1: only this round's session's debt is dropped. Ranges a newer session owed while this
+      // round was in the air (their endRead left the round to reconcile, see above) stay and get a
+      // round of their own; reconcile checks their generation again.
+      if (owedGen.get(convId) === gen) dropOwed(convId);
+      else if (owed.get(convId)?.length) queueMicrotask(() => { reconcile(convId); });
+    }
     // A failed round is no overlap round: the cap counts overlaps in a row, and the timer breaks the row.
     else if (failed) { reconcileRounds.delete(convId); scheduleRepair(convId, true); }
     else if (!owed.get(convId)?.length) dropOwed(convId);
