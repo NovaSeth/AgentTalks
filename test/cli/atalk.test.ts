@@ -1,3 +1,4 @@
+// Polish fixture arguments and page bodies exercise CLI parsing and exact content delivery.
 /**
  * Tests for the `atalk` client - the one agents use.
  *
@@ -21,38 +22,38 @@ import { createActor } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
 import { createChannel } from "../../src/core/conversations.ts";
 
-const zrodloAtalk = readFileSync(
+const atalkSource = readFileSync(
   fileURLToPath(new URL("../../src/cli/atalk.ts", import.meta.url)),
   "utf8",
 );
 
 test("every flag used in the code is listed in KNOWN_FLAGS", () => {
-  const uzyte = new Set<string>();
-  for (const m of zrodloAtalk.matchAll(/flagStr\(args,\s*"([a-z-]+)"\)/g)) uzyte.add(m[1]);
-  for (const m of zrodloAtalk.matchAll(/args\.flags\.([a-zA-Z]+)/g)) uzyte.add(m[1]);
+  const used = new Set<string>();
+  for (const m of atalkSource.matchAll(/flagStr\(args,\s*"([a-z-]+)"\)/g)) used.add(m[1]);
+  for (const m of atalkSource.matchAll(/args\.flags\.([a-zA-Z]+)/g)) used.add(m[1]);
 
-  const blok = zrodloAtalk.match(/const KNOWN_FLAGS = new Set\(\[([\s\S]*?)\]\)/);
-  assert.ok(blok, "nie znalazlem listy KNOWN_FLAGS");
-  const znane = new Set([...blok[1].matchAll(/"([a-z-]+)"/g)].map((m) => m[1]));
+  const block = atalkSource.match(/const KNOWN_FLAGS = new Set\(\[([\s\S]*?)\]\)/);
+  assert.ok(block, "KNOWN_FLAGS list not found");
+  const known = new Set([...block[1].matchAll(/"([a-z-]+)"/g)].map((m) => m[1]));
 
-  const brakujace = [...uzyte].filter((f) => !znane.has(f)).sort();
+  const missingEntries = [...used].filter((f) => !known.has(f)).sort();
   assert.deepEqual(
-    brakujace,
+    missingEntries,
     [],
-    `flagi uzyte w kodzie, ale nieznane parserowi (ladowalyby w TRESCI): ${brakujace.join(", ")}`,
+    `flags used in code but unknown to the parser (would become CONTENT): ${missingEntries.join(", ")}`,
   );
 });
 
 test("argument parser: an unknown flag stays content, the terminator ends flags", () => {
-  const znane = new Set(["title", "file"]);
-  const a = parseArgs(["say", "testy", "padly", "na", "--coverage", "prosze"], znane);
+  const known = new Set(["title", "file"]);
+  const a = parseArgs(["say", "testy", "padly", "na", "--coverage", "prosze"], known);
   assert.deepEqual(a.positional, ["say", "testy", "padly", "na", "--coverage", "prosze"]);
 
-  const b = parseArgs(["wiki", "write", "plan", "--title", "Plan", "tresc"], znane);
+  const b = parseArgs(["wiki", "write", "plan", "--title", "Plan", "tresc"], known);
   assert.equal(b.flags.title, "Plan");
   assert.deepEqual(b.positional, ["wiki", "write", "plan", "tresc"]);
 
-  const c = parseArgs(["say", "--", "--to-jest-tresc"], znane);
+  const c = parseArgs(["say", "--", "--to-jest-tresc"], known);
   assert.deepEqual(c.positional, ["say", "--to-jest-tresc"]);
 });
 
@@ -65,17 +66,17 @@ test("argument parser: an unknown flag stays content, the terminator ends flags"
  *content. An effect is stronger evidence than a message, because a message can be truthful
  *about behaviour that is wrong.
  */
-async function uruchom(argv: string[], env: Record<string, string>): Promise<number> {
-  const przed = { url: process.env.AGENTTALKS_URL, token: process.env.AGENTTALKS_TOKEN };
+async function run(argv: string[], env: Record<string, string>): Promise<number> {
+  const before = { url: process.env.AGENTTALKS_URL, token: process.env.AGENTTALKS_TOKEN };
   process.env.AGENTTALKS_URL = env.AGENTTALKS_URL;
   process.env.AGENTTALKS_TOKEN = env.AGENTTALKS_TOKEN;
   try {
     return await atalkMain(argv);
   } finally {
-    if (przed.url === undefined) delete process.env.AGENTTALKS_URL;
-    else process.env.AGENTTALKS_URL = przed.url;
-    if (przed.token === undefined) delete process.env.AGENTTALKS_TOKEN;
-    else process.env.AGENTTALKS_TOKEN = przed.token;
+    if (before.url === undefined) delete process.env.AGENTTALKS_URL;
+    else process.env.AGENTTALKS_URL = before.url;
+    if (before.token === undefined) delete process.env.AGENTTALKS_TOKEN;
+    else process.env.AGENTTALKS_TOKEN = before.token;
   }
 }
 
@@ -86,15 +87,15 @@ test("atalk talks to a live server: whoami, say, read", async () => {
   const token = mintToken(s.ctx, ala.id, "test").token;
   const env = { AGENTTALKS_URL: s.url, AGENTTALKS_TOKEN: token };
 
-  assert.equal(await uruchom(["whoami"], env), 0);
-  assert.equal(await uruchom(["say", "czesc", "z", "testu"], env), 0);
+  assert.equal(await run(["whoami"], env), 0);
+  assert.equal(await run(["say", "czesc", "z", "testu"], env), 0);
 
   // The content has to arrive IN FULL - including words that look like flags.
-  assert.equal(await uruchom(["say", "raport:", "padlo", "na", "--coverage"], env), 0);
-  const lista = await (await fetch(`${s.url}/api/conversations/1/messages`, {
+  assert.equal(await run(["say", "raport:", "padlo", "na", "--coverage"], env), 0);
+  const list = await (await fetch(`${s.url}/api/conversations/1/messages`, {
     headers: { authorization: `Bearer ${token}` },
   })).json();
-  assert.match(lista.messages.at(-1).body, /--coverage/);
+  assert.match(list.messages.at(-1).body, /--coverage/);
   await s.close();
 });
 
@@ -105,7 +106,7 @@ test("atalk wiki write --force works as a FLAG rather than page content", async 
   const tokenA = mintToken(s.ctx, ala.id, "test").token;
   const tokenB = mintToken(s.ctx, bob.id, "test").token;
 
-  // Ala zaklada strone.
+  // Ala creates the page.
   await fetch(`${s.url}/api/wiki/plan`, {
     method: "PUT", headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
     body: JSON.stringify({ title: "Plan", body: "tresc ali" }),
@@ -114,36 +115,36 @@ test("atalk wiki write --force works as a FLAG rather than page content", async 
   // Bob overwrites it DELIBERATELY, through --force. If the flag were unknown, the word
   // "--force" would land in the page's content and the save would go through without forcing
   // and be rejected (409) - two symptoms at once.
-  const kod = await uruchom(
+  const code = await run(
     ["wiki", "write", "plan", "--title", "Plan", "--force", "tresc boba"],
     { AGENTTALKS_URL: s.url, AGENTTALKS_TOKEN: tokenB },
   );
-  assert.equal(kod, 0);
+  assert.equal(code, 0);
 
-  const strona = await (await fetch(`${s.url}/api/wiki/plan`, {
+  const page = await (await fetch(`${s.url}/api/wiki/plan`, {
     headers: { authorization: `Bearer ${tokenB}` },
   })).json();
-  assert.equal(strona.page.body, "tresc boba");
-  assert.ok(!strona.page.body.includes("--force"), "flaga wylądowala w tresci strony");
+  assert.equal(page.page.body, "tresc boba");
+  assert.ok(!page.page.body.includes("--force"), "the flag ended up in the page body");
   await s.close();
 });
 
 test("atalk without a token returns an error code rather than throwing", async () => {
-  const kod = await uruchom(["whoami"], { AGENTTALKS_URL: "http://127.0.0.1:1", AGENTTALKS_TOKEN: "" });
-  assert.equal(kod, 1);
+  const code = await run(["whoami"], { AGENTTALKS_URL: "http://127.0.0.1:1", AGENTTALKS_TOKEN: "" });
+  assert.equal(code, 1);
 });
 
 test("a boolean flag does not swallow the next word", () => {
-  const znane = new Set(["title", "force", "stdin"]);
+  const known = new Set(["title", "force", "stdin"]);
   // This is exactly the case that quietly broke `wiki write --force`: the parser took the
   // content as the flag's VALUE, so forcing did not happen and the first word of the content
   // disappeared.
-  const a = parseArgs(["wiki", "write", "plan", "--force", "tresc", "strony"], znane);
+  const a = parseArgs(["wiki", "write", "plan", "--force", "tresc", "strony"], known);
   assert.equal(a.flags.force, true);
   assert.deepEqual(a.positional, ["wiki", "write", "plan", "tresc", "strony"]);
 
   // A flag with a value works as before.
-  const b = parseArgs(["wiki", "write", "plan", "--title", "Plan"], znane);
+  const b = parseArgs(["wiki", "write", "plan", "--title", "Plan"], known);
   assert.equal(b.flags.title, "Plan");
 });
 
@@ -164,9 +165,9 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join as sciezka } from "node:path";
+import { join as path } from "node:path";
 
-const wykonaj = promisify(execFile);
+const execute = promisify(execFile);
 
 test("atalk accepts ATALKS_* alongside AGENTTALKS_*, the canonical name wins", async () => {
   const s = await startTestServer();
@@ -180,11 +181,11 @@ test("atalk accepts ATALKS_* alongside AGENTTALKS_*, the canonical name wins", a
     // (and this repository has one). Cutting off only one leaves the other, and the test then
     // examines the disk's contents rather than the variables. The control assertion below caught
     // this.
-    const HOME = mkdtempSync(sciezka(tmpdir(), "atalk-home-"));
+    const HOME = mkdtempSync(path(tmpdir(), "atalk-home-"));
 
-    const uruchomOsobno = async (env: Record<string, string>) => {
+    const runSeparately = async (env: Record<string, string>) => {
       try {
-        await wykonaj(process.execPath, [bin, "whoami"],
+        await execute(process.execPath, [bin, "whoami"],
           { cwd: HOME, env: { PATH: process.env.PATH ?? "", HOME, ...env } });
         return 0;
       } catch (e) {
@@ -194,22 +195,22 @@ test("atalk accepts ATALKS_* alongside AGENTTALKS_*, the canonical name wins", a
 
     // A control: with no variable at all it has to FAIL. Without this the test could pass for a
     // reason it is not examining.
-    assert.notEqual(await uruchomOsobno({}), 0, "bez tokenu klient nie moze dzialac");
+    assert.notEqual(await runSeparately({}), 0, "the client must not work without a token");
 
     // The names from the skill alone.
     assert.equal(
-      await uruchomOsobno({ ATALKS_URL: s.url, ATALKS_TOKEN: token }), 0,
-      "nazwy, ktorych uczy skill, nie dzialaja w kliencie",
+      await runSeparately({ ATALKS_URL: s.url, ATALKS_TOKEN: token }), 0,
+      "the names documented by the skill do not work in the client",
     );
 
     // Both at once: the canonical one wins. Otherwise the behaviour would depend on which one was
     // left in the environment by a previous session.
     assert.equal(
-      await uruchomOsobno({
+      await runSeparately({
         AGENTTALKS_URL: s.url, AGENTTALKS_TOKEN: token,
         ATALKS_URL: s.url, ATALKS_TOKEN: "atk_zly-token-ktory-ma-przegrac",
       }), 0,
-      "AGENTTALKS_* powinno wygrac z ATALKS_*",
+      "AGENTTALKS_* must take precedence over ATALKS_*",
     );
   } finally {
     await s.close();

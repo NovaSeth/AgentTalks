@@ -1,5 +1,6 @@
+// Polish fixture messages, notes and page bodies exercise storage, search and delivery without changing user input.
 /** Tests for the modules from the #nextIteration feedback: leases, files, wake, the digest,
- *  wzmianki, piny, zywotnosc aktora. */
+ *  mentions, pins, actor liveness. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, existsSync } from "node:fs";
@@ -19,9 +20,9 @@ import { actorLiveness } from "../../src/core/presence.ts";
 import { registerSession, endSession } from "../../src/core/presence.ts";
 import { createActor } from "../../src/core/actors.ts";
 
-// --- dzierzawy -------------------------------------------------------------
+// --- leases -------------------------------------------------------------
 
-test("dzierzawa: jeden bierze, drugi dostaje odmowe z danymi wlasciciela", () => {
+test("lease: one actor acquires it; another is refused with the owner's details", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
   const r1 = acquire(ctx, { resource: "deploy", actorId: ala.id, ttlSec: 300, note: "wdrazam" });
@@ -35,7 +36,7 @@ test("dzierzawa: jeden bierze, drugi dostaje odmowe z danymi wlasciciela", () =>
   }
 });
 
-test("dzierzawa wygasa po TTL i daje sie przejac", () => {
+test("a lease expires after its TTL and can be taken over", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
@@ -45,7 +46,7 @@ test("dzierzawa wygasa po TTL i daje sie przejac", () => {
   assert.equal(r.granted, true);
 });
 
-test("ponowne wziecie wlasnej dzierzawy przedluza, nie resetuje acquired_at", () => {
+test("reacquiring one's own lease extends it without resetting acquired_at", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const ala = mkActor(ctx, "ala");
@@ -59,7 +60,7 @@ test("ponowne wziecie wlasnej dzierzawy przedluza, nie resetuje acquired_at", ()
   }
 });
 
-test("zwolnic moze wlasciciel; cudza zywa dzierzawa daje odmowe", () => {
+test("only the owner can release a lease; another actor's live lease refuses release", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
   acquire(ctx, { resource: "deploy", actorId: ala.id });
@@ -69,7 +70,7 @@ test("zwolnic moze wlasciciel; cudza zywa dzierzawa daje odmowe", () => {
   assert.equal(release(ctx, { resource: "deploy", actorId: ala.id }).released, true); // idempotentne
 });
 
-test("lista dzierzaw sprzata wygasle", () => {
+test("listing leases cleans up expired ones", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const ala = mkActor(ctx, "ala");
@@ -79,7 +80,7 @@ test("lista dzierzaw sprzata wygasle", () => {
   assert.deepEqual(listLeases(ctx).map((l) => l.resource), ["dluga"]);
 });
 
-test("nazwa zasobu ze spacja jest odrzucona", () => {
+test("a resource name containing a space is rejected", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala");
   assert.throws(() => acquire(ctx, { resource: "zly zasob", actorId: ala.id }), /resource name/);
@@ -89,7 +90,7 @@ test("nazwa zasobu ze spacja jest odrzucona", () => {
 
 const tmpFiles = () => mkdtempSync(join(tmpdir(), "at-files-"));
 
-test("plik laduje w konwersacji jako wiadomosc i daje sie pobrac czlonkowi", () => {
+test("a file appears in a conversation as a message and a member can download it", () => {
   const ctx = testCtx();
   const dir = tmpFiles();
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
@@ -104,20 +105,20 @@ test("plik laduje w konwersacji jako wiadomosc i daje sie pobrac czlonkowi", () 
   assert.equal(got.data.toString(), "tresc raportu");
 });
 
-test("plik z cudzej konwersacji jest niewidoczny i niepobieralny", () => {
+test("a file in another actor's conversation cannot be seen or downloaded", () => {
   const ctx = testCtx();
   const dir = tmpFiles();
-  const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob"), obcy = mkActor(ctx, "obcy");
+  const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob"), outsider = mkActor(ctx, "obcy");
   const dm = ensureDirect(ctx, [ala.id, bob.id]);
   const { file } = storeFile(ctx, dir, {
     actorId: ala.id, conversationId: dm.id, name: "tajne.txt",
     data: Buffer.from("x"), maxBytes: 1024,
   });
-  assert.equal(getFileInfo(ctx, file.id, obcy.id), null);
-  assert.throws(() => readFile(ctx, file.id, obcy.id), /file .* was not found/);
+  assert.equal(getFileInfo(ctx, file.id, outsider.id), null);
+  assert.throws(() => readFile(ctx, file.id, outsider.id), /file .* was not found/);
 });
 
-test("burn: plik znika po pobraniu przez nie-autora, autor nie spala", () => {
+test("burn: a file disappears after a non-author downloads it; the author does not burn it", () => {
   const ctx = testCtx();
   const dir = tmpFiles();
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
@@ -132,7 +133,7 @@ test("burn: plik znika po pobraniu przez nie-autora, autor nie spala", () => {
   assert.equal(getFileInfo(ctx, file.id, bob.id), null);
 });
 
-test("sensitive bez TTL dostaje domyslny TTL i wygasa", () => {
+test("sensitive without a TTL receives the default TTL and expires", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const dir = tmpFiles();
@@ -147,7 +148,7 @@ test("sensitive bez TTL dostaje domyslny TTL i wygasa", () => {
   assert.equal(getFileInfo(ctx, file.id, ala.id), null);
 });
 
-test("sweep kasuje wygasle wpisy i bajty z dysku", () => {
+test("sweep deletes expired records and their bytes from disk", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const dir = tmpFiles();
@@ -163,7 +164,7 @@ test("sweep kasuje wygasle wpisy i bajty z dysku", () => {
   assert.equal(existsSync(row.path), false);
 });
 
-test("nazwa pliku nie moze byc sciezka", () => {
+test("a filename cannot be a path", () => {
   const ctx = testCtx();
   const dir = tmpFiles();
   const ala = mkActor(ctx, "ala");
@@ -191,7 +192,7 @@ function wakeSetup() {
   return { ctx, ala, bob, dm, delivered, setOk: (v: boolean) => { deliverOk = v; } };
 }
 
-test("DM budzi nieobecnego adresata podpisanym ladunkiem", async () => {
+test("a DM wakes an absent recipient with a signed payload", async () => {
   const { ctx, ala, bob, dm, delivered } = wakeSetup();
   const { secret } = setWake(ctx, bob.id, "https://most.example/wake");
   postMessage(ctx, { conversationId: dm.id, actorId: ala.id, body: "obudz sie" });
@@ -206,7 +207,7 @@ test("DM budzi nieobecnego adresata podpisanym ladunkiem", async () => {
   assert.equal(payload.preview, "obudz sie");
 });
 
-test("aktor z zywym SSE nie jest budzony - push juz dotarl", async () => {
+test("an actor with a live SSE connection is not woken; push already arrived", async () => {
   const { ctx, ala, bob, dm, delivered } = wakeSetup();
   setWake(ctx, bob.id, "https://most.example/wake");
   // A live SSE is a registered STREAM (openStream), not an ordinary subscription - a long-poll
@@ -219,7 +220,7 @@ test("aktor z zywym SSE nie jest budzony - push juz dotarl", async () => {
   off();
 });
 
-test("dlawienie: druga wiadomosc w oknie nie strzela drugi raz", async () => {
+test("throttling: a second message within the window does not trigger another delivery", async () => {
   const { ctx, ala, bob, dm, delivered } = wakeSetup();
   setWake(ctx, bob.id, "https://most.example/wake");
   postMessage(ctx, { conversationId: dm.id, actorId: ala.id, body: "raz" });
@@ -229,7 +230,7 @@ test("dlawienie: druga wiadomosc w oknie nie strzela drugi raz", async () => {
   assert.equal(delivered.length, 1);
 });
 
-test("w kanale budzi wzmianka, a nie kazda wiadomosc", async () => {
+test("in a channel, a mention triggers wake rather than every message", async () => {
   const { ctx, ala, bob, delivered } = wakeSetup();
   setWake(ctx, bob.id, "https://most.example/wake");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: ala.id });
@@ -242,7 +243,7 @@ test("w kanale budzi wzmianka, a nie kazda wiadomosc", async () => {
   assert.equal(JSON.parse(delivered[0].body).reason, "mention");
 });
 
-test("po serii porazek wake gasnie i wlasciciel dostaje systemowy DM", async () => {
+test("a series of failures disables wake and sends the owner a system DM", async () => {
   const { ctx, ala, bob, dm, delivered, setOk } = wakeSetup();
   setWake(ctx, bob.id, "https://martwy.example/wake");
   setOk(false);
@@ -260,19 +261,19 @@ test("po serii porazek wake gasnie i wlasciciel dostaje systemowy DM", async () 
   const sysMsg = ctx.db.prepare(
     "SELECT body FROM messages WHERE kind = 'system' ORDER BY id DESC LIMIT 1",
   ).get() as { body: string } | undefined;
-  assert.ok(sysMsg && /DISABLED/.test(sysMsg.body), "brak sladu o wylaczeniu");
+  assert.ok(sysMsg && /DISABLED/.test(sysMsg.body), "no record of wake being disabled");
 });
 
-test("zly URL webhooka jest odrzucany przy rejestracji", () => {
+test("an invalid webhook URL is rejected during registration", () => {
   const ctx = testCtx();
   const bob = mkActor(ctx, "bob");
   assert.throws(() => setWake(ctx, bob.id, "nie-url"), /Invalid URL|HTTP/);
   assert.throws(() => setWake(ctx, bob.id, "file:///etc/passwd"), /HTTP/);
 });
 
-// --- digest i wzmianki -----------------------------------------------------
+// --- digest and mentions -----------------------------------------------------
 
-test("digest streszcza od kotwicy odczytu i wskazuje wzmianki", () => {
+test("digest summarizes from the read marker and identifies mentions", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: ala.id });
@@ -288,13 +289,13 @@ test("digest streszcza od kotwicy odczytu i wskazuje wzmianki", () => {
   assert.match(d.mentions[0].body, /nowa druga/);
 });
 
-test("digest zwraca null, gdy nic sie nie dzialo", () => {
+test("digest returns null when nothing happened", () => {
   const ctx = testCtx();
   const bob = mkActor(ctx, "bob");
   assert.equal(digestFor(ctx, bob.id), null);
 });
 
-test("wzmianka w cudzym kanale prywatnym nie wycieka przez mentionsOf", () => {
+test("a mention in another actor's private channel does not leak through mentionsOf", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
   const prv = createChannel(ctx, { slug: "s", kind: "private", createdBy: ala.id });
@@ -302,7 +303,7 @@ test("wzmianka w cudzym kanale prywatnym nie wycieka przez mentionsOf", () => {
   assert.equal(mentionsOf(ctx, bob.id).length, 0);
 });
 
-test("wzmianka w kanale publicznym jest widoczna bez czlonkostwa", () => {
+test("a mention in a public channel is visible without membership", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: ala.id });
@@ -310,9 +311,9 @@ test("wzmianka w kanale publicznym jest widoczna bez czlonkostwa", () => {
   assert.equal(mentionsOf(ctx, bob.id).length, 1);
 });
 
-// --- piny ------------------------------------------------------------------
+// --- pins ------------------------------------------------------------------
 
-test("pin i unpin dzialaja w obrebie konwersacji, z autorem przypiecia", () => {
+test("pin and unpin work within a conversation and record who pinned the message", () => {
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: ala.id });
@@ -324,17 +325,17 @@ test("pin i unpin dzialaja w obrebie konwersacji, z autorem przypiecia", () => {
   assert.equal(listPins(ctx, { conversationId: c.id, actorId: ala.id }).length, 0);
 });
 
-test("nie da sie przypiac wiadomosci z kanalu bez dostepu", () => {
+test("a message in an inaccessible channel cannot be pinned", () => {
   const ctx = testCtx();
-  const ala = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
+  const ala = mkActor(ctx, "ala"), outsider = mkActor(ctx, "obcy");
   const prv = createChannel(ctx, { slug: "s", kind: "private", createdBy: ala.id });
   const m = postMessage(ctx, { conversationId: prv.id, actorId: ala.id, body: "x" });
-  assert.throws(() => pin(ctx, { messageId: m.id, actorId: obcy.id }), /is not accessible/);
+  assert.throws(() => pin(ctx, { messageId: m.id, actorId: outsider.id }), /is not accessible/);
 });
 
-// --- zywotnosc aktora ------------------------------------------------------
+// --- actor liveness ------------------------------------------------------
 
-test("actorLiveness: zywa sesja -> online, zakonczona -> nieobecny", () => {
+test("actorLiveness: a live session means online; an ended session means absent", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const bob = mkActor(ctx, "bob");
@@ -348,26 +349,26 @@ test("actorLiveness: zywa sesja -> online, zakonczona -> nieobecny", () => {
   assert.deepEqual(actorLiveness(ctx, bob.id), { online: false, lastSeenAt: null });
 });
 
-test("wake odrzuca adresy lokalne i prywatne (SSRF)", () => {
+test("wake rejects local and private addresses (SSRF)", () => {
   const ctx = testCtx();
   const bob = mkActor(ctx, "bob");
   for (const bad of [
     "http://127.0.0.1/wake", "http://localhost:9000/x", "http://169.254.169.254/latest/meta-data",
     "http://10.0.0.5/x", "http://192.168.1.1/x", "http://172.16.0.1/x", "http://[::1]/x",
   ]) {
-    assert.throws(() => setWake(ctx, bob.id, bad), /local|private|HTTP/, `przeszlo: ${bad}`);
+    assert.throws(() => setWake(ctx, bob.id, bad), /local|private|HTTP/, `unexpectedly allowed: ${bad}`);
   }
   assert.doesNotThrow(() => setWake(ctx, bob.id, "https://most.example.com/wake"));
 });
 
-test("wake pozwala na loopback tylko za jawna zgoda", () => {
+test("wake allows loopback only with explicit permission", () => {
   const ctx = testCtx();
   const bob = mkActor(ctx, "bob");
   assert.throws(() => setWake(ctx, bob.id, "http://127.0.0.1/wake"), /local/);
   assert.doesNotThrow(() => setWake(ctx, bob.id, "http://127.0.0.1/wake", { allowLoopback: true }));
 });
 
-test("plik sensitive z ttl=0 dostaje domyslny TTL, nie staje sie wieczny", () => {
+test("a sensitive file with ttl=0 receives the default TTL rather than becoming permanent", () => {
   let t = 1000;
   const ctx = testCtx(() => t);
   const dir = mkdtempSync(join(tmpdir(), "at-files-"));
@@ -377,10 +378,10 @@ test("plik sensitive z ttl=0 dostaje domyslny TTL, nie staje sie wieczny", () =>
     actorId: ala.id, conversationId: c.id, name: "z.png", data: Buffer.from("x"),
     maxBytes: 1024, sensitive: true, ttlSec: 0,
   });
-  assert.equal(file.expiresAt, 1000 + 24 * 3600, "ttl=0 przy sensitive musi dac domyslny TTL");
+  assert.equal(file.expiresAt, 1000 + 24 * 3600, "ttl=0 for a sensitive file must use the default TTL");
 });
 
-test("wake httpDeliver ODMAWIA polaczenia na adres prywatny przy strzale (SSRF rebinding)", async () => {
+test("wake httpDeliver REFUSES a private address at delivery time (SSRF rebinding)", async () => {
   // The name passes registration (setWake does no DNS), but at firing time our guardedLookup
   // resolves it and REFUSES, because the IP is private. We use the real httpDeliver (registerWake
   // without an injected deliver) and a host pointing at 127.0.0.1.
@@ -394,7 +395,7 @@ test("wake httpDeliver ODMAWIA polaczenia na adres prywatny przy strzale (SSRF r
   ctx.db.prepare(
     "UPDATE actors SET wake_kind='webhook', wake_target=?, wake_secret='s' WHERE id=?",
   ).run("http://localtest.me:59999/wake", bob.id);
-  registerWake(ctx); // prawdziwy httpDeliver
+  registerWake(ctx); // real httpDeliver
   postMessage(ctx, { conversationId: dm.id, actorId: ala.id, body: "obudz sie" });
   // After a moment wake_failures should have grown (delivery refused), rather than a connection
   // to a local address having happened.
@@ -405,10 +406,10 @@ test("wake httpDeliver ODMAWIA polaczenia na adres prywatny przy strzale (SSRF r
   }, 3000);
   const r = ctx.db.prepare("SELECT wake_failures FROM actors WHERE id=?").get(bob.id) as
     { wake_failures: number };
-  assert.ok(r.wake_failures >= 1, "strzal na adres prywatny powinien byc odrzucony");
+  assert.ok(r.wake_failures >= 1, "delivery to a private address must be rejected");
 });
 
-test("isBlockedIp: prywatne blokowane, publiczne przepuszczane, loopback za zgoda", async () => {
+test("isBlockedIp: private addresses blocked, public addresses allowed, loopback requires permission", async () => {
   const { isBlockedIp } = await import("../../src/core/wake.ts");
   assert.equal(isBlockedIp("127.0.0.1"), true);
   assert.equal(isBlockedIp("127.0.0.1", true), false);
@@ -418,7 +419,7 @@ test("isBlockedIp: prywatne blokowane, publiczne przepuszczane, loopback za zgod
   assert.equal(isBlockedIp("8.8.8.8"), false);
 });
 
-test("isWakeable: rozroznia zarejestrowany webhook od jego braku", () => {
+test("isWakeable: distinguishes a registered webhook from an absent one", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   assert.equal(isWakeable(ctx, a.id), false);
@@ -428,20 +429,20 @@ test("isWakeable: rozroznia zarejestrowany webhook od jego braku", () => {
   assert.equal(isWakeable(ctx, a.id), false);
 });
 
-test("firstConnectGuidelines: raz zwraca zasady, potem null", async () => {
+test("firstConnectGuidelines: returns guidelines once, then null", async () => {
   const { firstConnectGuidelines, needsGuidelines } = await import("../../src/core/guidelines.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   assert.equal(needsGuidelines(ctx, a.id), true);
   const g = firstConnectGuidelines(ctx, a.id);
-  assert.ok(g && g.prompt && g.text, "brak payloadu zasad na pierwszym polaczeniu");
-  assert.equal(firstConnectGuidelines(ctx, a.id), null, "zasady podane drugi raz");
+  assert.ok(g && g.prompt && g.text, "no guidelines payload on the first connection");
+  assert.equal(firstConnectGuidelines(ctx, a.id), null, "guidelines returned a second time");
   assert.equal(needsGuidelines(ctx, a.id), false);
 });
 
 // --- wiki -----------------------------------------------------------------
 
-test("wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie", async () => {
+test("wiki: create, read, update - history grows", async () => {
   const { savePage, getPage, markPageSeen, pageHistory } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
@@ -464,24 +465,24 @@ test("wiki: zaloz, przeczytaj, zaktualizuj - historia rosnie", async () => {
   assert.equal(hist[0].note, "doprecyzowanie");
 });
 
-test("wiki: kazdy zalogowany moze edytowac (wspolna wiedza), ale nie na slepo", async () => {
+test("wiki: any authenticated actor can edit shared knowledge, but must read it first", async () => {
   const { savePage, getPage, markPageSeen } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
-  const a = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
+  const a = mkActor(ctx, "ala"), outsider = mkActor(ctx, "obcy");
   savePage(ctx, { slug: "s", title: "S", body: "od ali", actorId: a.id });
   // A write without reading somebody else's page is a blind overwrite - the refusal carries the
   // revision id so that it can be read.
   assert.throws(
-    () => savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: obcy.id }),
+    () => savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: outsider.id }),
     /conflict|have not read/,
   );
   // "a stranger" is nobody's member, and can still write - the wiki is public
-  markPageSeen(ctx, "s", obcy.id);
-  savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: obcy.id });
+  markPageSeen(ctx, "s", outsider.id);
+  savePage(ctx, { slug: "s", title: "S", body: "od obcego", actorId: outsider.id });
   assert.equal(getPage(ctx, "s")!.body, "od obcego");
 });
 
-test("wiki: slug kolidujacy z trasa (search) jest odrzucany", async () => {
+test("wiki: a slug conflicting with a route (search) is rejected", async () => {
   const { savePage, getPage } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
@@ -492,7 +493,7 @@ test("wiki: slug kolidujacy z trasa (search) jest odrzucany", async () => {
   assert.equal(getPage(ctx, "search"), null); // the page was not created
 });
 
-test("wiki drzewo: podstrona, przenoszenie, undefined nie rusza polozenia", async () => {
+test("wiki tree: child pages, moving, and undefined preserves position", async () => {
   const { savePage, getPage } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
@@ -507,7 +508,7 @@ test("wiki drzewo: podstrona, przenoszenie, undefined nie rusza polozenia", asyn
   assert.equal(getPage(ctx, "vps")!.parentSlug, null);
 });
 
-test("wiki drzewo: cykl (pod soba / pod potomkiem) jest odrzucany", async () => {
+test("wiki tree: a cycle under itself or a descendant is rejected", async () => {
   const { savePage } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
@@ -528,7 +529,7 @@ test("wiki drzewo: cykl (pod soba / pod potomkiem) jest odrzucany", async () => 
   );
 });
 
-test("wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie", async () => {
+test("wiki unseen: others' revisions count since the last visit; one's own do not", async () => {
   const { savePage, listPages, markPageSeen } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
@@ -549,7 +550,7 @@ test("wiki unseen: cudze rewizje licza sie od ostatniego wejscia, wlasne nie", a
   assert.equal(listPages(ctx, a.id)[0].unseen, 1);
 });
 
-test("wiki: wyszukiwarka znajduje po tresci i tytule", async () => {
+test("wiki: search finds pages by body and title", async () => {
   const { savePage, searchWiki } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
@@ -561,7 +562,7 @@ test("wiki: wyszukiwarka znajduje po tresci i tytule", async () => {
   assert.equal(searchWiki(ctx, "wdraza").length >= 1, true);
 });
 
-test("wiki: revert przywraca tresc jako nowa rewizje", async () => {
+test("wiki: revert restores content as a new revision", async () => {
   const { savePage, revertPage, getPage, pageHistory } = await import("../../src/core/wiki.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
@@ -570,56 +571,56 @@ test("wiki: revert przywraca tresc jako nowa rewizje", async () => {
   const firstRev = pageHistory(ctx, "s").at(-1)!.id;
   revertPage(ctx, { slug: "s", revisionId: firstRev, actorId: a.id });
   assert.equal(getPage(ctx, "s")!.body, "dobra wersja");
-  assert.equal(pageHistory(ctx, "s").length, 3, "revert ma dopisac rewizje, nie przepisac");
+  assert.equal(pageHistory(ctx, "s").length, 3, "revert must append a revision rather than overwrite one");
 });
 
-test("wiki: zalacznik jest publiczny dla kazdego zalogowanego", async () => {
+test("wiki: an attachment is public to every authenticated actor", async () => {
   const { savePage, pageId } = await import("../../src/core/wiki.ts");
   const { storeWikiFile, getFileInfo, readFile } = await import("../../src/core/files.ts");
   const ctx = testCtx();
   const dir = mkdtempSync(join(tmpdir(), "at-wiki-"));
-  const a = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
+  const a = mkActor(ctx, "ala"), outsider = mkActor(ctx, "obcy");
   savePage(ctx, { slug: "s", title: "S", body: "tresc", actorId: a.id });
   const pid = pageId(ctx, "s")!;
   const f = storeWikiFile(ctx, dir, { actorId: a.id, wikiPageId: pid, name: "diagram.txt",
     data: Buffer.from("schemat"), maxBytes: 1024 });
   // a stranger, not the author, not a member of any conversation - and still sees the wiki attachment
-  assert.ok(getFileInfo(ctx, f.id, obcy.id), "zalacznik wiki nie jest publiczny");
-  assert.equal(readFile(ctx, f.id, obcy.id).data.toString(), "schemat");
+  assert.ok(getFileInfo(ctx, f.id, outsider.id), "the wiki attachment is not public");
+  assert.equal(readFile(ctx, f.id, outsider.id).data.toString(), "schemat");
 });
 
-test("news: aktor dostaje nowosci dokladnie raz na wersje tresci", async () => {
+test("news: an actor receives news exactly once per content version", async () => {
   const { firstConnectNews, newsHash } = await import("../../src/core/news.ts");
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   if (!newsHash()) return; // an environment with no NEWS.md - the mechanism sleeps
   const first = firstConnectNews(ctx, a.id);
   assert.ok(first && first.text.length > 0 && first.prompt.length > 0);
-  assert.equal(firstConnectNews(ctx, a.id), null, "nowosci podane drugi raz temu samemu aktorowi");
-  // niezaleznie per aktor
+  assert.equal(firstConnectNews(ctx, a.id), null, "news returned a second time to the same actor");
+  // independent for each actor
   assert.ok(firstConnectNews(ctx, b.id));
   assert.equal(firstConnectNews(ctx, b.id), null);
 });
 
-test("heartbeat sesji NIE budzi wszystkich - rozgloszenie tylko przy realnej zmianie", async () => {
+test("a session heartbeat does NOT wake everyone; broadcast only on a real change", async () => {
   const { registerSession } = await import("../../src/core/presence.ts");
   const ctx = testCtx();
   const ala = mkActor(ctx, "ala"), bob = mkActor(ctx, "bob");
-  const zdarzenia: string[] = [];
-  ctx.bus.subscribe(bob.id, (e) => zdarzenia.push(e.type));
+  const events: string[] = [];
+  ctx.bus.subscribe(bob.id, (e) => events.push(e.type));
 
   // The first registration is a real change - Bob should learn about it.
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "vps" });
-  assert.equal(zdarzenia.length, 1);
+  assert.equal(events.length, 1);
 
   // Further heartbeats of the same session change NOTHING anybody can see. Previously each of
   // them woke everybody: with N sessions the traffic grew with N squared, and the event's
   // content was the same every time.
   registerSession(ctx, { sessionId: "s1", actorId: ala.id });
   registerSession(ctx, { sessionId: "s1", actorId: ala.id });
-  assert.equal(zdarzenia.length, 1, "heartbeat rozglasza mimo braku zmiany");
+  assert.equal(events.length, 1, "heartbeat broadcasts despite no change");
 
   // A label change IS visible, so it has to spread.
   registerSession(ctx, { sessionId: "s1", actorId: ala.id, label: "laptop" });
-  assert.equal(zdarzenia.length, 2);
+  assert.equal(events.length, 2);
 });

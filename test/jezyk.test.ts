@@ -35,62 +35,64 @@ import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const KORZEN = fileURLToPath(new URL("../", import.meta.url));
+const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 /** Polish words that carry no diacritics. Disjoint from K1 by construction: K1 fires
  *  on characters, this one on tokens that no English sentence contains. */
-const PL_SLOWA = /\b(nie|jest|sie|ktore|ktory|ktora|ktorej|ktorym|zeby|wiec|albo|tylko|moze|jak|tego|przez|juz|czyli|kazdy|kazda|wszystko|wszystkie|zamiast|wlasny|wlasna|swoj|byla|bylo|byly|bedzie|dziala|robi|daje|mowi|dlatego|poniewaz|natomiast|wtedy|gdyby|ktos|cos|musi|trzeba|warto|mozna|nadal|takze|rowniez|nawet|wiadomosc|wiadomosci|rozmowa|rozmowy|kanal|kanaly|uzytkownik|zapisz|odczyt|nazwa|nazwy|plik|pliku|strona|strony|serwer|serwera|blad|bledu|zmiana|zmiany|wersja|liczba|potrafi|nalezy|zawsze|nigdy)\b/i;
-const PL_ZNAKI = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/;
+const POLISH_WORDS = /\b(nie|jest|sie|ktore|ktory|ktora|ktorej|ktorym|zeby|wiec|albo|tylko|moze|jak|tego|przez|juz|czyli|kazdy|kazda|wszystko|wszystkie|zamiast|wlasny|wlasna|swoj|byla|bylo|byly|bedzie|dziala|robi|daje|mowi|dlatego|poniewaz|natomiast|wtedy|gdyby|ktos|cos|musi|trzeba|warto|mozna|nadal|takze|rowniez|nawet|wiadomosc|wiadomosci|rozmowa|rozmowy|kanal|kanaly|uzytkownik|zapisz|odczyt|nazwa|nazwy|plik|pliku|strona|strony|serwer|serwera|blad|bledu|zmiana|zmiany|wersja|liczba|potrafi|nalezy|zawsze|nigdy)\b/i;
+const POLISH_DIACRITICS = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/;
 
 /** The comment's content: the marker and the indentation stripped, and QUOTED SPANS
  *  removed - a quotation in Polish inside an English sentence is not a Polish comment. */
-function trescKomentarza(linia: string): string | null {
-  const m = linia.match(/^\s*(?:\/\/|\/\*\*?|\*\/?)\s?(.*)$/) ?? linia.match(/^\s*[^/\s].*?\S\s+\/\/\s?(.*)$/);
+function commentContent(line: string): string | null {
+  const m = line.match(/^\s*(?:\/\/|\/\*\*?|\*\/?)\s?(.*)$/) ?? line.match(/^\s*[^/\s].*?\S\s+\/\/\s?(.*)$/);
   if (!m) return null;
   return m[1].replace(/"[^"]*"|'[^']*'|`[^`]*`/g, " ");
 }
 
-function pliki(): string[] {
-  return execFileSync("git", ["ls-files", "*.ts", "*.js"], { cwd: KORZEN, encoding: "utf8" })
+function files(): string[] {
+  return execFileSync("git", ["ls-files", "*.ts", "*.js"], { cwd: ROOT, encoding: "utf8" })
     .split("\n").filter((p) => p && !p.endsWith("i18n-pl.js"));
 }
 
-test("komentarze w kodzie sa po angielsku (dwa rozlaczne kryteria)", () => {
-  const lista = pliki();
-  assert.ok(lista.length >= 80, `czujnik widzi tylko ${lista.length} plikow - wzorzec git ls-files przestal pasowac`);
+test("code comments are English, checked by two disjoint criteria", () => {
+  const list = files();
+  assert.ok(list.length >= 80, `the check sees only ${list.length} files; the git ls-files pattern no longer matches`);
 
-  const trafienia: string[] = [];
-  for (const f of lista) {
-    const linie = readFileSync(KORZEN + f, "utf8").split("\n");
-    linie.forEach((l, i) => {
-      const t = trescKomentarza(l);
+  const matches: string[] = [];
+  for (const f of list) {
+    const lines = readFileSync(ROOT + f, "utf8").split("\n");
+    lines.forEach((l, i) => {
+      const t = commentContent(l);
       if (!t) return;
-      const k1 = PL_ZNAKI.test(t), k2 = PL_SLOWA.test(t);
-      if (k1 || k2) trafienia.push(`  ${f}:${i + 1} [${k1 ? "K1" : ""}${k2 ? "K2" : ""}] ${t.trim().slice(0, 80)}`);
+      const k1 = POLISH_DIACRITICS.test(t), k2 = POLISH_WORDS.test(t);
+      if (k1 || k2) matches.push(`  ${f}:${i + 1} [${k1 ? "K1" : ""}${k2 ? "K2" : ""}] ${t.trim().slice(0, 80)}`);
     });
   }
-  assert.deepEqual(trafienia, [], `polskie komentarze:\n${trafienia.join("\n")}`);
+  assert.deepEqual(matches, [], `Polish comments:\n${matches.join("\n")}`);
 });
 
-test("oba kryteria POTRAFIA zaswiecic - probka negatywna dla kazdego z osobna", () => {
+test("both criteria CAN fire, with a separate negative sample for each", () => {
   // Without this, the test above is a sentence about an empty set: if the criteria
   // stopped matching anything, "no Polish comments" would be true and worthless.
   // Each criterion is checked SEPARATELY, because they are supposed to catch
   // different things - a common probe would let one of them die unnoticed.
-  const bezOgonkow = trescKomentarza("// to jest komentarz ktory nie ma ogonkow")!;
-  assert.equal(PL_ZNAKI.test(bezOgonkow), false, "K1 nie powinno lapac zdania bez diakrytykow");
-  assert.equal(PL_SLOWA.test(bezOgonkow), true, "K2 przestalo lapac polskie slowa");
+  // This Polish sample without diacritics proves the word criterion can detect Polish.
+  const withoutDiacritics = commentContent("// to jest komentarz ktory nie ma ogonkow")!;
+  assert.equal(POLISH_DIACRITICS.test(withoutDiacritics), false, "K1 must not match a sentence without diacritics");
+  assert.equal(POLISH_WORDS.test(withoutDiacritics), true, "K2 stopped matching Polish words");
 
-  const zOgonkami = trescKomentarza(" * zażółć gęślą jaźń")!;
-  assert.equal(PL_ZNAKI.test(zOgonkami), true, "K1 przestalo lapac diakrytyki");
+  // This Polish pangram proves the diacritic criterion can detect Polish independently.
+  const withDiacritics = commentContent(" * zażółć gęślą jaźń")!;
+  assert.equal(POLISH_DIACRITICS.test(withDiacritics), true, "K1 stopped matching diacritics");
 
-  const angielski = trescKomentarza("// the server refuses a write to a page you have not read")!;
-  assert.equal(PL_ZNAKI.test(angielski) || PL_SLOWA.test(angielski), false,
-    "kryterium lapie angielskie zdanie - dalby falszywy alarm");
+  const english = commentContent("// the server refuses a write to a page you have not read")!;
+  assert.equal(POLISH_DIACRITICS.test(english) || POLISH_WORDS.test(english), false,
+    "the criterion matches an English sentence; this would be a false alarm");
 
   // A quotation stays legal: this is exactly the case of ids.ts, i18n.test.ts and
   // mcp.test.ts, where Polish is the subject of the sentence rather than its language.
-  const cytat = trescKomentarza('// would be wrong at "2 wiadomości" - three forms, not two')!;
-  assert.equal(PL_ZNAKI.test(cytat) || PL_SLOWA.test(cytat), false,
-    "cytat po polsku w angielskim zdaniu nie moze byc liczony jako polski komentarz");
+  const quotation = commentContent('// would be wrong at "2 wiadomości" - three forms, not two')!;
+  assert.equal(POLISH_DIACRITICS.test(quotation) || POLISH_WORDS.test(quotation), false,
+    "a Polish quotation in an English sentence must not count as a Polish comment");
 });

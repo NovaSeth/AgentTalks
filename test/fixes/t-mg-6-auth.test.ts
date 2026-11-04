@@ -1,3 +1,4 @@
+// Polish synthetic passwords and private message bodies verify authentication and non-disclosure of exact input.
 /** T-MG-6 (fix package A1): auth and sessions. One group of tests per finding. */
 import { test } from "node:test";
 import assert from "node:assert/strict";

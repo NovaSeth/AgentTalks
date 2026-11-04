@@ -1,3 +1,4 @@
+// Polish fixture arguments, paths and passwords exercise CLI parsing, configuration and exact credential handling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
@@ -25,7 +26,7 @@ test("init creates the data directory, database and a 64-character secret", () =
   const dir = tmpDir();
   const cfg = initData(dir);
   assert.equal(cfg.secret.length, 64);
-  assert.ok(existsSync(join(dir, "agenttalks.sqlite")) === false, "baza powstaje przy init CLI");
+  assert.ok(existsSync(join(dir, "agenttalks.sqlite")) === false, "the database is created by CLI init");
   assert.ok(existsSync(join(dir, "agenttalks.json")));
   assert.ok(existsSync(join(dir, "files")));
 });
@@ -130,9 +131,9 @@ test("clone makes a consistent copy with its own secret", async () => {
   await main(["actor", "create", "probny", "--kind", "agent", "--data", src]);
   assert.equal(await main(["clone", dst, "--data", src]), 0);
   const srcCfg = loadConfig(src), dstCfg = loadConfig(dst);
-  assert.notEqual(dstCfg.secret, srcCfg.secret, "kopia nie moze dzielic sekretu sesji");
+  assert.notEqual(dstCfg.secret, srcCfg.secret, "the clone must not share the session secret");
   const ctx = createCtx(openDb(dstCfg.dbPath));
-  assert.ok(getActorByHandle(ctx, "probny"), "dane nie przeszly do kopii");
+  assert.ok(getActorByHandle(ctx, "probny"), "the data was not copied");
 });
 
 test("parseArgs with known flags preserves content containing --", () => {
@@ -192,6 +193,7 @@ test("NEWS.md becomes a wiki page with history, without adding revisions when un
   const { createActor } = await import("../../src/core/actors.ts");
   createActor(ctx, { kind: "system", handle: "system" });
 
+  // These Polish result values match the current source contract; migrate them with the producer.
   assert.equal(publishNewsToWiki(ctx), "zapisane");
   const page = getPage(ctx, NEWS_SLUG)!;
   assert.match(page.body, /What's new in AgentTalks/);

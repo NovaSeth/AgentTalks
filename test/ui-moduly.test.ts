@@ -31,30 +31,30 @@ const UI = fileURLToPath(new URL("../src/http/ui/js/", import.meta.url));
  *  with an explicit type there is nothing left to guess, so the verdict depends on the
  *  content alone. The negative probe below is what proves that - and it would prove it
  *  for any other mechanism put here too, which is the whole point of having it. */
-function bladSkladni(src: string, nazwa: string): string | null {
+function syntaxError(src: string, name: string): string | null {
   const r = spawnSync(process.execPath, ["--check", "--input-type=module", "-"],
     { input: src, encoding: "utf8" });
   if (r.status === 0) return null;
-  return `${nazwa}: ${(r.stderr || "").trim().split("\n").slice(0, 3).join(" ")}`;
+  return `${name}: ${(r.stderr || "").trim().split("\n").slice(0, 3).join(" ")}`;
 }
 
 test("every UI module parses as an ES module", () => {
-  const pliki = readdirSync(UI).filter((f) => f.endsWith(".js"));
-  assert.ok(pliki.length >= 15, `czujnik widzi tylko ${pliki.length} plikow UI - katalog sie przeniosl?`);
-  const zle = pliki
-    .map((f) => ({ f, blad: bladSkladni(readFileSync(UI + f, "utf8"), f) }))
-    .filter((x) => x.blad);
-  assert.deepEqual(zle, [], zle.map((x) => `${x.f}: ${x.blad}`).join("\n"));
+  const files = readdirSync(UI).filter((f) => f.endsWith(".js"));
+  assert.ok(files.length >= 15, `the check sees only ${files.length} UI files; did the directory move?`);
+  const invalid = files
+    .map((f) => ({ f, error: syntaxError(readFileSync(UI + f, "utf8"), f) }))
+    .filter((x) => x.error);
+  assert.deepEqual(invalid, [], invalid.map((x) => `${x.f}: ${x.error}`).join("\n"));
 });
 
 test("the syntax gate CAN fail - a deliberately broken sample", () => {
   // Input of the same shape as the real thing (an import + an export), with one explicit error.
   // If the gate were blind - as `node --check` is on a file of ambiguous type - this line would
   // pass green and the test above would mean nothing.
-  const zepsuty = 'import { t } from "./i18n.js";\nexport const q = ;\n';
-  assert.ok(bladSkladni(zepsuty, "probka-zepsuta.js"), "bramka NIE zglosila bledu w pliku, ktory jest zepsuty");
+  const broken = 'import { t } from "./i18n.js";\nexport const q = ;\n';
+  assert.ok(syntaxError(broken, "broken-sample.js"), "the gate did NOT report an error in a broken file");
   // And the other side: a correct file of the same shape has to pass, otherwise "always red"
   // is as useless as "always green".
-  const dobry = 'import { t } from "./i18n.js";\nexport const q = t("x");\n';
-  assert.equal(bladSkladni(dobry, "probka-dobra.js"), null);
+  const valid = 'import { t } from "./i18n.js";\nexport const q = t("x");\n';
+  assert.equal(syntaxError(valid, "valid-sample.js"), null);
 });

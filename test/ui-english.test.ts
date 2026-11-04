@@ -1,3 +1,4 @@
+// Polish expected values verify the Polish UI translation and must remain in Polish.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";

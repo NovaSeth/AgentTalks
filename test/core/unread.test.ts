@@ -1,3 +1,4 @@
+// Polish fixture messages exercise unread counts and mention handling with Polish input.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkActor, testCtx } from "../helpers.ts";
@@ -8,7 +9,7 @@ import { markRead, totalBadge, unreadFor } from "../../src/core/unread.ts";
 const rowFor = (ctx: ReturnType<typeof testCtx>, actorId: number, convId: number) =>
   unreadFor(ctx, actorId).find((r) => r.conversationId === convId)!;
 
-test("wlasne wiadomosci nie licza sie jako nieprzeczytane", () => {
+test("one's own messages do not count as unread", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -16,7 +17,7 @@ test("wlasne wiadomosci nie licza sie jako nieprzeczytane", () => {
   assert.equal(rowFor(ctx, a.id, c.id).unread, 0);
 });
 
-test("w kanale plakietka liczy tylko wzmianki, licznik liczy wszystko", () => {
+test("in a channel the badge counts only mentions; the counter counts everything", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -28,7 +29,7 @@ test("w kanale plakietka liczy tylko wzmianki, licznik liczy wszystko", () => {
   assert.equal(row.badge, 1);
 });
 
-test("w DM kazda wiadomosc jest plakietka, bez wzmianki", () => {
+test("in a DM every message adds to the badge without a mention", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const d = ensureDirect(ctx, [a.id, b.id]);
@@ -38,7 +39,7 @@ test("w DM kazda wiadomosc jest plakietka, bez wzmianki", () => {
   assert.equal(row.badge, 1);
 });
 
-test("w grupie kazda wiadomosc jest plakietka", () => {
+test("in a group every message adds to the badge", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob"), c3 = mkActor(ctx, "cez");
   const g = ensureDirect(ctx, [a.id, b.id, c3.id]);
@@ -46,7 +47,7 @@ test("w grupie kazda wiadomosc jest plakietka", () => {
   assert.equal(rowFor(ctx, c3.id, g.id).badge, 1);
 });
 
-test("markRead bez argumentu zeruje do najnowszej", () => {
+test("markRead without an argument clears unread through the latest message", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -56,7 +57,7 @@ test("markRead bez argumentu zeruje do najnowszej", () => {
   assert.equal(rowFor(ctx, b.id, c.id).unread, 0);
 });
 
-test("markRead nie cofa sie do starszej wiadomosci", () => {
+test("markRead never moves back to an older message", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -68,7 +69,7 @@ test("markRead nie cofa sie do starszej wiadomosci", () => {
   assert.equal(rowFor(ctx, b.id, c.id).unread, 0);
 });
 
-test("skasowana wiadomosc nie utrzymuje licznika", () => {
+test("a deleted message does not keep the counter up", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -78,16 +79,16 @@ test("skasowana wiadomosc nie utrzymuje licznika", () => {
   assert.equal(rowFor(ctx, b.id, c.id).unread, 0);
 });
 
-test("liczniki nie wyciekaja z konwersacji, ktorych nie jestem czlonkiem", () => {
+test("counters do not leak from conversations the actor has not joined", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
   postMessage(ctx, { conversationId: c.id, actorId: a.id, body: "@bob nawet ze wzmianka" });
-  assert.equal(unreadFor(ctx, b.id).length, 0, "bob nie dolaczyl, wiec nie ma licznika");
+  assert.equal(unreadFor(ctx, b.id).length, 0, "bob has not joined and must not have a counter");
   assert.equal(totalBadge(ctx, b.id), 0);
 });
 
-test("totalBadge sumuje plakietki ze wszystkich konwersacji", () => {
+test("totalBadge sums badges from all conversations", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });

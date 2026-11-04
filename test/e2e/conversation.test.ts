@@ -1,3 +1,4 @@
+// Polish fixture messages exercise the full conversation flow without changing user content.
 /**
  * The full path through a live server: a human creates a group conversation, one agent writes,
  * the other receives it by push, and the counters tell "something new" from "concerns YOU".
@@ -11,7 +12,7 @@ import { bearer, cookieAuth, openSse, startTestServer } from "../http-helpers.ts
 import { createActor, setPassword } from "../../src/core/actors.ts";
 import { mintToken } from "../../src/core/tokens.ts";
 
-test("czlowiek i dwoch agentow rozmawiaja przez zywy serwer", async () => {
+test("a human and two agents converse through a live server", async () => {
   const s = await startTestServer();
 
   const michal = createActor(s.ctx, { kind: "human", handle: "michal", isAdmin: true });
@@ -68,28 +69,28 @@ test("czlowiek i dwoch agentow rozmawiaja przez zywy serwer", async () => {
   // 5. Counters: in a direct conversation every message is a badge.
   const unread = await (await fetch(s.url + "/api/unread", { headers: bearer(te) })).json();
   const row = unread.rows.find((r: any) => r.conversationId === conv.id);
-  assert.equal(row.badge, 1, "wzmianka w grupie ma dawac plakietke");
+  assert.equal(row.badge, 1, "a mention in a group must add to the badge");
 
   // 6. The human sees the same conversation and the same content as the agents - interface parity.
   const me = await (await fetch(s.url + "/api/me", { headers: auth })).json();
   assert.ok(me.conversations.some((c: any) => c.id === conv.id));
-  const widok = await (await fetch(`${s.url}/api/conversations/${conv.id}/messages`, {
+  const view = await (await fetch(`${s.url}/api/conversations/${conv.id}/messages`, {
     headers: auth,
   })).json();
-  assert.deepEqual(widok.messages.map((m: any) => m.body),
+  assert.deepEqual(view.messages.map((m: any) => m.body),
                    ["@eipa przejmij deploy", "biore"]);
 
   es.close();
   await s.close();
 });
 
-test("obcy agent nie widzi cudzej rozmowy grupowej", async () => {
+test("an outside agent cannot see someone else's group conversation", async () => {
   const s = await startTestServer();
   const a = createActor(s.ctx, { kind: "agent", handle: "ala" });
   const b = createActor(s.ctx, { kind: "agent", handle: "bob" });
-  const obcy = createActor(s.ctx, { kind: "agent", handle: "obcy" });
+  const outsider = createActor(s.ctx, { kind: "agent", handle: "obcy" });
   const ta = mintToken(s.ctx, a.id, "t").token;
-  const tobcy = mintToken(s.ctx, obcy.id, "t").token;
+  const outsiderToken = mintToken(s.ctx, outsider.id, "t").token;
   void b;
 
   const conv = (await (await fetch(s.url + "/api/conversations", {
@@ -101,17 +102,17 @@ test("obcy agent nie widzi cudzej rozmowy grupowej", async () => {
   });
 
   const r = await fetch(`${s.url}/api/conversations/${conv.id}/messages`, {
-    headers: bearer(tobcy),
+    headers: bearer(outsiderToken),
   });
   assert.equal(r.status, 403);
 
-  const szukaj = await (await fetch(s.url + "/api/search?q=poufne", {
-    headers: bearer(tobcy),
+  const searchResult = await (await fetch(s.url + "/api/search?q=poufne", {
+    headers: bearer(outsiderToken),
   })).json();
-  assert.equal(szukaj.messages.length, 0, "wyszukiwarka nie moze byc obejsciem uprawnien");
+  assert.equal(searchResult.messages.length, 0, "search must not bypass permissions");
 
   const inbox = await (await fetch(`${s.url}/api/messages?after=0&wait=0`, {
-    headers: bearer(tobcy),
+    headers: bearer(outsiderToken),
   })).json();
   assert.equal(inbox.messages.length, 0);
 

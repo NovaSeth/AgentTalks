@@ -1,3 +1,4 @@
+// Polish fixture handles and message bodies exercise persistence, migration and full-text search.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -7,7 +8,7 @@ import { onCommitted, openDb, schemaVersion, tx } from "../../src/store/db.ts";
 import { MIGRATIONS, SCHEMA_VERSION } from "../../src/store/schema.ts";
 import { DatabaseSync } from "node:sqlite";
 
-test("openDb tworzy schemat i ustawia wersje", () => {
+test("openDb creates the schema and sets the version", () => {
   const db = openDb(":memory:");
   assert.equal(schemaVersion(db), SCHEMA_VERSION);
   const tables = (db.prepare(
@@ -17,11 +18,11 @@ test("openDb tworzy schemat i ustawia wersje", () => {
                    "messages", "mentions", "reactions", "questions", "files",
                    "pins", "leases", "wiki_pages", "wiki_revisions", "invites",
                    "wiki_reads"]) {
-    assert.ok(tables.includes(t), `brak tabeli ${t}`);
+    assert.ok(tables.includes(t), `table ${t} missing`);
   }
 });
 
-test("openDb jest idempotentne na TYM SAMYM pliku", () => {
+test("openDb is idempotent on THE SAME file", () => {
   // Two :memory: databases are independent and prove nothing - migrations have to go through the
   // "already migrated" path on a shared file.
   const path = join(mkdtempSync(join(tmpdir(), "at-db-")), "test.sqlite");
@@ -33,10 +34,10 @@ test("openDb jest idempotentne na TYM SAMYM pliku", () => {
   const db2 = openDb(path);
   assert.equal(schemaVersion(db2), SCHEMA_VERSION);
   const n = db2.prepare("SELECT count(*) AS n FROM actors").get() as { n: number };
-  assert.equal(n.n, 1, "ponowne otwarcie nie moze ruszyc danych");
+  assert.equal(n.n, 1, "reopening must not change the data");
 });
 
-test("tx zagniezdzone: wewnetrzny rollback nie zabija zewnetrznej transakcji", () => {
+test("nested tx: an inner rollback does not kill the outer transaction", () => {
   const db = openDb(":memory:");
   const ins = (h: string) => db.prepare(
     "INSERT INTO actors(kind,handle,display_name,created_at) VALUES('agent',?,?,1)").run(h, h);
@@ -50,24 +51,24 @@ test("tx zagniezdzone: wewnetrzny rollback nie zabija zewnetrznej transakcji", (
   assert.deepEqual(handles, ["po-wewnetrznym", "zewnetrzny"]);
 });
 
-test("onCommitted w transakcji odklada wywolanie do commita; blad = brak wywolania", () => {
+test("onCommitted inside a transaction defers the call until commit; an error prevents the call", () => {
   const db = openDb(":memory:");
   const calls: string[] = [];
   tx(db, () => {
     onCommitted(db, () => calls.push("a"));
-    assert.deepEqual(calls, [], "callback nie moze wyprzedzic commita");
+    assert.deepEqual(calls, [], "the callback must not precede commit");
   });
   assert.deepEqual(calls, ["a"]);
   assert.throws(() => tx(db, () => {
     onCommitted(db, () => calls.push("b"));
     throw new Error("bum");
   }), /bum/);
-  assert.deepEqual(calls, ["a"], "po rollbacku callback nie ma prawa wyjsc");
+  assert.deepEqual(calls, ["a"], "the callback must not fire after rollback");
   onCommitted(db, () => calls.push("c"));
-  assert.deepEqual(calls, ["a", "c"], "poza transakcja - od razu");
+  assert.deepEqual(calls, ["a", "c"], "outside a transaction, fire immediately");
 });
 
-test("FTS5 jest dostepny i synchronizuje sie triggerem", () => {
+test("FTS5 is available and synchronized by a trigger", () => {
   const db = openDb(":memory:");
   const now = 1;
   db.prepare("INSERT INTO actors(kind,handle,display_name,created_at) VALUES(?,?,?,?)")
@@ -81,7 +82,7 @@ test("FTS5 jest dostepny i synchronizuje sie triggerem", () => {
   assert.equal(hits.length, 1);
 });
 
-test("klucze obce sa egzekwowane", () => {
+test("foreign keys are enforced", () => {
   const db = openDb(":memory:");
   assert.throws(
     () => db.prepare("INSERT INTO messages(conversation_id,actor_id,ts,body) VALUES(9,9,1,'x')").run(),
@@ -89,7 +90,7 @@ test("klucze obce sa egzekwowane", () => {
   );
 });
 
-test("tx wycofuje wszystko przy bledzie w srodku", () => {
+test("tx rolls everything back when an error occurs inside", () => {
   const db = openDb(":memory:");
   assert.throws(() => tx(db, () => {
     db.prepare("INSERT INTO actors(kind,handle,display_name,created_at) VALUES(?,?,?,?)")
@@ -100,7 +101,7 @@ test("tx wycofuje wszystko przy bledzie w srodku", () => {
   assert.equal(n.n, 0);
 });
 
-test("migracja wielokrokowa: stara baza dochodzi do biezacej wersji, z danymi", () => {
+test("multistep migration: an old database reaches the current version with its data", () => {
   // The previous version of this test only OPENED a fresh database and checked that it has the
   // columns - that is, it tested a from-scratch installation under the name "migration", and
   // could not fail on a broken migration. Here we really start from a schema from years back:
@@ -109,38 +110,38 @@ test("migracja wielokrokowa: stara baza dochodzi do biezacej wersji, z danymi", 
   const path = join(mkdtempSync(join(tmpdir(), "at-mig-")), "test.sqlite");
 
   // 1. The database in the state after M1 and only M1.
-  const stara = new DatabaseSync(path);
-  stara.exec("PRAGMA foreign_keys = ON");
-  stara.exec(MIGRATIONS[0]);
-  stara.exec("PRAGMA user_version = 1");
-  stara.prepare("INSERT INTO actors(kind, handle, display_name, created_at) VALUES(?,?,?,?)")
+  const oldDb = new DatabaseSync(path);
+  oldDb.exec("PRAGMA foreign_keys = ON");
+  oldDb.exec(MIGRATIONS[0]);
+  oldDb.exec("PRAGMA user_version = 1");
+  oldDb.prepare("INSERT INTO actors(kind, handle, display_name, created_at) VALUES(?,?,?,?)")
     .run("agent", "stary-agent", "stary-agent", 1000);
-  stara.close();
+  oldDb.close();
 
   // 2. Opening through openDb has to pull in ALL the remaining migrations.
   const db = openDb(path);
-  assert.equal(schemaVersion(db), SCHEMA_VERSION, "migracja nie doszla do biezacej wersji");
+  assert.equal(schemaVersion(db), SCHEMA_VERSION, "migration did not reach the current version");
 
-  // 3. Dane sprzed migracji zyja.
-  const kto = db.prepare("SELECT handle FROM actors WHERE handle = ?").get("stary-agent") as
+  // 3. Pre-migration data survives.
+  const actorRow = db.prepare("SELECT handle FROM actors WHERE handle = ?").get("stary-agent") as
     | { handle: string }
     | undefined;
-  assert.equal(kto?.handle, "stary-agent", "migracja zgubila dane sprzed niej");
+  assert.equal(actorRow?.handle, "stary-agent", "migration lost preexisting data");
 
   // 4. Columns and tables from later migrations really are there.
-  const kolumny = (tabela: string) =>
-    (db.prepare(`PRAGMA table_info(${tabela})`).all() as Array<{ name: string }>).map((c) => c.name);
-  assert.ok(kolumny("messages").includes("dedup_key"), "brak dedup_key (M2)");
-  assert.ok(kolumny("tokens").includes("expires_at"), "brak tokens.expires_at (M2)");
-  assert.ok(kolumny("messages").includes("fixed_at"), "brak messages.fixed_at (M12)");
-  assert.ok(kolumny("actors").includes("session_epoch"), "brak actors.session_epoch (M13)");
-  const tabele = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as
+  const columns = (table: string) =>
+    (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name);
+  assert.ok(columns("messages").includes("dedup_key"), "dedup_key missing (M2)");
+  assert.ok(columns("tokens").includes("expires_at"), "tokens.expires_at missing (M2)");
+  assert.ok(columns("messages").includes("fixed_at"), "messages.fixed_at missing (M12)");
+  assert.ok(columns("actors").includes("session_epoch"), "actors.session_epoch missing (M13)");
+  const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as
     Array<{ name: string }>).map((t) => t.name);
-  assert.ok(tabele.includes("notifications"), "brak tabeli notifications (M11)");
-  assert.ok(tabele.includes("wiki_pages"), "brak tabeli wiki_pages (M4)");
+  assert.ok(tables.includes("notifications"), "notifications table missing (M11)");
+  assert.ok(tables.includes("wiki_pages"), "wiki_pages table missing (M4)");
 });
 
-test("migracja jest idempotentna: drugie otwarcie nie robi nic i nie psuje danych", () => {
+test("migration is idempotent: a second open does nothing and preserves data", () => {
   const path = join(mkdtempSync(join(tmpdir(), "at-mig2-")), "test.sqlite");
   const a = openDb(path);
   a.prepare("INSERT INTO actors(kind, handle, display_name, created_at) VALUES(?,?,?,?)")
@@ -149,5 +150,5 @@ test("migracja jest idempotentna: drugie otwarcie nie robi nic i nie psuje danyc
   const b = openDb(path);
   assert.equal(schemaVersion(b), SCHEMA_VERSION);
   const n = b.prepare("SELECT COUNT(*) AS n FROM actors").get() as { n: number };
-  assert.equal(n.n, 1, "ponowne otwarcie zmienilo dane");
+  assert.equal(n.n, 1, "reopening changed the data");
 });

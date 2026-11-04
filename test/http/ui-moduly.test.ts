@@ -27,42 +27,42 @@ import { startTestServer } from "../http-helpers.ts";
 
 const UI_DIR = fileURLToPath(new URL("../../src/http/ui/js/", import.meta.url));
 
-function pliki(): string[] {
+function files(): string[] {
   return readdirSync(UI_DIR).filter((f) => f.endsWith(".js")).sort();
 }
 
 test("every UI module in the directory is served under /js/", async () => {
-  const lista = pliki();
-  assert.ok(lista.length >= 15, `czujnik widzi tylko ${lista.length} modulow - katalog sie przeniosl?`);
+  const list = files();
+  assert.ok(list.length >= 15, `the check sees only ${list.length} modules; did the directory move?`);
 
   const s = await startTestServer();
   try {
-    const kody = await Promise.all(lista.map(async (f) => ({
+    const codes = await Promise.all(list.map(async (f) => ({
       f, status: (await fetch(`${s.url}/js/${f}`)).status,
     })));
-    const brakujace = kody.filter((k) => k.status !== 200);
-    assert.deepEqual(brakujace, [],
-      `moduly, ktorych serwer NIE odda (przegladarka dostanie 404 i CALY graf padnie):\n`
-      + brakujace.map((k) => `  ${k.f} -> ${k.status}`).join("\n"));
+    const missingEntries = codes.filter((k) => k.status !== 200);
+    assert.deepEqual(missingEntries, [],
+      `modules the server will NOT serve (the browser gets 404 and the ENTIRE graph fails):\n`
+      + missingEntries.map((k) => `  ${k.f} -> ${k.status}`).join("\n"));
   } finally { await s.close(); }
 });
 
 test("every UI module import points to a file the server serves", async () => {
   // The other side of the same pair: even when a file exists and is on the list, an
   // import can point at a name the directory does not have - and the symptom is identical.
-  const importy = new Set<string>();
-  for (const f of pliki()) {
+  const imports = new Set<string>();
+  for (const f of files()) {
     const src = readFileSync(UI_DIR + f, "utf8");
-    for (const m of src.matchAll(/from\s+"\.\/([\w.-]+\.js)"/g)) importy.add(m[1]);
+    for (const m of src.matchAll(/from\s+"\.\/([\w.-]+\.js)"/g)) imports.add(m[1]);
   }
-  assert.ok(importy.size >= 10, `wyciagnieto tylko ${importy.size} importow - wzorzec przestal pasowac`);
+  assert.ok(imports.size >= 10, `only ${imports.size} imports extracted; the pattern no longer matches`);
 
   const s = await startTestServer();
   try {
-    const kody = await Promise.all([...importy].map(async (f) => ({
+    const codes = await Promise.all([...imports].map(async (f) => ({
       f, status: (await fetch(`${s.url}/js/${f}`)).status,
     })));
-    const zle = kody.filter((k) => k.status !== 200);
-    assert.deepEqual(zle, [], zle.map((k) => `  import "./${k.f}" -> ${k.status}`).join("\n"));
+    const invalid = codes.filter((k) => k.status !== 200);
+    assert.deepEqual(invalid, [], invalid.map((k) => `  import "./${k.f}" -> ${k.status}`).join("\n"));
   } finally { await s.close(); }
 });

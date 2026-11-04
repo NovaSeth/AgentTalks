@@ -1,3 +1,4 @@
+// Polish fixture records exercise import, search and read markers without changing historical input.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
@@ -22,7 +23,7 @@ function fixtureRaw(channelJsonl: string, presence: Record<string, unknown> = {}
 const fixture = (records: Array<Record<string, unknown>>, presence?: Record<string, unknown>) =>
   fixtureRaw(records.map((r) => JSON.stringify(r)).join("\n") + "\n", presence);
 
-test("import odtwarza kanaly, aktorow i kolejnosc wiadomosci", () => {
+test("import restores channels, actors and message order", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "Nestor/chat-vps", kind: "say", chan: "#general",
       text: "pierwsza", mid: "m1" },
@@ -39,7 +40,7 @@ test("import odtwarza kanaly, aktorow i kolejnosc wiadomosci", () => {
   assert.equal(getActorByHandle(ctx, "nestor-chat-vps")?.displayName, "Nestor/chat-vps");
 });
 
-test("import jest idempotentny - drugi przebieg nie dubluje", () => {
+test("import is idempotent; a second pass does not duplicate records", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "say", chan: "#general", text: "x", mid: "m1" },
   ]);
@@ -50,7 +51,7 @@ test("import jest idempotentny - drugi przebieg nie dubluje", () => {
   assert.equal(second.skipped, 1);
 });
 
-test("wiadomosc z to staje sie DM-em, nie wiadomoscia kanalowa", () => {
+test("a message with to becomes a DM rather than a channel message", () => {
   const home = fixture([
     { ts: 90, sid: "michal", label: "Michal", kind: "say", chan: "#general",
       text: "obecnosc", mid: "m0" },
@@ -61,11 +62,11 @@ test("wiadomosc z to staje sie DM-em, nie wiadomoscia kanalowa", () => {
   importTalkHome(ctx, home);
   const michal = getActorByHandle(ctx, "michal")!;
   const dm = listForActor(ctx, michal.id).find((c) => c.kind === "dm");
-  assert.ok(dm, "brak DM-a po imporcie");
+  assert.ok(dm, "DM missing after import");
   assert.equal(listMessages(ctx, { conversationId: dm!.id })[0].body, "prywatnie");
 });
 
-test("adresat znany tylko z katalogu obecnosci daje sie rozwiazac", () => {
+test("a recipient known only from the presence directory can be resolved", () => {
   const home = fixture(
     [{ ts: 100, sid: "s1", label: "nestor", kind: "say", chan: "#general", to: "eipa-ceny",
        text: "hej", mid: "m1" }],
@@ -77,7 +78,7 @@ test("adresat znany tylko z katalogu obecnosci daje sie rozwiazac", () => {
   assert.equal(rep.skipped, 0);
 });
 
-test("reakcje nie staja sie wiadomosciami", () => {
+test("reactions do not become messages", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "say", chan: "#general", text: "tresc", mid: "m1" },
     { ts: 110, sid: "s2", label: "beta", kind: "react", chan: "#general", text: "",
@@ -89,7 +90,7 @@ test("reakcje nie staja sie wiadomosciami", () => {
   assert.equal(rep.reactions, 1);
 });
 
-test("ask i answer odtwarzaja pytanie razem z watkiem", () => {
+test("ask and answer restore the question and its thread", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "ask", chan: "#issues", text: "czy dziala?",
       mid: "m1", id: "q1" },
@@ -100,12 +101,12 @@ test("ask i answer odtwarzaja pytanie razem z watkiem", () => {
   const rep = importTalkHome(ctx, home);
   assert.equal(rep.questions, 1);
   const q = ctx.db.prepare("SELECT closed_at FROM questions").get() as { closed_at: number | null };
-  assert.ok(q.closed_at, "pytanie powinno byc zamkniete przez odpowiedz");
+  assert.ok(q.closed_at, "the answer must close the question");
   const msgs = listMessages(ctx, { conversationId: getBySlug(ctx, "issues")!.id });
   assert.equal(msgs[1].threadId, msgs[0].id);
 });
 
-test("join i leave sa pomijane jako szum", () => {
+test("join and leave are skipped as noise", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "join", chan: "#general", text: "", mid: "m1" },
     { ts: 110, sid: "s1", label: "alfa", kind: "leave", chan: "#general", text: "", mid: "m2" },
@@ -116,7 +117,7 @@ test("join i leave sa pomijane jako szum", () => {
   assert.equal(rep.skipped, 2);
 });
 
-test("nierozwiazywalny adresat trafia do raportu, nie ginie", () => {
+test("an unresolvable recipient is reported rather than lost", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "say", chan: "#general", to: "ktos-kogo-nie-ma",
       text: "x", mid: "m1" },
@@ -127,7 +128,7 @@ test("nierozwiazywalny adresat trafia do raportu, nie ginie", () => {
   assert.match(rep.problems.join(" "), /could not resolve recipient/);
 });
 
-test("uszkodzona linia JSON nie przerywa importu i jest policzona", () => {
+test("a malformed JSON line does not stop the import and is counted", () => {
   const home = fixtureRaw(
     '{"ts":1,"sid":"s","label":"alfa","kind":"say","chan":"#general","text":"ok","mid":"m1"}\n'
       + "{ urwana\n",
@@ -139,7 +140,7 @@ test("uszkodzona linia JSON nie przerywa importu i jest policzona", () => {
   assert.match(rep.problems.join(" "), /invalid JSON line/);
 });
 
-test("wzmianki sa odtworzone po handle", () => {
+test("mentions are restored by handle", () => {
   const home = fixture([
     { ts: 90, sid: "michal", label: "Michal", kind: "say", chan: "#general", text: "jestem",
       mid: "m0" },
@@ -152,7 +153,7 @@ test("wzmianki sa odtworzone po handle", () => {
   assert.equal(n.n, 1);
 });
 
-test("znacznik odczytu przelicza sie z czasu na id wiadomosci", () => {
+test("a read marker is converted from a timestamp to a message id", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "say", chan: "#general", text: "raz", mid: "m1" },
     { ts: 300, sid: "s1", label: "alfa", kind: "say", chan: "#general", text: "dwa", mid: "m2" },
@@ -169,11 +170,11 @@ test("znacznik odczytu przelicza sie z czasu na id wiadomosci", () => {
     .prepare("SELECT last_read_message_id AS id FROM members WHERE actor_id = ?")
     .get(michal.id) as { id: number };
   const msgs = listMessages(ctx, { conversationId: getBySlug(ctx, "general")!.id });
-  const raz = msgs.find((m) => m.body === "raz")!;
-  assert.equal(row.id, raz.id, "znacznik ma wskazywac ostatnia wiadomosc sprzed ts=200");
+  const firstMessage = msgs.find((m) => m.body === "raz")!;
+  assert.equal(row.id, firstMessage.id, "the marker must point to the last message before ts=200");
 });
 
-test("drugi przebieg nie dubluje reakcji, pytan ani znacznikow", () => {
+test("a second pass does not duplicate reactions, questions or markers", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "ask", chan: "#issues", text: "q?",
       mid: "m1", id: "q1" },
@@ -193,7 +194,7 @@ test("drugi przebieg nie dubluje reakcji, pytan ani znacznikow", () => {
   assert.equal(m.n, 2);
 });
 
-test("import przyrostowy: reakcja z drugiego pliku trafia w wiadomosc z pierwszego", () => {
+test("incremental import: a reaction in the second file targets a message from the first", () => {
   const ctx = testCtx();
   importTalkHome(ctx, fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "say", chan: "#general", text: "baza", mid: "m1" },
@@ -202,10 +203,10 @@ test("import przyrostowy: reakcja z drugiego pliku trafia w wiadomosc z pierwsze
     { ts: 110, sid: "s2", label: "beta", kind: "react", chan: "#general", text: "",
       ref: "m1", emoji: "OK", mid: "m2" },
   ]));
-  assert.equal(rep.reactions, 1, "reakcja do wiadomosci z poprzedniego przebiegu przepadla");
+  assert.equal(rep.reactions, 1, "the reaction to a previous pass's message was lost");
 });
 
-test("dwie ROZNE etykiety zderzone w jeden handle nie sa zlewane w jednego aktora", () => {
+test("two DISTINCT labels colliding on one handle are not merged into one actor", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "mac/general", kind: "say", chan: "#g", text: "a", mid: "m1" },
     { ts: 110, sid: "s2", label: "mac general", kind: "say", chan: "#g", text: "b", mid: "m2" },
@@ -215,10 +216,10 @@ test("dwie ROZNE etykiety zderzone w jeden handle nie sa zlewane w jednego aktor
   const authors = ctx.db.prepare(
     "SELECT DISTINCT actor_id FROM messages",
   ).all() as Array<{ actor_id: number }>;
-  assert.equal(authors.length, 2, "dwoch rozmowcow zlanych w jednego");
+  assert.equal(authors.length, 2, "two participants were merged into one");
 });
 
-test("zly kanal w jednym rekordzie nie wywala calego importu", () => {
+test("an invalid channel in one record does not crash the entire import", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "alfa", kind: "say", chan: "#!!!", text: "zly", mid: "m1" },
     { ts: 110, sid: "s1", label: "alfa", kind: "say", chan: "#general", text: "dobry", mid: "m2" },
@@ -229,7 +230,7 @@ test("zly kanal w jednym rekordzie nie wywala calego importu", () => {
   assert.equal(rep.skipped, 1);
 });
 
-test("znaczniki odczytu DM-ow sa przenoszone", () => {
+test("DM read markers are transferred", () => {
   const home = fixture([
     { ts: 100, sid: "sid-nestor", label: "nestor", kind: "say", chan: "#general",
       to: "Michal", text: "prywatna", mid: "m1" },
@@ -240,10 +241,10 @@ test("znaczniki odczytu DM-ow sa przenoszone", () => {
   writeFileSync(join(home, "read", "michal", "dm_sid-nestor"), String(200 * 1000));
   const ctx = testCtx();
   const rep = importTalkHome(ctx, home);
-  assert.equal(rep.reads, 1, "znacznik odczytu DM-a przepadl");
+  assert.equal(rep.reads, 1, "the DM read marker was lost");
 });
 
-test("sufiksy (N) scalaja sie w jednego aktora", () => {
+test("(N) suffixes are merged into one actor", () => {
   const home = fixture([
     { ts: 100, sid: "s1", label: "Nestor/myday", kind: "say", chan: "#myday", text: "a", mid: "m1" },
     { ts: 110, sid: "s2", label: "Nestor/myday (2)", kind: "say", chan: "#myday", text: "b", mid: "m2" },
@@ -253,7 +254,7 @@ test("sufiksy (N) scalaja sie w jednego aktora", () => {
   importTalkHome(ctx, home);
   const authors = ctx.db.prepare("SELECT DISTINCT actor_id FROM messages").all() as
     Array<{ actor_id: number }>;
-  assert.equal(authors.length, 1, "sufiksy (N) nie zostaly scalone");
+  assert.equal(authors.length, 1, "(N) suffixes were not merged");
   assert.ok(getActorByHandle(ctx, "nestor-myday"));
-  assert.equal(getActorByHandle(ctx, "nestor-myday-2"), null, "powstal osobny aktor dla (2)");
+  assert.equal(getActorByHandle(ctx, "nestor-myday-2"), null, "a separate actor was created for (2)");
 });

@@ -1,7 +1,7 @@
 /**
  * Interface language: does every sentence the code shows have a translation?
  *
- * This is the same class of sensor as `dokumentacja.test.ts` - "both sides
+ * This is the same class of sensor as `docs.test.ts` - "both sides
  * correct, pair broken". A `t("Send")` with no Polish entry is not an error
  * anywhere: the code is fine, the dictionary is fine, and the interface quietly
  * shows one English word in the middle of a Polish screen. Nobody reports it,
@@ -30,40 +30,40 @@ const UI = fileURLToPath(new URL("../src/http/ui/js/", import.meta.url));
 /** A JS literal is not JSON: it may contain \` and \$ (needed inside a template),
  *  which JSON.parse rejects. We unescape them instead of pretending they do not
  *  occur - the wiki editor placeholder contains exactly that. */
-const naJson = (s: string): string => s.replace(/\\([`$])/g, "$1");
+const asJson = (s: string): string => s.replace(/\\([`$])/g, "$1");
 
-function plikiUI(): string[] {
+function uiFiles(): string[] {
   return readdirSync(UI).filter((f) => f.endsWith(".js") && !f.startsWith("i18n"));
 }
 
-function uzyteKlucze(): Map<string, string[]> {
-  const gdzie = new Map<string, string[]>();
-  for (const f of plikiUI()) {
+function usedKeys(): Map<string, string[]> {
+  const locations = new Map<string, string[]>();
+  for (const f of uiFiles()) {
     const src = readFileSync(UI + f, "utf8");
     for (const m of src.matchAll(/\b(?:t|msg)\(\s*("(?:[^"\\]|\\.)*")/g)) {
-      const klucz = JSON.parse(naJson(m[1])) as string;
-      const lista = gdzie.get(klucz);
-      if (lista) { if (!lista.includes(f)) lista.push(f); } else gdzie.set(klucz, [f]);
+      const key = JSON.parse(asJson(m[1])) as string;
+      const list = locations.get(key);
+      if (list) { if (!list.includes(f)) list.push(f); } else locations.set(key, [f]);
     }
   }
-  return gdzie;
+  return locations;
 }
 
 test("every interface sentence has a translation and every translation is used", async () => {
-  const uzyte = uzyteKlucze();
+  const used = usedKeys();
   // A guard against a silent failure of the sensor itself: when the expression stops matching
   // (a different function name, a different quote), the set will be empty and the test will
   // pass HAVING CHECKED NOTHING. That threshold has already been the cause of false green here.
-  assert.ok(uzyte.size > 400, `wyciagnieto tylko ${uzyte.size} kluczy - czujnik przestal widziec kod`);
+  assert.ok(used.size > 400, `only ${used.size} keys extracted; the check no longer sees the code`);
 
   const { PL } = await import("../src/http/ui/js/i18n-pl.js");
-  const maja = new Set(Object.keys(PL));
+  const have = new Set(Object.keys(PL));
 
-  const brak = [...uzyte.keys()].filter((k) => !maja.has(k));
-  assert.deepEqual(brak, [], `bez tlumaczenia:\n${brak.map((k) => `  ${JSON.stringify(k)} (${uzyte.get(k)!.join(", ")})`).join("\n")}`);
+  const missing = [...used.keys()].filter((k) => !have.has(k));
+  assert.deepEqual(missing, [], `missing translations:\n${missing.map((k) => `  ${JSON.stringify(k)} (${used.get(k)!.join(", ")})`).join("\n")}`);
 
-  const martwe = [...maja].filter((k) => !uzyte.has(k));
-  assert.deepEqual(martwe, [], `w slowniku, nieuzywane w kodzie:\n${martwe.map((k) => `  ${JSON.stringify(k)}`).join("\n")}`);
+  const unused = [...have].filter((k) => !used.has(k));
+  assert.deepEqual(unused, [], `in the dictionary but unused in code:\n${unused.map((k) => `  ${JSON.stringify(k)}`).join("\n")}`);
 });
 
 test("plural forms cover the categories requested by Polish Intl.PluralRules", async () => {
@@ -72,22 +72,22 @@ test("plural forms cover the categories requested by Polish Intl.PluralRules", a
   // The numbers are chosen so that all three Polish categories occur: 1 -> one, 2..4 -> few,
   // 5+ and 0 -> many. We ask Intl rather than ourselves - it is what picks the form at runtime,
   // so its opinion is the binding one.
-  const kategorie = new Set([0, 1, 2, 3, 5, 11, 22, 25, 101].map((n) => rules.select(n)));
-  assert.ok(kategorie.size >= 3, `polski powinien miec >=3 kategorie, jest ${[...kategorie]}`);
+  const categories = new Set([0, 1, 2, 3, 5, 11, 22, 25, 101].map((n) => rules.select(n)));
+  assert.ok(categories.size >= 3, `Polish must have >=3 categories; found ${[...categories]}`);
 
-  let mnogich = 0;
-  for (const [klucz, wartosc] of Object.entries(PL)) {
-    if (typeof wartosc === "string") continue;
-    mnogich++;
-    for (const kat of kategorie) {
+  let pluralEntries = 0;
+  for (const [key, value] of Object.entries(PL)) {
+    if (typeof value === "string") continue;
+    pluralEntries++;
+    for (const category of categories) {
       assert.ok(
-        typeof (wartosc as Record<string, string>)[kat] === "string"
-          || typeof (wartosc as Record<string, string>).other === "string",
-        `${JSON.stringify(klucz)}: brak formy "${kat}"`,
+        typeof (value as Record<string, string>)[category] === "string"
+          || typeof (value as Record<string, string>).other === "string",
+        `${JSON.stringify(key)}: missing form "${category}"`,
       );
     }
   }
-  assert.ok(mnogich >= 5, `spodziewam sie kilku form mnogich, jest ${mnogich}`);
+  assert.ok(pluralEntries >= 5, `expected several plural entries; found ${pluralEntries}`);
 });
 
 test("t() translates, selects the plural form and falls back to English for missing entries", async () => {
@@ -97,6 +97,7 @@ test("t() translates, selects the plural form and falls back to English for miss
   assert.equal(i18n.t("{n} replies", { n: 1 }), "1 reply");
   assert.equal(i18n.t("{n} replies", { n: 5 }), "5 replies");
 
+  // Polish expected values verify translation, plural forms and interpolation.
   i18n.setLang("pl");
   assert.equal(i18n.t("Sign in"), "Wejdź");
   // Three forms, not two - that is the whole difference between this mechanism and the ternary
@@ -115,15 +116,15 @@ test("t() translates, selects the plural form and falls back to English for miss
 test("no UI file shadows the imported t() with its own `t`", () => {
   // The patterns that actually occurred while translating the interface: `const t =` (a title
   // field, a bar), `(t)` and `(t,` (a parameter in map/forEach - a token, a tab).
-  const PRZYKRYCIE = /\bconst\s+t\b|\blet\s+t\b|\bvar\s+t\b|\(\s*t\s*\)\s*=>|\(\s*t\s*,/;
-  const winne: string[] = [];
-  let sprawdzonych = 0;
-  for (const f of plikiUI()) {
+  const SHADOWING = /\bconst\s+t\b|\blet\s+t\b|\bvar\s+t\b|\(\s*t\s*\)\s*=>|\(\s*t\s*,/;
+  const offenders: string[] = [];
+  let checked = 0;
+  for (const f of uiFiles()) {
     const src = readFileSync(UI + f, "utf8");
     if (!/import\s*\{[^}]*\bt\b[^}]*\}\s*from\s*"\.\/i18n\.js"/.test(src)) continue;
-    sprawdzonych++;
-    if (PRZYKRYCIE.test(src)) winne.push(f);
+    checked++;
+    if (SHADOWING.test(src)) offenders.push(f);
   }
-  assert.ok(sprawdzonych >= 8, `czujnik widzi tylko ${sprawdzonych} plikow z importem t() - wzorzec importu przestal pasowac`);
-  assert.deepEqual(winne, [], `lokalne \`t\` przykrywa tlumaczenie w: ${winne.join(", ")}`);
+  assert.ok(checked >= 8, `the check sees only ${checked} files importing t(); the import pattern no longer matches`);
+  assert.deepEqual(offenders, [], `local \`t\` shadows the translation function in: ${offenders.join(", ")}`);
 });

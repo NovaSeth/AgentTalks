@@ -1,3 +1,4 @@
+// Polish fixture bodies and queries exercise question, reaction and search handling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkActor, testCtx } from "../helpers.ts";
@@ -7,7 +8,7 @@ import { answer, ask, openQuestions } from "../../src/core/questions.ts";
 import { react, reactionsFor } from "../../src/core/reactions.ts";
 import { search } from "../../src/core/search.ts";
 
-test("pytanie jest otwarte, dopoki ktokolwiek nie odpowie", () => {
+test("a question stays open until anyone answers", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "issues", kind: "public", createdBy: a.id });
@@ -17,7 +18,7 @@ test("pytanie jest otwarte, dopoki ktokolwiek nie odpowie", () => {
   assert.equal(openQuestions(ctx, { actorId: b.id }).length, 0);
 });
 
-test("odpowiedz laduje w watku pytania", () => {
+test("the answer is placed in the question's thread", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "i", kind: "public", createdBy: a.id });
@@ -27,7 +28,7 @@ test("odpowiedz laduje w watku pytania", () => {
   assert.equal(r.message.kind, "answer");
 });
 
-test("na zamkniete pytanie nie da sie odpowiedziec drugi raz", () => {
+test("a closed question cannot be answered again", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "i", kind: "public", createdBy: a.id });
@@ -39,7 +40,7 @@ test("na zamkniete pytanie nie da sie odpowiedziec drugi raz", () => {
   );
 });
 
-test("otwarte pytania nie wyciekaja z kanalu prywatnego", () => {
+test("open questions do not leak from a private channel", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "obcy");
   const c = createChannel(ctx, { slug: "tajne", kind: "private", createdBy: a.id });
@@ -48,7 +49,7 @@ test("otwarte pytania nie wyciekaja z kanalu prywatnego", () => {
   assert.equal(openQuestions(ctx, { actorId: a.id }).length, 1);
 });
 
-test("skasowane pytanie znika z otwartych", () => {
+test("a deleted question disappears from open questions", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "i", kind: "public", createdBy: a.id });
@@ -57,7 +58,7 @@ test("skasowane pytanie znika z otwartych", () => {
   assert.equal(openQuestions(ctx, { actorId: a.id }).length, 0);
 });
 
-test("reakcja jest przelacznikiem i nie duplikuje sie", () => {
+test("a reaction toggles without duplication", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -68,7 +69,7 @@ test("reakcja jest przelacznikiem i nie duplikuje sie", () => {
   assert.deepEqual(reactionsFor(ctx, [m.id]), {});
 });
 
-test("reakcja pokazuje KTO zareagowal, nie tylko ile", () => {
+test("a reaction shows WHO reacted, not just how many", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -78,7 +79,7 @@ test("reakcja pokazuje KTO zareagowal, nie tylko ile", () => {
   assert.deepEqual(reactionsFor(ctx, [m.id])[m.id]["OK"], ["ala", "bob"]);
 });
 
-test("nie da sie zareagowac na wiadomosc z kanalu bez dostepu", () => {
+test("an inaccessible channel's message cannot receive a reaction", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "obcy");
   const c = createChannel(ctx, { slug: "s", kind: "private", createdBy: a.id });
@@ -86,7 +87,7 @@ test("nie da sie zareagowac na wiadomosc z kanalu bez dostepu", () => {
   assert.throws(() => react(ctx, { messageId: m.id, actorId: b.id, emoji: "OK" }), /is not accessible/);
 });
 
-test("wyszukiwanie nie zwraca tresci z kanalow bez dostepu", () => {
+test("search does not return content from inaccessible channels", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala"), b = mkActor(ctx, "bob");
   const pub = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -98,7 +99,7 @@ test("wyszukiwanie nie zwraca tresci z kanalow bez dostepu", () => {
   assert.equal(hits[0].conversationId, pub.id);
 });
 
-test("wyszukiwanie pomija skasowane", () => {
+test("search omits deleted messages", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -107,7 +108,7 @@ test("wyszukiwanie pomija skasowane", () => {
   assert.equal(search(ctx, { actorId: a.id, text: "znajdzka" }).length, 0);
 });
 
-test("skladnia FTS w zapytaniu uzytkownika nie wywraca wyszukiwania", () => {
+test("FTS syntax in a user query does not break search", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -116,7 +117,7 @@ test("skladnia FTS w zapytaniu uzytkownika nie wywraca wyszukiwania", () => {
   assert.equal(search(ctx, { actorId: a.id, text: "raport wnioski" }).length, 1);
 });
 
-test("wyszukiwanie dopasowuje przedrostek", () => {
+test("search matches prefixes", () => {
   const ctx = testCtx();
   const a = mkActor(ctx, "ala");
   const c = createChannel(ctx, { slug: "g", kind: "public", createdBy: a.id });
@@ -124,12 +125,12 @@ test("wyszukiwanie dopasowuje przedrostek", () => {
   assert.equal(search(ctx, { actorId: a.id, text: "konfig" }).length, 1);
 });
 
-test("digest i search nie wyciekaja tresci z cudzego kanalu prywatnego (ACL)", () => {
+test("digest and search do not leak content from another actor's private channel (ACL)", () => {
   const ctx = testCtx();
-  const a = mkActor(ctx, "ala"), obcy = mkActor(ctx, "obcy");
+  const a = mkActor(ctx, "ala"), outsider = mkActor(ctx, "obcy");
   const prv = createChannel(ctx, { slug: "tajne", kind: "private", createdBy: a.id });
   postMessage(ctx, { conversationId: prv.id, actorId: a.id, body: "poufna fraza kanaru" });
   // a stranger is not a member
-  const hits = search(ctx, { actorId: obcy.id, text: "kanaru" });
-  assert.equal(hits.length, 0, "search wyciekl z prywatnego kanalu");
+  const hits = search(ctx, { actorId: outsider.id, text: "kanaru" });
+  assert.equal(hits.length, 0, "search leaked content from a private channel");
 });

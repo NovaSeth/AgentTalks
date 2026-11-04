@@ -1,3 +1,4 @@
+// Polish fixture handles, display names and passwords exercise normalization and exact credential matching.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { testCtx } from "../helpers.ts";
@@ -11,7 +12,7 @@ import {
   verifyPassword,
 } from "../../src/core/actors.ts";
 
-test("handle jest normalizowany i walidowany", () => {
+test("handle is normalized and validated", () => {
   assert.equal(normalizeHandle("  @Nestor "), "nestor");
   assert.equal(normalizeHandle("bs/uzytkownik"), "bs-uzytkownik");
   assert.equal(normalizeHandle("Nestor/chat-vps"), "nestor-chat-vps");
@@ -20,18 +21,18 @@ test("handle jest normalizowany i walidowany", () => {
   assert.throws(() => normalizeHandle("!!!"), /handle/);
 });
 
-test("slug kanalu gubi krzyzyk", () => {
+test("channel slugs lose the hash prefix", () => {
   assert.equal(normalizeSlug("#general"), "general");
   assert.equal(normalizeSlug("Infra"), "infra");
 });
 
-test("nie da sie utworzyc dwoch aktorow o tym samym handle", () => {
+test("two actors cannot have the same handle", () => {
   const ctx = testCtx();
   createActor(ctx, { kind: "agent", handle: "nestor" });
   assert.throws(() => createActor(ctx, { kind: "agent", handle: "Nestor" }), /already taken/);
 });
 
-test("displayName domyslnie rowna sie handle i daje sie zmienic bez ruszania handle", () => {
+test("displayName defaults to the handle and can change without changing the handle", () => {
   const ctx = testCtx();
   const a = createActor(ctx, { kind: "agent", handle: "eipa" });
   assert.equal(a.displayName, "eipa");
@@ -40,7 +41,7 @@ test("displayName domyslnie rowna sie handle i daje sie zmienic bez ruszania han
   assert.equal(b.handle, "eipa");
 });
 
-test("haslo weryfikuje sie przez scrypt i nie jest przechowywane jawnie", () => {
+test("passwords are verified with scrypt and are not stored in plaintext", () => {
   const ctx = testCtx();
   const a = createActor(ctx, { kind: "human", handle: "michal" });
   setPassword(ctx, a.id, "tajne123");
@@ -53,25 +54,25 @@ test("haslo weryfikuje sie przez scrypt i nie jest przechowywane jawnie", () => 
   assert.match(row.password_hash, /^scrypt\$[0-9a-f]{32}\$[0-9a-f]{128}$/);
 });
 
-test("aktor bez hasla nie zaloguje sie pustym haslem", () => {
+test("an actor without a password cannot log in with an empty password", () => {
   const ctx = testCtx();
   createActor(ctx, { kind: "agent", handle: "nestor" });
   assert.equal(verifyPassword(ctx, "nestor", ""), null);
 });
 
-test("za krotkie haslo jest odrzucone", () => {
+test("a password that is too short is rejected", () => {
   const ctx = testCtx();
   const a = createActor(ctx, { kind: "human", handle: "michal" });
   assert.throws(() => setPassword(ctx, a.id, "krotkie"), /8 characters/);
 });
 
-test("getActorByHandle nie rzuca na smieciach, tylko zwraca null", () => {
+test("getActorByHandle returns null for garbage input rather than throwing", () => {
   const ctx = testCtx();
   assert.equal(getActorByHandle(ctx, "!!!nie-ma-takiego!!!"), null);
   assert.equal(getActorByHandle(ctx, ""), null);
 });
 
-test("listActors sortuje po handle", () => {
+test("listActors sorts by handle", () => {
   const ctx = testCtx();
   createActor(ctx, { kind: "agent", handle: "zeta" });
   createActor(ctx, { kind: "agent", handle: "alfa" });

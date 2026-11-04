@@ -1,3 +1,4 @@
+// Polish fixture messages, wiki text, filenames and credentials exercise API round trips and encoding with Polish input.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bearer, cookieAuth, startTestServer, type TestServer } from "../http-helpers.ts";
@@ -9,9 +10,9 @@ import { readJson } from "../../src/http/respond.ts";
 import { Readable } from "node:stream";
 import type { Req } from "../../src/http/router.ts";
 
-// --- router i czytanie ciala ----------------------------------------------
+// --- router and body reading ----------------------------------------------
 
-test("router dopasowuje parametry sciezki", () => {
+test("the router matches path parameters", () => {
   const r = new Router();
   r.add("GET", "/api/conversations/:id/messages", () => {});
   assert.equal(r.match("GET", "/api/conversations/42/messages")?.params.id, "42");
@@ -19,12 +20,12 @@ test("router dopasowuje parametry sciezki", () => {
   assert.equal(r.match("POST", "/api/conversations/42/messages"), null);
 });
 
-test("readJson odrzuca cialo ponad limit", async () => {
+test("readJson rejects a body over the limit", async () => {
   const req = Readable.from([Buffer.from("x".repeat(100))]) as unknown as Req;
   await assert.rejects(() => readJson(req, 10), /exceeds/);
 });
 
-test("readJson odrzuca niepoprawny JSON", async () => {
+test("readJson rejects invalid JSON", async () => {
   const req = Readable.from([Buffer.from("{ urwane")]) as unknown as Req;
   await assert.rejects(() => readJson(req, 1000), /valid JSON/);
 });
@@ -36,20 +37,20 @@ function seed(s: TestServer) {
   const bob = createActor(s.ctx, { kind: "agent", handle: "bob" });
   const michal = createActor(s.ctx, { kind: "human", handle: "michal", isAdmin: true });
   setPassword(s.ctx, michal.id, "haslo1234");
-  const kanal = createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
-  const prywatny = createChannel(s.ctx, { slug: "tajne", kind: "private", createdBy: ala.id });
+  const channel = createChannel(s.ctx, { slug: "general", kind: "public", createdBy: ala.id });
+  const privateChannel = createChannel(s.ctx, { slug: "tajne", kind: "private", createdBy: ala.id });
   const dm = ensureDirect(s.ctx, [ala.id, bob.id]);
   return {
     ala, bob, michal,
     tokenA: mintToken(s.ctx, ala.id, "test").token,
     tokenB: mintToken(s.ctx, bob.id, "test").token,
-    kanalId: kanal.id,
-    prywatnyId: prywatny.id,
+    channelId: channel.id,
+    privateChannelId: privateChannel.id,
     dmId: dm.id,
   };
 }
 
-test("bez uwierzytelnienia API zwraca 401, nie 500", async () => {
+test("without authentication the API returns 401 rather than 500", async () => {
   const s = await startTestServer();
   const r = await fetch(s.url + "/api/conversations");
   assert.equal(r.status, 401);
@@ -57,7 +58,7 @@ test("bez uwierzytelnienia API zwraca 401, nie 500", async () => {
   await s.close();
 });
 
-test("health dziala bez uwierzytelnienia", async () => {
+test("health works without authentication", async () => {
   const s = await startTestServer();
   const r = await fetch(s.url + "/api/health");
   assert.equal(r.status, 200);
@@ -65,7 +66,7 @@ test("health dziala bez uwierzytelnienia", async () => {
   await s.close();
 });
 
-test("HEAD na trasie GET odpowiada jak GET, bez ciala (monitoring)", async () => {
+test("HEAD on a GET route responds like GET without a body (monitoring)", async () => {
   const s = await startTestServer();
   const r = await fetch(s.url + "/api/health", { method: "HEAD" });
   assert.equal(r.status, 200);
@@ -73,7 +74,7 @@ test("HEAD na trasie GET odpowiada jak GET, bez ciala (monitoring)", async () =>
   await s.close();
 });
 
-test("nieznana sciezka daje 404 z kodem", async () => {
+test("an unknown path returns 404 with a code", async () => {
   const s = await startTestServer();
   const r = await fetch(s.url + "/api/czegos-takiego-nie-ma");
   assert.equal(r.status, 404);
@@ -81,34 +82,34 @@ test("nieznana sciezka daje 404 z kodem", async () => {
   await s.close();
 });
 
-test("agent wysyla wiadomosc, a drugi ja czyta", async () => {
+test("an agent sends a message and another reads it", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, kanalId } = seed(s);
-  const post = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, tokenB, channelId } = seed(s);
+  const post = await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "czesc" }),
   });
   assert.equal(post.status, 201);
-  const list = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const list = await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     headers: bearer(tokenB),
   })).json();
   assert.equal(list.messages.at(-1).body, "czesc");
   await s.close();
 });
 
-test("nie da sie czytac cudzego kanalu prywatnego przez API", async () => {
+test("the API cannot read another actor's private channel", async () => {
   const s = await startTestServer();
-  const { tokenB, prywatnyId } = seed(s);
-  const r = await fetch(`${s.url}/api/conversations/${prywatnyId}/messages`, {
+  const { tokenB, privateChannelId } = seed(s);
+  const r = await fetch(`${s.url}/api/conversations/${privateChannelId}/messages`, {
     headers: bearer(tokenB),
   });
   assert.equal(r.status, 403);
   await s.close();
 });
 
-test("klient nie moze podszyc sie pod innego aktora polem w ciele", async () => {
+test("a client cannot impersonate another actor through a body field", async () => {
   const s = await startTestServer();
-  const { tokenA, bob, kanalId } = seed(s);
-  const r = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, bob, channelId } = seed(s);
+  const r = await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA),
     body: JSON.stringify({ body: "podszycie", actorId: bob.id }),
   });
@@ -116,10 +117,10 @@ test("klient nie moze podszyc sie pod innego aktora polem w ciele", async () => 
   await s.close();
 });
 
-test("blad domenowy mapuje sie na kod HTTP, nie na 500", async () => {
+test("a domain error maps to an HTTP code rather than 500", async () => {
   const s = await startTestServer();
-  const { tokenA, kanalId } = seed(s);
-  const r = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, channelId } = seed(s);
+  const r = await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "" }),
   });
   assert.equal(r.status, 400);
@@ -127,7 +128,7 @@ test("blad domenowy mapuje sie na kod HTTP, nie na 500", async () => {
   await s.close();
 });
 
-test("czlowiek loguje sie i dostaje cookie oraz token CSRF", async () => {
+test("a human logs in and receives a cookie and CSRF token", async () => {
   const s = await startTestServer();
   seed(s);
   const r = await fetch(s.url + "/api/login", {
@@ -142,53 +143,53 @@ test("czlowiek loguje sie i dostaje cookie oraz token CSRF", async () => {
   await s.close();
 });
 
-test("zle haslo i nieistniejacy uzytkownik daja ten sam komunikat", async () => {
+test("an incorrect password and a missing user produce the same message", async () => {
   const s = await startTestServer();
   seed(s);
-  const zle = await (await fetch(s.url + "/api/login", {
+  const invalid = await (await fetch(s.url + "/api/login", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ handle: "michal", password: "nie-to" }),
   })).json();
-  const brak = await (await fetch(s.url + "/api/login", {
+  const missing = await (await fetch(s.url + "/api/login", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ handle: "nie-ma-takiego", password: "cokolwiek" }),
   })).json();
-  assert.equal(zle.error, brak.error);
+  assert.equal(invalid.error, missing.error);
   await s.close();
 });
 
-test("mutacja z cookie bez naglowka CSRF jest odrzucona", async () => {
+test("a cookie-authenticated mutation without a CSRF header is rejected", async () => {
   const s = await startTestServer();
-  const { kanalId } = seed(s);
+  const { channelId } = seed(s);
   const login = await fetch(s.url + "/api/login", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ handle: "michal", password: "haslo1234" }),
   });
   const cookie = login.headers.get("set-cookie")!.split(";")[0];
-  const bez = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const withoutCsrf = await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: { cookie, "content-type": "application/json" },
     body: JSON.stringify({ body: "bez csrf" }),
   });
-  assert.equal(bez.status, 403);
-  const z = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  assert.equal(withoutCsrf.status, 403);
+  const withCsrf = await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: cookieAuth(login.headers.get("set-cookie")!),
     body: JSON.stringify({ body: "z csrf" }),
   });
-  assert.equal(z.status, 201);
+  assert.equal(withCsrf.status, 201);
   await s.close();
 });
 
-test("zadanie z bearerem nie wymaga CSRF", async () => {
+test("a bearer-authenticated request does not require CSRF", async () => {
   const s = await startTestServer();
-  const { tokenA, kanalId } = seed(s);
-  const r = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, channelId } = seed(s);
+  const r = await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "bez csrf" }),
   });
   assert.equal(r.status, 201);
   await s.close();
 });
 
-test("rozmowa grupowa powstaje z listy handle i zawiera nadawce", async () => {
+test("a group conversation is created from handles and includes the sender", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   createActor(s.ctx, { kind: "agent", handle: "cez" });
@@ -206,7 +207,7 @@ test("rozmowa grupowa powstaje z listy handle i zawiera nadawce", async () => {
   await s.close();
 });
 
-test("rozmowa z nieistniejacym aktorem daje 404 z nazwa", async () => {
+test("a conversation with a missing actor returns 404 with the name", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   const r = await fetch(s.url + "/api/conversations", {
@@ -218,26 +219,26 @@ test("rozmowa z nieistniejacym aktorem daje 404 z nazwa", async () => {
   await s.close();
 });
 
-test("licznik nieprzeczytanych zeruje sie po oznaczeniu widoku", async () => {
+test("the unread counter resets after marking the view as read", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   await fetch(`${s.url}/api/conversations/${dmId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "hej" }),
   });
-  const przed = await (await fetch(s.url + "/api/unread", { headers: bearer(tokenB) })).json();
-  assert.equal(przed.rows.find((r: any) => r.conversationId === dmId).badge, 1);
+  const before = await (await fetch(s.url + "/api/unread", { headers: bearer(tokenB) })).json();
+  assert.equal(before.rows.find((r: any) => r.conversationId === dmId).badge, 1);
   await fetch(`${s.url}/api/conversations/${dmId}/read`, {
     method: "POST", headers: bearer(tokenB), body: "{}",
   });
-  const po = await (await fetch(s.url + "/api/unread", { headers: bearer(tokenB) })).json();
-  assert.equal(po.rows.find((r: any) => r.conversationId === dmId).unread, 0);
+  const after = await (await fetch(s.url + "/api/unread", { headers: bearer(tokenB) })).json();
+  assert.equal(after.rows.find((r: any) => r.conversationId === dmId).unread, 0);
   await s.close();
 });
 
-test("wyszukiwanie przez API respektuje dostep", async () => {
+test("API search respects access permissions", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, prywatnyId } = seed(s);
-  await fetch(`${s.url}/api/conversations/${prywatnyId}/messages`, {
+  const { tokenA, tokenB, privateChannelId } = seed(s);
+  await fetch(`${s.url}/api/conversations/${privateChannelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "poufna sprawa" }),
   });
   const mine = await (await fetch(s.url + "/api/search?q=poufna", {
@@ -251,10 +252,10 @@ test("wyszukiwanie przez API respektuje dostep", async () => {
   await s.close();
 });
 
-test("edycja i kasowanie cudzej wiadomosci daje 403", async () => {
+test("editing and deleting another actor's message returns 403", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, kanalId } = seed(s);
-  const m = (await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, tokenB, channelId } = seed(s);
+  const m = (await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "moje" }),
   })).json()).message;
   const patch = await fetch(`${s.url}/api/messages/${m.id}`, {
@@ -268,7 +269,7 @@ test("edycja i kasowanie cudzej wiadomosci daje 403", async () => {
   await s.close();
 });
 
-test("obecnosc pokazuje zarejestrowana sesje z sygnalem busy", async () => {
+test("presence shows a registered session with a busy signal", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   await fetch(s.url + "/api/sessions", {
@@ -284,66 +285,66 @@ test("obecnosc pokazuje zarejestrowana sesje z sygnalem busy", async () => {
   await s.close();
 });
 
-test("otwarte pytanie zamyka odpowiedz od kogokolwiek", async () => {
+test("anyone's answer closes an open question", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, kanalId } = seed(s);
-  const q = await (await fetch(`${s.url}/api/conversations/${kanalId}/ask`, {
+  const { tokenA, tokenB, channelId } = seed(s);
+  const q = await (await fetch(`${s.url}/api/conversations/${channelId}/ask`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "czy mozna deploy?" }),
   })).json();
-  const otwarte = await (await fetch(s.url + "/api/questions/open", {
+  const open = await (await fetch(s.url + "/api/questions/open", {
     headers: bearer(tokenB),
   })).json();
-  assert.equal(otwarte.questions.length, 1);
+  assert.equal(open.questions.length, 1);
   await fetch(`${s.url}/api/questions/${q.question}/answer`, {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ body: "mozna" }),
   });
-  const po = await (await fetch(s.url + "/api/questions/open", { headers: bearer(tokenB) })).json();
-  assert.equal(po.questions.length, 0);
+  const after = await (await fetch(s.url + "/api/questions/open", { headers: bearer(tokenB) })).json();
+  assert.equal(after.questions.length, 0);
   await s.close();
 });
 
-test("lista konwersacji rozroznia kanal moj od kanalu, ktory tylko widze", async () => {
+test("the conversation list distinguishes my channels from channels I can only see", async () => {
   const s = await startTestServer();
-  const { tokenB, kanalId } = seed(s);
-  const przed = await (await fetch(s.url + "/api/conversations", {
+  const { tokenB, channelId } = seed(s);
+  const before = await (await fetch(s.url + "/api/conversations", {
     headers: bearer(tokenB),
   })).json();
   assert.ok(
-    przed.conversations.some((c: any) => c.id === kanalId),
-    "kanal publiczny ma byc widoczny",
+    before.conversations.some((c: any) => c.id === channelId),
+    "the public channel must be visible",
   );
   assert.equal(
-    przed.memberships.some((m: any) => m.conversationId === kanalId), false,
-    "bob jeszcze nie dolaczyl",
+    before.memberships.some((m: any) => m.conversationId === channelId), false,
+    "bob has not joined yet",
   );
-  await fetch(`${s.url}/api/conversations/${kanalId}/join`, {
+  await fetch(`${s.url}/api/conversations/${channelId}/join`, {
     method: "POST", headers: bearer(tokenB),
   });
-  const po = await (await fetch(s.url + "/api/conversations", {
+  const after = await (await fetch(s.url + "/api/conversations", {
     headers: bearer(tokenB),
   })).json();
-  assert.ok(po.memberships.some((m: any) => m.conversationId === kanalId));
+  assert.ok(after.memberships.some((m: any) => m.conversationId === channelId));
   await s.close();
 });
 
-test("nie da sie dolaczyc do kanalu prywatnego przez join", async () => {
+test("join cannot join a private channel", async () => {
   const s = await startTestServer();
-  const { tokenB, prywatnyId } = seed(s);
-  const r = await fetch(`${s.url}/api/conversations/${prywatnyId}/join`, {
+  const { tokenB, privateChannelId } = seed(s);
+  const r = await fetch(`${s.url}/api/conversations/${privateChannelId}/join`, {
     method: "POST", headers: bearer(tokenB),
   });
   assert.equal(r.status, 403);
   await s.close();
 });
 
-test("sfalszowane i wygasle cookie sesji daje 401 przez API", async () => {
+test("forged and expired session cookies return 401 through the API", async () => {
   const s = await startTestServer();
   const { michal } = seed(s);
-  // podpis od innego sekretu
+  // signed with a different secret
   const fake = `at_session=${michal.id}.9999999999.deadbeef`;
   const r1 = await fetch(s.url + "/api/me", { headers: { cookie: fake } });
   assert.equal(r1.status, 401);
-  // dobre cookie, ale wygasle (expiry w przeszlosci, podpis prawidlowy)
+  // valid but expired cookie (expiry in the past, valid signature)
   const { makeCookie } = await import("../../src/http/auth.ts");
   const expired = makeCookie(s.ctx, s.config, michal.id, -10, false).split(";")[0];
   const r2 = await fetch(s.url + "/api/me", { headers: { cookie: expired } });
@@ -351,7 +352,7 @@ test("sfalszowane i wygasle cookie sesji daje 401 przez API", async () => {
   await s.close();
 });
 
-test("cookie sesji jest ODWOLYWALNE: zmiana hasla uniewaznia wydane wczesniej", async () => {
+test("session cookies are REVOCABLE: changing the password invalidates previously issued cookies", async () => {
   const s = await startTestServer();
   const { michal } = seed(s);
   const { makeCookie } = await import("../../src/http/auth.ts");
@@ -366,12 +367,12 @@ test("cookie sesji jest ODWOLYWALNE: zmiana hasla uniewaznia wydane wczesniej", 
   assert.equal((await fetch(s.url + "/api/me", { headers: { cookie } })).status, 401);
 
   // A new login works normally.
-  const swieze = makeCookie(s.ctx, s.config, michal.id, 3600, false).split(";")[0];
-  assert.equal((await fetch(s.url + "/api/me", { headers: { cookie: swieze } })).status, 200);
+  const fresh = makeCookie(s.ctx, s.config, michal.id, 3600, false).split(";")[0];
+  assert.equal((await fetch(s.url + "/api/me", { headers: { cookie: fresh } })).status, 200);
   await s.close();
 });
 
-test("wylaczenie konta uniewaznia otwarta sesje na cookie, nie tylko nastepne logowanie", async () => {
+test("disabling an account invalidates an open cookie session, not just the next login", async () => {
   const s = await startTestServer();
   const { michal } = seed(s);
   const { makeCookie } = await import("../../src/http/auth.ts");
@@ -383,7 +384,7 @@ test("wylaczenie konta uniewaznia otwarta sesje na cookie, nie tylko nastepne lo
   await s.close();
 });
 
-test("zle procent-kodowanie w sciezce daje 404, nie 500", async () => {
+test("invalid percent-encoding in a path returns 404 rather than 500", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   const r = await fetch(s.url + "/api/files/%zz/info", { headers: bearer(tokenA) });
@@ -391,10 +392,10 @@ test("zle procent-kodowanie w sciezce daje 404, nie 500", async () => {
   await s.close();
 });
 
-test("watek nieistniejacy i watek bez dostepu daja te sama odpowiedz", async () => {
+test("a missing thread and an inaccessible thread return the same response", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, prywatnyId } = seed(s);
-  const m = (await (await fetch(`${s.url}/api/conversations/${prywatnyId}/messages`, {
+  const { tokenA, tokenB, privateChannelId } = seed(s);
+  const m = (await (await fetch(`${s.url}/api/conversations/${privateChannelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "tajne" }),
   })).json()).message;
   const noAccess = await fetch(`${s.url}/api/messages/${m.id}/thread`, {
@@ -408,23 +409,23 @@ test("watek nieistniejacy i watek bez dostepu daja te sama odpowiedz", async () 
   await s.close();
 });
 
-test("kind=ask przemycone przez POST /messages nie tworzy pytania-sieroty", async () => {
+test("kind=ask smuggled through POST /messages does not create an orphan question", async () => {
   const s = await startTestServer();
-  const { tokenA, kanalId } = seed(s);
-  const r = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, channelId } = seed(s);
+  const r = await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA),
     body: JSON.stringify({ body: "podstepne pytanie?", kind: "ask" }),
   })).json();
-  assert.equal(r.message.kind, "text", "kind ask ma isc wylacznie przez /ask");
+  assert.equal(r.message.kind, "text", "kind ask must only go through /ask");
   const n = s.ctx.db.prepare("SELECT count(*) AS n FROM questions").get() as { n: number };
   assert.equal(n.n, 0);
   await s.close();
 });
 
-test("nie da sie przymusowo dopisac kogos do kanalu publicznego", async () => {
+test("someone cannot be forcibly added to a public channel", async () => {
   const s = await startTestServer();
-  const { tokenA, kanalId } = seed(s);
-  const r = await fetch(`${s.url}/api/conversations/${kanalId}/members`, {
+  const { tokenA, channelId } = seed(s);
+  const r = await fetch(`${s.url}/api/conversations/${channelId}/members`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ handle: "bob" }),
   });
   assert.equal(r.status, 400);
@@ -432,27 +433,27 @@ test("nie da sie przymusowo dopisac kogos do kanalu publicznego", async () => {
   await s.close();
 });
 
-test("edycja wiadomosci aktualizuje indeks wyszukiwania", async () => {
+test("editing a message updates the search index", async () => {
   const s = await startTestServer();
-  const { tokenA, kanalId } = seed(s);
-  const m = (await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, channelId } = seed(s);
+  const m = (await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "pierwotna fraza" }),
   })).json()).message;
   await fetch(`${s.url}/api/messages/${m.id}`, {
     method: "PATCH", headers: bearer(tokenA), body: JSON.stringify({ body: "zmieniona tresc" }),
   });
-  const stara = await (await fetch(s.url + "/api/search?q=pierwotna", {
+  const originalResults = await (await fetch(s.url + "/api/search?q=pierwotna", {
     headers: bearer(tokenA),
   })).json();
-  const nowa = await (await fetch(s.url + "/api/search?q=zmieniona", {
+  const updatedResults = await (await fetch(s.url + "/api/search?q=zmieniona", {
     headers: bearer(tokenA),
   })).json();
-  assert.equal(stara.messages.length, 0, "stara tresc nie moze byc znajdowalna");
-  assert.equal(nowa.messages.length, 1);
+  assert.equal(originalResults.messages.length, 0, "the old body must not be searchable");
+  assert.equal(updatedResults.messages.length, 1);
   await s.close();
 });
 
-test("dzierzawa przez API: 200 przy zajeciu, 409 z wlascicielem przy odmowie", async () => {
+test("API lease: 200 on acquisition, 409 with the owner on refusal", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB } = seed(s);
   const ok = await fetch(s.url + "/api/leases", {
@@ -469,7 +470,7 @@ test("dzierzawa przez API: 200 przy zajeciu, 409 z wlascicielem przy odmowie", a
   await s.close();
 });
 
-test("upload pliku przez API, pobranie przez czlonka, odmowa dla obcego", async () => {
+test("API file upload, download by a member, refusal for an outsider", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   const up = await fetch(`${s.url}/api/conversations/${dmId}/files`, {
@@ -483,10 +484,10 @@ test("upload pliku przez API, pobranie przez czlonka, odmowa dla obcego", async 
   const got = await fetch(`${s.url}/api/files/${fileId}`, { headers: bearer(tokenB) });
   assert.equal(got.status, 200);
   assert.equal(await got.text(), "tresc raportu");
-  const obcy = createActor(s.ctx, { kind: "agent", handle: "obcy" });
-  const tokenObcy = mintToken(s.ctx, obcy.id, "t").token;
+  const outsider = createActor(s.ctx, { kind: "agent", handle: "obcy" });
+  const outsiderToken = mintToken(s.ctx, outsider.id, "t").token;
   const denied = await fetch(`${s.url}/api/files/${fileId}`, {
-    headers: bearer(tokenObcy),
+    headers: bearer(outsiderToken),
   });
   assert.equal(denied.status, 404);
   await s.close();
@@ -499,32 +500,32 @@ test("upload pliku przez API, pobranie przez czlonka, odmowa dla obcego", async 
  * enough to make decodeURIComponent throw. Without this test a 400 with a readable message
  * could quietly become a 500.
  */
-test("X-File-Name ze zlym %-kodowaniem daje 400 z instrukcja, nie 500", async () => {
+test("X-File-Name with invalid percent-encoding returns 400 with instructions rather than 500", async () => {
   const s = await startTestServer();
   try {
   const { tokenA, dmId } = seed(s);
-  const wyslij = (nazwa: string) => fetch(`${s.url}/api/conversations/${dmId}/files`, {
+  const send = (name: string) => fetch(`${s.url}/api/conversations/${dmId}/files`, {
     method: "POST",
     headers: { authorization: (bearer(tokenA) as any).authorization,
-      "content-type": "text/plain", "x-file-name": nazwa },
+      "content-type": "text/plain", "x-file-name": name },
     body: "tresc",
   });
 
-  const zle = await wyslij("raport 50%.txt");
-  assert.equal(zle.status, 400, "urwane %-kodowanie ma dac blad zadania, nie awarie serwera");
-  const blad = await zle.json();
-  assert.equal(blad.code, "invalid_name");
-  assert.match(blad.error, /encodeURIComponent/, "komunikat ma mowic, CO zrobic");
+  const invalid = await send("raport 50%.txt");
+  assert.equal(invalid.status, 400, "incomplete percent-encoding must return a request error rather than a server failure");
+  const error = await invalid.json();
+  assert.equal(error.code, "invalid_name");
+  assert.match(error.error, /encodeURIComponent/, "the message must say WHAT to do");
 
   // The same name, correctly encoded, goes through and comes back in its original form - that
   // is, the rejection is about the encoding, not about the percent sign itself.
-  const dobre = await wyslij(encodeURIComponent("raport 50%.txt"));
-  assert.equal(dobre.status, 201);
-  assert.equal((await dobre.json()).file.name, "raport 50%.txt");
+  const valid = await send(encodeURIComponent("raport 50%.txt"));
+  assert.equal(valid.status, 201);
+  assert.equal((await valid.json()).file.name, "raport 50%.txt");
   } finally { await s.close(); }
 });
 
-test("plik z aktywnym MIME (text/html) jest serwowany inertnie (anty stored-XSS)", async () => {
+test("a file with an active MIME type (text/html) is served inertly to prevent stored XSS", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, dmId } = seed(s);
   const up = await fetch(`${s.url}/api/conversations/${dmId}/files`, {
@@ -537,7 +538,7 @@ test("plik z aktywnym MIME (text/html) jest serwowany inertnie (anty stored-XSS)
   const fileId = (await up.json()).file.id;
   const got = await fetch(`${s.url}/api/files/${fileId}`, { headers: bearer(tokenB) });
   assert.equal(got.status, 200);
-  // typ zneutralizowany, wymuszone pobranie, brak wachania, sandbox
+  // neutralized type, forced download, no sniffing, sandbox
   assert.equal(got.headers.get("content-type"), "application/octet-stream");
   assert.match(got.headers.get("content-disposition") ?? "", /^attachment/);
   assert.equal(got.headers.get("x-content-type-options"), "nosniff");
@@ -545,7 +546,7 @@ test("plik z aktywnym MIME (text/html) jest serwowany inertnie (anty stored-XSS)
   await s.close();
 });
 
-test("wake: rejestracja zwraca sekret raz, GET pokazuje konfiguracje bez sekretu", async () => {
+test("wake: registration returns the secret once; GET shows configuration without the secret", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   const put = await (await fetch(s.url + "/api/wake", {
@@ -555,76 +556,76 @@ test("wake: rejestracja zwraca sekret raz, GET pokazuje konfiguracje bez sekretu
   assert.ok(put.secret.length > 20);
   const got = await (await fetch(s.url + "/api/wake", { headers: bearer(tokenA) })).json();
   assert.equal(got.wake.target, "https://most.example/wake");
-  assert.equal(got.wake.secret, undefined, "sekret nie moze byc odczytywalny po fakcie");
+  assert.equal(got.wake.secret, undefined, "the secret must not be readable afterward");
   await s.close();
 });
 
-test("odpowiedz z wiadomosciami niesie mape aktorow z kind (egzekwowanie human)", async () => {
+test("the message response carries an actor map with kind to enforce human identity", async () => {
   const s = await startTestServer();
-  const { tokenA, michal, kanalId } = seed(s);
-  await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, michal, channelId } = seed(s);
+  await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "od agenta" }),
   });
-  const r = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const r = await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     headers: bearer(tokenA),
   })).json();
   const authorId = r.messages.at(-1).actorId;
-  assert.ok(r.actors[authorId], "brak mapy aktorow w odpowiedzi");
+  assert.ok(r.actors[authorId], "actor map missing from the response");
   assert.equal(r.actors[authorId].kind, "agent");
   void michal;
   await s.close();
 });
 
-test("health robi realna sonde DB (liczby, nie tylko ok)", async () => {
+test("health performs a real database probe with counts, not just ok", async () => {
   const s = await startTestServer();
   seed(s);
   const h = await (await fetch(s.url + "/api/health")).json();
   assert.equal(h.ok, true);
   assert.equal(typeof h.actors, "number");
-  assert.ok(h.actors >= 3, "health nie odczytal realnej liczby aktorow");
+  assert.ok(h.actors >= 3, "health did not read the actual actor count");
   assert.equal(typeof h.lastMessageId, "number");
   await s.close();
 });
 
-test("clientMsgId przez API: powtorzony POST zwraca to samo id, bez drugiej wiadomosci", async () => {
+test("clientMsgId through the API: a repeated POST returns the same id without a second message", async () => {
   const s = await startTestServer();
-  const { tokenA, kanalId } = seed(s);
+  const { tokenA, channelId } = seed(s);
   const body = JSON.stringify({ body: "deploy prod", clientMsgId: "req-42" });
-  const m1 = (await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const m1 = (await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body,
   })).json()).message;
-  const m2 = (await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const m2 = (await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body,
   })).json()).message;
   assert.equal(m1.id, m2.id);
-  const list = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const list = await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     headers: bearer(tokenA),
   })).json();
   assert.equal(list.messages.filter((m: any) => m.body === "deploy prod").length, 1);
   await s.close();
 });
 
-test("pierwsze polaczenie serwuje zasady z promptem, drugie juz nie", async () => {
+test("the first connection serves guidelines with a prompt; the second does not", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   const me1 = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
-  assert.ok(me1.guidelines, "pierwsze /api/me nie podalo zasad");
+  assert.ok(me1.guidelines, "the first /api/me did not return guidelines");
   assert.match(me1.guidelines.prompt, /read them before/i);
   assert.match(me1.guidelines.text, /AgentTalks/);
   const me2 = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
-  assert.equal(me2.guidelines, undefined, "zasady podane drugi raz");
+  assert.equal(me2.guidelines, undefined, "guidelines returned a second time");
   await s.close();
 });
 
-test("GET /api/guidelines zwraca tekst zasad na zadanie", async () => {
+test("GET /api/guidelines returns the guidelines text on request", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   const r = await (await fetch(s.url + "/api/guidelines", { headers: bearer(tokenA) })).json();
-  assert.match(r.text, /jak się tu odnaleźć|AgentTalks/);
+  assert.match(r.text, /how to find your way here|AgentTalks/);
   await s.close();
 });
 
-test("enroll: zaproszenie zaklada aktora, token dziala; zly kod = 403", async () => {
+test("enroll: an invite creates an actor and the token works; an invalid code returns 403", async () => {
   const s = await startTestServer();
   const { createInvite } = await import("../../src/core/invites.ts");
   const { code } = createInvite(s.ctx, { createdBy: null, uses: 2 });
@@ -647,7 +648,7 @@ test("enroll: zaproszenie zaklada aktora, token dziala; zly kod = 403", async ()
   await s.close();
 });
 
-test("wiki przez API: zapis, odczyt, szukanie, historia, revert", async () => {
+test("wiki through the API: save, read, search, history, revert", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   const put = await fetch(s.url + "/api/wiki/projekt", {
@@ -685,7 +686,7 @@ test("wiki przez API: zapis, odczyt, szukanie, historia, revert", async () => {
   await s.close();
 });
 
-test("wiki: strona jest wspolna - inny aktor tez ja edytuje (po przeczytaniu)", async () => {
+test("wiki: a page is shared; another actor can also edit it after reading", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB } = seed(s);
   await fetch(s.url + "/api/wiki/wspolna", {
@@ -702,7 +703,7 @@ test("wiki: strona jest wspolna - inny aktor tez ja edytuje (po przeczytaniu)", 
   await s.close();
 });
 
-test("wiki: slepy zapis na cudza strone -> 409 z numerem rewizji, po przeczytaniu -> 200", async () => {
+test("wiki: a blind write to another actor's page returns 409 with the revision number; after reading it returns 200", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB } = seed(s);
   await fetch(s.url + "/api/wiki/korzen", {
@@ -730,7 +731,7 @@ test("wiki: slepy zapis na cudza strone -> 409 z numerem rewizji, po przeczytani
   await s.close();
 });
 
-test("wiki: baseRevision - zgodny przechodzi, rozjechany daje 409, 0 = tylko zaloz", async () => {
+test("wiki: baseRevision - matching passes, mismatched returns 409, 0 means create only", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB } = seed(s);
   await fetch(s.url + "/api/wiki/plan", {
@@ -754,7 +755,7 @@ test("wiki: baseRevision - zgodny przechodzi, rozjechany daje 409, 0 = tylko zal
     body: JSON.stringify({ title: "Plan", body: "moje", baseRevision: p2.page.lastRevisionId }),
   });
   assert.equal(stale.status, 409);
-  // force = swiadome nadpisanie, przechodzi mimo rozjazdu
+  // force = deliberate overwrite, accepted despite a revision mismatch
   const forced = await fetch(s.url + "/api/wiki/plan", {
     method: "PUT", headers: bearer(tokenB),
     body: JSON.stringify({ title: "Plan", body: "moje", force: true }),
@@ -775,7 +776,7 @@ test("wiki: baseRevision - zgodny przechodzi, rozjechany daje 409, 0 = tylko zal
   await s.close();
 });
 
-test("wiki attach: plik podpiety, pobieralny przez innego zalogowanego", async () => {
+test("wiki attach: an attached file can be downloaded by another authenticated actor", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB } = seed(s);
   await fetch(s.url + "/api/wiki/dokumenty", {
@@ -795,7 +796,7 @@ test("wiki attach: plik podpiety, pobieralny przez innego zalogowanego", async (
   await s.close();
 });
 
-test("wiki: podglad pojedynczej rewizji zwraca pelna tresc; cudza/nieistniejaca -> 404", async () => {
+test("wiki: a single revision preview returns the full body; another page's or a missing revision returns 404", async () => {
   const s = await startTestServer();
   const { tokenA } = seed(s);
   await fetch(s.url + "/api/wiki/notatki", {
@@ -813,16 +814,16 @@ test("wiki: podglad pojedynczej rewizji zwraca pelna tresc; cudza/nieistniejaca 
   await fetch(s.url + "/api/wiki/inna", {
     method: "PUT", headers: bearer(tokenA), body: JSON.stringify({ title: "I", body: "x" }),
   });
-  const histInna = await (await fetch(s.url + "/api/wiki/inna/history", { headers: bearer(tokenA) })).json();
-  const obcaRewizja = histInna.revisions[0].id;
-  const bad = await fetch(`${s.url}/api/wiki/notatki/revisions/${obcaRewizja}`, { headers: bearer(tokenA) });
+  const otherHistory = await (await fetch(s.url + "/api/wiki/inna/history", { headers: bearer(tokenA) })).json();
+  const foreignRevision = otherHistory.revisions[0].id;
+  const bad = await fetch(`${s.url}/api/wiki/notatki/revisions/${foreignRevision}`, { headers: bearer(tokenA) });
   assert.equal(bad.status, 404);
   await s.close();
 });
 
-// --- panel admina -----------------------------------------------------------
+// --- admin panel -----------------------------------------------------------
 
-test("panel admina: czlowiek-admin wchodzi, agent (nawet adminowski) nie", async () => {
+test("admin panel: a human admin can enter; an agent cannot, even as admin", async () => {
   const s = await startTestServer();
   const { ala, tokenA } = seed(s);
   // an agent without admin
@@ -843,11 +844,11 @@ test("panel admina: czlowiek-admin wchodzi, agent (nawet adminowski) nie", async
   const data = await r3.json();
   assert.ok(Array.isArray(data.actors) && data.actors.length >= 3);
   const alaRow = data.actors.find((a: { handle: string }) => a.handle === "ala");
-  assert.ok(alaRow.tokens.length >= 1, "brak tokenow w odpowiedzi admina");
+  assert.ok(alaRow.tokens.length >= 1, "tokens missing from the admin response");
   await s.close();
 });
 
-test("panel admina: zaproszenie z UI dziala w enrollu, odwolane przestaje", async () => {
+test("admin panel: a UI invite works for enrollment and stops working when revoked", async () => {
   const s = await startTestServer();
   seed(s);
   const login = await fetch(s.url + "/api/login", {
@@ -862,7 +863,7 @@ test("panel admina: zaproszenie z UI dziala w enrollu, odwolane przestaje", asyn
     body: JSON.stringify({ note: "test-ui", uses: 1 }),
   })).json();
   assert.match(created.code, /^ati_/);
-  // enroll kodem z panelu
+  // enroll with the code from the panel
   const enr = await fetch(s.url + "/api/enroll", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ invite: created.code, handle: "nowy-agent" }),
@@ -886,7 +887,7 @@ test("panel admina: zaproszenie z UI dziala w enrollu, odwolane przestaje", asyn
   await s.close();
 });
 
-test("panel admina: wylaczenie konta gasi token, wlaczenie przywraca", async () => {
+test("admin panel: disabling an account disables its token; enabling restores it", async () => {
   const s = await startTestServer();
   const { ala, tokenA } = seed(s);
   const login = await fetch(s.url + "/api/login", {
@@ -907,9 +908,9 @@ test("panel admina: wylaczenie konta gasi token, wlaczenie przywraca", async () 
   await s.close();
 });
 
-// --- centrum powiadomien ----------------------------------------------------
+// --- notification center ----------------------------------------------------
 
-test("powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeruje licznik", async () => {
+test("notifications: mentions, DMs and reactions reach the center; marking read clears the counter", async () => {
   const s = await startTestServer();
   const { ala, tokenA, tokenB } = seed(s);
   const conv = await (await fetch(s.url + "/api/conversations", {
@@ -929,8 +930,8 @@ test("powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeru
   assert.equal(mine.notifications[0].from, "ala");
   assert.equal(mine.notifications[0].conversationId, convId);
   assert.match(mine.notifications[0].excerpt, /deploy/);
-  const autor = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
-  assert.equal(autor.unread, 0, "wlasna wzmianka nie jest zdarzeniem dla autora");
+  const author = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
+  assert.equal(author.unread, 0, "an author's own mention is not an event for that author");
 
   // 2. A DM: every message counts, not only a mention by name.
   const dm = await (await fetch(s.url + "/api/conversations", {
@@ -951,28 +952,28 @@ test("powiadomienia: wzmianka, DM i reakcja trafiaja do centrum; odhaczenie zeru
   await fetch(`${s.url}/api/messages/${msgId}/reactions`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ emoji: "🎉" }),
   });
-  let bobowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
-  assert.equal(bobowe.notifications[0].kind, "reaction");
-  const poReakcji = bobowe.unread;
+  let bobNotifications = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
+  assert.equal(bobNotifications.notifications[0].kind, "reaction");
+  const afterReaction = bobNotifications.unread;
   await fetch(`${s.url}/api/messages/${msgId}/reactions`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ emoji: "🎉" }),
   });
-  bobowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
-  assert.equal(bobowe.unread, poReakcji, "zdjecie reakcji nie jest nowym powiadomieniem");
+  bobNotifications = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
+  assert.equal(bobNotifications.unread, afterReaction, "removing a reaction is not a new notification");
 
-  // 4. Odhaczenie wszystkiego + licznik w /api/me.
+  // 4. Mark everything read + the counter in /api/me.
   const read = await (await fetch(s.url + "/api/notifications/read", {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({}),
   })).json();
   assert.equal(read.unread, 0);
-  assert.equal(read.changed, poReakcji);
+  assert.equal(read.changed, afterReaction);
   const me = await (await fetch(s.url + "/api/me", { headers: bearer(tokenB) })).json();
   assert.equal(me.notifications.unread, 0);
   assert.ok(ala);
   await s.close();
 });
 
-test("powiadomienia wiki: zmiana strony wola tych, ktorzy juz na niej pisali", async () => {
+test("wiki notifications: a page change notifies those who have already written on it", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB } = seed(s);
   await fetch(s.url + "/api/wiki/wspolna-notatka", {
@@ -985,24 +986,24 @@ test("powiadomienia wiki: zmiana strony wola tych, ktorzy juz na niej pisali", a
   });
   // Ala sees a notification about a change in something she co-authored; Bob gets no
   // notification about his own edit.
-  const alowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
-  assert.equal(alowe.notifications[0].kind, "wiki");
-  assert.equal(alowe.notifications[0].wikiSlug, "wspolna-notatka");
-  assert.equal(alowe.notifications[0].from, "bob");
-  const bobowe = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
-  assert.equal(bobowe.unread, 0);
+  const alaNotifications = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
+  assert.equal(alaNotifications.notifications[0].kind, "wiki");
+  assert.equal(alaNotifications.notifications[0].wikiSlug, "wspolna-notatka");
+  assert.equal(alaNotifications.notifications[0].from, "bob");
+  const bobNotifications = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenB) })).json();
+  assert.equal(bobNotifications.unread, 0);
 
   // Ticking off a single notification by id - the unread list is empty.
   await fetch(s.url + "/api/notifications/read", {
     method: "POST", headers: bearer(tokenA),
-    body: JSON.stringify({ ids: [alowe.notifications[0].id] }),
+    body: JSON.stringify({ ids: [alaNotifications.notifications[0].id] }),
   });
-  const tylkoNowe = await (await fetch(s.url + "/api/notifications?unread=1", { headers: bearer(tokenA) })).json();
-  assert.equal(tylkoNowe.notifications.length, 0);
+  const onlyNew = await (await fetch(s.url + "/api/notifications?unread=1", { headers: bearer(tokenA) })).json();
+  assert.equal(onlyNew.notifications.length, 0);
   await s.close();
 });
 
-test("wiki: kasowanie strony - tylko zalozyciel albo admin; dzieci nie gina", async () => {
+test("wiki: only the creator or an admin can delete a page; children survive", async () => {
   const s = await startTestServer();
   const { tokenA, tokenB, michal } = seed(s);
   const tokenAdmin = mintToken(s.ctx, michal.id, "admin").token;
@@ -1014,102 +1015,102 @@ test("wiki: kasowanie strony - tylko zalozyciel albo admin; dzieci nie gina", as
     body: JSON.stringify({ title: "Poddział", body: "dziecko", parentSlug: "dzial" }),
   });
   // A stranger does not delete somebody else's page - writing together is not deleting.
-  const obcy = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenB) });
-  assert.equal(obcy.status, 403);
-  assert.equal((await obcy.json()).code, "not_your_page");
+  const outsider = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenB) });
+  assert.equal(outsider.status, 403);
+  assert.equal((await outsider.json()).code, "not_your_page");
   // The creator deletes; the child moves into the parent's place rather than disappearing.
   const del = await fetch(s.url + "/api/wiki/dzial", { method: "DELETE", headers: bearer(tokenA) });
   assert.equal(del.status, 200);
   const body = await del.json();
   assert.equal(body.deleted.movedChildren, 1);
-  assert.equal(body.deleted.body, "korzeń", "odpowiedz niesie tresc, ktora znika");
+  assert.equal(body.deleted.body, "korzeń", "the response carries the body being deleted");
   assert.equal((await fetch(s.url + "/api/wiki/dzial", { headers: bearer(tokenA) })).status, 404);
-  const dziecko = await (await fetch(s.url + "/api/wiki/poddzial", { headers: bearer(tokenA) })).json();
-  assert.equal(dziecko.page.parentSlug, null);
-  // Admin instancji kasuje cudza strone.
+  const child = await (await fetch(s.url + "/api/wiki/poddzial", { headers: bearer(tokenA) })).json();
+  assert.equal(child.page.parentSlug, null);
+  // The instance admin deletes another actor's page.
   const adminDel = await fetch(s.url + "/api/wiki/poddzial", { method: "DELETE", headers: bearer(tokenAdmin) });
   assert.equal(adminDel.status, 200);
   await s.close();
 });
 
-test("zgloszenia: 'naprawione' moze naprawiajacy, 'potwierdzone' tylko autor/admin", async () => {
+test("reports: the fixer can mark fixed; only the author/admin can mark resolved", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, kanalId } = seed(s);
-  // Ala zglasza, Bob naprawia.
-  const zgl = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const { tokenA, tokenB, channelId } = seed(s);
+  // Ala reports, Bob fixes.
+  const report = await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: "wiki nadpisuje w ciemno" }),
   })).json();
-  const id = zgl.message.id;
+  const id = report.message.id;
 
   // The fixer does NOT close the report (that is a claim about the symptom, not about the code)...
-  const proba = await fetch(`${s.url}/api/messages/${id}/resolve`, {
+  const attempt = await fetch(`${s.url}/api/messages/${id}/resolve`, {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ resolved: true }),
   });
-  assert.equal(proba.status, 403);
+  assert.equal(attempt.status, 403);
 
   // ...but they can say "done on my side".
   const fix = await fetch(`${s.url}/api/messages/${id}/fix`, {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ fixed: true }),
   });
   assert.equal(fix.status, 200);
-  const poNaprawie = (await fix.json()).message;
-  assert.ok(poNaprawie.fixedAt > 0);
-  assert.equal(poNaprawie.resolvedAt, null, "naprawione to NIE to samo co potwierdzone");
+  const afterFix = (await fix.json()).message;
+  assert.ok(afterFix.fixedAt > 0);
+  assert.equal(afterFix.resolvedAt, null, "fixed is NOT the same as resolved");
 
   // The report's author gets a notification OF ITS OWN KIND - not a "mention", because then the
   // list said "called you" and sent them looking in the channel for a call that is not there.
   // The excerpt is the report's content alone; the description of the action is added by the client.
-  const powiadomienia = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
-  assert.equal(powiadomienia.notifications[0].kind, "fix");
-  assert.match(powiadomienia.notifications[0].excerpt, /wiki nadpisuje w ciemno/);
+  const notifications = await (await fetch(s.url + "/api/notifications", { headers: bearer(tokenA) })).json();
+  assert.equal(notifications.notifications[0].kind, "fix");
+  assert.match(notifications.notifications[0].excerpt, /wiki nadpisuje w ciemno/);
 
   // Confirmation stays with the author - and only then is the state complete.
   const res = await fetch(`${s.url}/api/messages/${id}/resolve`, {
     method: "POST", headers: bearer(tokenA), body: JSON.stringify({ resolved: true }),
   });
   assert.equal(res.status, 200);
-  const koniec = (await res.json()).message;
-  assert.ok(koniec.resolvedAt > 0);
-  assert.ok(koniec.fixedAt > 0, "potwierdzenie nie kasuje sladu, kto naprawil");
+  const end = (await res.json()).message;
+  assert.ok(end.resolvedAt > 0);
+  assert.ok(end.fixedAt > 0, "resolving must not erase who fixed the issue");
 
   // Taking back "fixed" is possible (a fix can turn out to be wrong).
-  const cofniete = await (await fetch(`${s.url}/api/messages/${id}/fix`, {
+  const reverted = await (await fetch(`${s.url}/api/messages/${id}/fix`, {
     method: "POST", headers: bearer(tokenB), body: JSON.stringify({ fixed: false }),
   })).json();
-  assert.equal(cofniete.message.fixedAt, null);
+  assert.equal(reverted.message.fixedAt, null);
   await s.close();
 });
 
-test("dluga tresc przechodzi pelny obieg bez obciecia (zgloszenie [71])", async () => {
+test("a long body completes the full round trip without truncation (report [71])", async () => {
   const s = await startTestServer();
-  const { tokenA, tokenB, kanalId } = seed(s);
+  const { tokenA, tokenB, channelId } = seed(s);
   // The marker at the VERY END: if anything along the way truncated the content, it is the
   // marker that disappears, while the length still matches "roughly" - which is worse than an
   // explicit error, because the report looks complete.
-  const dlugi = `${"Raport z pomiarow. ".repeat(500)}ZNACZNIK-KONCA-9f3a`;
-  const post = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
-    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: dlugi }),
+  const longText = `${"Raport z pomiarow. ".repeat(500)}ZNACZNIK-KONCA-9f3a`;
+  const post = await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: longText }),
   });
   assert.equal(post.status, 201);
-  const lista = await (await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
+  const list = await (await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
     headers: bearer(tokenB),
   })).json();
-  const odczytana = lista.messages.at(-1).body;
-  assert.equal(odczytana.length, dlugi.length, "dlugosc odczytu rozni sie od wysylki");
-  assert.equal(odczytana, dlugi);
-  assert.ok(odczytana.endsWith("ZNACZNIK-KONCA-9f3a"), "koniec tresci nie dotarl");
+  const readPage = list.messages.at(-1).body;
+  assert.equal(readPage.length, longText.length, "the read length differs from the sent length");
+  assert.equal(readPage, longText);
+  assert.ok(readPage.endsWith("ZNACZNIK-KONCA-9f3a"), "the end of the body did not arrive");
   await s.close();
 });
 
-test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => {
+test("the length limit states HOW MUCH over the limit and is exposed in /api/me", async () => {
   const s = await startTestServer();
-  const { tokenA, kanalId } = seed(s);
+  const { tokenA, channelId } = seed(s);
   const me = await (await fetch(s.url + "/api/me", { headers: bearer(tokenA) })).json();
-  assert.ok(me.limits.maxMessageBytes > 0, "klient nie zna limitu, wiec nie pokaze licznika");
+  assert.ok(me.limits.maxMessageBytes > 0, "the client does not know the limit and cannot show a counter");
 
-  const zaDlugie = "x".repeat(me.limits.maxMessageBytes + 100);
-  const r = await fetch(`${s.url}/api/conversations/${kanalId}/messages`, {
-    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: zaDlugie }),
+  const tooLong = "x".repeat(me.limits.maxMessageBytes + 100);
+  const r = await fetch(`${s.url}/api/conversations/${channelId}/messages`, {
+    method: "POST", headers: bearer(tokenA), body: JSON.stringify({ body: tooLong }),
   });
   assert.equal(r.status, 413);
   const err = await r.json();
@@ -1120,13 +1121,13 @@ test("limit dlugosci mowi, O ILE za duzo, i jest podany w /api/me", async () => 
   await s.close();
 });
 
-// --- bramka anty-bot --------------------------------------------------------
+// --- anti-bot gate --------------------------------------------------------
 
-test("bramka: strona zamknieta bez ciasteczka, wlasciwe haslo wpuszcza, zle nie", async () => {
+test("gate: the site is closed without a cookie; the correct password allows entry and an incorrect one does not", async () => {
   const s = await startTestServer({ sitePassword: "tajne-haslo-bramki" });
   // The interface is closed...
-  const zamknieta = await fetch(s.url + "/");
-  assert.equal(zamknieta.status, 401);
+  const closed = await fetch(s.url + "/");
+  assert.equal(closed.status, 401);
   // ...but the API and onboarding are NOT, because an agent authenticates by token, and a fresh
   // agent has to fetch /install before it has any token at all.
   assert.equal((await fetch(s.url + "/api/health")).status, 200);
@@ -1143,48 +1144,48 @@ test("bramka: strona zamknieta bez ciasteczka, wlasciwe haslo wpuszcza, zle nie"
   assert.equal(lines.at(-1), "Disallow: /");
   assert.ok(lines.indexOf("Disallow: /") > lines.indexOf("Allow: /install"));
 
-  const zle = await fetch(s.url + "/api/site-gate", {
+  const invalid = await fetch(s.url + "/api/site-gate", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ password: "nie-to-haslo" }),
   });
-  assert.equal(zle.status, 401);
+  assert.equal(invalid.status, 401);
 
-  const dobre = await fetch(s.url + "/api/site-gate", {
+  const valid = await fetch(s.url + "/api/site-gate", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ password: "tajne-haslo-bramki" }),
   });
-  assert.equal(dobre.status, 200);
-  const cookie = dobre.headers.get("set-cookie")!.split(";")[0];
+  assert.equal(valid.status, 200);
+  const cookie = valid.headers.get("set-cookie")!.split(";")[0];
   // A 401 alone proves only that something is being rejected - only this checks that the gate
   // lets the owners in.
-  const po = await fetch(s.url + "/", { headers: { cookie } });
-  assert.equal(po.status, 200);
+  const after = await fetch(s.url + "/", { headers: { cookie } });
+  assert.equal(after.status, 200);
   await s.close();
 });
 
-test("bramka wylaczona (brak hasla) nie blokuje niczego", async () => {
+test("a disabled gate with no password blocks nothing", async () => {
   const s = await startTestServer();
   assert.equal((await fetch(s.url + "/")).status, 200);
   await s.close();
 });
 
-test("limit prob logowania: 429 po serii, a udane wejscie zwalnia licznik", async () => {
+test("login attempt limit: 429 after a series of attempts; successful login resets the counter", async () => {
   const s = await startTestServer();
   seed(s);
-  const zleHaslo = () => fetch(s.url + "/api/login", {
+  const wrongPassword = () => fetch(s.url + "/api/login", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ handle: "michal", password: "zle" }),
   });
-  let widziano429 = false;
+  let saw429 = false;
   for (let i = 0; i < 12; i++) {
-    const r = await zleHaslo();
-    if (r.status === 429) { widziano429 = true; break; }
+    const r = await wrongPassword();
+    if (r.status === 429) { saw429 = true; break; }
   }
-  assert.ok(widziano429, "limiter nie zadzialal - zgadywanie hasla bez ograniczen");
+  assert.ok(saw429, "the limiter failed; password guessing is unlimited");
   await s.close();
 });
 
-test("diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktora", async () => {
+test("dead token diagnosis: 401 says to request a token for THE SAME actor", async () => {
   const s = await startTestServer();
   const { ala, tokenA } = seed(s);
   const { revokeToken, listTokens } = await import("../../src/core/tokens.ts");
@@ -1202,13 +1203,13 @@ test("diagnoza martwego tokenu: 401 mowi, ze prosic o token do TEGO SAMEGO aktor
   await s.close();
 });
 
-test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () => {
+test("invalid percent-encoding in X-File-Name returns 400 with a hint rather than 500", async () => {
   const s = await startTestServer();
-  const { tokenA, kanalId } = seed(s);
+  const { tokenA, channelId } = seed(s);
   // "report%zz.txt" breaks decodeURIComponent (a URIError). An unhandled URIError is a 500, that
   // is, a server reporting ITS OWN failure in response to somebody else's junk - a message that
   // lies about who was at fault.
-  const r = await fetch(`${s.url}/api/conversations/${kanalId}/files`, {
+  const r = await fetch(`${s.url}/api/conversations/${channelId}/files`, {
     method: "POST",
     headers: {
       authorization: (bearer(tokenA) as unknown as { authorization: string }).authorization,
@@ -1223,7 +1224,7 @@ test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () 
   assert.match(err.error, /encodeURIComponent/);
 
   // A correctly encoded name (with a space and accented characters) goes through.
-  const ok = await fetch(`${s.url}/api/conversations/${kanalId}/files`, {
+  const ok = await fetch(`${s.url}/api/conversations/${channelId}/files`, {
     method: "POST",
     headers: {
       authorization: (bearer(tokenA) as unknown as { authorization: string }).authorization,
@@ -1246,59 +1247,59 @@ test("zle %-kodowanie w X-File-Name daje 400 z podpowiedzia, nie 500", async () 
  *my copy current" answered "yes" for a copy that differs from the live one. Found by @zelda's
  *measurement on #bugs [164]: the same fingerprint, sizes 14,402 B and 14,613 B.
  */
-test("odcisk skilla jest skrotem tego, co serwer NAPRAWDE oddaje", async () => {
+test("the skill fingerprint hashes what the server ACTUALLY serves", async () => {
   const s = await startTestServer({ sitePassword: "haslo-bramki", trustProxy: true }); // SYNTH
   try {
     const { createHash } = await import("node:crypto");
-    const skrot = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 16);
+    const summary = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 16);
 
     // PUBLIC like the skill itself: an agent has to be able to check freshness before it has a token.
     const r = await fetch(s.url + "/skill.version");
     assert.equal(r.status, 200);
-    const odcisk = (await r.text()).trim();
-    assert.match(odcisk, /^[0-9a-f]{16}$/);
+    const fingerprint = (await r.text()).trim();
+    assert.match(fingerprint, /^[0-9a-f]{16}$/);
 
-    const tresc = await (await fetch(s.url + "/skill.md")).text();
-    assert.equal(odcisk, skrot(tresc), "odcisk nie odpowiada serwowanej tresci skilla");
+    const content = await (await fetch(s.url + "/skill.md")).text();
+    assert.equal(fingerprint, summary(content), "the fingerprint does not match the served skill content");
 
     // The same server under a DIFFERENT host name returns different content (the substituted
     // address), so it MUST return a different fingerprint too. An equal fingerprint with different
     // content is exactly the false calm this route exists to remove. The `host` header cannot be
     // set through fetch (a forbidden name), and `x-forwarded-host` comes first here anyway - it is
     // the same code path.
-    const inny = { "x-forwarded-host": "inna-nazwa.example" };
-    const treschInna = await (await fetch(s.url + "/skill.md", { headers: inny })).text();
-    const odciskInny = (await (await fetch(s.url + "/skill.version", { headers: inny })).text()).trim();
-    assert.equal(odciskInny, skrot(treschInna));
-    assert.notEqual(tresc, treschInna, "podstawienie adresu nie zadzialalo - test nic nie sprawdza");
-    assert.notEqual(odcisk, odciskInny, "rozna tresc pod tym samym odciskiem");
+    const other = { "x-forwarded-host": "inna-nazwa.example" };
+    const otherContent = await (await fetch(s.url + "/skill.md", { headers: other })).text();
+    const otherFingerprint = (await (await fetch(s.url + "/skill.version", { headers: other })).text()).trim();
+    assert.equal(otherFingerprint, summary(otherContent));
+    assert.notEqual(content, otherContent, "URL substitution failed; the test checks nothing");
+    assert.notEqual(fingerprint, otherFingerprint, "different content has the same fingerprint");
   } finally {
     await s.close();
   }
 });
 
-test("skill nie kaze juz wklejac tokenu do pliku, ktory idzie do repozytorium", async () => {
+test("the skill no longer instructs users to paste a token into a file committed to the repository", async () => {
   const s = await startTestServer();
   const skill = await (await fetch(s.url + "/skill.md")).text();
   // .mcp.json exists in order to be shared through the repository - a token in it is a secret in
   // git. The instruction has to lead to a local registration.
   assert.ok(
     !/mcpServers[\s\S]{0,400}Bearer atk_/.test(skill),
-    "skill nadal pokazuje token w konfiguracji MCP",
+    "the skill still shows a token in the MCP configuration",
   );
   assert.match(skill, /claude mcp add --scope local/);
   assert.match(skill, /\.agenttalks\.json/);
   await s.close();
 });
 
-test("panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)", async () => {
+test("the admin panel issues a token to an existing actor for rotation without SSH", async () => {
   const s = await startTestServer();
   const { ala } = seed(s);
   const login = await fetch(s.url + "/api/login", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ handle: "michal", password: "haslo1234" }),
   });
-  assert.equal(login.status, 200, `logowanie w tescie nie przeszlo (${login.status})`);
+  assert.equal(login.status, 200, `test login failed (${login.status})`);
   const auth = cookieAuth(login.headers.get("set-cookie")!);
 
   const r = await fetch(s.url + "/api/admin/tokens", {
@@ -1312,11 +1313,11 @@ test("panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)", asyn
   assert.equal(me.actor.handle, "ala");
 
   // The same threshold as in the console: a short TTL only deliberately.
-  const krotki = await fetch(s.url + "/api/admin/tokens", {
+  const shortText = await fetch(s.url + "/api/admin/tokens", {
     method: "POST", headers: auth, body: JSON.stringify({ actorId: ala.id, ttlSec: 600 }),
   });
-  assert.equal(krotki.status, 400);
-  assert.equal((await krotki.json()).code, "ttl_too_short");
+  assert.equal(shortText.status, 400);
+  assert.equal((await shortText.json()).code, "ttl_too_short");
 
   // An agent (even with a token) does not issue tokens - the panel is for a human.
   const agent = await fetch(s.url + "/api/admin/tokens", {
@@ -1338,32 +1339,32 @@ test("panel admina wystawia token istniejacemu aktorowi (rotacja bez ssh)", asyn
  *Found by running every command from the LIVE skill literally, the way a new agent will - not
  *by reading the code.
  */
-test("POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa", async () => {
+test("POST /api/sessions: `doing` and `workingOn` mean the same thing; `doing` wins", async () => {
   const s = await startTestServer();
   try {
     const { tokenA } = seed(s);
     const { presence } = await import("../../src/core/presence.ts");
     const doing = () => presence(s.ctx).find((p) => p.sessionId === "s1")?.doing ?? null;
 
-    const wyslij = (body: Record<string, unknown>) =>
+    const send = (body: Record<string, unknown>) =>
       fetch(`${s.url}/api/sessions`, {
         method: "POST", headers: bearer(tokenA),
         body: JSON.stringify({ sessionId: "s1", label: "test", ...body }),
       });
 
-    assert.equal((await wyslij({ workingOn: "z aliasu" })).status, 200);
-    assert.equal(doing(), "z aliasu", "nazwa z rozdanych kopii skilla nadal znika");
+    assert.equal((await send({ workingOn: "z aliasu" })).status, 200);
+    assert.equal(doing(), "z aliasu", "the field name from distributed skill copies still disappears");
 
-    assert.equal((await wyslij({ doing: "kanoniczne" })).status, 200);
+    assert.equal((await send({ doing: "kanoniczne" })).status, 200);
     assert.equal(doing(), "kanoniczne");
 
     // Both at once: the canonical one wins, so that behaviour does not depend on the order of
     // fields in the JSON.
-    assert.equal((await wyslij({ doing: "kanoniczne", workingOn: "alias" })).status, 200);
+    assert.equal((await send({ doing: "kanoniczne", workingOn: "alias" })).status, 200);
     assert.equal(doing(), "kanoniczne");
 
     // A bare heartbeat (with neither field) does NOT erase what is already set.
-    assert.equal((await wyslij({})).status, 200);
+    assert.equal((await send({})).status, 200);
     assert.equal(doing(), "kanoniczne");
   } finally {
     await s.close();
@@ -1382,54 +1383,54 @@ test("POST /api/sessions: `doing` i `workingOn` znacza to samo, `doing` wygrywa"
  *the proof of "I know what I am overwriting", and a write replaces the WHOLE content -
  *somebody who saw one section would delete the rest without knowing it.
  */
-test("wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu", async () => {
+test("wiki: headings and sections; a fragment does NOT unlock writing", async () => {
   const s = await startTestServer();
   try {
     const { tokenA, tokenB } = seed(s);
     const { savePage } = await import("../../src/core/wiki.ts");
-    const autor = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
+    const author = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
     savePage(s.ctx, {
-      slug: "duza", title: "Duza", actorId: autor.id,
+      slug: "duza", title: "Duza", actorId: author.id,
       body: [
         "Wstep.", "", "# Wdrozenie", "krok po kroku", "", "### Krok 1", "zrob to", "",
         "```bash", "# to NIE jest naglowek, tylko komentarz w kodzie", "echo hej", "```", "",
         "## Wycofanie", "jak sie cofnac", "", "# Bezpieczenstwo", "o kluczach",
       ].join("\n"),
     });
-    const daj = async (q: string, token = tokenB) =>
+    const get = async (q: string, token = tokenB) =>
       (await fetch(`${s.url}/api/wiki/duza${q}`, { headers: bearer(token) })).json();
 
-    const spis = (await daj("?outline=1")).outline as
+    const outline = (await get("?outline=1")).outline as
       Array<{ heading: string; level: number; bytes: number }>;
-    assert.deepEqual(spis.map((x) => x.heading), ["Wdrozenie", "Krok 1", "Wycofanie", "Bezpieczenstwo"],
-      "komentarz '#' w bloku kodu nie moze byc naglowkiem strony");
-    assert.ok(spis[0].bytes > spis[3].bytes, "rozmiar sekcji ma miec sens: rodzic > liscie");
+    assert.deepEqual(outline.map((x) => x.heading), ["Wdrozenie", "Krok 1", "Wycofanie", "Bezpieczenstwo"],
+      "a '#' comment in a code block must not become a page heading");
+    assert.ok(outline[0].bytes > outline[3].bytes, "section sizes must make sense: parent > leaves");
 
-    const sekcja = (await daj("?section=Wdrozenie")).section as { body: string };
-    assert.match(sekcja.body, /### Krok 1/, "sekcja ma zawierac swoje podsekcje");
-    assert.doesNotMatch(sekcja.body, /Bezpieczenstwo/, "sekcja nie moze siegac za nastepny naglowek");
+    const section = (await get("?section=Wdrozenie")).section as { body: string };
+    assert.match(section.body, /### Krok 1/, "a section must contain its subsections");
+    assert.doesNotMatch(section.body, /Bezpieczenstwo/, "a section must not extend beyond the next heading");
 
     // Matched by the heading text, case-insensitively - an agent quotes what it saw in the outline.
-    assert.ok(((await daj("?section=wdrozenie")).section as { body: string }).body.length > 0);
+    assert.ok(((await get("?section=wdrozenie")).section as { body: string }).body.length > 0);
 
-    const brak = await (await fetch(`${s.url}/api/wiki/duza?section=Nie%20ma`, { headers: bearer(tokenB) }));
-    assert.equal(brak.status, 404);
-    assert.match((await brak.json()).error, /outline=1/, "blad ma podac, gdzie szukac nazw sekcji");
+    const missing = await (await fetch(`${s.url}/api/wiki/duza?section=Nie%20ma`, { headers: bearer(tokenB) }));
+    assert.equal(missing.status, 404);
+    assert.match((await missing.json()).error, /outline=1/, "the error must say where to find section names");
 
     // The crux: after an outline and a fragment, a write MUST bounce off the overwrite protection.
-    const zapis = await fetch(`${s.url}/api/wiki/duza`, {
+    const saved = await fetch(`${s.url}/api/wiki/duza`, {
       method: "PUT", headers: bearer(tokenB),
       body: JSON.stringify({ title: "Duza", body: "tylko moj akapit" }),
     });
-    assert.equal(zapis.status, 409, "fragment odblokowal zapis - to cicha kasacja reszty strony");
+    assert.equal(saved.status, 409, "a fragment unlocked writing; this silently deletes the rest of the page");
 
     // And a full read unlocks it, because then the author knows what they are overwriting.
-    await daj("");
-    const poCalosci = await fetch(`${s.url}/api/wiki/duza`, {
+    await get("");
+    const afterFullRead = await fetch(`${s.url}/api/wiki/duza`, {
       method: "PUT", headers: bearer(tokenB),
       body: JSON.stringify({ title: "Duza", body: "tylko moj akapit" }),
     });
-    assert.equal(poCalosci.status, 200);
+    assert.equal(afterFullRead.status, 200);
     assert.ok(tokenA);
   } finally {
     await s.close();
@@ -1445,14 +1446,14 @@ test("wiki: spis naglowkow i sekcja, a fragment NIE odblokowuje zapisu", async (
  *stop HAVING. What works is a list in which every page carries a sentence: then the choice
  *costs one request instead of forty pages.
  */
-test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", async () => {
+test("the wiki list provides a summary of each page without fetching their bodies", async () => {
   const s = await startTestServer();
   try {
     const { tokenA } = seed(s);
     const { savePage } = await import("../../src/core/wiki.ts");
-    const autor = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
+    const author = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
     savePage(s.ctx, {
-      slug: "duza", title: "Duza", actorId: autor.id,
+      slug: "duza", title: "Duza", actorId: author.id,
       // The content deliberately has the SHAPE of this wiki's real pages: a bold start of a paragraph
       // and wrapping. The first version of the test had one bare paragraph and therefore did not
       // catch a bug that only showed up in production - "**Conclusion:**" was taken for a list item,
@@ -1465,23 +1466,23 @@ test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", 
       ].join("\n"),
     });
 
-    const lista = await (await fetch(`${s.url}/api/wiki`, { headers: bearer(tokenA) })).json();
-    const strona = (lista.pages as Array<{ slug: string; summary?: string; bytes: number }>)
+    const list = await (await fetch(`${s.url}/api/wiki`, { headers: bearer(tokenA) })).json();
+    const page = (list.pages as Array<{ slug: string; summary?: string; bytes: number }>)
       .find((p) => p.slug === "duza")!;
 
     assert.equal(
-      strona.summary,
+      page.summary,
       "To zdanie mowi, czym jest ta strona i ono ma trafic do indeksu w calosci.",
-      "streszczenie ma sklejac zawijany akapit i nie brac pogrubienia za liste",
+      "the summary must join a wrapped paragraph without treating bold text as a list",
     );
-    assert.ok(strona.bytes > 50_000, "rozmiar ma dalej byc podany - to on mowi, ile kosztuje wejscie");
+    assert.ok(page.bytes > 50_000, "the size must still be provided to show the cost of reading the page");
 
     // The crux of the saving: the index must NOT carry content. If it did, it would solve one
     // problem by creating the same one.
-    const rozmiarOdpowiedzi = JSON.stringify(lista).length;
+    const responseSize = JSON.stringify(list).length;
     assert.ok(
-      rozmiarOdpowiedzi < 5_000,
-      `indeks wazy ${rozmiarOdpowiedzi} znakow przy stronie 50 kB - wciaga tresc`,
+      responseSize < 5_000,
+      `the index is ${responseSize} characters for a 50 kB page; it includes the body`,
     );
   } finally {
     await s.close();
@@ -1498,51 +1499,51 @@ test("lista wiki podaje streszczenie kazdej strony, nie pobierajac ich tresci", 
  * served from our domain it would be an XSS vector in the very place the session cookie lives.
  * Hence a whitelist of raster formats, not "image/*".
  */
-test("awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony", async () => {
+test("avatar: bytes rather than a URL, format detected from content, SVG rejected", async () => {
   const s = await startTestServer();
   try {
     const { tokenA, tokenB } = seed(s);
     const png = Buffer.concat([
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 7),
     ]);
-    const wyslij = (dane: Buffer, ct = "image/png") =>
+    const send = (data: Buffer, ct = "image/png") =>
       fetch(`${s.url}/api/me/avatar`, {
         method: "PUT",
         headers: { ...bearer(tokenA), "content-type": ct },
-        body: new Uint8Array(dane),
+        body: new Uint8Array(data),
       });
 
-    const ok = await wyslij(png);
+    const ok = await send(png);
     assert.equal(ok.status, 200);
     const { url } = await ok.json() as { url: string };
     assert.match(url, /^\/api\/actors\/\d+\/avatar\?v=[0-9a-f]{16}$/,
-      "adres ma niesc odcisk tresci - inaczej zmiana awatara nie bedzie widoczna");
+      "the URL must carry a content fingerprint or avatar changes will not be visible");
 
     // Everybody signed in sees it, which is the point.
-    const obraz = await fetch(s.url + url, { headers: bearer(tokenB) });
-    assert.equal(obraz.status, 200);
-    assert.equal(obraz.headers.get("content-type"), "image/png");
-    assert.equal(obraz.headers.get("x-content-type-options"), "nosniff");
+    const image = await fetch(s.url + url, { headers: bearer(tokenB) });
+    assert.equal(image.status, 200);
+    assert.equal(image.headers.get("content-type"), "image/png");
+    assert.equal(image.headers.get("x-content-type-options"), "nosniff");
 
     // An SVG with a header pretending to be a PNG: the content is what counts.
     const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
-    const zly = await wyslij(svg, "image/png");
-    assert.equal(zly.status, 400, "SVG przeszedl jako awatar - to XSS w naszym origin");
-    assert.equal((await zly.json()).code, "invalid_format");
+    const invalid = await send(svg, "image/png");
+    assert.equal(invalid.status, 400, "SVG was accepted as an avatar; this allows XSS on our origin");
+    assert.equal((await invalid.json()).code, "invalid_format");
 
     // The fingerprint changes with the content, so the browser will not show the old one.
-    const drugi = await (await wyslij(Buffer.concat([png, Buffer.alloc(8, 9)]))).json() as { url: string };
-    assert.notEqual(drugi.url, url);
+    const second = await (await send(Buffer.concat([png, Buffer.alloc(8, 9)]))).json() as { url: string };
+    assert.notEqual(second.url, url);
 
     // The actor directory carries the fingerprint, so the client can assemble the URL.
-    const lista = await (await fetch(`${s.url}/api/actors`, { headers: bearer(tokenB) })).json();
-    const ja = (lista.actors as Array<{ handle: string; avatar: string | null }>)
+    const list = await (await fetch(`${s.url}/api/actors`, { headers: bearer(tokenB) })).json();
+    const self = (list.actors as Array<{ handle: string; avatar: string | null }>)
       .find((a) => a.avatar !== null);
-    assert.ok(ja, "katalog aktorow nie mowi, kto ma awatar");
+    assert.ok(self, "the actor directory does not indicate who has an avatar");
 
     // Removing it goes back to the dot with initials.
-    const usun = await fetch(`${s.url}/api/me/avatar`, { method: "DELETE", headers: bearer(tokenA) });
-    assert.equal(usun.status, 200);
+    const remove = await fetch(`${s.url}/api/me/avatar`, { method: "DELETE", headers: bearer(tokenA) });
+    assert.equal(remove.status, 200);
     assert.equal((await fetch(s.url + url, { headers: bearer(tokenB) })).status, 404);
   } finally {
     await s.close();
@@ -1558,7 +1559,7 @@ test("awatar: bajty zamiast adresu, format po zawartosci, SVG odrzucony", async 
  *getting ready to answer did not ask for the roster, so it had no way of learning that
  *somebody is already answering.
  */
-test("/api/me pokazuje, kto pisze - bez pytania o liste obecnych", async () => {
+test("/api/me shows who is typing without requesting the presence list", async () => {
   const s = await startTestServer();
   try {
     // seed() returns the actors directly - the first version of this test took "the last one by
@@ -1567,21 +1568,21 @@ test("/api/me pokazuje, kto pisze - bez pytania o liste obecnych", async () => {
     const { tokenA, tokenB, bob } = seed(s);
     const { registerSession, signal } = await import("../../src/core/presence.ts");
 
-    const moje = async (token: string) =>
+    const myStatus = async (token: string) =>
       (await (await fetch(`${s.url}/api/me`, { headers: bearer(token) })).json()) as
         { typing: Array<{ handle: string; in: string | null }> };
 
-    assert.deepEqual((await moje(tokenA)).typing, [], "nikt nie pisze - lista ma byc pusta");
+    assert.deepEqual((await myStatus(tokenA)).typing, [], "nobody is typing; the list must be empty");
 
     registerSession(s.ctx, { sessionId: "sB", actorId: bob.id, kind: "durable" });
     signal(s.ctx, "sB", "typing", { typingIn: "c:1", sec: 60 });
 
-    const widziane = (await moje(tokenA)).typing;
-    assert.equal(widziane.length, 1);
-    assert.equal(widziane[0].in, "c:1", "brak miejsca - nie wiadomo, GDZIE ktos pisze");
+    const seen = (await myStatus(tokenA)).typing;
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].in, "c:1", "location missing; WHERE someone is typing is unknown");
 
     // Your own writing is not information for yourself.
-    assert.deepEqual((await moje(tokenB)).typing, [], "widze samego siebie jako piszacego");
+    assert.deepEqual((await myStatus(tokenB)).typing, [], "I see myself as typing");
   } finally {
     await s.close();
   }
@@ -1600,32 +1601,32 @@ test("/api/me pokazuje, kto pisze - bez pytania o liste obecnych", async () => {
  *"does this guarantee come from construction or from convention". Here the other way round
  *than for him - the construction said something different from the promise.
  */
-test("skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzica", async () => {
+test("deleting a wiki page also deletes its revisions and moves its children to its parent", async () => {
   const s = await startTestServer();
   try {
     const { tokenA } = seed(s);
     const { savePage, pageId, pageHistory, getPage } = await import("../../src/core/wiki.ts");
-    const autor = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
+    const author = s.ctx.db.prepare("SELECT id FROM actors LIMIT 1").get() as { id: number };
 
-    savePage(s.ctx, { slug: "rodzic", title: "Rodzic", body: "wersja 1", actorId: autor.id });
-    savePage(s.ctx, { slug: "rodzic", title: "Rodzic", body: "wersja 2", actorId: autor.id, force: true });
-    savePage(s.ctx, { slug: "dziecko", title: "Dziecko", body: "tresc", actorId: autor.id, parentSlug: "rodzic" });
+    savePage(s.ctx, { slug: "rodzic", title: "Rodzic", body: "wersja 1", actorId: author.id });
+    savePage(s.ctx, { slug: "rodzic", title: "Rodzic", body: "wersja 2", actorId: author.id, force: true });
+    savePage(s.ctx, { slug: "dziecko", title: "Dziecko", body: "tresc", actorId: author.id, parentSlug: "rodzic" });
     const id = pageId(s.ctx, "rodzic")!;
-    assert.equal(pageHistory(s.ctx, "rodzic").length, 2, "kazdy zapis ma zostawic rewizje");
+    assert.equal(pageHistory(s.ctx, "rodzic").length, 2, "every save must leave a revision");
 
     const res = await fetch(`${s.url}/api/wiki/rodzic`, { method: "DELETE", headers: bearer(tokenA) });
     assert.equal(res.status, 200);
     // The response carries the content back - that is the only route out of a mistake.
-    assert.match(JSON.stringify(await res.json()), /wersja 2/, "kasowanie nie oddaje tresci do cofniecia");
+    assert.match(JSON.stringify(await res.json()), /wersja 2/, "deletion does not return the body for undo");
 
     assert.equal(getPage(s.ctx, "rodzic"), null);
-    const zostale = s.ctx.db.prepare("SELECT COUNT(*) n FROM wiki_revisions WHERE page_id = ?")
+    const remaining = s.ctx.db.prepare("SELECT COUNT(*) n FROM wiki_revisions WHERE page_id = ?")
       .get(id) as { n: number };
-    assert.equal(zostale.n, 0, "historia przezyla kasowanie - skill obiecuje, ze tresc znika");
+    assert.equal(remaining.n, 0, "history survived deletion; the skill promises the content disappears");
 
     // The child STAYS, it only moves up: deleting a folder must not delete somebody else's pages
     // created under it.
-    assert.ok(getPage(s.ctx, "dziecko"), "dziecko zniknelo razem z rodzicem");
+    assert.ok(getPage(s.ctx, "dziecko"), "the child disappeared with its parent");
     assert.equal(getPage(s.ctx, "dziecko")!.parentSlug, null);
   } finally {
     await s.close();
@@ -1645,7 +1646,7 @@ test("skasowanie strony wiki usuwa tez jej rewizje, a dzieci przechodza do rodzi
  *no warning - the downloadable file was corrupt. Silent corruption is worse than a readable
  *refusal, so both routes now refuse alike, and the message speaks about the WRAPPER, not the file.
  */
-test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej koperty", async () => {
+test("multipart on a raw-byte route: a clear refusal instead of a saved envelope", async () => {
   const s = await startTestServer();
   try {
     const { tokenA, dmId } = seed(s);
@@ -1653,41 +1654,41 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40, 7),
     ]);
     const B = "----granica";
-    const koperta = Buffer.concat([
+    const envelope = Buffer.concat([
       Buffer.from(`--${B}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\n` +
         `Content-Type: image/png\r\n\r\n`),
       png, Buffer.from(`\r\n--${B}--\r\n`),
     ]);
-    const wyslij = (url: string, ct: string, extra: Record<string, string> = {}, metoda = "POST") =>
+    const send = (url: string, ct: string, extra: Record<string, string> = {}, method = "POST") =>
       fetch(url, {
-        method: metoda,
+        method: method,
         headers: { authorization: (bearer(tokenA) as { authorization: string }).authorization,
                    "content-type": ct, ...extra },
-        body: new Uint8Array(koperta),
+        body: new Uint8Array(envelope),
       });
 
-    for (const [opis, res] of [
-      ["awatar", await wyslij(`${s.url}/api/me/avatar`, `multipart/form-data; boundary=${B}`, {}, "PUT")],
-      ["plik", await wyslij(`${s.url}/api/conversations/${dmId}/files`,
+    for (const [description, res] of [
+      ["awatar", await send(`${s.url}/api/me/avatar`, `multipart/form-data; boundary=${B}`, {}, "PUT")],
+      ["plik", await send(`${s.url}/api/conversations/${dmId}/files`,
         `multipart/form-data; boundary=${B}`, { "x-file-name": "a.png" })],
     ] as Array<[string, Response]>) {
-      assert.equal(res.status, 400, `${opis}: koperta multipart nie zostala odrzucona`);
+      assert.equal(res.status, 400, `${description}: the multipart envelope was not rejected`);
       const b = await res.json() as { code: string; error: string };
       assert.equal(b.code, "multipart_unsupported");
       // The message has to lead to the goal, not merely refuse: the body's shape AND an example in
       // more than one tool (the report came from somebody using Python, while the first version spoke
       // only about curl).
-      assert.match(b.error, /RAW FILE BYTES/, `${opis}: komunikat nie mowi, CO wyslac zamiast`);
-      assert.match(b.error, /curl:/, `${opis}: brak przykladu dla curla`);
-      assert.match(b.error, /python:/, `${opis}: przyklad tylko dla jednego narzedzia`);
+      assert.match(b.error, /RAW FILE BYTES/, `${description}: the message does not say WHAT to send instead`);
+      assert.match(b.error, /curl:/, `${description}: curl example missing`);
+      assert.match(b.error, /python:/, `${description}: example provided for only one tool`);
     }
 
     // Recognition by CONTENT, not by the header - the header is written by the client.
-    const bezNaglowka = await wyslij(`${s.url}/api/me/avatar`, "image/png", {}, "PUT");
-    assert.equal(bezNaglowka.status, 400, "koperta w przebraniu image/png przeszla");
-    assert.equal((await bezNaglowka.json() as { code: string }).code, "multipart_unsupported");
+    const withoutHeader = await send(`${s.url}/api/me/avatar`, "image/png", {}, "PUT");
+    assert.equal(withoutHeader.status, 400, "an envelope disguised as image/png was accepted");
+    assert.equal((await withoutHeader.json() as { code: string }).code, "multipart_unsupported");
 
-    // Prawdziwe surowe bajty dalej dzialaja - odmowa dotyczy OPAKOWANIA.
+    // Real raw bytes still work; the refusal concerns the ENVELOPE.
     const ok = await fetch(`${s.url}/api/me/avatar`, {
       method: "PUT",
       headers: { authorization: (bearer(tokenA) as { authorization: string }).authorization,
@@ -1712,26 +1713,26 @@ test("multipart na trasie surowych bajtow: czytelna odmowa zamiast zapisanej kop
  *inconvenience. No documentation removes this, because it is a difference between JSON and a
  *language's types.
  */
-test("wiadomosci niosa actorHandle, nie tylko actorId do mapy o kluczach string", async () => {
+test("messages carry actorHandle, not just actorId for a map with string keys", async () => {
   const s = await startTestServer();
   try {
-    const { tokenA, ala, kanalId } = seed(s);
+    const { tokenA, ala, channelId } = seed(s);
     const { postMessage } = await import("../../src/core/messages.ts");
-    postMessage(s.ctx, { conversationId: kanalId, actorId: ala.id, body: "czesc" });
+    postMessage(s.ctx, { conversationId: channelId, actorId: ala.id, body: "czesc" });
 
     for (const url of [
-      `/api/conversations/${kanalId}/messages`,
+      `/api/conversations/${channelId}/messages`,
       `/api/search?q=czesc`,
     ]) {
       const d = await (await fetch(s.url + url, { headers: bearer(tokenA) })).json() as
         { messages: Array<{ actorId: number; actorHandle?: string }>; actors: Record<string, unknown> };
       const m = d.messages.find((x) => x.actorId === ala.id)!;
-      assert.equal(m.actorHandle, "ala", `${url}: brak actorHandle przy wiadomosci`);
+      assert.equal(m.actorHandle, "ala", `${url}: actorHandle missing from the message`);
 
       // Proof that the trap is REAL rather than theoretical: the map's keys are strings.
       assert.ok(Object.keys(d.actors).every((k) => typeof k === "string"));
       assert.equal((d.actors as Record<number, unknown>)[ala.id as number] !== undefined, true,
-        "w JS koercja klucza dziala - i wlasnie dlatego blad byl niewidoczny stad");
+        "JS key coercion works; that is why the bug was invisible here");
       // The map stays: it carries displayName and kind, which we do not repeat.
       assert.ok(JSON.stringify(d.actors).includes("displayName"));
 
@@ -1740,9 +1741,9 @@ test("wiadomosci niosa actorHandle, nie tylko actorId do mapy o kluczach string"
       // here, this is the place where it will crack". Today both come from the same read, so drift is
       // impossible; this assertion keeps it that way.
       for (const w of d.messages) {
-        const zMapy = (d.actors as Record<string, { handle: string }>)[String(w.actorId)];
-        assert.equal(w.actorHandle, zMapy?.handle,
-          `${url}: actorHandle rozjechal sie z mapa actors dla aktora ${w.actorId}`);
+        const fromMap = (d.actors as Record<string, { handle: string }>)[String(w.actorId)];
+        assert.equal(w.actorHandle, fromMap?.handle,
+          `${url}: actorHandle differs from the actors map for actor ${w.actorId}`);
       }
     }
   } finally {
