@@ -191,8 +191,21 @@
       "data": {
         "head": "abac1050ee7a1cd97d23dede1fbe6c7f124e358f"
       }
+    },
+    {
+      "at": "2026-11-04T03:27:03.785Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "3f52bb685cfcede49d961c747ab386703c0476a5",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "0c65e454907c5ad075eb9e77c1f33be4d0614fa0"
+      }
     }
   ],
   "base": "b5048faafbdc30f27d23bd7dd98a379853f45988",
-  "branch": "task/T-MG-14-plugin-f10-f11"
+  "branch": "task/T-MG-14-plugin-f10-f11",
+  "mergedAt": "2026-11-04T03:27:03.785Z"
 }
