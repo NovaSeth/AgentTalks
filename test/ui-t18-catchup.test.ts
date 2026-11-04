@@ -54,9 +54,13 @@ let onRequest: ((path: string) => void) | null = null;
 let hold: { match: RegExp; gate: Promise<void> } | null = null;
 /** One-shot holds (T-MG-43 r1): only the FIRST request matching each entry waits for its gate. */
 let onceHolds: { match: RegExp; gate: Promise<void> }[] = [];
+/** One-shot holds BEFORE the cut (T-MG-43 r2): the request reaches the server only when the gate opens. */
+let preHolds: { match: RegExp; gate: Promise<void> }[] = [];
 g.fetch = async (path: string) => {
   requests.push(String(path));
   onRequest?.(String(path));
+  const pre = preHolds.findIndex((h) => h.match.test(String(path)));
+  if (pre >= 0) await preHolds.splice(pre, 1)[0].gate;
   const url = new URL(String(path), "https://test.local");
   const m = /^\/api\/conversations\/(\d+)\/messages$/.exec(url.pathname);
   let messages: Any[] = [];
@@ -103,6 +107,7 @@ beforeEach(() => {
   onRequest = null;
   hold = null;
   onceHolds = [];
+  preHolds = [];
   failAfterOnce = false;
   reactions5 = {};
   Object.assign(state, {
@@ -452,4 +457,51 @@ test("r1 F1: a reaction refresh sent before a newer catch-up and landing after i
   await settle();
   assert.equal(bodyOf(2), "edited in outage 2");
   assert.deepEqual(state.reactions[2], thumbs("nestor"));
+});
+
+// ---- T-MG-43 fix round 2 (codex review-r2 F2): send order is not the server's cut order
+test("r2 F2 (codex repro): a read sent earlier but cut later is not erased by a read sent after it but cut before it", async (t) => {
+  await heldResume(t, /never/);
+  hold = null;
+  await settle();
+  general();
+  assert.deepEqual(ids(5), [1, 2]);
+  // A: the reaction read of message 1, delayed BEFORE it reaches the server.
+  let deliverA!: () => void;
+  preHolds = [{ match: /before=2&limit=1/, gate: new Promise<void>((r) => { deliverA = r; }) }];
+  reacted(1);
+  await settle();
+  // B: the next reconnect's newest-30 read, cut now and held after its cut.
+  let deliverB!: () => void;
+  onceHolds = [{ match: /messages\?limit=30$/, gate: new Promise<void>((r) => { deliverB = r; }) }];
+  last().drop(2);
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  // The stream drops; meanwhile message 1 gets a reaction and an edit, and messages 3..32 arrive.
+  last().drop(2);
+  reactions5 = { 1: thumbs("nestor") };
+  server5[0] = edited(1, "edited in outage");
+  for (let i = 3; i <= 32; i++) server5.push(msg(i));
+  deliverA();
+  await settle();
+  deliverB();
+  await settle();
+  t.mock.timers.tick(1000);
+  last().open();
+  await settle();
+  general();
+  assert.deepEqual(state.reactions[1], thumbs("nestor"));
+  assert.equal(bodyOf(1), "edited in outage");
+  assert.deepEqual(ids(5), range(32));
+});
+
+test("r2 F2: an unstamped reaction write while a page is in flight (a view loader) is kept, then re-read", async (t) => {
+  const release = await heldResume(t, /after=1/);
+  reactions5 = { 2: thumbs("nestor", "michal") };
+  store.mergeReactions([msg(2)], { 2: thumbs("nestor", "michal") });   // e.g. the thread or jump loader of view-chat.js
+  release();
+  await settle();
+  assert.deepEqual(state.reactions[2], thumbs("nestor", "michal"));
 });
