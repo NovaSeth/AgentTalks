@@ -14,7 +14,7 @@
     }
   ],
   "status": "fix-round",
-  "round": 1,
+  "round": 2,
   "events": [
     {
       "at": "2026-11-03T23:49:15.112Z",
@@ -98,6 +98,46 @@
       "data": {
         "round": 1,
         "addressed": 5,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T00:09:42.424Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:10:05.217Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 0,
+        "open": 3,
+        "note": "dispatched round 2 (D-MG-14 device cookie)"
+      }
+    },
+    {
+      "at": "2026-11-04T00:12:49.949Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T00:12:50.148Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 3,
         "open": 0
       }
     }

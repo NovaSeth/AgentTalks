@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-94",
+  "status": "open",
+  "task": "T-MG-7",
+  "round": 1,
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:security-reviewer"
+  },
+  "finding": "F2",
+  "severity": "minor",
+  "path": "src/core/unread.ts",
+  "line": null,
+  "rule": "PRI-6",
+  "text": "Low: UNREAD_CAP=100 changes unread/badge semantics for every consumer (MCP status/talk_channels print '100 nieprzeczytanych'; digest.ts still counts all rows). Clients must render 99+/100+; consider returning a capped flag so callers can tell 'exactly 100' from 'more'.",
+  "filedAt": "2026-11-04T00:07:35.939Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

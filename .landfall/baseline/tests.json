@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "2f453bf1eb0c4471470dd52d56dd4e5252ca88c5",
-  "collectedAt": "2026-11-03T23:55:47.616Z",
+  "head": "694017705f33ab046ca3ec693be884edb1df8141",
+  "collectedAt": "2026-11-04T00:08:17.140Z",
   "tests": [
     {
       "id": "[\"\",\"/api/me pokazuje, kto pisze - bez pytania o liste obecnych\",1]",
@@ -15,27 +15,7 @@
       "skipped": false
     },
     {
-      "id": "[\"\",\"CI: every action is pinned to a full commit SHA (B-MG-12, B-MG-16)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"CI: the pin check can fire (a tag reference is reported)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"CI: the workflow token is read-only by default (B-MG-16)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
       "id": "[\"\",\"DM budzi nieobecnego adresata podpisanym ladunkiem\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"Docker: the base image is pinned by digest and only /data is owned by the runtime user (B-MG-17)\",1]",
       "file": "",
       "skipped": false
     },
@@ -116,6 +96,16 @@
     },
     {
       "id": "[\"\",\"X-File-Name ze zlym %-kodowaniem daje 400 z instrukcja, nie 500\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a message immediately restores an actor silent for 14 days without fetching\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"a message immediately restores an actor silent for 90 days without fetching\",1]",
       "file": "",
       "skipped": false
     },
@@ -266,16 +256,6 @@
     },
     {
       "id": "[\"\",\"czlowiek loguje sie i dostaje cookie oraz token CSRF\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"deploy: the site password becomes valid JSON even with quotes and backslashes (B-MG-22)\",1]",
-      "file": "",
-      "skipped": false
-    },
-    {
-      "id": "[\"\",\"deploy: without python3 the helper fails loudly instead of sending an empty body (T-MG-9 review F1)\",1]",
       "file": "",
       "skipped": false
     },
@@ -620,7 +600,57 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"listActors does not expose the timestamp of a deleted public message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors does not expose the timestamp of a dm message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors does not expose the timestamp of a group message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors does not expose the timestamp of a private message\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors looks up activity by actor without scanning message or session history\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"listActors sortuje po handle\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses account creation when an actor has no activity\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses the newest created timestamp for lastActiveAt\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses the newest message timestamp for lastActiveAt\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses the newest session timestamp for lastActiveAt\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"listActors uses the newest token timestamp for lastActiveAt\",1]",
       "file": "",
       "skipped": false
     },
@@ -836,6 +866,11 @@
     },
     {
       "id": "[\"\",\"onCommitted w transakcji odklada wywolanie do commita; blad = brak wywolania\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"online presence wins over old activity\",1]",
       "file": "",
       "skipped": false
     },
@@ -1120,6 +1155,21 @@
       "skipped": false
     },
     {
+      "id": "[\"\",\"sidebar classifies 13 silent days as active\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sidebar classifies 14 silent days as faded\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"sidebar classifies 90 silent days as archived\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
       "id": "[\"\",\"skasowana wiadomosc nie utrzymuje licznika\",1]",
       "file": "",
       "skipped": false
@@ -1221,6 +1271,11 @@
     },
     {
       "id": "[\"\",\"talk_status wypisuje pola narzedzi z TOOLS, nie z reki\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"the actor directory cache retains uploaded avatars\",1]",
       "file": "",
       "skipped": false
     },
@@ -1646,5 +1701,5 @@
     }
   ],
   "failing": [],
-  "sha256": "6c3292191e4232eb129b97cf833b9e2dddda0ccf653c1e71ce481a026525b45a"
+  "sha256": "c9e69f2c68193750b3f3a9077e6a2590bfe70d64cc3a6e3212ea5a6513da2a60"
 }
