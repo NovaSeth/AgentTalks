@@ -13,8 +13,8 @@
       "at": "2026-11-04T00:40:43.646Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "done",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-03T23:41:25.401Z",
@@ -61,6 +61,129 @@
         "executor": "codex:implementer",
         "base": "d89e721ef8bd4809aa9066030d2dd834632c996c",
         "note": "EN-1 error-code contract"
+      }
+    },
+    {
+      "at": "2026-11-04T02:23:42.096Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns"
+      }
+    },
+    {
+      "at": "2026-11-04T02:30:38.578Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T02:30:38.798Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T02:30:55.563Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 3,
+        "note": "codex fix round 1"
+      }
+    },
+    {
+      "at": "2026-11-04T02:46:29.154Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T02:46:29.330Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 3,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T02:46:29.527Z",
+      "by": "MG",
+      "event": "self-verified",
+      "data": {
+        "round": 1,
+        "note": "REV-20: docs tables, language gate coverage, UI error dictionary"
+      }
+    },
+    {
+      "at": "2026-11-04T02:47:03.218Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:b3be0a31f9e13857",
+          "risk-path:a384388adcb2ed2b",
+          "risk-path:8f42976ee3c19720",
+          "risk-path:469917e480700f46",
+          "files-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T02:47:03.218Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "baseline-shrunk",
+        "head": "dc4ad75738bba87b8a46d72f65ca1f30802acd6e",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T02:47:39.797Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "missing-artifact",
+        "head": "dc4ad75738bba87b8a46d72f65ca1f30802acd6e",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T02:48:31.935Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "dc4ad75738bba87b8a46d72f65ca1f30802acd6e",
+        "class": "critical",
+        "attempt": 3
+      }
+    },
+    {
+      "at": "2026-11-04T02:49:03.532Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "dc4ad75738bba87b8a46d72f65ca1f30802acd6e"
       }
     }
   ],

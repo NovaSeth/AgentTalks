@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/wake.mjs",
+      "line": 395,
+      "rule": "AGT-3",
+      "text": "High: wake runs inherit the bridge's AgentTalks credentials instead of the recorded actor/server. In-memory createWakeBridge test: Alice/A session, A-signed wake, Bob/B credentials in opts.env -> 202 woke:true; runner resumed Alice but resolveIdentity(runner.env) selected B with Bob's token. Content from A can therefore trigger actions with B's rights. Resolve credentials per recorded principal, verify the actor/server before spawning, and refuse mismatches."
+    }
+  ],
+  "run": "codex-T-MG-2-reviewer-1",
+  "sha256": "c0066e85700f49c37926a4c9c0e3dc030b7abcee46b6172d2fc22e081b6aa4d5"
+}

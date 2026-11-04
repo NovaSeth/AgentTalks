@@ -1,0 +1,12 @@
+---
+red: {"command": "node --test test/plugin/{mention-restart,liveness,wake-bridge,project-trust}.test.ts (each before its fix)", "exit": 1, "excerpt": "F10: 51 lost after restart saved={lastEventId:51,mentionCursor:10}; F11: {woke:false, reason:'no recorded session'} expected woke:true, retry 409 expected 202; item3: untrusted project identity used; item3b: raw path in additionalContext; item4: Bob's token reached the woken run, mismatch cases woke:true"}
+green: {"command": "node --test --test-concurrency=2 --test-timeout=20000 \"test/**/*.test.ts\"; npm run typecheck; landfall secrets --range b5048fa..HEAD", "exit": 0, "excerpt": "tests 586, pass 586, fail 0; tsc exit 0; secrets clean"}
+---
+# T-MG-14 report: plugin delivery races F10/F11, plus items 3 and 4
+<!-- Stored by the orchestrator (condensed): the designer's harness refused the write. -->
+Status: DONE_WITH_CONCERNS
+1 F10 (3e1c6b6): /api/status watermark kept as a separate floor that becomes the event cursor only through the in-order ledger after the start-time mention read; a stop in that window hands over the previous delivered cursors; monitor accepts a (null, M) heartbeat. Tests: codex scenario with/without /api/status -> [51] once; liveness takeover; property test extended with a "pending" action, 12 seeds.
+2 F11 (2de6331): readSessions also reads fresh tombstones (newest per session, never stale); replay cache records a knock only just before a successful spawn. Tests: codex scenario woke:true; woke:false then retry woke:true then replay 409 (nonce and body hash).
+3 untrusted project identity (0dc37bb, 09c1782): a project file is used only if trusted; channel/monitor/hook do not connect; additionalContext gets a fixed sentence without the path; stderr carries the path JSON-quoted and sanitized. Tests: project-trust.test.ts (no request; trust then connect; hostile path never unquoted).
+4 woken-run identity (4be5f91): wakeEnv strips all AgentTalks credential vars; the bridge resolves the identity the woken session will use, requires it on the verifying secret's server, confirms handle and actorId via GET /api/me (5 s timeout); otherwise woke:false; replay key reserved during the check. Tests: codex scenario, mismatch cases, matching case.
+Concerns: after a (null, M) handover non-mention messages in the window are not pushed live (stay unread); /api/mentions caps at 200 at start (pre-existing); env-only or plugin-option identities can no longer be woken (documented); stricter than atalk for URL-only overrides.
