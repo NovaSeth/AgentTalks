@@ -212,16 +212,22 @@ const LAST_CONV_KEY = (owner) => `atalks_last_conv_${owner}`;
 const RECENT_KEY = (owner) => `atalks_recent_${owner}`;
 // r4 (item 9): the Threads view's "seen" marks (root id -> last reply id seen) per actor too.
 const THREADS_SEEN_KEY = (owner) => `atalks_threads_seen_${owner}`;
-const UNSENT_KEY = (owner, convId) => `atalks_unsent_${owner}_${convId}`;
+// T-MG-16 (F8 r7): one key per unsent message. A per-conversation list was a read-modify-write
+// that two tabs (a migration and a normal write) could interleave, so the later write dropped the
+// other one's entry. With one key per message no write ever rewrites another message: listing is a
+// scan of the prefix, and migration and cleanup add or remove single keys.
+const UNSENT_KEY = (owner, convId, clientMsgId) => `atalks_unsent_${owner}_${convId}_${clientMsgId}`;
 const UNSENT_PREFIX = (owner) => `atalks_unsent_${owner}_`;
+const UNSENT_ENTRY = /^atalks_unsent_(\d+)_(\d+)_(.+)$/;
 // Written before r3 (and by a tab still running that code): one marker for the whole browser and
-// un-namespaced keys; before r5 one unsent list per conversation shared by every account. Read
-// only by the migration below.
+// un-namespaced keys; before r5 one unsent list per conversation shared by every account; in r5
+// one unsent list per account and conversation. Read only by the migration below.
 const LEGACY_OWNER_KEY = "atalks_owner";
 const LEGACY_DRAFT = /^atalks_draft_(\d+)$/;
 const LEGACY_WIKI_PREFIX = "atalks_wiki_draft_";
 const LEGACY_THREADS_SEEN_KEY = "atalks_threads_seen";
 const LEGACY_UNSENT = /^atalks_unsent_(\d+)$/;
+const R5_UNSENT = /^atalks_unsent_(\d+)_(\d+)$/;
 // F4 (r5): the migration's versioned flag. Once it is set, a legacy key is something an old,
 // unreloaded tab wrote AFTER the migration: there is no owner it can be proven to belong to, so it
 // is dropped, never claimed.
@@ -243,20 +249,15 @@ function storageKeys() {
   return keys;
 }
 
-function readList(key) {
-  try {
-    const list = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(list) ? list : [];
-  } catch { return []; }
-}
-
 /** The migration of legacy (un-namespaced) data, run before every claim and every sign-out.
  *  First run (no flag): un-namespaced keys go to the actor the old owner marker names, and only to
- *  it; with no valid marker they are deleted. A pre-r5 shared unsent list is split by each entry's
- *  own `ownerId` (the marker's actor for an entry without one; deleted with no marker). A
- *  namespaced key that already exists wins over its legacy copy. The flag is then recorded and the
- *  marker removed. Every later run deletes whatever legacy key or marker an old tab wrote since:
- *  unattributed data is quarantined, never handed to whoever signs in next (F4 r5). A legacy wiki
+ *  it; with no valid marker they are deleted. A namespaced key that already exists wins over its
+ *  legacy copy. The flag is then recorded and the marker removed. Every later run deletes whatever
+ *  legacy key or marker an old tab wrote since: unattributed data is quarantined, never handed to
+ *  whoever signs in next (F4 r5). Unsent lists are the exception that every run handles: an entry
+ *  names its writer, so a pre-r5 shared list is split by each entry's `ownerId` and an r5 list by
+ *  its key into one key per message (moveUnsentList, F7/F8 r7); only an entry with no owner is
+ *  deleted (the marker vouches for it on the first run only). A legacy wiki
  *  slug that itself starts with digits and "_" reads as namespaced and is left alone (it belongs
  *  to nobody visible). */
 function migrateLegacy() {
@@ -282,8 +283,13 @@ function migrateLegacy() {
       else if (key === "atalks_recent") move(key, RECENT_KEY);
       else if (key === LEGACY_THREADS_SEEN_KEY) move(key, THREADS_SEEN_KEY);
       else if ((m = LEGACY_UNSENT.exec(key))) {
-        if (firstRun) splitLegacyUnsent(key, m[1], owner);
-        localStorage.removeItem(key);
+        // F7 (r7): EVERY sweep, not only the first: an unreloaded old tab keeps writing this list
+        // after the upgrade, and an entry tagged with its writer is still that writer's. Only the
+        // first run lets the old marker vouch for an untagged entry.
+        moveUnsentList(key, m[1], (u) => (u.ownerId != null ? String(u.ownerId) : owner));
+      } else if ((m = R5_UNSENT.exec(key))) {
+        const listOwner = m[1];
+        moveUnsentList(key, m[2], () => listOwner);
       }
     }
     localStorage.removeItem(LEGACY_OWNER_KEY);
@@ -291,25 +297,36 @@ function migrateLegacy() {
   } catch { /* private browsing */ }
 }
 
-/** First run only: a pre-r5 shared list `atalks_unsent_<conv>` into the per-actor keys. An entry
- *  names its writer in `ownerId` (8c92d64); one written before that (4aa92d5) has only the old
- *  marker. An entry with neither is deleted. */
-function splitLegacyUnsent(key, convId, markerOwner) {
-  const byOwner = new Map();
-  for (const u of readList(key)) {
-    if (!u || !u.clientMsgId) continue;
-    const who = u.ownerId != null ? String(u.ownerId) : markerOwner;
-    if (who == null || !/^\d+$/.test(who)) continue;
-    const entry = { ...u };
-    delete entry.ownerId;                  // the key names the owner now
-    if (!byOwner.has(who)) byOwner.set(who, []);
-    byOwner.get(who).push(entry);
-  }
-  for (const [who, entries] of byOwner) {
-    const target = UNSENT_KEY(who, convId);
-    const kept = readList(target);
-    const ids = new Set(kept.map((u) => u && u.clientMsgId));
-    localStorage.setItem(target, JSON.stringify([...kept, ...entries.filter((u) => !ids.has(u.clientMsgId))]));
+/** An unsent LIST of an older layout into one key per message. `ownerOf(entry)` names the account
+ *  an entry belongs to: the pre-r5 shared list `atalks_unsent_<conv>` carries the writer in each
+ *  entry's `ownerId` (8c92d64; on the first run the old marker vouches for an entry written before
+ *  that, 4aa92d5), the r5 list `atalks_unsent_<actor>_<conv>` in its key. An entry with no valid
+ *  owner is dropped. A message key that already exists wins (it is the newer write). The list is
+ *  read again before every write: when another tab has meanwhile migrated it (gone) or an old tab
+ *  rewrote it (changed), this run stops or starts over on the new value, so it does not write back
+ *  a message the other tab has already sent and removed. The list is removed only while it still
+ *  holds the value that was moved. */
+function moveUnsentList(key, convId, ownerOf) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return;
+    let list = [];
+    try { list = JSON.parse(raw); } catch { /* unreadable: nothing to move */ }
+    let changed = false;
+    for (const u of Array.isArray(list) ? list : []) {
+      if (!u || typeof u !== "object" || !u.clientMsgId || typeof u.body !== "string") continue;
+      const who = ownerOf(u);
+      if (who == null || !/^\d+$/.test(who)) continue;
+      if (localStorage.getItem(key) !== raw) { changed = true; break; }
+      const target = UNSENT_KEY(who, convId, u.clientMsgId);
+      if (localStorage.getItem(target) != null) continue;
+      const entry = { ...u };
+      delete entry.ownerId;                  // the key names the owner now
+      localStorage.setItem(target, JSON.stringify(entry));
+    }
+    if (changed || localStorage.getItem(key) !== raw) continue;
+    localStorage.removeItem(key);
+    return;
   }
 }
 
@@ -398,30 +415,27 @@ export function lastConvId() {
 // "not sent" bubble rather than folded into the composer text (T-MG-3 F3, W3-S4-B): the bubble
 // keeps its clientMsgId, so "Send again" can never post it twice even when the first attempt
 // did land, a thread reply stays a thread reply, and two failed messages stay two. They are
-// stored per account and conversation (`atalks_unsent_<actorId>_<conv>`, F5 r5), so only the
-// account that wrote them gets them back and no other account's cleanup can rewrite them.
+// stored per account, conversation and message (`atalks_unsent_<actorId>_<conv>_<clientMsgId>`,
+// F5 r5, F8 r7), so only the account that wrote them gets them back, and no other account's
+// cleanup and no other tab's write can rewrite them.
 
-/** Writes the conversation's in-flight and failed messages to this account's key (or removes it).
- *  Two tabs of the SAME account share the key, so the stored list is merged: entries the other
- *  tab wrote stay, unless this tab holds them or has just sent or discarded them (`done`). */
+/** Writes each in-flight or failed message of the conversation to its own key in this account's
+ *  namespace and removes the keys of the messages just sent or discarded (`done`). No other key
+ *  is read or written, so what another tab of the same account stored stays as it is. */
 export function persistUnsent(convId, done = []) {
   const owner = storageOwner();
   if (owner == null) return;               // no known account: writing an unattributed entry would leak it
-  const key = UNSENT_KEY(owner, convId);
-  const mine = (state.pending[convId] || []).map((p) => ({
-    clientMsgId: p.clientMsgId, body: p.body, threadId: p.threadId ?? null, ts: p.ts,
-    // An in-flight entry has no error yet; if it comes back from storage, it was never confirmed.
-    error: p.failed ? p.error || null : null,
-  }));
-  const skip = new Set([...done, ...mine.map((u) => u.clientMsgId)]);
-  let others = [];
+  const gone = new Set(done);
   try {
-    others = readList(key).filter((u) => u && u.clientMsgId && !skip.has(u.clientMsgId));
-  } catch { /* unavailable: this tab's list replaces it */ }
-  const list = [...others, ...mine];
-  try {
-    if (list.length) localStorage.setItem(key, JSON.stringify(list));
-    else localStorage.removeItem(key);
+    for (const p of state.pending[convId] || []) {
+      if (!p.clientMsgId || gone.has(p.clientMsgId)) continue;
+      localStorage.setItem(UNSENT_KEY(owner, convId, p.clientMsgId), JSON.stringify({
+        clientMsgId: p.clientMsgId, body: p.body, threadId: p.threadId ?? null, ts: p.ts,
+        // An in-flight entry has no error yet; if it comes back from storage, it was never confirmed.
+        error: p.failed ? p.error || null : null,
+      }));
+    }
+    for (const id of gone) localStorage.removeItem(UNSENT_KEY(owner, convId, id));
   } catch { /* private browsing: the memory copy is all there is */ }
 }
 
@@ -442,26 +456,31 @@ export function preserveUnsent() {
 }
 
 /** Sign-in: this account's stored unsent messages (its own keys only) come back as failed
- *  bubbles, merged with what the tab still holds. */
+ *  bubbles, merged with what the tab still holds, oldest first (storage keys have no order). */
 function restoreUnsent(actorId) {
-  const prefix = UNSENT_PREFIX(actorId);
-  let keys = [];
-  try { keys = storageKeys().filter((key) => key.startsWith(prefix)); } catch { return; }
-  for (const key of keys) {
-    const rest = key.slice(prefix.length);
-    if (!/^\d+$/.test(rest)) continue;
-    const convId = Number(rest);
-    for (const u of readList(key)) {
-      if (!u || typeof u.body !== "string" || !u.clientMsgId) continue;
-      const mine = state.pending[convId] || (state.pending[convId] = []);
-      if (mine.some((p) => p.clientMsgId === u.clientMsgId)) continue;
-      mine.push({
-        id: `tmp-${u.clientMsgId}`, clientMsgId: u.clientMsgId, conversationId: convId, actorId,
-        body: u.body, ts: u.ts || Math.floor(Date.now() / 1000), kind: "text", threadId: u.threadId ?? null,
-        pending: false, failed: true, restored: true,
-        error: u.error || t("This message may not have been sent. Send it again - it will not be posted twice."),
-      });
+  const me = String(actorId);
+  const found = [];
+  try {
+    for (const key of storageKeys()) {
+      const m = UNSENT_ENTRY.exec(key);
+      if (!m || m[1] !== me) continue;
+      let u = null;
+      try { u = JSON.parse(localStorage.getItem(key) || "null"); } catch { continue; }
+      if (!u || typeof u.body !== "string" || u.clientMsgId !== m[3]) continue;
+      found.push({ convId: Number(m[2]), u });
     }
+  } catch { return; }
+  const ts = (x) => Number(x.u.ts) || 0;
+  found.sort((x, y) => ts(x) - ts(y) || String(x.u.clientMsgId).localeCompare(String(y.u.clientMsgId)));
+  for (const { convId, u } of found) {
+    const mine = state.pending[convId] || (state.pending[convId] = []);
+    if (mine.some((p) => p.clientMsgId === u.clientMsgId)) continue;
+    mine.push({
+      id: `tmp-${u.clientMsgId}`, clientMsgId: u.clientMsgId, conversationId: convId, actorId,
+      body: u.body, ts: u.ts || Math.floor(Date.now() / 1000), kind: "text", threadId: u.threadId ?? null,
+      pending: false, failed: true, restored: true,
+      error: u.error || t("This message may not have been sent. Send it again - it will not be posted twice."),
+    });
   }
 }
 
