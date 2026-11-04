@@ -1480,15 +1480,25 @@ export function renderThread() {
   async function submit() {
     const v = ta.value.trim(); if (!v) return;
     ta.value = ""; autosize();
-    const msg = await sendMessage(v, { threadId: state.threadOpen });
+    // Capture the target before awaiting: the user may switch threads or close the panel.
+    const convId = state.activeId, rootId = state.threadOpen;
+    const msg = await sendMessage(v, { threadId: rootId, conversationId: convId });
+    const stillHere = state.view === "chat" && state.activeId === convId && state.threadOpen === rootId;
     // A failed send returns the text to the field - exactly as in the main composer.
-    if (!msg) { ta.value = v; autosize(); ta.focus(); return; }
+    if (!msg) {
+      if (stillHere && document.getElementById("th-input") === ta) { ta.value = v; autosize(); ta.focus(); }
+      return;
+    }
+    // sendMessage already stored the reply for its root; never insert it into another thread.
+    if (!stillHere) return;
     const index = state.threadMsgs.findIndex((entry) => entry.id === msg.id);
     if (index >= 0) state.threadMsgs[index] = msg;
     else { state.threadMsgs.push(msg); state.threadMsgs.sort((a, b) => a.id - b.id); }
     renderThread();
-    upsertMessageNode(findMsgById(state.threadOpen));   // the thread bar on the main list
-    document.getElementById("th-msgs").scrollTop = 999999;
+    const root = findMsgById(rootId);
+    if (root) upsertMessageNode(root);   // the thread bar on the main list
+    const list = document.getElementById("th-msgs");
+    if (list) list.scrollTop = 999999;
   }
   document.getElementById("th-msgs").scrollTop = 999999;
 }
