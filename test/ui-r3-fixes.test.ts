@@ -390,14 +390,11 @@ test("F2: sign-out clears only the signing-out account's keys (drafts, wiki, nav
   assert.equal(b2.loadWikiDraft("home"), null);
   assert.equal(b2.lastConvId(), null);
   a2.clearLocalAccountData(1);
-  // The storage-layout flag (F4 r5) and its first-seen time (T-MG-16 fix round 1) are browser-level
-  // and name no account.
-  const left = [...storage.data.keys()].filter((k) => k.startsWith("atalks_") && k !== "atalks_storage_v"
-    && k !== "atalks_storage_v_since");
+  const left = [...storage.data.keys()].filter((k) => k.startsWith("atalks_"));
   assert.deepEqual(left, [], "nothing of either account is left");
 });
 
-test("F2: legacy un-namespaced keys go once to the actor the old marker names, and the marker goes", async () => {
+test("F2 (D-MG-30): legacy un-namespaced keys are deleted, never moved to the actor the old marker names", async () => {
   storage.setItem("atalks_owner", "1");
   storage.setItem("atalks_draft_5", "LEGACY_A");
   storage.setItem("atalks_wiki_draft_home", JSON.stringify({ title: "t", body: "LEGACY_WIKI" }));
@@ -408,17 +405,16 @@ test("F2: legacy un-namespaced keys go once to the actor the old marker names, a
   assert.equal(b.loadDraft(5), null);
   assert.equal(b.loadWikiDraft("home"), null);
   assert.equal(b.lastConvId(), null);
-  assert.equal(storage.getItem("atalks_owner"), null, "the marker is gone");
-  assert.equal(storage.getItem("atalks_draft_5"), null, "the legacy key is gone");
-  // T-MG-16 fix round 1: an old unsent list is only read (copied per message), never removed early.
-  assert.ok(storage.getItem("atalks_unsent_5"), "the shared legacy list is only read");
-  assert.deepEqual(storedIds(1, 5), ["old"], "the legacy unsent entry is A's (in A's key, F5 r5)");
-  assert.deepEqual(storedIds(2, 5), [], "and not B's");
+  for (const key of ["atalks_owner", "atalks_draft_5", "atalks_wiki_draft_home", "atalks_last_conv", "atalks_recent", "atalks_unsent_5"]) {
+    assert.equal(storage.getItem(key), null, `${key} is deleted`);
+  }
+  assert.deepEqual(storedIds(1, 5), [], "nothing is moved into A's namespace");
+  assert.deepEqual(storedIds(2, 5), []);
   const a = await tab("a7", A);
-  assert.equal(a.loadDraft(5)?.text, "LEGACY_A");
-  assert.equal(a.loadWikiDraft("home")?.body, "LEGACY_WIKI");
-  assert.equal(a.lastConvId(), 5);
-  assert.ok(a.visibleMessages(5).some((m: Any) => m.body === "legacy unsent"));
+  assert.equal(a.loadDraft(5), null);
+  assert.equal(a.loadWikiDraft("home"), null);
+  assert.equal(a.lastConvId(), null);
+  assert.ok(!a.visibleMessages(5).some((m: Any) => m.body === "legacy unsent"));
 });
 
 test("F2/F4 (r5): legacy keys with no marker at all are quarantined, never claimed by a sign-in", async () => {

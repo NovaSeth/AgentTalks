@@ -362,13 +362,13 @@ test("9: the Threads view's seen marks are stored per actor (atalks_threads_seen
   assert.doesNotMatch(VIEW_THREADS, /"atalks_threads_seen"/, "view-threads.js has no bare key");
 });
 
-test("9: a pre-r4 browser-wide seen map migrates to the old marker's actor and sign-out clears only that actor's", () => {
-  // F4 (r5): only the actor the old owner marker names claims legacy data (no marker: deleted).
+test("9 (D-MG-30): a pre-r4 browser-wide seen map is deleted, and sign-out clears only the leaving actor's marks", () => {
   storage.setItem("atalks_owner", "1");
   storage.setItem("atalks_threads_seen", JSON.stringify({ 9: 3 }));
   model.claimLocalData(1);
   assert.equal(storage.getItem("atalks_threads_seen"), null);
-  assert.deepEqual(model.loadThreadsSeen(), { 9: 3 });
+  assert.deepEqual(model.loadThreadsSeen(), {}, "not handed to the old marker's actor");
+  state.actor = A; model.saveThreadsSeen({ 9: 3 });
   state.actor = B; model.saveThreadsSeen({ 11: 5 });
   model.clearLocalAccountData(1);
   assert.equal(storage.getItem("atalks_threads_seen_1"), null);

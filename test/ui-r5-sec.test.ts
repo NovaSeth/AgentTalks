@@ -103,16 +103,11 @@ test("F4: an old tab that rewrites the owner marker after the upgrade gets nothi
   assert.deepEqual(unsentBodies(b), []);
   const a = await tab(A);
   assert.equal(a.loadDraft(5), null, "written after the migration: dropped, not claimed (not even by the marker's actor)");
-  // T-MG-16 (F7 r7): an unsent entry names its writer (ownerId), so it is that writer's on every
-  // sweep; the untagged one has no owner and the late marker does not vouch for it.
-  assert.deepEqual(unsentBodies(a), ["late unsent"]);
-  for (const key of ["atalks_owner", "atalks_draft_5", "atalks_last_conv", "atalks_recent", "atalks_threads_seen"]) {
+  // D-MG-30: legacy unsent lists are deleted too, nobody gets them.
+  assert.deepEqual(unsentBodies(a), []);
+  for (const key of ["atalks_owner", "atalks_draft_5", "atalks_last_conv", "atalks_recent", "atalks_threads_seen", "atalks_unsent_5"]) {
     assert.equal(storage.getItem(key), null, `${key} is gone`);
   }
-  // T-MG-16 fix round 1: the old unsent list is only read until it is collected (7 days); its
-  // untagged entry is imported for nobody.
-  assert.ok(storage.getItem("atalks_unsent_5"), "the old unsent list is kept, not rewritten");
-  assert.ok(![...storage.data.keys()].some((k) => k.endsWith("_late-untagged")), "the untagged entry is in no account's key");
 });
 
 test("F4: on the first run legacy keys with no owner marker are deleted, never given to the first sign-in", async () => {
@@ -125,29 +120,20 @@ test("F4: on the first run legacy keys with no owner marker are deleted, never g
   assert.equal(c.loadWikiDraft("home"), null);
   assert.equal(c.lastConvId(), null);
   assert.deepEqual(unsentBodies(c, 9), []);
-  // T-MG-16 fix round 1: the old unsent list stays (only read, collected after 7 days) but its
-  // ownerless entry reaches no account's key; the first-seen time is browser-level.
-  assert.deepEqual(atalksKeys().filter((k) => k !== "atalks_storage_v" && k !== "atalks_storage_v_since" && k !== "atalks_unsent_9"),
-    [], "every other unattributed key is deleted");
-  assert.ok(!atalksKeys().some((k) => k.endsWith("_x")), "the ownerless unsent entry is imported for nobody");
+  assert.deepEqual(atalksKeys(), [], "every unattributed key is deleted (D-MG-30)");
 });
 
-test("F4: on the first run the marker's actor gets the legacy data once, and only that actor", async () => {
+test("F4 (D-MG-30): on the first run the marker's actor gets nothing either: legacy data is deleted", async () => {
   storage.setItem("atalks_owner", "1");
   storage.setItem("atalks_draft_5", "LEGACY_A");
   storage.setItem("atalks_unsent_5", JSON.stringify([{ clientMsgId: "old", body: "legacy unsent", ts: 1 }]));
-  const b = await tab(B);                          // B signs in first in this browser
+  const b = await tab(B);
   assert.equal(b.loadDraft(5), null);
   assert.deepEqual(unsentBodies(b), []);
   const a = await tab(A);
-  assert.equal(a.loadDraft(5)?.text, "LEGACY_A");
-  assert.deepEqual(unsentBodies(a), ["legacy unsent"]);
-  // A late legacy write after that is not claimed by anyone, A included.
-  storage.setItem("atalks_owner", "1");
-  storage.setItem("atalks_draft_6", "LATE");
-  const a2 = await tab(A);
-  assert.equal(a2.loadDraft(6), null);
-  assert.equal(a2.loadDraft(5)?.text, "LEGACY_A", "what was claimed stays claimed");
+  assert.equal(a.loadDraft(5), null, "not even the marker's actor is handed the legacy draft");
+  assert.deepEqual(unsentBodies(a), []);
+  assert.deepEqual(atalksKeys(), [], "all of it was deleted");
 });
 
 test("F4: a marker that is not an actor id claims nothing", async () => {
@@ -245,21 +231,20 @@ test("F5: two tabs of the SAME account keep each other's unsent entries in their
   t2.state.pending[5] = []; t2.persistUnsent(5, ["m2"]);
   assert.deepEqual(storedIds(1, 5), ["m1"]);
   t1.state.pending[5] = []; t1.persistUnsent(5, ["m1"]);
-  // T-MG-16 fix round 1: per-message keys only; the tombstone set (atalks_unsent_done_1) remains.
-  assert.deepEqual(atalksKeys().filter((k) => k.startsWith("atalks_unsent_") && !k.startsWith("atalks_unsent_done_")), [],
+  assert.deepEqual(atalksKeys().filter((k) => k.startsWith("atalks_unsent_")), [],
     "the last message's key goes with it");
 });
 
-test("F5: a shared pre-r5 list is split once into the per-actor keys by each entry's ownerId", async () => {
+test("F5 (D-MG-30): a shared pre-r5 list is deleted, not split: nobody gets its entries", async () => {
   storage.setItem("atalks_unsent_5", JSON.stringify([
     { clientMsgId: "m-a", body: "a-text", ts: 1, ownerId: 1 },
     { clientMsgId: "m-b", body: "b-text", ts: 1, ownerId: 2 },
   ]));
   const b = await tab(B);
-  assert.deepEqual(unsentBodies(b), ["b-text"]);
-  assert.ok(storage.getItem("atalks_unsent_5"), "the shared list is only read (T-MG-16 fix round 1)");
+  assert.deepEqual(unsentBodies(b), []);
+  assert.equal(storage.getItem("atalks_unsent_5"), null, "the shared list is deleted");
   const a = await tab(A);
-  assert.deepEqual(unsentBodies(a), ["a-text"]);
+  assert.deepEqual(unsentBodies(a), []);
 });
 
 test("F5: the session-lost path stores the entries under the account that wrote them", async () => {
