@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "collector": "node-test",
-  "head": "1db813557a6487ef61fd4f7866426eeae8554038",
-  "collectedAt": "2026-11-04T15:34:14.832Z",
+  "head": "3462642df667518a5ee4de8ee650f9287d9f9fbe",
+  "collectedAt": "2026-11-04T17:13:01.866Z",
   "tests": [
     {
       "id": "[\"\",\"(N) suffixes are merged into one actor\",1]",
@@ -1326,6 +1326,11 @@
     },
     {
       "id": "[\"\",\"S10b: the git call passes safe.directory\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"S11: an ignore line that git does not honour (a later negation in the same .gitignore) -> refuse, no credential on disk, .gitignore unchanged, nothing trusted\",1]",
       "file": "",
       "skipped": false
     },
@@ -2791,6 +2796,26 @@
     },
     {
       "id": "[\"\",\"atalk accepts ATALKS_* alongside AGENTTALKS_*, the canonical name wins\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk login --local in a SUBDIRECTORY of a git repo: the token file is ignored by git (or the login refuses), never an un-ignored token\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk login --local refuses a symlinked .agenttalks.json: the link target is untouched\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk login --local refuses when .agenttalks.json is already tracked by git: nothing written\",1]",
+      "file": "",
+      "skipped": false
+    },
+    {
+      "id": "[\"\",\"atalk login --local: an ignore line git does not honour (a later negation) -> refuse, nothing written\",1]",
       "file": "",
       "skipped": false
     },
@@ -5256,5 +5281,5 @@
     }
   ],
   "failing": [],
-  "sha256": "b5c591f2567207a5e29ed1f6b4f327ce9168005b5a5c5047d9cbca34f539b3a5"
+  "sha256": "298841eb5908cc414b1e9140b803503deed61b5b622d4fa422629b0dec493e00"
 }

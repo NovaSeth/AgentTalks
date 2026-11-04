@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "claude",
+    "id": "claude:security-reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/lib/credguard.mjs",
+      "line": 139,
+      "rule": "COD-2",
+      "text": "Medium: the rollback in ensureIgnored restores the .gitignore bytes read earlier (or unlinks it) without checking it is still the file this run wrote, so a concurrent edit between write and check-ignore is clobbered. Narrow window; compare content before restoring."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "path": "integrations/claude-code-plugin/lib/credguard.mjs",
+      "line": 43,
+      "rule": "COD-2",
+      "text": "Low: core.excludesFile=/dev/null (global config unread) means a file ignored only globally looks not-ignored, so the write is refused after the line is added and rolled back. Safe direction (harmless refusal); worth one line in the README/message."
+    }
+  ]
+}

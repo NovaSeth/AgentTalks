@@ -5,9 +5,15 @@
   "title": "Web UI: Wiki and claimed resources as their own left-nav item above Admin",
   "lane": null,
   "owner": "MG",
-  "class": null,
-  "classHistory": [],
-  "status": "new",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 6 files > 2; 120 LOC > 30",
+      "at": "2026-11-04T16:58:54.553Z"
+    }
+  ],
+  "status": "dispatched",
   "round": 0,
   "events": [
     {
@@ -15,8 +21,39 @@
       "by": "MG",
       "event": "created",
       "data": {}
+    },
+    {
+      "at": "2026-11-04T16:58:54.553Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T16:58:54.909Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-38-wiki-rail-place",
+        "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-38"
+      }
+    },
+    {
+      "at": "2026-11-04T16:59:25.426Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "3b666b9eda33"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+  "branch": "task/T-MG-38-wiki-rail-place"
 }

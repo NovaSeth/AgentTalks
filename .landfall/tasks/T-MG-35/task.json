@@ -5,18 +5,194 @@
   "title": "Plugin monitor stops after ~29 min and Claude Code does not re-arm it: unattended agents go deaf silently",
   "lane": null,
   "owner": "MG",
-  "class": null,
-  "classHistory": [],
-  "status": "new",
-  "round": 0,
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 6 files > 2",
+      "at": "2026-11-04T16:28:26.622Z"
+    }
+  ],
+  "status": "done",
+  "round": 1,
   "events": [
     {
       "at": "2026-11-04T16:28:07.291Z",
       "by": "MG",
       "event": "created",
       "data": {}
+    },
+    {
+      "at": "2026-11-04T16:28:26.622Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T16:28:37.377Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "main",
+        "base": "1cb87c2"
+      }
+    },
+    {
+      "at": "2026-11-04T16:28:37.597Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "orchestrator",
+        "base": "1cb87c2"
+      }
+    },
+    {
+      "at": "2026-11-04T16:28:37.914Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done"
+      }
+    },
+    {
+      "at": "2026-11-04T16:28:38.111Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+        "class": "standard",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T16:30:13.429Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:reviewer",
+        "base": "1cb87c2",
+        "note": "review r1 of ccb8841"
+      }
+    },
+    {
+      "at": "2026-11-04T16:31:40.981Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T16:31:48.641Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-35-monitor-orphan",
+        "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-35"
+      }
+    },
+    {
+      "at": "2026-11-04T16:32:19.675Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 0,
+        "open": 1
+      }
+    },
+    {
+      "at": "2026-11-04T16:32:19.928Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "3b666b9eda33",
+        "note": "fix round 1 (F1 orphan monitor)"
+      }
+    },
+    {
+      "at": "2026-11-04T16:52:45.219Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T16:53:12.571Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:reviewer",
+        "base": "3b666b9eda33",
+        "note": "scoped re-review r2"
+      }
+    },
+    {
+      "at": "2026-11-04T16:55:41.448Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "approved",
+        "reviewer": "claude"
+      }
+    },
+    {
+      "at": "2026-11-04T16:57:34.924Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T16:57:34.924Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "952e3e8803455c6e0ae57fff32a7bd35eee5c83d",
+        "class": "standard",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T17:06:24.651Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "952e3e8803455c6e0ae57fff32a7bd35eee5c83d"
+      }
+    },
+    {
+      "at": "2026-11-04T17:06:25.946Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "ae11197decc0ad3f725b7798b3b37f22f1f4cd55",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "3838fcd7ef34400c3a438633e786aa28238fcc48"
+      }
     }
   ],
-  "base": null,
-  "branch": null
+  "base": "3b666b9eda33f6644edbaca924ba9c4dbbe22a1c",
+  "branch": "task/T-MG-35-monitor-orphan",
+  "mergedAt": "2026-11-04T17:06:25.946Z"
 }
