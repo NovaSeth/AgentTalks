@@ -10,6 +10,7 @@ import { mdToHtml } from "./markdown.js";
 import { clearWikiDraft, loadWikiDraft, saveWikiDraft, state, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 import { buildRoute, syncRoute } from "./router.js";
+import { keepPlace, placeOnOpen } from "./view-sidebar.js";
 
 // --------------------------------------------------- the wiki editor's draft
 // The chat has long kept a message draft that survives F5 and a deployment; the wiki editor
@@ -117,12 +118,16 @@ if (typeof document !== "undefined") document.addEventListener("keydown", onWiki
 const deletingPages = new Set();
 
 // ============================================================= WIKI
-export async function openWikiPage(slug) {
+export async function openWikiPage(slug, { refresh = false } = {}) {
   if (deletingPages.has(slug)) return;
   // Moving to another page while writing is the most common route to losing text - so we ask
   // here, not only at Cancel.
   if (state.wiki.editing && state.wiki.slug !== slug && !(await canLeaveWikiEditor())) return;
   state.view = "wiki";
+  // T-MG-38: opening a page puts the rail on Wiki, the page on screen included (a [[link]] to
+  // it); a `refresh` (sse-events.js: somebody else edited the page on screen) is not the
+  // reader's action and leaves the place alone.
+  if (!refresh) placeOnOpen("wiki");
   state.drawerOpen = false;
   state.wiki.slug = slug;
   syncRoute(buildRoute({ view: "wiki", slug }));   // S3: F5 and Back restore the page
@@ -146,7 +151,7 @@ export async function openWikiPage(slug) {
     if (item && item.unseen) { item.unseen = 0; views.sidebar(); }
     api("POST", `/api/wiki/${encodeURIComponent(slug)}/seen`, {}).catch(() => {});
   } catch (e) {
-    if (state.wiki.draft === null) { showError(e); state.view = "chat"; views.main(); return; }
+    if (state.wiki.draft === null) { showError(e); state.view = "chat"; keepPlace(); views.main(); return; }
   }
   renderWikiMain();
 }
@@ -178,6 +183,7 @@ export function newWikiPageModal() {
     if (!slug) return;
     close();
     state.view = "wiki";
+    placeOnOpen("wiki");   // T-MG-38: a new page is a page opened by the reader
     state.wiki.slug = slug;
     state.wiki.page = null;
     state.wiki.files = [];
@@ -373,6 +379,7 @@ export function renderWikiMain(loading) {
       // thing.
       const { deleted } = await api("DELETE", `/api/wiki/${encodeURIComponent(deletedSlug)}`);
       state.wiki.page = null; state.wiki.slug = null; state.view = "chat";
+      keepPlace();   // T-MG-38: the DELETE's completion moves the view, not the reader's place
       loadWikiList(); views.render();
       showToast(t("Deleted “{title}”.", { title: deleted?.title ?? page.title }), {
         action: { label: t("Undo"), onClick: () => { deletingPages.delete(deletedSlug); restoreWikiPage(deleted); } },

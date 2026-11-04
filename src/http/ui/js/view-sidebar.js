@@ -41,14 +41,65 @@ let archiveOpen = (() => {
 
 // ------------------------------------------------- sections, places, collapse (S1)
 // The sidebar is a list of SECTIONS; the rail picks a PLACE, which is a subset of them.
-// Home shows everything, DMs narrows the list to direct conversations and people.
-const SECTIONS_HOME = ["catchup", "channels", "discover", "directs", "people", "wiki", "leases"];
+// Home shows the conversations, DMs narrows the list to direct conversations and people, and
+// Wiki (T-MG-38) holds the wiki tree and the claimed resources: the shared memory and the shared
+// things, which used to sit under the fold of Home behind a list that grows without end.
+const SECTIONS_HOME = ["catchup", "channels", "discover", "directs", "people"];
 const SECTIONS_DMS = ["directs", "people"];
+const SECTIONS_WIKI = ["wiki", "leases"];
+const PLACES = { home: SECTIONS_HOME, dms: SECTIONS_DMS, wiki: SECTIONS_WIKI };
 let sidebarPlace = "home";
 
-export function sectionsFor(place) { return place === "dms" ? SECTIONS_DMS : SECTIONS_HOME; }
+export function sectionsFor(place) { return PLACES[place] || SECTIONS_HOME; }
 export function getSidebarPlace() { return sidebarPlace; }
-export function setSidebarPlace(place) { sidebarPlace = place === "dms" ? "dms" : "home"; }
+
+/** The place after entering `view` (state.view; "dm" is accepted for a route's kind; T-MG-38,
+ *  acceptance 4). A wiki page puts the rail on Wiki, so the tree of the page you are reading is
+ *  visible. A conversation entered from the Wiki place returns to Home: the Wiki place lists no
+ *  conversations, so the row you landed in would be nowhere in the sidebar. DMs keeps itself, as
+ *  it always did: it does list the conversation you are most likely in. Any other view (search,
+ *  threads, Activity) moves nothing. Pure. */
+export function placeAfterNavigation(place, view) {
+  if (view === "wiki") return "wiki";
+  if ((view === "chat" || view === "dm") && place === "wiki") return "home";
+  return place;
+}
+
+// T-MG-38 (fix round 4): how the place moves. Nothing here listens to routes or waits for a
+// response; the place changes only in one of these three synchronous steps:
+//  1. setSidebarPlace - the reader's explicit choice (a rail click, #/dms, #/wiki, #/people). The
+//     view on screen counts as seen, so the next render derives nothing from it (review r1 F1:
+//     Wiki picked in Activity switches the view to chat and must stay Wiki).
+//  2. settlePlace - the render path (renderShell, renderSidebarList): when the view being rendered
+//     differs from the view last rendered, placeAfterNavigation decides. The same view rendered
+//     again (a presence tick, an SSE refresh, a late completion redrawing what is on screen)
+//     moves nothing.
+//  3. placeOnOpen - an explicit opening (openWikiPage, openConversation, a new page) applies the
+//     same rule even when the view does not change (review r1 F2, r2 F4); a background refresh
+//     passes a flag to those functions and skips this step (review r2 F7).
+// keepPlace marks a view change made by an async completion as seen, so it moves nothing.
+let renderedView = null;
+
+export function setSidebarPlace(place) {
+  sidebarPlace = PLACES[place] ? place : "home";
+  renderedView = state.view;
+}
+
+export function settlePlace() {
+  if (state.view === renderedView) return;
+  renderedView = state.view;
+  sidebarPlace = placeAfterNavigation(sidebarPlace, state.view);
+}
+
+export function placeOnOpen(view) {
+  sidebarPlace = placeAfterNavigation(sidebarPlace, view);
+  renderedView = view;
+}
+
+/** An async completion moved the view (a page that failed to load, a deleted page): not the
+ *  reader's navigation, so the place stays as the reader left it - the next render derives
+ *  nothing from this view change, and a choice made while the request was pending wins. */
+export function keepPlace() { renderedView = state.view; }
 
 // Which sections are folded is remembered per browser under ONE key, as an object of
 // `sectionId -> true`; absent means open. Only `true` is kept so the stored object never grows
@@ -194,6 +245,7 @@ export function updatePresenceDots() {
 }
 
 export function renderSidebarList() {
+  settlePlace();   // T-MG-38: a view transition moves the place before the list is drawn
   const el = document.getElementById("sb-scroll");
   if (!el) return;
   // The container scrolls itself: without remembering the position, every rebuild would throw
@@ -411,7 +463,8 @@ export function renderSidebarList() {
       { extra: plus("lease", t("Claim a resource")),
         attrs: ` title="${t("Before anyone touches something shared (a deployment, a migration, a configuration file), they claim it here. Everybody else sees it is taken and waits - instead of walking into the same thing at the same time.")}"` }),
   };
-  // The rail's place decides which sections are drawn: Home shows all, DMs only the direct ones.
+  // The rail's place decides which sections are drawn: Home the conversations, DMs only the
+  // direct ones, Wiki the tree and the claimed resources.
   el.innerHTML = sectionsFor(sidebarPlace).map((id) => sections[id]()).join("");
   el.scrollTop = scrollTop;
   // S6 (G11): a people row opens the PROFILE (with its "Message" button), not a conversation at once.

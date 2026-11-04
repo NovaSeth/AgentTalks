@@ -26,6 +26,7 @@ const TABLE: Array<[string, Record<string, unknown>]> = [
   ["#/wiki/runbook", { view: "wiki", slug: "runbook" }],
   ["#/activity", { view: "activity" }],
   ["#/dms", { view: "dms" }],
+  ["#/wiki", { view: "wikiPlace" }],
   ["#/admin", { view: "admin" }],
   ["#/search?q=hello%20world", { view: "search", q: "hello world" }],
 ];
