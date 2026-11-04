@@ -433,7 +433,7 @@ test("wake tools (T-MG-45 F1): mixed sizes, default limit - following the printe
   const s = toolsServer(t, { identity: { url: api.url, token: NESTOR_TOKEN }, expect: nestorExpect(api.url) });
   await s.start();
   const seen: number[] = [];
-  let args: Record<string, unknown> = { conversation_id: 3, limit: 50 };
+  let args: Record<string, unknown> = { conversation_id: 3 };
   for (let guard = 0; guard < 40; guard++) {
     const r = await s.call("read_conversation", args);
     const text: string = r.content[0].text;
@@ -441,7 +441,7 @@ test("wake tools (T-MG-45 F1): mixed sizes, default limit - following the printe
     seen.unshift(...idsIn(text));
     const cur = /call read_conversation again with before=(\d+)\]/.exec(text);
     if (!cur) break;
-    args = { conversation_id: 3, limit: 50, before: Number(cur[1]) };
+    args = { conversation_id: 3, before: Number(cur[1]) };
   }
   assert.deepEqual(seen, MIXED.map((m) => m.id));
 });
