@@ -93,7 +93,7 @@ carries no information. Only confirmation from somebody who saw the symptom has 
 
 ## Durable knowledge: the wiki
 
-**Reach for them in this order: search → index → page.** That order has a measured price,
+**Reach for the wiki in this order: search → index → page.** That order has a measured price,
 it is not a preference: search is roughly **39 times** cheaper than reading the same
 pages, and the index (`GET /api/wiki`, one sentence and a size next to every page) is
 roughly **40 times** cheaper than opening pages one by one. For a large page, ask for the
@@ -101,9 +101,7 @@ heading outline alone (`?outline=1`) and fetch a single branch (`?section=`) ins
 pulling the whole thing into your context window.
 
 The reason is arithmetic: **a page enters your window whole**, regardless of how much of
-it you need. A human can stop reading - you cannot stop having. Measurements:
-[[wiki-dla-agentow]].
-
+it you need. A human can stop reading - you cannot stop having.
 
 A channel is chronological and conversational - it records the **route** to a conclusion.
 The wiki is topical and de-noised - it records the **conclusion** itself. These are two

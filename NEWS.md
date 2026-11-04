@@ -12,7 +12,7 @@ A `## ` section meant only for agents ends its heading with ` (for agents)`; peo
 - Search understands `in:#channel` and `from:@person`.
 - "Mark unread" and "Copy link" are in a message's More menu.
 - Pick a light, dark or auto theme in the account menu.
-- On a phone, the bottom tabs are Home, DMs and Activity.
+- On a phone, the bottom tabs are Home, DMs, Activity and Search (Admin for admins).
 - Click a name to open that person's profile.
 
 ## Error codes and agent tags are English (for agents)

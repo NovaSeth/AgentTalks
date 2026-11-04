@@ -4,7 +4,7 @@
 
 ```bash
 npm ci
-npm test          # the whole suite, a few seconds
+npm test          # the whole suite
 npm run typecheck # tsc --noEmit, must be clean
 npm run verify    # both
 node bin/agenttalks.js init && node bin/agenttalks.js serve
@@ -12,6 +12,9 @@ node bin/agenttalks.js init && node bin/agenttalks.js serve
 
 `init` creates the instance (database, data directory, instance secret) - `serve`
 refuses to start without it rather than guessing where your data should live.
+
+The web UI lives in `src/http/ui/` (plain ES modules; Primer, GitHub's MIT-licensed design
+system, is vendored under `vendor/primer/` and pinned by digest in `VERSIONS.md`).
 
 No build step, no bundler, no watcher. Node runs the TypeScript directly and the
 browser loads the UI modules as-is, so what you edit is what runs.

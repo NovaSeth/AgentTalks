@@ -30,7 +30,7 @@ jobs:
       # resolvedAt/fixedAt, making closed reports look open). The rest was
       # noise from missing @types/node that hid those two. Now it passes
       # cleanly, it must block failures or it is decoration nobody reads.
-      - name: Sprawdzenie typow
+      - name: Type check
         run: npm run typecheck
 
   docker:
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Build image
         run: docker build -t agenttalks:ci .
-      - name: Smoke - kontener wstaje i odpowiada
+      - name: Smoke - the container starts and answers
         run: |
           docker run -d --name smoke -p 127.0.0.1:8080:8080 agenttalks:ci
           for i in $(seq 1 20); do

@@ -18,7 +18,7 @@ import { registerUiRoutes, siteGateBlocks } from "./ui.ts";
 import { longPollHandler, sseHandler } from "./sse.ts";
 import { unauthorized } from "../core/errors.ts";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 export function buildRouter(): Router {
   const router = new Router();
