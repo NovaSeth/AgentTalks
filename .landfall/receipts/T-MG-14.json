@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "task": "T-MG-14",
+  "class": "critical",
+  "tier": null,
+  "startedAt": "2026-11-04T02:14:45.703Z",
+  "endedAt": "2026-11-04T03:26:33.362Z",
+  "wallMs": 4307659,
+  "tokens": {
+    "input": 286365,
+    "output": 228162,
+    "cacheRead": 59035474,
+    "cacheWrite": 848743
+  },
+  "costMicroUsd": 19261068,
+  "byAgent": [
+    {
+      "agentType": "main",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 120,
+        "output": 35215,
+        "cacheRead": 30117660,
+        "cacheWrite": 65063
+      },
+      "costMicroUsd": 7248818
+    },
+    {
+      "agentType": "landfall:designer",
+      "model": "claude-opus-5-5",
+      "tokens": {
+        "input": 288,
+        "output": 152902,
+        "cacheRead": 25173302,
+        "cacheWrite": 783680
+      },
+      "costMicroUsd": 12012250
+    }
+  ],
+  "external": [
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-14-reviewer-1",
+      "model": null,
+      "tokens": {
+        "input": 101425,
+        "output": 12597,
+        "cacheRead": 1243648,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 351758,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-14-reviewer-2",
+      "model": null,
+      "tokens": {
+        "input": 109637,
+        "output": 15086,
+        "cacheRead": 1511936,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 475869,
+      "exit": 0
+    },
+    {
+      "provider": "codex",
+      "runId": "codex-T-MG-14-reviewer-3",
+      "model": null,
+      "tokens": {
+        "input": 74895,
+        "output": 12362,
+        "cacheRead": 988928,
+        "cacheWrite": 0
+      },
+      "tokensReason": null,
+      "costMicroUsd": null,
+      "wallMs": 356047,
+      "exit": 0
+    }
+  ],
+  "rounds": 2,
+  "gates": null,
+  "defectsBeforeMerge": null,
+  "processOverhead": {
+    "wrapperTokens": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "hookInjectedChars": null
+  },
+  "priceTable": "2026-10-15",
+  "source": "transcripts@2.1.318",
+  "partial": false
+}

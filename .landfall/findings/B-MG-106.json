@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "B-MG-106",
+  "status": "open",
+  "task": "T-MG-14",
+  "round": 3,
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "finding": "F6",
+  "severity": "blocking",
+  "path": "integrations/claude-code-plugin/lib/wake.mjs",
+  "line": 501,
+  "rule": "REV-2",
+  "text": "The narrowed tools remove conversation reads. In-memory channel/feed repro for existing DM 41: tools/list=[reply,mark_read], read_messages returns -32602, and the fresh feed starts at 41 with delivered=[]. Text beyond the 400-character wake preview is absent from both prompt and hook summary. The wake therefore cannot read the conversation its prompt requires. Add a principal-checked read tool or fetch sufficient verified context before spawning, with a regression test.",
+  "filedAt": "2026-11-04T03:23:42.067Z",
+  "filedBy": "MG",
+  "takenBy": null,
+  "closedAt": null,
+  "closedBy": null,
+  "reason": null
+}

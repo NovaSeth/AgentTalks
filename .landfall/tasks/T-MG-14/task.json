@@ -13,8 +13,8 @@
       "at": "2026-11-04T02:14:31.594Z"
     }
   ],
-  "status": "fix-round",
-  "round": 1,
+  "status": "done",
+  "round": 2,
   "events": [
     {
       "at": "2026-11-04T02:14:24.683Z",
@@ -80,6 +80,116 @@
         "round": 1,
         "addressed": 0,
         "open": 3
+      }
+    },
+    {
+      "at": "2026-11-04T02:55:59.435Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T02:55:59.608Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 3,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T03:04:24.927Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T03:04:25.150Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 0,
+        "open": 2
+      }
+    },
+    {
+      "at": "2026-11-04T03:17:00.071Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T03:17:00.244Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 2,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T03:23:41.630Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 3,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T03:24:35.434Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "files-over",
+          "loc-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T03:24:35.434Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "baseline-shrunk",
+        "head": "abac1050ee7a1cd97d23dede1fbe6c7f124e358f",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T03:25:52.403Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "abac1050ee7a1cd97d23dede1fbe6c7f124e358f",
+        "class": "critical",
+        "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T03:26:33.718Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "abac1050ee7a1cd97d23dede1fbe6c7f124e358f"
       }
     }
   ],
