@@ -346,8 +346,21 @@
       "data": {
         "head": "a193c2e763417e7e22dcb8bb5598424aea1173e8"
       }
+    },
+    {
+      "at": "2026-11-04T09:20:24.836Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "d5c86cd9cc3df91cc36fdbb8857577b73d873353",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "d3a16412a1af3fd11b38b90a860082f4529582ce"
+      }
     }
   ],
   "base": "19920b832d29fb56f8882672d12901558c7005b1",
-  "branch": "task/T-MG-3-slack-primer-ui"
+  "branch": "task/T-MG-3-slack-primer-ui",
+  "mergedAt": "2026-11-04T09:20:24.836Z"
 }
