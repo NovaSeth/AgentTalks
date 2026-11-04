@@ -130,7 +130,9 @@ if (mode === "standby") {
 
 const resumed = loadState();
 // Taking over from the channel: resume where IT stopped, not from an older monitor cursor.
-if (handover && handover.lastEventId !== null) {
+// A null event cursor with a mention cursor is real delivered state too (the channel stopped
+// before its stream floor was safe to report, codex r4 F10).
+if (handover && (handover.lastEventId !== null || handover.mentionCursor !== null)) {
   resumed.lastEventId = handover.lastEventId;
   resumed.mentionCursor = handover.mentionCursor;
 }
