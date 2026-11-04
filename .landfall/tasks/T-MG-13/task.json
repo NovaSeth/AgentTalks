@@ -90,8 +90,21 @@
       "data": {
         "head": "b23191fec7ac07c69742a7652c8c56f289e7c523"
       }
+    },
+    {
+      "at": "2026-11-04T00:52:25.178Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "486daa63a50c668532a6714dab107201b774c91f",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "4a6f3dbe6a4de460f357dc0c7ac98037a5ca3905"
+      }
     }
   ],
   "base": "76515ba38c574d623f9d297c5c48b37c1c9c3b34",
-  "branch": "task/T-MG-13-gate-r5-fixes"
+  "branch": "task/T-MG-13-gate-r5-fixes",
+  "mergedAt": "2026-11-04T00:52:25.178Z"
 }
