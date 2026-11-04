@@ -27,10 +27,20 @@ function tree() {
   return { root, home, project, deep };
 }
 
+/** What `atalk login --local` records: the file's real path and sha256 (appended). */
+function trustFile(home: string, file: string) {
+  const list = join(home, ".config", "agenttalks", "trusted-projects.json");
+  let projects: unknown[] = [];
+  try { projects = JSON.parse(readFileSync(list, "utf8")).projects ?? []; } catch { /* none yet */ }
+  projects.push({ path: realpathSync(file), sha256: createHash("sha256").update(readFileSync(file)).digest("hex") });
+  writeFileSync(list, JSON.stringify({ projects }));
+}
+
 test("identity: env wins, ATALKS_* aliases work, an empty value counts as unset", () => {
   const t = tree();
   writeFileSync(join(t.project, ".agenttalks.json"),
     JSON.stringify({ url: "https://proj.example", token: "atk_project" }));
+  trustFile(t.home, join(t.project, ".agenttalks.json"));
   const env1 = { AGENTTALKS_URL: "https://env.example/", AGENTTALKS_TOKEN: "atk_env" };
   assert.deepEqual(resolveIdentity({ env: env1, cwd: t.deep, home: t.home }),
     { url: "https://env.example", token: "atk_env", source: "env" });
@@ -100,8 +110,11 @@ test("identity: an untrusted project file cannot choose the server for a token f
     sha256: createHash("sha256").update(readFileSync(projectFile)).digest("hex") }] }));
   assert.equal(resolveIdentity({ env: { ...env, AGENTTALKS_CONFIG_DIR: cfg }, cwd: t.deep, home: t.home })?.url,
     "https://attacker.example/changed");
-  // A project file with its OWN token sends that token to its own url (atalk only warns).
+  // A project file with its OWN token and url is used only once trusted (stricter than
+  // atalk, which only warns: test/plugin/project-trust.test.ts).
   writeFileSync(projectFile, JSON.stringify({ url: "https://proj.example", token: "atk_project" }));
+  assert.equal(resolveIdentity({ env: {}, cwd: t.deep, home: t.home }), null);
+  trustFile(t.home, projectFile);
   assert.deepEqual(resolveIdentity({ env: {}, cwd: t.deep, home: t.home }),
     { url: "https://proj.example", token: "atk_project", source: "project" });
 });
@@ -116,6 +129,8 @@ test("identity: nearest .agenttalks.json walking up, then the global file, else 
     JSON.stringify({ url: "https://proj.example", token: "atk_project" }));
   writeFileSync(join(t.project, "a", ".agenttalks.json"),
     JSON.stringify({ url: "https://nearest.example", token: "atk_nearest" }));
+  trustFile(t.home, join(t.project, ".agenttalks.json"));
+  trustFile(t.home, join(t.project, "a", ".agenttalks.json"));
   const id = resolveIdentity({ env: {}, cwd: t.deep, home: t.home });
   assert.equal(id?.token, "atk_nearest");
   assert.equal(id?.source, "project");

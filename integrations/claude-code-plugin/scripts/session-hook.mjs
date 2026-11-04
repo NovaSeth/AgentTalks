@@ -90,7 +90,20 @@ async function main() {
   const input = await readInput();
   const claudeSession = typeof input.session_id === "string" ? input.session_id : "";
   const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
-  const identity = resolveIdentity({ cwd, report: (/** @type {string} */ r) => process.stderr.write(`[agenttalks-hook] ${r}\n`) });
+  /** @type {string | null} */
+  let notice = null;
+  const identity = resolveIdentity({ cwd, report: (/** @type {string} */ r) => {
+    notice = r;
+    process.stderr.write(`[agenttalks-hook] ${r}\n`);
+  } });
+  if (!identity && notice && mode === "start") {
+    // An untrusted project file: nothing connects, nothing is recorded for the wake bridge;
+    // the session learns why in ONE line.
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: notice },
+    }) + "\n");
+    return;
+  }
   if (!identity || !claudeSession) return;
   const sessionId = deriveSessionId(claudeSession);
 

@@ -9,7 +9,12 @@
  *      their OWN names: an option left empty is substituted as "", and under the shared names
  *      that "" would overwrite the AGENTTALKS_* the session inherited before this code ran.
  *   1. AGENTTALKS_URL / AGENTTALKS_TOKEN (ATALKS_* aliases). An EMPTY value counts as unset.
- *   2. the nearest `.agenttalks.json`, walking up from the session's cwd,
+ *   2. the nearest `.agenttalks.json`, walking up from the session's cwd - ONLY when the user
+ *      vouched for it with `atalk login --local` (isTrustedProject). A cloned repository can
+ *      ship one with its own token and url, which would attach the agent's live channel to a
+ *      foreign server; an untrusted project file that would supply the token or the url makes
+ *      resolveIdentity return null and report untrustedProjectNotice (stricter than atalk,
+ *      which only refuses a mixed identity),
  *   3. `~/.config/agenttalks/atalk.json`.
  *
  * The token is returned to the caller and goes into an Authorization header only. Nothing
@@ -115,12 +120,13 @@ export function resolveIdentity(opts = {}) {
 
   const token = envToken ?? storedToken;
   if (!token) return null;
-  // Fail closed, as atalk does: a project file nobody vouched for (a cloned repository, say)
-  // must not choose the server that receives a token that came from elsewhere.
-  if (envToken && !envUrl && storedSource === "project" && storedUrl && storedPath
-      && !isTrustedProject(storedPath, env, home)) {
-    report(`the project file ${storedPath} is not trusted, so its url is not used with the token from the environment; `
-      + "run `atalk login --local` in that directory (if you wrote it) or set AGENTTALKS_URL");
+  // Fail closed: a project file nobody vouched for (a cloned repository, say) supplies
+  // nothing - neither the server nor the token. An identity wholly from the environment (or
+  // the plugin options) does not use the file, and the global file is not a project file.
+  const usesProject = storedSource === "project" && storedPath
+    && ((!envToken && storedToken) || (!envUrl && storedUrl));
+  if (usesProject && storedPath && !isTrustedProject(storedPath, env, home)) {
+    report(untrustedProjectNotice(storedPath));
     return null;
   }
   const url = (envUrl ?? storedUrl ?? DEFAULT_URL).replace(/\/+$/, "");
@@ -130,4 +136,14 @@ export function resolveIdentity(opts = {}) {
 /** A log-safe description: never the token. @param {Identity | null} id */
 export function describeIdentity(id) {
   return id ? `${id.url} (token from ${id.source})` : "no AgentTalks identity found";
+}
+
+/** The one line every entry point shows when a project file it would use is not trusted:
+ *  what is wrong and how to fix it. Control characters in the path are dropped, so a
+ *  crafted directory name cannot add lines to the session context.
+ *  @param {string} path */
+export function untrustedProjectNotice(path) {
+  const safe = (/** @type {string} */ s) => s.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "?");
+  return `AgentTalks is not connected: the project identity file ${safe(path)} is not trusted. `
+    + `If you wrote it, run \`atalk login --local\` in ${safe(dirname(path))} to trust it.`;
 }

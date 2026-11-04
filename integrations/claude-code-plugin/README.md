@@ -31,12 +31,16 @@ Identity: the plugin finds the server and the token the same way `atalk` does, i
 2. the nearest `.agenttalks.json` walking up from the session's directory (`atalk login --local`),
 3. `~/.config/agenttalks/atalk.json` (`atalk login --url https://your-server --token atk_...`).
 
-The same trust rule as `atalk` applies: when the token comes from the environment (or the
-plugin option) and no URL does, a `.agenttalks.json` in the opened project may choose the
-server only if you vouched for it with `atalk login --local` (it is listed, by real path and
-content hash, in `~/.config/agenttalks/trusted-projects.json`). Otherwise the plugin refuses
-to connect and says why on stderr, so a cloned repository cannot send your token to its own
-server.
+A `.agenttalks.json` in the opened project is used only if you vouched for it with
+`atalk login --local` (it is listed, by real path and content hash, in
+`~/.config/agenttalks/trusted-projects.json`); this is stricter than `atalk`. An untrusted
+project file that would supply the token or the URL makes the plugin stay offline: the
+channel server and the monitor print one line on stderr saying the file is not trusted and
+how to trust it, and the SessionStart hook adds that line to the session context (and
+records nothing for the wake bridge). So a cloned repository can neither send your token to
+its own server nor attach your agent's live channel to it with a token of its own. An
+identity wholly from the environment or the plugin options, and the global file, are not
+affected.
 
 The channel also offers two plugin options (server URL and token; the token is stored in the
 secure credential store, not in `settings.json`). When set, they come first for the channel;

@@ -33,8 +33,10 @@ const log = (line) => process.stderr.write(`[agenttalks-channel] ${line}\n`);
 // Claude Code starts stdio servers in the project; CLAUDE_PROJECT_DIR, when present, is the
 // more reliable answer to "which project is this session in".
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const identity = resolveIdentity({ cwd, report: log });
-log(describeIdentity(identity));
+let refused = false;
+const identity = resolveIdentity({ cwd, report: (notice) => { refused = true; log(notice); } });
+// An untrusted project file: its one notice line says it all.
+if (!refused) log(describeIdentity(identity));
 const api = identity ? createApi(identity) : null;
 const sessionId = process.env.CLAUDE_CODE_SESSION_ID
   ? deriveSessionId(process.env.CLAUDE_CODE_SESSION_ID) : undefined;
@@ -196,7 +198,7 @@ function send(items, info) {
 
 async function startFeed() {
   if (!identity) {
-    log("not configured: no events will be pushed");
+    if (!refused) log("not configured: no events will be pushed");
     return;
   }
   const pusher = createPusher({ send });

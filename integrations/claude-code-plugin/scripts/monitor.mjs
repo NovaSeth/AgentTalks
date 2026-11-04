@@ -46,9 +46,11 @@ function parseArgs(argv) {
 
 const { maxSeconds, stateDir } = parseArgs(process.argv.slice(2));
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const identity = resolveIdentity({ cwd, report: log });
+let refused = false;
+const identity = resolveIdentity({ cwd, report: (notice) => { refused = true; log(notice); } });
 if (!identity) {
-  log("no AgentTalks identity (AGENTTALKS_TOKEN, .agenttalks.json or ~/.config/agenttalks/atalk.json): nothing to watch");
+  // An untrusted project file: its one notice line (already printed) says it all.
+  if (!refused) log("no AgentTalks identity (AGENTTALKS_TOKEN, .agenttalks.json or ~/.config/agenttalks/atalk.json): nothing to watch");
   process.exit(0);
 }
 log(describeIdentity(identity));
