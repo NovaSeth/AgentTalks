@@ -22,6 +22,8 @@ export type FakeAt = {
   conversations: Route;
   /** GET /api/me body override (default: the actor, no conversations, nothing unread). */
   meBody?: unknown;
+  /** GET /api/me status override (default 200); a non-2xx answers `{ error }` instead of the actor. */
+  meStatus?: number;
   /** GET /api/messages/:root/thread by root id; a missing root answers 404. */
   threads: Map<number, Route>;
   /** Every message ever emitted, in order: the replay source. */
@@ -90,6 +92,9 @@ export async function fakeAt(opts: { me?: { id: number; handle: string } } = {})
       return;
     }
     if (url.pathname === "/api/me") {
+      if (fake.meStatus !== undefined && (fake.meStatus < 200 || fake.meStatus > 299)) {
+        return sendJson(res, { status: fake.meStatus, body: { error: "rejected" } });
+      }
       return sendJson(res, { status: 200, body: fake.meBody ?? { actor: me, conversations: [], unread: [] } });
     }
     if (url.pathname === "/api/conversations") {
