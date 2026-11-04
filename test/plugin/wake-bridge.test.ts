@@ -8,7 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
@@ -17,7 +17,7 @@ import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { signWake } from "../../src/core/wake.ts";
 import { createWakeBridge, listenHost, spawnRunner, DEFAULT_ALLOWED_TOOLS, checkWakeConfig } from "../../integrations/claude-code-plugin/lib/wake.mjs";
-import { recordSession } from "../../integrations/claude-code-plugin/lib/sessions.mjs";
+import { pruneSessions, recordSession, SESSION_TTL_MS } from "../../integrations/claude-code-plugin/lib/sessions.mjs";
 
 const BIN = fileURLToPath(new URL("../../integrations/claude-code-plugin/bin/agenttalks-wake-bridge.mjs", import.meta.url));
 const SECRET = "fake-secret-for-tests"; // SYNTH: a synthetic test value, not a credential
@@ -355,4 +355,53 @@ test("wake bridge: the default allowed tools cover this plugin's own tools and t
   for (const tool of ["Bash", "Edit", "Write", "WebFetch", "mcp__github__create_issue", "mcp__plugin_other_agenttalks__reply"]) {
     assert.ok(!ruleMatches(DEFAULT_ALLOWED_TOOLS, tool), `${tool} must not be allowed`);
   }
+});
+
+test("wake bridge: a wake that lands while a pruner holds a refreshed record as its tombstone still wakes the session (codex r4 F11)", async (t) => {
+  const store = mkdtempSync(join(tmpdir(), "at-plugin-wtomb-"));
+  const project = mkdtempSync(join(tmpdir(), "at-plugin-wproj-"));
+  const rec = { sessionId: SESSION, cwd: project, handle: "nestor", url: "https://at.example" };
+  // A stale record (written in place: recordSession would prune it at once).
+  recordSession(store, { ...rec, updatedAt: Date.now() });
+  const [name] = readdirSync(store);
+  writeFileSync(join(store, name), JSON.stringify({ ...rec, updatedAt: Date.now() - SESSION_TTL_MS - 60_000 }) + "\n");
+  // The pruner reads the record as stale; a SessionStart hook refreshes it (afterSelect); the
+  // pruner claims the name, so the FRESH record sits in its tombstone (afterClaim). What a
+  // reader sees at that instant is frozen into a copy the bridge reads.
+  const window = mkdtempSync(join(tmpdir(), "at-plugin-wwin-"));
+  pruneSessions(store, { hooks: {
+    afterSelect: () => recordSession(store, { ...rec, updatedAt: Date.now() }),
+    afterClaim: () => cpSync(store, window, { recursive: true }),
+  } });
+  assert.ok(readdirSync(window).some((f) => f.endsWith(".tomb")), "the copy holds the claimed record");
+  const b = await bridge(t, () => NOW, { records: [], extra: { sessionsDir: window } });
+  const body = legacyBody({ exp: NOW + 300, nonce: "0f1e2d3c4b5a69788796a5b4c3d2e1f0" });
+  const res = await b.send(body);
+  assert.equal(res.status, 202);
+  assert.deepEqual(await res.json(), { ok: true, woke: true });
+  assert.equal(b.calls.length, 1);
+  assert.equal(b.calls[0].argv[2], SESSION);
+});
+
+test("wake bridge: a woke:false answer does not use up the nonce - the retry after the session appears wakes it; a replay of a successful wake is still 409 (codex r4 F11)", async (t) => {
+  const b = await bridge(t, () => NOW, { records: [] });
+  const body = legacyBody({ exp: NOW + 300, nonce: "aa11bb22cc33dd44ee55ff6600778899" });
+  const first = await b.send(body);
+  assert.equal(first.status, 202);
+  assert.deepEqual(await first.json(), { ok: true, woke: false, reason: "no recorded session" });
+  recordSession(b.file, { sessionId: SESSION, cwd: b.project, handle: "nestor", url: "https://at.example", updatedAt: Date.now() });
+  const retry = await b.send(body);
+  assert.equal(retry.status, 202, "the sender's retry is not a replay");
+  assert.deepEqual(await retry.json(), { ok: true, woke: true });
+  assert.equal(b.calls.length, 1);
+  const replay = await b.send(body);
+  assert.equal(replay.status, 409);
+  assert.equal(b.calls.length, 1);
+  // A body without a nonce (its hash is the key) behaves the same.
+  const legacy = legacyBody({ messageId: 77 });
+  const b2 = await bridge(t, () => NOW, { records: [] });
+  assert.equal(((await (await b2.send(legacy)).json()) as any).woke, false);
+  recordSession(b2.file, { sessionId: SESSION, cwd: b2.project, handle: "nestor", url: "https://at.example", updatedAt: Date.now() });
+  assert.equal(((await (await b2.send(legacy)).json()) as any).woke, true);
+  assert.equal((await b2.send(legacy)).status, 409);
 });

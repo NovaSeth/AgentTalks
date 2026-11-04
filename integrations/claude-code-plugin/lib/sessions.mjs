@@ -51,21 +51,35 @@ function recordName(sessionId) {
   return createHash("sha256").update(sessionId).digest("hex").slice(0, 32) + ".json";
 }
 
-/** Every record in the store, newest first. A corrupt or foreign file is skipped.
- *  @param {string} dir @returns {SessionRecord[]} */
-export function readSessions(dir) {
+/** Every record in the store, newest first, one per session. A corrupt or foreign file is
+ *  skipped.
+ *
+ *  A record a pruner has claimed (its tombstone, pruneSessions) still counts while its
+ *  CONTENT is fresh: a SessionStart refresh can land between the pruner's "stale" read and
+ *  its claim, and until the pruner puts the record back a reader would otherwise see no
+ *  session at all (codex r4 F11). A stale tombstone is on its way out and is not shown.
+ *  @param {string} dir @param {{ now?: () => number, ttlMs?: number }} [opts]
+ *  @returns {SessionRecord[]} */
+export function readSessions(dir, opts = {}) {
+  const now = opts.now ?? Date.now;
+  const ttl = opts.ttlMs ?? SESSION_TTL_MS;
   let names;
   try { names = readdirSync(dir); } catch { return []; }
-  /** @type {SessionRecord[]} */
-  const out = [];
+  /** @type {Map<string, SessionRecord>} */
+  const bySession = new Map();
   for (const name of names) {
-    if (!RECORD_FILE.test(name)) continue;
+    const tomb = TOMB_FILE.exec(name);
+    const base = tomb ? tomb[1] : RECORD_FILE.test(name) ? name : null;
+    if (!base) continue;
     try {
       const v = JSON.parse(readFileSync(join(dir, name), "utf8"));
-      if (isRecord(v) && recordName(v.sessionId) === name) out.push(v);
-    } catch { /* being replaced right now, or corrupt: skip */ }
+      if (!isRecord(v) || recordName(v.sessionId) !== base) continue;
+      if (tomb && now() - v.updatedAt > ttl) continue;
+      const had = bySession.get(v.sessionId);
+      if (!had || v.updatedAt > had.updatedAt) bySession.set(v.sessionId, v);
+    } catch { /* being replaced or settled right now, or corrupt: skip */ }
   }
-  return out.sort((a, b) => b.updatedAt - a.updatedAt);
+  return [...bySession.values()].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /** Writes the session's own file atomically (a temp file in the same directory, then rename)
@@ -104,8 +118,8 @@ function alive(pid) {
  *      still newer record took the name meanwhile (that one wins); then drop the tombstone.
  * A pruner that dies between 1 and 2 leaves a tombstone whose owner pid is gone: every prune
  * settles such orphans the same way first, so a fresh record held by a dead pruner returns
- * at the next SessionStart. The cost: for the microseconds between claim and link a reader
- * does not see a record that is being put back (the bridge then answers woke:false once).
+ * at the next SessionStart. Readers (readSessions) count a fresh tombstone as present, so
+ * the record does not vanish for them between claim and link (codex r4 F11).
  * @param {string} dir
  * @param {{ now?: () => number, ttlMs?: number,
  *   hooks?: { afterSelect?: () => void, afterClaim?: () => void } }} [opts]

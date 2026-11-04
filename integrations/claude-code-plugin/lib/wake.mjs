@@ -13,7 +13,8 @@
  *      not be absurdly far ahead; a body without `exp` (the current server) must carry a
  *      `ts` at most 10 minutes old (401),
  *   4. replay: the `nonce`, or for a body without one the SHA-256 of the body, must not have
- *      been seen while the body could still be fresh (409).
+ *      woken a session already while the body could still be fresh (409). Only a knock that
+ *      wakes a session is recorded: a woke:false answer leaves the retry open.
  *
  * Spawning: an argv array without a shell (`shell: false`), so nothing in the body can
  * become shell syntax; the prompt is one argument after a `--` separator (`--tools` and
@@ -370,8 +371,9 @@ export function createWakeBridge(opts) {
         log("rejected: replay");
         return reply(res, 409, { error: "replay" });
       }
-      seen.set(key, keepUntil);
-      saveReplay();
+      // The knock is recorded only once it wakes a session (below): a woke:false answer
+      // consumes nothing, so the sender's retry can still wake it (codex r4 F11). Between
+      // this check and the record nothing awaits, so two copies cannot both pass.
 
       // Only a session recorded for the server that holds this secret (every secret has one:
       // checked at construction), compared in normalized form.
@@ -390,6 +392,8 @@ export function createWakeBridge(opts) {
       }
       const argv = ["-p", "--resume", rec.sessionId, "--permission-mode", "dontAsk",
         "--tools", "", "--allowedTools", allowedTools, "--", wakePrompt(body)];
+      seen.set(key, keepUntil);
+      saveReplay();
       running.add(rec.sessionId);
       log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
       void runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd, env: wakeEnv(opts.env ?? process.env) })
