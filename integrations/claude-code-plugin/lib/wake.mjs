@@ -16,10 +16,21 @@
  *      been seen while the body could still be fresh (409).
  *
  * Spawning: an argv array without a shell (`shell: false`), so nothing in the body can
- * become shell syntax; the prompt is one argument and never starts with "-". The session
- * runs under `--permission-mode dontAsk` with `--allowedTools` limited to AgentTalks tools:
- * a woken model works with text anyone in the conversation could have written, so it gets
- * no shell, no file edits, and no prompt that could wait forever for an absent human.
+ * become shell syntax; the prompt is one argument after a `--` separator (`--tools` and
+ * `--allowedTools` take a variable number of values and would otherwise swallow it) and
+ * never starts with "-".
+ *
+ * What the woken model may use. It works with text anyone in the conversation could have
+ * written, so:
+ *   - `--tools ""` removes EVERY built-in tool (Bash, Edit, Write, Read, WebFetch...). This
+ *     matters because `--permission-mode dontAsk` alone only denies what would PROMPT: it
+ *     still runs file reads, read-only shell commands and anything a `permissions.allow` rule
+ *     in the resumed session's user/project/local settings pre-approves (allow lists merge
+ *     across scopes, so `--settings` cannot empty them).
+ *   - `--allowedTools` pre-approves only the AgentTalks tools; under dontAsk every other MCP
+ *     tool call is denied instead of waiting for an absent human.
+ * Residual: an MCP tool of ANOTHER server that the user's own settings pre-approve (an allow
+ * rule such as `mcp__github__*`) stays callable; hooks and installed mods still run.
  */
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -263,7 +274,7 @@ export function createWakeBridge(opts) {
         return reply(res, 202, { ok: true, woke: false, reason: "a resumed run is still in progress" });
       }
       const argv = ["-p", "--resume", rec.sessionId, "--permission-mode", "dontAsk",
-        "--allowedTools", allowedTools, wakePrompt(body)];
+        "--tools", "", "--allowedTools", allowedTools, "--", wakePrompt(body)];
       running.add(rec.sessionId);
       log(`waking @${safeLabel(body.actor)} (session ${rec.sessionId.slice(0, 8)})`);
       void runner(opts.claudeBin ?? "claude", argv, { cwd: rec.cwd })
