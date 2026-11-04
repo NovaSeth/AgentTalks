@@ -7,7 +7,7 @@
   "owner": "MG",
   "class": null,
   "classHistory": [],
-  "status": "new",
+  "status": "cancelled",
   "round": 0,
   "events": [
     {
@@ -15,6 +15,14 @@
       "by": "MG",
       "event": "created",
       "data": {}
+    },
+    {
+      "at": "2026-11-04T16:24:24.902Z",
+      "by": "MG",
+      "event": "cancelled",
+      "data": {
+        "reason": "Handed over to the main Landfall session at Michal's request (2026-11-04); it recreates the task in its own state"
+      }
     }
   ],
   "base": null,
