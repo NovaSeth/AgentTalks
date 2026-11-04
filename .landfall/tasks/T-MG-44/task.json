@@ -1,0 +1,60 @@
+{
+  "schema": 2,
+  "id": "T-MG-44",
+  "kind": "task",
+  "title": "Web UI unread highlights like Slack (only after absence, fade after read)",
+  "lane": null,
+  "owner": "MG",
+  "class": "standard",
+  "classHistory": [
+    {
+      "class": "standard",
+      "reason": "standard: 5 files > 2; 150 LOC > 30",
+      "at": "2026-11-04T19:40:13.367Z"
+    }
+  ],
+  "status": "dispatched",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T19:40:09.407Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    },
+    {
+      "at": "2026-11-04T19:40:13.367Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "standard",
+        "keys": [
+          "files-over-trivial",
+          "loc-over-trivial"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T19:40:14.138Z",
+      "by": "MG",
+      "event": "started",
+      "data": {
+        "branch": "task/T-MG-44-unread-highlight",
+        "base": "550d269269d01a638a3eff95cc7c61d612c8025c",
+        "worktree": "/Users/michal/Documents/Code/AgentTalks-wt/T-MG-44"
+      }
+    },
+    {
+      "at": "2026-11-04T19:40:34.443Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "landfall:implementer",
+        "base": "550d269269d0",
+        "note": "brief: scratchpad/T-MG-44-brief.md (copy of the hand-written brief)"
+      }
+    }
+  ],
+  "base": "550d269269d01a638a3eff95cc7c61d612c8025c",
+  "branch": "task/T-MG-44-unread-highlight"
+}
