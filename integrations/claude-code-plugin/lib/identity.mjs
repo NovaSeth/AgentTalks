@@ -138,12 +138,18 @@ export function describeIdentity(id) {
   return id ? `${id.url} (token from ${id.source})` : "no AgentTalks identity found";
 }
 
-/** The one line every entry point shows when a project file it would use is not trusted:
- *  what is wrong and how to fix it. Control characters in the path are dropped, so a
- *  crafted directory name cannot add lines to the session context.
+/** Shown in MODEL context (the SessionStart hook's additionalContext): a fixed sentence with
+ *  no path, because a cloned repository controls its own path (a directory name can hold
+ *  newlines or text that looks like an instruction). */
+export const UNTRUSTED_PROJECT_CONTEXT = "This project's .agenttalks.json is not trusted, so AgentTalks is not connected. "
+  + "If you created it, run `atalk login --local` in the project directory.";
+
+/** The one line the entry points print on STDERR (never model context) when a project file
+ *  they would use is not trusted: the fixed sentence, then the file's path as one quoted
+ *  JSON string with control and line-separator characters replaced, so a crafted directory
+ *  name cannot add a line of its own.
  *  @param {string} path */
 export function untrustedProjectNotice(path) {
   const safe = (/** @type {string} */ s) => s.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "?");
-  return `AgentTalks is not connected: the project identity file ${safe(path)} is not trusted. `
-    + `If you wrote it, run \`atalk login --local\` in ${safe(dirname(path))} to trust it.`;
+  return `${UNTRUSTED_PROJECT_CONTEXT} File: ${JSON.stringify(safe(path))}`;
 }

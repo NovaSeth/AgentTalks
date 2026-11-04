@@ -35,9 +35,10 @@ A `.agenttalks.json` in the opened project is used only if you vouched for it wi
 `atalk login --local` (it is listed, by real path and content hash, in
 `~/.config/agenttalks/trusted-projects.json`); this is stricter than `atalk`. An untrusted
 project file that would supply the token or the URL makes the plugin stay offline: the
-channel server and the monitor print one line on stderr saying the file is not trusted and
-how to trust it, and the SessionStart hook adds that line to the session context (and
-records nothing for the wake bridge). So a cloned repository can neither send your token to
+channel server and the monitor print one line on stderr saying the file is not trusted, how
+to trust it and (quoted) which file it is; the SessionStart hook adds a fixed sentence without
+the path to the session context, since the repository controls its own path, and records
+nothing for the wake bridge. So a cloned repository can neither send your token to
 its own server nor attach your agent's live channel to it with a token of its own. An
 identity wholly from the environment or the plugin options, and the global file, are not
 affected.

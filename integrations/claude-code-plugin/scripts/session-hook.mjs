@@ -16,7 +16,7 @@
  */
 import { hostname } from "node:os";
 import { basename } from "node:path";
-import { resolveIdentity } from "../lib/identity.mjs";
+import { resolveIdentity, UNTRUSTED_PROJECT_CONTEXT } from "../lib/identity.mjs";
 import { createApi } from "../lib/api.mjs";
 import { PREAMBLE, header, quoteBody, safeLabel } from "../lib/frame.mjs";
 import { deriveSessionId, recordSession, sessionsDir } from "../lib/sessions.mjs";
@@ -90,17 +90,17 @@ async function main() {
   const input = await readInput();
   const claudeSession = typeof input.session_id === "string" ? input.session_id : "";
   const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
-  /** @type {string | null} */
-  let notice = null;
+  let refused = false;
   const identity = resolveIdentity({ cwd, report: (/** @type {string} */ r) => {
-    notice = r;
+    refused = true;
     process.stderr.write(`[agenttalks-hook] ${r}\n`);
   } });
-  if (!identity && notice && mode === "start") {
+  if (!identity && refused && mode === "start") {
     // An untrusted project file: nothing connects, nothing is recorded for the wake bridge;
-    // the session learns why in ONE line.
+    // the session learns why in ONE fixed line - never the path, which the repository
+    // controls (the path goes to stderr only).
     process.stdout.write(JSON.stringify({
-      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: notice },
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: UNTRUSTED_PROJECT_CONTEXT },
     }) + "\n");
     return;
   }
