@@ -1,0 +1,4 @@
+# T-MG-3 spec (pointer)
+The full spec lives in the repository: docs/superpowers/specs/2026-11-04-ui-slack-parity.md (commit 6d0f50d on main, written by landfall:designer on fable from the live UX review T-MG-1 G1-UX).
+Summary: option A (evolve the vanilla ES modules, no framework, no build step), hash routing (#/c/<slug>/m/<id>), side panel as a grid column at >= 1280 px; 15 vertical slices: P0 S0-S7 (scaffolding, collapsible sidebar + rail, side-panel column, routing + permalinks + thread deep links, composer parity, slash commands + reports, people/profiles/picker, counters), P1 S8-S11 (shortcuts, mobile, threads view, search filters), P2 S12-S14 (polish). Brand-copy guard: interaction model only, no Slack name/logo/colors/strings in product or code.
+Starts after T-MG-2 (English renames); uses the new module names from tasks/T-MG-2/vocabulary.md. Backlog findings to close with it: B-MG-40, B-MG-68..B-MG-85, B-MG-97, B-MG-98 (T-MG-8 review minors).

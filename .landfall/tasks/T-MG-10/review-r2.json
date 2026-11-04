@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "verdict": "approved",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F7",
+      "severity": "minor",
+      "path": "integrations/claude-code/hooks/atalk-hook.sh",
+      "line": 68,
+      "rule": "OWA-10",
+      "text": "Low: when mktemp fails, ERRF becomes /dev/null, but the EXIT trap still deletes it. A privileged hook can therefore remove /dev/null. Read-only reproduction with mktemp returning 1 and rm replaced by a logging function printed 'cleanup command: rm -f /dev/null'. Install the cleanup trap only after successful temporary-file creation, or explicitly exclude the fallback path."
+    }
+  ],
+  "run": "codex-T-MG-10-reviewer-1",
+  "sha256": "eb061ac81f404a5142f96d9f9975f64c09a37f5e27d8d8896a1fa12b0c76fd4a"
+}

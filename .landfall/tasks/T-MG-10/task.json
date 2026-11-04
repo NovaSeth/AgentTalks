@@ -13,8 +13,8 @@
       "at": "2026-11-03T23:54:02.236Z"
     }
   ],
-  "status": "dispatched",
-  "round": 0,
+  "status": "done",
+  "round": 2,
   "events": [
     {
       "at": "2026-11-03T23:54:01.911Z",
@@ -93,6 +93,94 @@
         "executor": "claude:implementer",
         "base": "903faa10aabfb3c6f0a112057fe4914d22e9d1ce",
         "note": "fix round 1 + item 13 (fresh agent, PRI-4)"
+      }
+    },
+    {
+      "at": "2026-11-04T00:27:14.376Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:27:14.591Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 1,
+        "addressed": 7,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T00:33:51.634Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 2,
+        "verdict": "approved",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:49.867Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done",
+        "round": 2
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:50.105Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 2,
+        "addressed": 1,
+        "open": 0
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:50.359Z",
+      "by": "MG",
+      "event": "self-verified",
+      "data": {
+        "round": 2,
+        "note": "REV-20: mechanical shell trap fix in the hook, not data/auth/concurrency"
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:50.601Z",
+      "by": "MG",
+      "event": "route",
+      "data": {
+        "computed": "critical",
+        "keys": [
+          "risk-path:b3be0a31f9e13857",
+          "files-over"
+        ]
+      }
+    },
+    {
+      "at": "2026-11-04T00:34:50.601Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "pass",
+        "head": "a0599f0c296273c406e0c11629fff771c004fef8",
+        "class": "critical",
+        "attempt": 1
+      }
+    },
+    {
+      "at": "2026-11-04T00:35:18.842Z",
+      "by": "MG",
+      "event": "done",
+      "data": {
+        "head": "a0599f0c296273c406e0c11629fff771c004fef8"
       }
     }
   ],

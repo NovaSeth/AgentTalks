@@ -36,3 +36,26 @@ Production must set AGENTTALKS_TRUST_PROXY=1 (behind Apache) or AGENTTALKS_BASE_
 ## Open issues
 - Item 13 pending (after T-MG-6/T-MG-7 merge).
 - Automated scan: the writtenBy marker in .agenttalks.json is self-declared and forgeable; the warning is a heuristic. Follow-up: trust list in ~/.config/agenttalks keyed by realpath + content hash, written only by `atalk login --local`.
+
+## Fix round 1 (findings-r1.md)
+<!-- Stored by the orchestrator: the implementer's harness refused the write. -->
+Status: DONE_WITH_CONCERNS
+Merge: `git merge origin/main` clean (8b0cde1); baseline after the merge 391 pass. Round commits: 52d10c0, a745315, 3b51e11, b17df32.
+- F1: wBudzecie measures the quoted line ("> " + l); 'x\n'*30000 -> <= 42 000 chars, the message names how to read the rest. Test R1-F1.
+- F2: LINE_BREAKS moved to dependency-free src/core/untrusted.ts; covers every C0 control except tab, DEL, NEL, U+2028/2029 (regex with the u flag). Test matrix over 11 tools with U+001C + helper test for six separators.
+- F3: atalk fmtMsg prints the header then the "> "-quoted body; the note once per invocation; wiki/pins/questions/labels/doing quoted or single-lined; server.ts re-exports the shared helper. Test R1-F3 (no clean RED captured: the first capture caught the runner's own frames; GREEN shows the behavior).
+- F4: `atalk login --local` records {realpath, sha256} in $AGENTTALKS_CONFIG_DIR or ~/.config/agenttalks/trusted-projects.json (0600); an untrusted/edited project file with a url is refused when the token comes from env/flags and no --url is given (one-line error); a file with its own token+url still works with a warning; the hook surfaces the first warning/error line in additionalContext, quoted. New AGENTTALKS_CONFIG_DIR override (tests). Tests R1-F4 + hook warning test.
+- F5: declared Content-Length > 1 MB -> 413 before reading; chunked bodies stop at the cap; up to 4 MB drained then destroyed within 2 s. Tests: 60 MB declared -> 413 in < 200 ms; chunked 1.5 MB -> 413.
+- F6: wiki_write echo and talk_typing target via oneLine; talk_typing echo clamps sec; every tool error message single-lined in the buildServer catch. Test R1-F6.
+- 7a: renderStatus and talk_who use presenceFor(ctx, actor.id). Test R1-7a.
+- 7b: handleMcp passes stillValid (verifyToken(...)?.id === actor.id); after a talk_read wait an invalid token yields an MCP isError result, no content. Tests R1-7b (revoked -> nothing; unrevoked -> delivers).
+Gate: npm test 403/0 (three runs); typecheck clean; secrets range: only the known SYNTH line test/http/api.test.ts:1250 in 986e5af (D-MG-8), none added.
+Outside the file list: new src/core/untrusted.ts (allowed by F3); test/fixes/t-mg-10-cli.test.ts got a temp config dir only.
+DISPUTED: none.
+
+## Fix round 2 (codex review r2, F7 minor; mechanical, by the orchestrator)
+Problem: when mktemp fails the hook falls back to ERRF=/dev/null but the EXIT trap still ran `rm -f "$ERRF"`, i.e. `rm -f /dev/null` (a privileged hook would delete the device node).
+Fix: the cleanup trap is installed only when mktemp succeeded; the /dev/null fallback has no trap.
+Test: test/fixes/t-mg-10-r2-hook.test.ts runs the hook with stub mktemp (fails) and stub rm (logs argv): RED "-f /dev/null" logged; GREEN nothing logged.
+Gate: npm test 404/0; typecheck clean.
+Status: DONE

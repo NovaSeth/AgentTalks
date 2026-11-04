@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "test/fixes/t-mg-11-guards.test.ts",
+      "line": 179,
+      "rule": "OWA-2",
+      "text": "Item 6 omits the required HTTPS-baseUrl case. Reproduction: testConfig({baseUrl:'https://example.test',trustProxy:false}), then makeCookie and makeDeviceCookie with secure=false, produces sessionSecure=false and deviceSecure=false; the required assertion fails. These cookies remain eligible for HTTP transmission. Add this regression test and implement the required Secure behavior, or obtain an explicit scope decision."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "test/fixes/t-mg-11-hardening.test.ts",
+      "line": 60,
+      "rule": "COD-2",
+      "text": "Item 8's tampered issuedAt is 219 days in the future, so rejection happens before MAC verification. Reproduction: remove only hasDeviceCookie's MAC comparison in memory and replay the seven cookie vectors; all seven retain their expected results. Thus the new signed fields lack a discriminating forgery test. Change issuedAt within the accepted window without recomputing its MAC, assert no exemption, and prove that removing the MAC check fails that test."
+    }
+  ],
+  "run": "codex-T-MG-11-reviewer-1",
+  "sha256": "4cafcdaed876fc20bf94e386465e3030b79af49ae912a4ac6aecac60c66409ba"
+}
