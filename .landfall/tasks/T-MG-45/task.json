@@ -1,0 +1,22 @@
+{
+  "schema": 2,
+  "id": "T-MG-45",
+  "kind": "task",
+  "title": "Plugin wake tools: a total framed-output budget with a cursor, like the T-MG-40 channel tools",
+  "lane": null,
+  "owner": "MG",
+  "class": null,
+  "classHistory": [],
+  "status": "new",
+  "round": 0,
+  "events": [
+    {
+      "at": "2026-11-04T19:58:13.142Z",
+      "by": "MG",
+      "event": "created",
+      "data": {}
+    }
+  ],
+  "base": null,
+  "branch": null
+}

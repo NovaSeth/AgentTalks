@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "verdict": "needs-fixes",
+  "reviewer": {
+    "kind": "external",
+    "id": "codex:reviewer"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/tools.mjs",
+      "line": 358,
+      "rule": "OWA-6",
+      "text": "wiki_read marks a page seen before truncating it, permitting blind replacement. Repro: an in-memory real-route probe with a 60,000-character body and 200-character title returned tailVisible=false, truncated=true, writeAccepted=true; growth between the two GETs did too. Budget the complete framed result and authorize writes only for a fully delivered, unchanged revision. Add boundary and race tests."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/tools.mjs",
+      "line": 377,
+      "rule": "OWA-6",
+      "text": "base_revision bypasses the promised full-read safeguard: the server accepts a matching revision without checking its read marker. Repro: the in-memory real-route probe read only a 70,004-character page's outline, then wrote using its returned revision: fullGETs=0, withoutBaseRejected=true, withBaseAccepted=true. Require proof that the complete revision was delivered before forwarding base_revision; test outline and section reads followed by writes."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "path": "integrations/claude-code-plugin/lib/tools.mjs",
+      "line": 122,
+      "rule": "LLM-10",
+      "text": "Message framing caps individual bodies but never the total result; read_thread also has no message-count limit. Repro: calling read_thread({message_id:1}) with 50 valid 60,000-character fixture messages returned 3,001,989 characters, truncated=false, isError=false. This permits other actors to exhaust context or cause the client to reject the result. Enforce a total framed-output budget with pagination/continuation and regression tests."
+    },
+    {
+      "id": "F4",
+      "severity": "blocking",
+      "path": "test/plugin/full-api.test.ts",
+      "line": 17,
+      "rule": "ORC-2",
+      "text": "Acceptance 5 is unmet: tests replace the mandated fake-at.ts helper with startTestServer despite the explicit NEEDS_CONTEXT requirement for missing endpoints. Repro: rg -n 'fakeAt|startTestServer' test/plugin/full-api.test.ts returns only startTestServer at 17, 38, 74; fake-at.ts lacks the required wiki/lease routes. Have the orchestrator resolve the shared-helper gap or explicitly amend acceptance, then provide the agreed success, invalid-input and framing coverage."
+    }
+  ],
+  "run": "codex-T-MG-40-reviewer-1",
+  "sha256": "941ea80cd1f09806f1545e4b8c981fd514d46fc1906b94b0cdbb7f41093d2004"
+}

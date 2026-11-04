@@ -154,8 +154,21 @@
       "data": {
         "head": "bfbe7d22afaf55c4e2a98fdab4e0ad0d9d44a93c"
       }
+    },
+    {
+      "at": "2026-11-04T19:36:05.472Z",
+      "by": "MG",
+      "event": "merged",
+      "data": {
+        "commit": "550d269269d01a638a3eff95cc7c61d612c8025c",
+        "target": "main",
+        "batch": null,
+        "adopted": false,
+        "verify": "c4ea7fdb44070f89fa7091424067ee08b21a94b7"
+      }
     }
   ],
   "base": "a85b76d43d9603b341c401f465604f5219275749",
-  "branch": "task/T-MG-41-atalks-cli-name"
+  "branch": "task/T-MG-41-atalks-cli-name",
+  "mergedAt": "2026-11-04T19:36:05.472Z"
 }

@@ -19,7 +19,7 @@
     }
   ],
   "status": "implemented",
-  "round": 2,
+  "round": 3,
   "events": [
     {
       "at": "2026-11-04T16:28:08.011Z",
@@ -136,6 +136,56 @@
         "head": "b01c47f02ef7c7ad7ae806307873a488ea44a515",
         "class": "critical",
         "attempt": 2
+      }
+    },
+    {
+      "at": "2026-11-04T19:35:54.303Z",
+      "by": "MG",
+      "event": "dispatched",
+      "data": {
+        "executor": "codex:reviewer",
+        "base": "3b666b9eda33",
+        "note": "cross-provider review r1 (route escalated to critical)"
+      }
+    },
+    {
+      "at": "2026-11-04T19:39:48.707Z",
+      "by": "MG",
+      "event": "review",
+      "data": {
+        "round": 1,
+        "verdict": "needs-fixes",
+        "reviewer": "external"
+      }
+    },
+    {
+      "at": "2026-11-04T19:39:49.607Z",
+      "by": "MG",
+      "event": "fix-round",
+      "data": {
+        "round": 3,
+        "addressed": 0,
+        "open": 3
+      }
+    },
+    {
+      "at": "2026-11-04T19:53:18.605Z",
+      "by": "MG",
+      "event": "implementer",
+      "data": {
+        "report": "done-with-concerns",
+        "round": 3
+      }
+    },
+    {
+      "at": "2026-11-04T19:53:18.810Z",
+      "by": "MG",
+      "event": "verify",
+      "data": {
+        "result": "missing-artifact",
+        "head": "e7bc3639ab6c9ac06b2d5ad49f3837cd1328d667",
+        "class": "critical",
+        "attempt": 3
       }
     }
   ],
