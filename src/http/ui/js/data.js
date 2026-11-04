@@ -1,7 +1,7 @@
 /**
  * Fetching and refreshing data. It calls drawing through the `views` registry.
  */
-import { SID_KEY, api } from "./api.js";
+import { SID_KEY, api, sessionGeneration } from "./api.js";
 import { acceptDigest, badgeText, dividerAfter, railBadges } from "./counters.js";
 import { updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
@@ -106,11 +106,14 @@ let digestSeq = 0;
 export async function refreshDigestAndLeases(force) {
   if (!force && document.visibilityState !== "visible") return;  // a background tab does not need the lease board
   const seq = ++digestSeq;
+  const gen = sessionGeneration();
   try {
     const [d, l] = await Promise.all([
       api("GET", "/api/digest?summary=1").catch(() => ({ digest: undefined })),
       api("GET", "/api/leases").catch(() => ({ leases: [] })),
     ]);
+    // The fallbacks above must not blank the next account's board either (F1).
+    if (gen !== sessionGeneration()) return;
     const incoming = d.digest ? { ...d.digest, seq } : d.digest;
     state.digest = acceptDigest(state.digest, incoming);
     state.leases = l.leases || [];
@@ -139,11 +142,16 @@ const ACTORS_TTL_MS = 60000;
 
 let actorsRequest = null;
 
+let actorsRequestGen = -1;
+
 export async function ensureActors(opts = {}) {
   const fresh = Date.now() - state.actorsAt < (opts.maxAgeMs ?? ACTORS_TTL_MS);
   if (!opts.force && fresh && state.actorsList.length) return state.actorsList;
-  if (actorsRequest) return actorsRequest;
-  actorsRequest = api("GET", "/api/actors")
+  // The shared request is shared within ONE session only: the next account must not wait on
+  // (and get nothing from) the previous account's request (F1).
+  if (actorsRequest && actorsRequestGen === sessionGeneration()) return actorsRequest;
+  actorsRequestGen = sessionGeneration();
+  const request = api("GET", "/api/actors")
     .then((d) => {
       state.actorsList = d.actors || [];
       for (const a of state.actorsList) {
@@ -159,8 +167,9 @@ export async function ensureActors(opts = {}) {
       return state.actorsList;
     })
     .catch(() => state.actorsList)
-    .finally(() => { actorsRequest = null; });
-  return actorsRequest;
+    .finally(() => { if (actorsRequest === request) actorsRequest = null; });
+  actorsRequest = request;
+  return request;
 }
 
 export async function refreshPresence() {
@@ -213,6 +222,12 @@ export async function loadWikiList() {
 }
 
 let markReadTimers = {};
+
+/** Teardown: a debounced "read" of the previous account must not fire under the next one. */
+export function cancelMarkRead() {
+  for (const id of Object.keys(markReadTimers)) clearTimeout(markReadTimers[id]);
+  markReadTimers = {};
+}
 
 /** @param messageId up to which message we are reading. Without it the server moves the marker
 /**  to the NEWEST message in the system - so a jump to an entry from an hour ago would also

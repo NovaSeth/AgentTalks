@@ -7,7 +7,7 @@
  * this file only fetches, groups and draws. `Cmd+F` inside a conversation opens the palette
  * with `in:#slug ` already typed.
  */
-import { api } from "./api.js";
+import { api, sessionGeneration } from "./api.js";
 import { avatarHtml, emptyStateHtml, escapeHtml, fmtDateTime, skeletonHtml, toggleDrawerClass } from "./dom.js";
 import { iconSearch } from "./icons.js";
 import { t } from "./i18n.js";
@@ -18,7 +18,14 @@ import { openConversation } from "./view-chat.js";
 
 /** The current search: the query, what it parsed to, and what the server answered. Module-local
  *  rather than on `state`: nothing outside this view reads it. */
-let current = { q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null };
+let current = { q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null, gen: -1 };
+
+/** Every search carries a sequence number and the session generation it started in (F1): an
+ *  older answer (a newer query was typed, or the account changed under it) is dropped before
+ *  it touches `current`, the actor directory or the DOM. */
+let searchSeq = 0;
+
+const emptySearch = () => ({ q: "", parsed: parseQuery(""), loading: false, messages: [], unresolvedIn: false, error: null, gen: sessionGeneration() });
 
 /** Hits grouped by conversation. Groups are ordered by their newest hit, and the hits inside a
  *  group newest first: the server already returns the newest page, so the top is "most recent". */
@@ -41,7 +48,10 @@ export function groupByConversation(messages) {
 export async function openSearchView(q) {
   const query = String(q ?? "").trim();
   const parsed = parseQuery(query);
-  current = { q: query, parsed, loading: !!parsed.text, messages: [], unresolvedIn: false, error: null };
+  const my = ++searchSeq;
+  const gen = sessionGeneration();
+  const fresh = () => my === searchSeq && gen === sessionGeneration();
+  current = { q: query, parsed, loading: !!parsed.text, messages: [], unresolvedIn: false, error: null, gen };
   state.view = "search";
   state.drawerOpen = false;
   state.threadOpen = null;
@@ -58,13 +68,15 @@ export async function openSearchView(q) {
     renderSearchMain();
     return;
   }
-  try {
-    const data = await api("GET", `/api/search?${params.query}`);
+  let data = null, error = null;
+  try { data = await api("GET", `/api/search?${params.query}`); }
+  catch (e) { error = e; }
+  if (!fresh()) return;
+  if (data) {
     mergeActors(data.actors);
     current.messages = (data.messages || []).filter((m) => matchesFrom(m, parsed.from));
-  } catch (e) {
-    current.error = e;
   }
+  current.error = error;
   current.loading = false;
   if (state.view === "search" && current.q === query) renderSearchMain();
 }
@@ -75,6 +87,8 @@ const conversationName = (c) => c ? (c.slug ? `#${c.slug}` : dmLabel(c)) : t("a 
 export function renderSearchMain() {
   const el = document.getElementById("main");
   if (!el || state.view !== "search") return;
+  // Results kept from another account's session are never drawn (F1).
+  if (current.gen !== sessionGeneration()) current = emptySearch();
   const { q, parsed, loading, messages, unresolvedIn, error } = current;
   const groups = groupByConversation(messages);
   const terms = queryTerms(parsed.text);

@@ -153,6 +153,35 @@ export function formatBytes(n) {
 
 export const IMG_RE = /\.(png|jpe?g|gif|webp|avif)$/i;
 
+// ------------------------------------------------------- account-bound overlays
+// Windows, menus, pickers and the toast stack are mounted on <body>, outside #app, so redrawing
+// #app at sign-out or a lost session does not touch them (T-MG-3 F2: a freshly issued token
+// stayed on the sign-in screen). Each one registers here with its own close function, which
+// also removes its document listeners; closeAccountOverlays() runs them all at teardown.
+const overlays = new Set();
+
+/** @param el the mounted element; @param close its own close (removes listeners), called with
+ *  `{ forced: true }` at teardown. @returns a function that unregisters it. */
+export function trackOverlay(el, close) {
+  for (const o of overlays) if (!o.el.isConnected) overlays.delete(o);
+  const entry = { el, close };
+  overlays.add(entry);
+  return () => overlays.delete(entry);
+}
+
+/** Closes every registered overlay, including the persistent secret dialogs that refuse normal
+ *  dismissal, and removes their DOM even when a close function fails. */
+export function closeAccountOverlays() {
+  const all = [...overlays];
+  overlays.clear();
+  for (const o of all) {
+    if (o.el.isConnected) {
+      try { o.close({ forced: true }); } catch { /* the element still goes below */ }
+    }
+    try { o.el.remove(); } catch { /* already gone */ }
+  }
+}
+
 // -------------------------------------------------------------------- modals
 // ONE modal implementation for the whole UI. Reason: a window without a focus
 // trap looks like a modal but is not one - Tab walks out onto the page
@@ -181,14 +210,23 @@ export function openModal(html, opts = {}) {
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
-  function close() {
+  let closed = false;
+  function close(how) {
+    if (closed) return;
+    closed = true;
+    untrack();
     document.removeEventListener("keydown", onKey, true);
     ov.remove();
+    // A caller with listeners of its own (confirmModal's Escape, the news queue) learns that the
+    // window is gone; `forced` = the account teardown closed it, not the user.
+    opts.onClose?.({ forced: !!how?.forced });
+    if (how?.forced) return;
     // Focus returns where it came from - otherwise, after the window closes, a
     // screen reader starts from the top of the page instead of from the button
     // that opened it.
     if (returnTo && document.contains(returnTo)) returnTo.focus();
   }
+  const untrack = trackOverlay(ov, close);
   document.addEventListener("keydown", onKey, true);
   ov.addEventListener("click", (e) => { if (e.target === ov && !ov.dataset.persistent) close(); });
   const modal = ov.querySelector(".modal");
@@ -225,7 +263,7 @@ export function confirmModal({ title, body, ok, cancel, danger = false }) {
       <div class="row">
         <button class="btn ghost" id="cf-no">${escapeHtml(cancelLabel)}</button>
         <button class="btn ${danger ? "danger" : ""}" id="cf-yes">${escapeHtml(okLabel)}</button>
-      </div>`);
+      </div>`, { onClose: ({ forced }) => { if (forced) finish(false); } });
     let answered = false;
     const finish = (v) => {
       if (answered) return;

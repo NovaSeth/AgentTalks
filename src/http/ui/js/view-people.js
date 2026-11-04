@@ -10,7 +10,7 @@
  * clicked, as a popover would.
  */
 import { startDirect } from "./actions.js";
-import { api } from "./api.js";
+import { api, sessionGeneration } from "./api.js";
 import { ensureActors } from "./data.js";
 import { avatarHtml, escapeHtml, timeAgo } from "./dom.js";
 import { iconChat, iconClose, iconGear } from "./icons.js";
@@ -112,7 +112,9 @@ export async function openProfile(handle, anchor) {
   state.profileHandle = h;
   bindProfileKeys();
   if (!actorByHandle(h)) {
+    const gen = sessionGeneration();
     try { await ensureActors({ force: true }); } catch { /* the panel says "unknown" below */ }
+    if (gen !== sessionGeneration()) return;   // the account changed while the directory loaded (F1)
   }
   views.main();
   const panel = document.getElementById("profile-slot");
@@ -314,10 +316,12 @@ export function ensureHeaderMembers(convId, onReady) {
   state.convMembersFor = convId;
   requestAnimationFrame(() => {
     if (state.activeId !== convId) { state.convMembersFor = null; return; }
+    const gen = sessionGeneration();
     api("GET", `/api/conversations/${convId}`).then(async (d) => {
       if (state.activeId !== convId) return;
       state.convMembers = d.members || [];
       if (state.convMembers.some((m) => !state.actorsCache[m.actorId])) await ensureActors({ force: true });
+      if (gen !== sessionGeneration()) return;
       onReady?.();
     }).catch(() => { state.convMembersFor = null; });
   });

@@ -4,6 +4,7 @@
  * a conversation whose history was never fetched is loaded lazily when the view opens.
  * Opened with Mod+Shift+A (shortcuts.js); a row jumps to the message in its conversation.
  */
+import { sessionGeneration } from "./api.js";
 import { loadMessages } from "./data.js";
 import { avatarHtml, emptyStateHtml, escapeHtml, fmtTime, hamburgerHtml, toggleDrawerClass } from "./dom.js";
 import { iconCheck, iconChat } from "./icons.js";
@@ -113,6 +114,11 @@ export async function openUnreadsView() {
   toggleDrawerClass();
   const pending = unreadGroups(state).filter((g) => g.pending).slice(0, MAX_LAZY_LOADS);
   if (!pending.length) return;
-  await Promise.all(pending.map((g) => loadMessages(g.conv.id).catch(() => { state.loaded[g.conv.id] = true; })));
-  if (state.view === "unreads") renderUnreadsMain();
+  // F1: a load that ends after the account changed must not mark the next account's
+  // conversations as loaded, nor redraw its screen.
+  const gen = sessionGeneration();
+  await Promise.all(pending.map((g) => loadMessages(g.conv.id).catch(() => {
+    if (gen === sessionGeneration()) state.loaded[g.conv.id] = true;
+  })));
+  if (gen === sessionGeneration() && state.view === "unreads") renderUnreadsMain();
 }

@@ -5,7 +5,7 @@ import { claimLease, releaseLease } from "./actions.js";
 import { api, csrf } from "./api.js";
 import { badgeText } from "./counters.js";
 import { ensureActors, refreshDigestAndLeases } from "./data.js";
-import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml } from "./dom.js";
+import { UI_STAMP, avatarHtml, escapeHtml, leaseCountdown, openModal, sidebarEmptyHtml, trackOverlay } from "./dom.js";
 import { iconCheck, iconChevron, iconDesktop, iconDigest, iconDoc, iconLock, iconMoon, iconQuestion, iconSearch, iconSun, iconThread } from "./icons.js";
 import { msg, t } from "./i18n.js";
 import { THEMES, currentTheme, setTheme } from "./theme.js";
@@ -625,13 +625,17 @@ function openAccountMenu(anchor) {
   const rect = anchor.getBoundingClientRect();
   pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8))}px`;
-  function close() {
+  let armed = null;
+  function close(how) {
+    clearTimeout(armed);
+    untrack();
     pop.remove();
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
     anchor.setAttribute("aria-expanded", "false");
-    if (document.contains(anchor)) anchor.focus();
+    if (!how?.forced && document.contains(anchor)) anchor.focus();
   }
+  const untrack = trackOverlay(pop, close);
   const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
   const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
   pop.addEventListener("click", (e) => {
@@ -652,7 +656,7 @@ function openAccountMenu(anchor) {
     if (b.dataset.mact === "avatar") changeAvatar();
     if (b.dataset.mact === "logout") doLogout();
   });
-  setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  armed = setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
   document.addEventListener("keydown", onKey, true);
   pop.querySelector("[role=menuitem]")?.focus();
 }

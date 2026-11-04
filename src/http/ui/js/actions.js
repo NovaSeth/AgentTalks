@@ -2,12 +2,12 @@
  * Message actions: sending (optimistic, with retry), reactions, editing,
  * deleting. Drawing goes through the `views` registry.
  */
-import { api } from "./api.js";
+import { api, describeError } from "./api.js";
 import { parseCommand, runCommand } from "./commands.js";
 import { loadConversationsList, markReadDebounced, mySessionId, refreshQuestions } from "./data.js";
 import { iconCheck } from "./icons.js";
 import { t } from "./i18n.js";
-import { clearDraft, findMsgById, saveDraft, state, upsertMessage, views } from "./state.js";
+import { clearDraft, findMsgById, persistUnsent, saveDraft, state, upsertMessage, views } from "./state.js";
 import { showError, showToast } from "./toasts.js";
 
 // Optimistic send. The bubble appears IMMEDIATELY (greyed out), because the
@@ -52,13 +52,23 @@ export async function sendMessage(text, opts = {}) {
     list.push(rec);
   }
   rec.pending = true; rec.failed = false;
-  if (state.activeId === convId && !rec.threadId) { views.message(rec); views.scrollToBottom(true); }
+  // In the main list: a main-list message, or a thread reply brought back as "not sent".
+  const inMainList = !rec.threadId || rec.restored;
+  // Stored BEFORE the request: an F5 or a lost session mid-send must not take the words (W3-S4-B).
+  persistUnsent(convId);
+  if (state.activeId === convId && inMainList) { views.message(rec); views.scrollToBottom(true); }
   try {
     const data = await api("POST", `/api/conversations/${convId}/messages`, {
       body: rec.body, clientMsgId, threadId: rec.threadId || undefined, sessionId: mySessionId || undefined,
     });
-    state.pending[convId] = list.filter((p) => p.clientMsgId !== clientMsgId);
-    document.querySelector(`#messages [data-msg="${rec.id}"]`)?.remove();
+    // This send supersedes an earlier failed copy of the same words in the same place (the user
+    // typed them again instead of pressing "Send again").
+    const superseded = (state.pending[convId] || []).filter((p) => p.clientMsgId !== clientMsgId
+      && p.failed && p.body === rec.body && (p.threadId ?? null) === (rec.threadId ?? null));
+    state.pending[convId] = (state.pending[convId] || [])
+      .filter((p) => p.clientMsgId !== clientMsgId && !superseded.includes(p));
+    persistUnsent(convId, [clientMsgId, ...superseded.map((p) => p.clientMsgId)]);
+    for (const p of [rec, ...superseded]) document.querySelector(`#messages [data-msg="${p.id}"]`)?.remove();
     upsertMessage(convId, data.message);
     if (data.delivery) {
       state.lastDelivery = { conversationId: convId, messageId: data.message.id, delivery: data.delivery };
@@ -102,8 +112,13 @@ export async function sendMessage(text, opts = {}) {
     }
     return data.message;
   } catch (e) {
-    rec.pending = false; rec.failed = true; rec.error = e.message;
-    if (state.activeId === convId && !rec.threadId) views.message(rec);
+    // A lost session already preserved this entry for its account (onSessionLost), and an
+    // answer from a previous session belongs to nobody here: neither may touch the state now.
+    if (e.stale || e.sessionLost) return null;
+    // The human sentence, never fetch's raw "Failed to fetch" (W3-S4-B).
+    rec.pending = false; rec.failed = true; rec.error = describeError(e);
+    persistUnsent(convId);
+    if (state.activeId === convId && inMainList) views.message(rec);
     showError(e);
     return null;
   }
@@ -141,6 +156,7 @@ export function retryPending(convId, clientMsgId) {
 export function dropPending(convId, clientMsgId) {
   const rec = (state.pending[convId] || []).find((p) => p.clientMsgId === clientMsgId);
   state.pending[convId] = (state.pending[convId] || []).filter((p) => p.clientMsgId !== clientMsgId);
+  persistUnsent(convId, [clientMsgId]);
   document.querySelector(`#messages [data-msg="${rec?.id}"]`)?.remove();
   const ta = document.getElementById("composer-input");
   if (rec && ta) { ta.value = rec.body; ta.dispatchEvent(new Event("input")); ta.focus(); }

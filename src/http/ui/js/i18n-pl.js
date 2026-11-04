@@ -308,6 +308,8 @@ export const PL = {
   "not sent": "nie wysłano",
   "sending...": "wysyłanie...",
   "Could not send": "Nie udało się wysłać",
+  "This message may not have been sent. Send it again - it will not be posted twice.":
+    "Ta wiadomość mogła nie dotrzeć. Wyślij ją ponownie - nie pojawi się dwa razy.",
   "Send again": "Wyślij ponownie",
   "Copy the text": "Kopiuj treść",
   "The text goes back to the writing field - from there you can fix it or delete it":

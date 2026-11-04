@@ -1,9 +1,9 @@
 /**
  * Login screen, passkeys and session lifecycle.
  */
-import { ACTOR_KEY, CSRF_KEY, api, csrf, describeError, setCsrf } from "./api.js";
-import { mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
-import { $app, escapeHtml, openModal } from "./dom.js";
+import { ACTOR_KEY, CSRF_KEY, api, csrf, describeError, newSessionGeneration, setCsrf } from "./api.js";
+import { cancelMarkRead, mySessionId, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { $app, closeAccountOverlays, escapeHtml, openModal } from "./dom.js";
 import { LANGS, lang, setLang, t } from "./i18n.js";
 import { iconChat, iconFingerprint } from "./icons.js";
 import { applyUnreadRows, claimLocalData, clearLocalAccountData, rebuildMentionRe, resetState, state, views } from "./state.js";
@@ -16,6 +16,7 @@ export async function tryRestoreSession() {
   if (!csrf || !savedActor) return false;
   try {
     const me = await api("GET", "/api/me");
+    newSessionGeneration();   // F1: a new account session starts here
     state.actor = me.actor;
     claimLocalData(me.actor.id);
     state.conversations = me.conversations;
@@ -39,6 +40,7 @@ export async function tryRestoreSession() {
 
 async function doLogin(handle, password) {
   const data = await api("POST", "/api/login", { handle, password });
+  newSessionGeneration();
   state.actor = data.actor;
   claimLocalData(data.actor.id);
   setCsrf(data.csrf);
@@ -57,7 +59,12 @@ export async function doLogout() {
   // timers.
   stopPresenceHeartbeat();
   stopDigestTimer();
+  cancelMarkRead();
   disconnectSSE();
+  // F1: answers still in flight belong to the account that just left; F2: so do the windows,
+  // menus and toasts mounted outside #app.
+  newSessionGeneration();
+  closeAccountOverlays();
   resetState();
   clearLocalAccountData();
   document.title = "AgentTalks";
@@ -189,6 +196,7 @@ async function passkeyLogin() {
     signature: bufToB64u(cred.response.signature),
   });
   markPasskeyKnownHere(); // a passkey just worked here: the button has earned its place
+  newSessionGeneration();
   state.actor = data.actor;
   claimLocalData(data.actor.id);
   setCsrf(data.csrf);

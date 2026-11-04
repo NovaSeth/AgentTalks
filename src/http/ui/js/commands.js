@@ -18,7 +18,7 @@
 import { askQuestion, claimLease, fixMsg, releaseLease, resolveMsg } from "./actions.js";
 import { api } from "./api.js";
 import { ensureActors, refreshDigestAndLeases } from "./data.js";
-import { avatarHtml, escapeHtml, leaseCountdown, openModal, timeAgo } from "./dom.js";
+import { avatarHtml, escapeHtml, leaseCountdown, openModal, timeAgo, trackOverlay } from "./dom.js";
 import { iconFile, iconPlus, iconQuestion } from "./icons.js";
 import { t } from "./i18n.js";
 import { findMsgById, state, views } from "./state.js";
@@ -258,12 +258,16 @@ export function openPlusMenu(anchor, o = {}) {
   const top = rect.top - pop.offsetHeight - 8;
   pop.style.top = `${Math.max(8, top < 8 ? Math.min(rect.bottom + 8, vh - pop.offsetHeight - 8) : top)}px`;
   pop.style.left = `${Math.max(8, Math.min(rect.left, vw - pop.offsetWidth - 8))}px`;
+  let armed = null;
   function close() {
+    clearTimeout(armed);
+    untrack();
     pop.remove();
     document.removeEventListener("pointerdown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
     closePlus = null;
   }
+  const untrack = trackOverlay(pop, close);
   const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
   const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); anchor.focus(); } };
   pop.addEventListener("click", (e) => {
@@ -275,7 +279,7 @@ export function openPlusMenu(anchor, o = {}) {
     else if (action === "ask") openAskModal(state.activeId);
     else if (action === "claim") claimLeaseModal();
   });
-  setTimeout(() => document.addEventListener("pointerdown", onOutside, true), 0);
+  armed = setTimeout(() => document.addEventListener("pointerdown", onOutside, true), 0);
   document.addEventListener("keydown", onKey, true);
   closePlus = close;
   pop.querySelector("button")?.focus();

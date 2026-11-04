@@ -39,7 +39,16 @@ export function showNewsModal(news, onClose) {
       <h2 id="m-title">${t("What's new")}</h2>
       <div class="md news-body">${mdToHtml(news.text, "page", state.actor.handle)}</div>
       <div class="row"><button class="btn" id="news-ok">${t("Got it, thanks")}</button></div>`,
-  { modalClass: "wide news-modal" });
+  {
+    modalClass: "wide news-modal",
+    // A teardown (sign-out, lost session) drops the window and its Escape listener, and does NOT
+    // advance the greeting queue onto the sign-in screen (F2).
+    onClose: ({ forced }) => {
+      if (!forced) return;
+      closed = true;
+      document.removeEventListener("keydown", onEscape, true);
+    },
+  });
   let closed = false;
   const finish = () => {
     if (closed) return;

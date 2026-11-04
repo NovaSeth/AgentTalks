@@ -208,7 +208,8 @@ export function clearLocalAccountData() {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i);
       if (key === "atalks_last_conv" || key === "atalks_recent"
-          || key?.startsWith("atalks_draft_") || key?.startsWith("atalks_wiki_draft_")) {
+          || key?.startsWith("atalks_draft_") || key?.startsWith("atalks_wiki_draft_")
+          || key?.startsWith(UNSENT_PREFIX)) {
         localStorage.removeItem(key);
       }
     }
@@ -225,8 +226,89 @@ export function claimLocalData(actorId) {
     if (owner !== null && owner !== me) clearLocalAccountData();
     localStorage.setItem(OWNER_KEY, me);
   } catch { /* private browsing */ }
-  if (state.draftsOwner != null && String(state.draftsOwner) !== me) state.drafts = {};
+  if (state.draftsOwner != null && String(state.draftsOwner) !== me) { state.drafts = {}; state.pending = {}; }
   state.draftsOwner = actorId;
+  restoreUnsent(actorId);
+}
+
+// ------------------------------------------------------------------ unsent messages
+// A message that did not reach the server (offline, a lost session, F5 mid-send) is kept as a
+// "not sent" bubble rather than folded into the composer text (T-MG-3 F3, W3-S4-B): the bubble
+// keeps its clientMsgId, so "Send again" can never post it twice even when the first attempt
+// did land, a thread reply stays a thread reply, and two failed messages stay two. They are
+// stored per conversation under the same owner marker as the drafts, so only the account that
+// wrote them gets them back.
+const UNSENT_PREFIX = "atalks_unsent_";
+
+/** Writes the conversation's in-flight and failed messages to storage (or removes the key).
+ *  Storage is shared by every tab of the browser, so the stored list is MERGED: entries another
+ *  tab wrote stay, unless this tab holds them or has just sent or discarded them (`done`). */
+export function persistUnsent(convId, done = []) {
+  const mine = (state.pending[convId] || []).map((p) => ({
+    clientMsgId: p.clientMsgId, body: p.body, threadId: p.threadId ?? null, ts: p.ts,
+    // An in-flight entry has no error yet; if it comes back from storage, it was never confirmed.
+    error: p.failed ? p.error || null : null,
+  }));
+  const skip = new Set([...done, ...mine.map((u) => u.clientMsgId)]);
+  let others = [];
+  try {
+    const stored = JSON.parse(localStorage.getItem(UNSENT_PREFIX + convId) || "[]");
+    if (Array.isArray(stored)) others = stored.filter((u) => u && u.clientMsgId && !skip.has(u.clientMsgId));
+  } catch { /* unreadable or unavailable: this tab's list replaces it */ }
+  const list = [...others, ...mine];
+  try {
+    if (list.length) {
+      if (state.actor) localStorage.setItem(OWNER_KEY, String(state.actor.id));
+      localStorage.setItem(UNSENT_PREFIX + convId, JSON.stringify(list));
+    } else {
+      localStorage.removeItem(UNSENT_PREFIX + convId);
+    }
+  } catch { /* private browsing: the memory copy is all there is */ }
+}
+
+/** Teardown (a lost session): every entry becomes a failed one and is stored, so the same
+ *  account finds it after signing in again or after a reload. */
+export function preserveUnsent() {
+  for (const convId of Object.keys(state.pending)) {
+    for (const p of state.pending[convId]) {
+      // The thread box that held a failed reply's text is gone with the shell: every entry now
+      // stands in the main list.
+      p.restored = true;
+      if (p.failed) continue;
+      p.pending = false; p.failed = true;
+      p.error = t("This message may not have been sent. Send it again - it will not be posted twice.");
+    }
+    persistUnsent(convId);
+  }
+}
+
+/** Sign-in: the stored unsent messages of THIS account (claimLocalData has already wiped any
+ *  other account's) come back as failed bubbles, merged with what the tab still holds. */
+function restoreUnsent(actorId) {
+  let keys = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(UNSENT_PREFIX)) keys.push(key);
+    }
+  } catch { return; }
+  for (const key of keys) {
+    const convId = Number(key.slice(UNSENT_PREFIX.length));
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* a broken entry */ }
+    if (!Number.isFinite(convId) || !Array.isArray(list)) continue;
+    const mine = state.pending[convId] || (state.pending[convId] = []);
+    for (const u of list) {
+      if (!u || typeof u.body !== "string" || !u.clientMsgId) continue;
+      if (mine.some((p) => p.clientMsgId === u.clientMsgId)) continue;
+      mine.push({
+        id: `tmp-${u.clientMsgId}`, clientMsgId: u.clientMsgId, conversationId: convId, actorId,
+        body: u.body, ts: u.ts || Math.floor(Date.now() / 1000), kind: "text", threadId: u.threadId ?? null,
+        pending: false, failed: true, restored: true,
+        error: u.error || t("This message may not have been sent. Send it again - it will not be posted twice."),
+      });
+    }
+  }
 }
 
 /** It looks into the text field, because that is the source of truth about a draft's content
@@ -364,7 +446,10 @@ export function canManageActive() {
 /**  entries. Thread replies do not stand in the main list. */
 export function visibleMessages(convId) {
   const msgs = (state.msgs[convId] || []).filter((m) => !m.threadId);
-  const pend = (state.pending[convId] || []).filter((m) => !m.threadId);
+  // A thread reply that came back from storage or a lost session has no thread box holding its
+  // text any more: it stands in the main list as "not sent", where Send again still posts it
+  // to its thread.
+  const pend = (state.pending[convId] || []).filter((m) => !m.threadId || m.restored);
   return pend.length ? [...msgs, ...pend] : msgs;
 }
 

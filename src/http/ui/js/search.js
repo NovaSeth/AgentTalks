@@ -7,9 +7,9 @@
  * has no server parameter (N4) and is filtered on the client with matchesFrom().
  */
 import { startDirect } from "./actions.js";
-import { api } from "./api.js";
+import { api, sessionGeneration } from "./api.js";
 import { ensureActors } from "./data.js";
-import { avatarHtml, escapeHtml, timeAgo } from "./dom.js";
+import { avatarHtml, escapeHtml, timeAgo, trackOverlay } from "./dom.js";
 import { iconDoc, iconSearch } from "./icons.js";
 import { t } from "./i18n.js";
 import { actorHandle, dmLabel, dmOthers, mergeActors, recentConversations, state } from "./state.js";
@@ -168,12 +168,20 @@ export function openSearchPalette(opts = {}) {
   // conversation - so we fetch it in the background without blocking the window.
   ensureActors().then(() => rebuild());
 
-  const close = () => {
-    searchOverlay.remove();
-    searchOverlay = null;
+  // F1: the palette belongs to the account that opened it. A pending debounce or search answer
+  // is invalidated when it closes, and a teardown (sign-out, lost session) closes it.
+  const gen = sessionGeneration();
+  const overlay = searchOverlay;
+  const close = (how) => {
+    seq++;
+    clearTimeout(debounce);
+    untrack();
+    overlay.remove();
+    if (searchOverlay === overlay) searchOverlay = null;
     document.removeEventListener("keydown", onKey, true);
-    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+    if (!how?.forced && returnFocus && document.contains(returnFocus)) returnFocus.focus();
   };
+  const untrack = trackOverlay(overlay, close);
   searchOverlay.addEventListener("click", (e) => { if (e.target === searchOverlay) close(); });
 
   // Conversations and people are ALREADY in the client's memory, so this section
@@ -277,7 +285,7 @@ export function openSearchPalette(opts = {}) {
         params.unresolvedIn ? Promise.resolve({ messages: [], actors: {} })
           : api("GET", `/api/search?${params.query}`).catch(() => ({ messages: [], actors: {} })),
       ]);
-      if (my !== seq) return;
+      if (my !== seq || gen !== sessionGeneration()) return;
       mergeActors(msgs.actors);
       remote = [];
       for (const h of wiki.hits) {

@@ -1,11 +1,11 @@
 /**
  * The live event stream: resumption with a cursor, backoff, notifications.
  */
-import { ACTOR_KEY, CSRF_KEY, api, onUnauthorized, setCsrf } from "./api.js";
-import { ensureActors, loadConversationsList, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
-import { announce, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
+import { ACTOR_KEY, CSRF_KEY, api, newSessionGeneration, onUnauthorized, sessionGeneration, setCsrf } from "./api.js";
+import { cancelMarkRead, ensureActors, loadConversationsList, loadReactionsForMessage, loadWikiList, markReadDebounced, refreshNotifications, refreshPresence, refreshQuestions, stopDigestTimer, stopPresenceHeartbeat } from "./data.js";
+import { announce, closeAccountOverlays, isScrolledToBottom, scrollToBottom, updateJumpPill, updateTitleBadge } from "./dom.js";
 import { t } from "./i18n.js";
-import { actorHandle, findMsgById, mentionsMe, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
+import { actorHandle, findMsgById, mentionsMe, preserveUnsent, resetState, saveDraft, state, upsertMessage, views } from "./state.js";
 import { showToast } from "./toasts.js";
 
 // ------------------------------------------------------------ session lost (S7)
@@ -15,17 +15,28 @@ import { showToast } from "./toasts.js";
 // doLogout this keeps the drafts (memory and localStorage): the user did not choose to leave.
 export function onSessionLost() {
   if (!state.actor) return;
+  // F1: from here on, every answer to a request of this session is dropped by api().
+  newSessionGeneration();
   saveDraft();
+  // F3: in-flight and failed messages become stored "not sent" bubbles of this account, before
+  // the reset below drops them from memory.
+  preserveUnsent();
   setCsrf(null);
   sessionStorage.removeItem(CSRF_KEY);
   sessionStorage.removeItem(ACTOR_KEY);
   stopPresenceHeartbeat();
   stopDigestTimer();
+  cancelMarkRead();
   disconnectSSE();
+  // F2: windows (a freshly issued token included), menus, pickers and old toasts live outside
+  // #app; they go before the sign-in screen is drawn.
+  closeAccountOverlays();
   const drafts = state.drafts;
+  const pending = state.pending;
   const owner = state.actor.id;
   resetState();
   state.drafts = drafts;
+  state.pending = pending;
   state.draftsOwner = owner;
   document.title = "AgentTalks";
   views.render();
@@ -149,12 +160,19 @@ export function connectSSE() {
 async function onMessageEvent(ev) {
   const convId = ev.conversationId, msg = ev.message;
   const isUpdate = ev.type === "message_updated";
+  // F1: an event of this session that resumes after an await under another account is dropped.
+  const gen = sessionGeneration();
   const known = state.conversations.some((c) => c.id === convId);
-  if (!known) { await loadConversationsList(); views.sidebar(); }
+  if (!known) {
+    try { await loadConversationsList(); } catch { return; }
+    if (gen !== sessionGeneration()) return;
+    views.sidebar();
+  }
   // An unknown author: we fetch the ACTOR DIRECTORY, not the messages. Reloading the list
   // replaced the array with the 30 newest and erased all the loaded history - and that for one
   // missing handle.
   if (!state.actorsCache[msg.actorId]) await ensureActors({ force: true });
+  if (gen !== sessionGeneration() || !state.actor) return;
   // A visible message restores a silent actor immediately. SSE replay must not age them again.
   const cachedActor = state.actorsCache[msg.actorId];
   if (cachedActor) {

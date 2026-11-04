@@ -15,7 +15,7 @@
  * since S0 keep working.
  */
 import { commandSuggestions } from "./commands.js";
-import { avatarHtml, escapeHtml } from "./dom.js";
+import { avatarHtml, escapeHtml, trackOverlay } from "./dom.js";
 import { rememberEmoji, searchEmoji } from "./emoji.js";
 import { iconAddReaction, iconPlus, iconSend } from "./icons.js";
 import { lang, t } from "./i18n.js";
@@ -214,17 +214,21 @@ export function openEmojiPicker(anchor, onPick) {
     }
   };
   const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
+  let armed = null;
   function close() {
+    clearTimeout(armed);
+    untrack();
     pop.removeEventListener("click", onGrid);
     pop.removeEventListener("keydown", onKey);
     document.removeEventListener("pointerdown", onOutside, true);
     pop.remove();
     closePicker = null;
   }
+  const untrack = trackOverlay(pop, close);
   pop.addEventListener("click", onGrid);
   pop.addEventListener("keydown", onKey);
   search.addEventListener("input", draw);
-  setTimeout(() => document.addEventListener("pointerdown", onOutside, true), 0);
+  armed = setTimeout(() => document.addEventListener("pointerdown", onOutside, true), 0);
   draw();
   place();
   search.focus();
@@ -241,8 +245,10 @@ export function openEmojiPicker(anchor, onPick) {
 export function createAutocomplete(ta, providers) {
   let pop = null, items = [], index = 0, start = -1, kind = null, seq = 0;
 
+  let untrack = () => {};
   function close() {
-    if (pop) { pop.remove(); pop = null; }
+    seq++;   // an answer still in flight must not re-open the list after a close or a teardown
+    if (pop) { untrack(); pop.remove(); pop = null; }
     items = []; kind = null;
   }
 
@@ -291,6 +297,7 @@ export function createAutocomplete(ta, providers) {
       pop.className = "mention-pop";
       pop.setAttribute("role", "listbox");
       document.body.appendChild(pop);
+      untrack = trackOverlay(pop, close);
     }
     pop.innerHTML = items.map((a, i) => a.html ? a.html : kind === "#"
       ? `<button type="button" role="option" data-mi="${i}" class="${i === index ? "sel" : ""}">

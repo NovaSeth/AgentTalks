@@ -2,10 +2,10 @@
  * The conversation view: the message list, the composer, a thread, the details panel.
  */
 import { answerQuestion, deleteMsg, dropPending, fixMsg, joinChannel, resolveMsg, retryPending, saveEditedMsg, sendMessage, togglePin, toggleReaction } from "./actions.js";
-import { api, csrf } from "./api.js";
+import { api, csrf, sessionGeneration } from "./api.js";
 import { dividerAfter } from "./counters.js";
 import { ensureActors, loadConversationsList, loadMessages, loadOlderMessages, loadPins, markReadDebounced, refreshQuestions, signalTyping } from "./data.js";
-import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, updateJumpPill, scrollBehavior } from "./dom.js";
+import { IMG_RE, avatarHtml, confirmModal, dayKey, dayLabel, emptyStateHtml, escapeHtml, fmtTime, formatBytes, hamburgerHtml, isScrolledToBottom, openModal, scrollToBottom, skeletonHtml, timeAgo, toggleDrawerClass, trackOverlay, updateJumpPill, scrollBehavior } from "./dom.js";
 import { iconAddReaction, iconArrowDown, iconChat, iconCheck, iconCopy, iconEdit, iconFile, iconGear, iconInfo, iconLock, iconMore, iconPin, iconQuestion, iconReply, iconSend, iconThread, iconWrench } from "./icons.js";
 import { renderBody } from "./markdown.js";
 import { bindFormatting, composerCardHtml, createAutocomplete, insertAtCaret, openEmojiPicker } from "./composer.js";
@@ -23,6 +23,8 @@ const EMOJI_PALETTE = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "🚀",
 
 // ------------------------------------------------- entering a conversation
 export async function openConversation(id, focusMessageId) {
+  // F1: an open that resumes after the account changed must not draw, fetch or mark read.
+  const gen = sessionGeneration();
   saveDraft();                       // the PREVIOUS conversation's draft, before we redraw anything
   const previousConversation = state.activeId;
   // The "new messages" line disappears only on LEAVING a conversation - otherwise the one place
@@ -60,6 +62,7 @@ export async function openConversation(id, focusMessageId) {
     state.loadingConv = id;
     renderMain();
     try { await loadMessages(id); } catch (e) { showError(e); }
+    if (gen !== sessionGeneration()) return;
     if (state.loadingConv === id) state.loadingConv = false;
   }
   if (focusMessageId && !(state.msgs[id] || []).some((m) => m.id === focusMessageId)) {
@@ -69,6 +72,7 @@ export async function openConversation(id, focusMessageId) {
       mergeActors(data.actors);
       mergeReactions(data.messages, data.reactions);
     } catch { /* best effort */ }
+    if (gen !== sessionGeneration()) return;
   }
   renderMain();
   const questionsReady = refreshQuestions(id);
@@ -79,7 +83,7 @@ export async function openConversation(id, focusMessageId) {
   if (focusMessageId) {
     // These refreshes can redraw the list, so highlight only after they finish.
     await Promise.all([questionsReady, pinsReady]);
-    if (state.view !== "chat" || state.activeId !== id) return;
+    if (gen !== sessionGeneration() || state.view !== "chat" || state.activeId !== id) return;
     const target = (state.msgs[id] || []).find((m) => m.id === focusMessageId);
     if (target?.threadId) {
       await openThread(target.threadId);
@@ -115,7 +119,8 @@ export async function openThread(rootId) {
   const conversationId = state.activeId;
   state.threadOpen = rootId;
   state.threadMsgs = [];
-  const isCurrent = () => state.view === "chat" && state.activeId === conversationId && state.threadOpen === rootId;
+  const gen = sessionGeneration();
+  const isCurrent = () => gen === sessionGeneration() && state.view === "chat" && state.activeId === conversationId && state.threadOpen === rootId;
   // Opening the panel must not replace the main composer while a send is completing.
   if (!document.getElementById("thread-slot")) {
     const host = document.createElement("div");
@@ -1245,13 +1250,17 @@ function openMessageMenu(messageId, anchor) {
   pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
   pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8))}px`;
 
-  function close() {
+  let armed = null;
+  function close(how) {
+    clearTimeout(armed);
+    untrack();
     pop.remove();
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey, true);
     closeMsgMenu = null;
-    if (document.contains(anchor)) anchor.focus();
+    if (!how?.forced && document.contains(anchor)) anchor.focus();
   }
+  const untrack = trackOverlay(pop, close);
   const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
   const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
   pop.addEventListener("click", async (e) => {
@@ -1289,7 +1298,7 @@ function openMessageMenu(messageId, anchor) {
       })) deleteMsg(messageId);
     }
   });
-  setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  armed = setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
   document.addEventListener("keydown", onKey, true);
   closeMsgMenu = close;
   pop.querySelector("button")?.focus();
@@ -1389,13 +1398,15 @@ function openLightbox(url) {
   const returnFocus = document.activeElement;
   // The listener is removed in ONE place: previously only the Escape branch exited, so closing
   // by a click left a live close handler holding a reference to a removed element.
-  const close = () => {
+  const close = (how) => {
+    untrack();
     overlay.remove();
     document.removeEventListener("keydown", onKey);
-    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+    if (!how?.forced && returnFocus && document.contains(returnFocus)) returnFocus.focus();
   };
+  const untrack = trackOverlay(overlay, close);
   const onKey = (e) => { if (e.key === "Escape") close(); };
-  overlay.addEventListener("click", close);
+  overlay.addEventListener("click", () => close());
   document.addEventListener("keydown", onKey);
 }
 
@@ -1425,7 +1436,10 @@ function openEmojiPopover(messageId, anchor) {
   };
   const onOutside = (e) => { if (!pop.contains(e.target) && e.target !== anchor) close(); };
   const onKey = (e) => { if (e.key === "Escape") close(); };
+  let armed = null;
   function close() {
+    clearTimeout(armed);
+    untrack();
     pop.removeEventListener("click", onPick);
     document.removeEventListener("mousedown", onOutside, true);
     document.removeEventListener("keydown", onKey);
@@ -1433,8 +1447,9 @@ function openEmojiPopover(messageId, anchor) {
     closeEmojiPopover = null;
     emojiPopoverAnchor = null;
   }
+  const untrack = trackOverlay(pop, close);
   pop.addEventListener("click", onPick);
-  setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+  armed = setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
   document.addEventListener("keydown", onKey);
   closeEmojiPopover = close;
 }
