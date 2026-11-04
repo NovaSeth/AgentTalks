@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "B-MG-103",
-  "status": "open",
+  "status": "taken",
   "task": "T-MG-12",
   "round": 4,
   "reviewer": {
@@ -16,7 +16,7 @@
   "text": "Acceptance 4/5: claiming a refreshed record temporarily hides its wake target. In-memory pruneSessions reproduction: refresh in afterSelect; submit a valid signed wake in afterClaim -> 202 woke:false, reason='no recorded session'; after restoration, retry -> 409 replay; runner calls=0. The wake is permanently lost although the refreshed record survives. Synchronize wake reads with pruning or safely expose claimed fresh records to readers.",
   "filedAt": "2026-11-04T02:12:20.801Z",
   "filedBy": "MG",
-  "takenBy": null,
+  "takenBy": "T-MG-14",
   "closedAt": null,
   "closedBy": null,
   "reason": null
